@@ -22,8 +22,6 @@ export function ExpenseBreakdownDonut({
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm text-white/50">Expense breakdown</div>
-          <h2 className="mt-1 text-xl font-semibold">Структура расходов</h2>
         </div>
 
         <span className="rounded-full bg-rose-500/15 px-3 py-1 text-xs text-rose-300">
@@ -31,7 +29,7 @@ export function ExpenseBreakdownDonut({
         </span>
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[220px_1fr] xl:items-center">
+      <div className="mt-2 grid gap-6 xl:grid-cols-[220px_1fr] xl:items-center">
         <div className="relative h-[220px] w-[220px]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>

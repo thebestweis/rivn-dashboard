@@ -1,4 +1,4 @@
-import type { Dispatch, ReactNode, SetStateAction } from "react";
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { FinancialAnalyticsChart } from "./financial-analytics-chart";
 import { ExpenseBreakdownDonut } from "./expense-breakdown-donut";
 import { parseRubAmount, formatRub } from "../../lib/storage";
@@ -8,6 +8,8 @@ interface FinancialAnalyticsTabProps {
   expenses: any[];
   payments: any[];
   payrollPayouts: any[];
+    growthBasePeriod: 1 | 3;
+  setGrowthBasePeriod: Dispatch<SetStateAction<1 | 3>>;
   revenueDynamics: {
     month: string;
     revenue: number;
@@ -107,18 +109,17 @@ function formatMonthLabel(value: string) {
   });
 }
 
-function SectionCard({ eyebrow, title, children }: SectionCardProps) {
-    function formatMonthLabel(value: string) {
-  const [year, month] = value.split("-");
-  if (!year || !month) return value;
-
-  const date = new Date(Number(year), Number(month) - 1, 1);
-
-  return date.toLocaleDateString("ru-RU", {
-    month: "long",
-    year: "numeric",
-  });
+function getExpenseDate(expense: any) {
+  return (
+    expense.date ||
+    expense.expense_date ||
+    expense.payment_date ||
+    expense.created_at ||
+    null
+  );
 }
+
+function SectionCard({ eyebrow, title, children }: SectionCardProps) {
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
       <div className="text-sm text-white/50">{eyebrow}</div>
@@ -127,7 +128,6 @@ function SectionCard({ eyebrow, title, children }: SectionCardProps) {
     </div>
   );
 }
-
 export function FinancialAnalyticsTab({
   expenses,
   payments,
@@ -139,6 +139,8 @@ export function FinancialAnalyticsTab({
   targetMetrics,
   growthScenario,
   setGrowthScenario,
+  growthBasePeriod,
+  setGrowthBasePeriod,
   growthMetrics,
   growthInsights,
   growthPlan,
@@ -149,6 +151,31 @@ export function FinancialAnalyticsTab({
     payments,
     payrollPayouts,
   });
+
+  const [expensePeriod, setExpensePeriod] = useState<"month" | "year">("month");
+
+  const expenseMonths = Array.from(
+  new Set(
+    expenses
+      .map((expense) => {
+        const rawDate = getExpenseDate(expense);
+        if (!rawDate) return null;
+
+        const parsed = new Date(rawDate);
+        if (Number.isNaN(parsed.getTime())) return null;
+
+        return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
+      })
+      .filter(Boolean)
+  )
+).sort((a, b) => String(a).localeCompare(String(b)));
+
+const latestExpenseMonth =
+  expenseMonths.length > 0
+    ? expenseMonths[expenseMonths.length - 1]
+    : new Date().toISOString().slice(0, 7);
+
+const [expenseSelectedMonth, setExpenseSelectedMonth] = useState(latestExpenseMonth);
 
   const totalRevenue = payments.reduce(
     (sum, item) => sum + parseRubAmount(item.amount),
@@ -168,21 +195,48 @@ export function FinancialAnalyticsTab({
   const totalTax = Math.round(totalRevenue * 0.07);
   const totalProfit = totalRevenue - totalExpenses - totalFot - totalTax;
 
-  const grouped = expenses.reduce<Record<string, number>>((acc, expense) => {
-    const key = expense.category ?? "Без категории";
-    acc[key] = (acc[key] ?? 0) + parseRubAmount(expense.amount);
-    return acc;
-  }, {});
+  const [selectedExpenseYear, selectedExpenseMonth] = expenseSelectedMonth.split("-");
 
-  const expenseBreakdownData = Object.entries(grouped).map(([name, value]) => ({
-    name,
-    value,
-  }));
+const filteredExpenses = expenses.filter((expense) => {
+  const rawDate = getExpenseDate(expense);
+  if (!rawDate) return false;
+
+  const expenseDate = new Date(rawDate);
+  if (Number.isNaN(expenseDate.getTime())) return false;
+
+  const expenseYear = String(expenseDate.getFullYear());
+  const expenseMonth = String(expenseDate.getMonth() + 1).padStart(2, "0");
+
+  if (expensePeriod === "month") {
+    return (
+      expenseYear === selectedExpenseYear &&
+      expenseMonth === selectedExpenseMonth
+    );
+  }
+
+  return expenseYear === selectedExpenseYear;
+});
+
+const grouped = filteredExpenses.reduce<Record<string, number>>((acc, expense) => {
+  const key = expense.category ?? "Без категории";
+  acc[key] = (acc[key] ?? 0) + parseRubAmount(expense.amount);
+  return acc;
+}, {});
+
+const expenseBreakdownData = Object.entries(grouped).map(([name, value]) => ({
+  name,
+  value,
+}));
 
   const safeBreakdownData =
     expenseBreakdownData.length > 0
       ? expenseBreakdownData
       : [{ name: "Нет данных", value: 0 }];
+
+      const expensePeriodLabel =
+  expensePeriod === "month"
+    ? formatMonthLabel(expenseSelectedMonth)
+    : `За ${selectedExpenseYear} год`;
 
   const romi =
     totalExpenses > 0 ? Math.round((totalProfit / totalExpenses) * 100) : 0;
@@ -223,10 +277,14 @@ export function FinancialAnalyticsTab({
 const latestTaxRows = monthlyTaxRows.slice(0, 3);
 const olderTaxRows = monthlyTaxRows.slice(3);
 
-const totalTaxForMonths = monthlyTaxRows.reduce(
-  (sum, item) => sum + item.tax,
-  0
-);
+const currentYear = new Date().getFullYear();
+
+const taxYTD = monthlyTaxRows
+  .filter((item) => {
+    const date = new Date(item.month + "-01");
+    return date.getFullYear() === currentYear;
+  })
+  .reduce((sum, item) => sum + item.tax, 0);
 
   return (
     <div className="space-y-6">
@@ -302,11 +360,79 @@ const totalTaxForMonths = monthlyTaxRows.reduce(
 
           <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
             <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-sm text-white/50">Структура расходов</div>
-              <div className="mt-4">
-                <ExpenseBreakdownDonut data={safeBreakdownData} />
-              </div>
-            </div>
+  <div className="flex items-start justify-between gap-4">
+  <div className="flex items-center gap-2">
+  <div className="text-sm text-white/50">Структура расходов</div>
+  <div className="text-white/20">•</div>
+  <div className="text-sm text-white/50">{expensePeriodLabel}</div>
+</div>
+
+  <div className="flex items-center gap-3">
+    <div className="flex items-center rounded-full border border-white/10 bg-black/20 p-1">
+      <button
+        type="button"
+        onClick={() => {
+          const currentIndex = expenseMonths.indexOf(expenseSelectedMonth);
+          if (currentIndex > 0) {
+            setExpenseSelectedMonth(expenseMonths[currentIndex - 1]);
+          }
+        }}
+        className="rounded-full px-3 py-1 text-xs text-white/45 transition hover:text-white disabled:opacity-30"
+        disabled={expenseMonths.indexOf(expenseSelectedMonth) <= 0}
+      >
+        ←
+      </button>
+
+      <div className="px-2 text-xs text-white/60">
+        {formatMonthLabel(expenseSelectedMonth)}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          const currentIndex = expenseMonths.indexOf(expenseSelectedMonth);
+          if (currentIndex < expenseMonths.length - 1) {
+            setExpenseSelectedMonth(expenseMonths[currentIndex + 1]);
+          }
+        }}
+        className="rounded-full px-3 py-1 text-xs text-white/45 transition hover:text-white disabled:opacity-30"
+        disabled={expenseMonths.indexOf(expenseSelectedMonth) === expenseMonths.length - 1}
+      >
+        →
+      </button>
+    </div>
+
+    <div className="flex rounded-full border border-white/10 bg-black/20 p-1">
+      <button
+        type="button"
+        onClick={() => setExpensePeriod("month")}
+        className={`rounded-full px-3 py-1 text-xs transition ${
+          expensePeriod === "month"
+            ? "bg-violet-500/20 text-violet-300"
+            : "text-white/45 hover:text-white"
+        }`}
+      >
+        Месяц
+      </button>
+      <button
+        type="button"
+        onClick={() => setExpensePeriod("year")}
+        className={`rounded-full px-3 py-1 text-xs transition ${
+          expensePeriod === "year"
+            ? "bg-violet-500/20 text-violet-300"
+            : "text-white/45 hover:text-white"
+        }`}
+      >
+        Год
+      </button>
+    </div>
+  </div>
+</div>
+
+  <div className="mt-4">
+    <ExpenseBreakdownDonut data={safeBreakdownData} />
+  </div>
+</div>
 
             <div className="h-full rounded-[20px] border border-white/10 bg-white/[0.03] p-5">
   <div className="flex h-full flex-col">
@@ -316,16 +442,16 @@ const totalTaxForMonths = monthlyTaxRows.reduce(
         Налог 7% по месяцам
       </h3>
       <div className="mt-2 text-sm leading-6 text-white/55">
-        Расчёт ведётся отдельно по выручке каждого месяца.
+        Расчёт ведётся по выручке каждого месяца с начала года (YTD).
       </div>
     </div>
 
     <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
       <div className="text-xs uppercase tracking-[0.16em] text-white/35">
-        Общая сумма
-      </div>
+  За весь {currentYear} год накопилось налога на сумму:
+</div>
       <div className="mt-2 text-3xl font-semibold text-violet-300">
-        {formatRub(totalTaxForMonths)}
+        {formatRub(taxYTD)}
       </div>
     </div>
 
@@ -529,38 +655,121 @@ const totalTaxForMonths = monthlyTaxRows.reduce(
 </div>
   </div>
 </SectionCard>
+
 <SectionCard
   eyebrow="Калькулятор цели"
   title="Что нужно для достижения нужной прибыли"
 >
-  <div className="mt-2 text-sm text-white/50">
-    Задай цель по прибыли и сразу увидишь, сколько нужно выручки, клиентов и
-    что даст рост.
-  </div>
 
-  <div className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-    <div className="space-y-4">
-      <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
-        <label className="text-sm text-white/50">Цель по прибыли</label>
-        <input
-          type="number"
-          value={targetProfit}
-          onChange={(e) => setTargetProfit(Number(e.target.value) || 0)}
-          className="mt-3 h-[56px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-2xl font-semibold text-white outline-none"
-          placeholder="Например: 300000"
-        />
-      </div>
-
-      <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
-        <div className="text-sm text-white/50">Сценарий роста</div>
-        <div className="mt-1 text-sm text-white/35">
-          Измени параметры и сразу посмотри, как меняется результат
+  <div className="mt-4 space-y-5">
+    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+      <div className="mt-2 grid gap-3 xl:grid-cols-[1.08fr_0.92fr]">
+        <div className="rounded-[20px] border border-white/10 bg-black/20 p-3.5">
+          <label className="text-sm text-white/50">Цель по прибыли</label>
+          <input
+            type="number"
+            value={targetProfit}
+            onChange={(e) => setTargetProfit(Number(e.target.value) || 0)}
+            className="mt-2 h-[42px] w-full rounded-xl border border-white/10 bg-[#0B1120] px-4 text-xl font-semibold text-white outline-none"
+            placeholder="Например: 300000"
+          />
+          <div className="mt-2 text-xs leading-5 text-white/40">
+  Введи, сколько чистой прибыли хочешь получать за месяц. Справа увидишь,
+  чего не хватает до цели. Можно расти за счёт одного сильного рычага или
+  улучшать несколько показателей постепенно.
+</div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-center">
+            <div className="text-[11px] uppercase tracking-[0.12em] text-white/35">
+              Не хватает прибыли
+            </div>
+            <div className="mt-2 text-[30px] font-semibold leading-none text-rose-300">
+              {formatRub(growthPlan.profitGap)}
+            </div>
+            <div className="mt-2 text-xs text-white/40">Дефицит до цели</div>
+          </div>
+
+          <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-center">
+            <div className="text-[11px] uppercase tracking-[0.12em] text-white/35">
+              Нужная выручка
+            </div>
+            <div className="mt-2 text-[30px] font-semibold leading-none text-violet-300">
+              {formatRub(targetMetrics.requiredRevenue)}
+            </div>
+            <div className="mt-2 text-xs text-white/40">Чтобы выйти на цель</div>
+          </div>
+
+          <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-center">
+            <div className="text-[11px] uppercase tracking-[0.12em] text-white/35">
+              Ещё нужно клиентов
+            </div>
+            <div className="mt-2 text-[30px] font-semibold leading-none text-emerald-300">
+              {targetMetrics.requiredClients}
+            </div>
+            <div className="mt-2 text-xs text-white/40">
+              При текущем среднем чеке
+            </div>
+          </div>
+
+          <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-center">
+            <div className="text-[11px] uppercase tracking-[0.12em] text-white/35">
+              Рост чека
+            </div>
+            <div className="mt-2 text-[30px] font-semibold leading-none text-amber-300">
+              {growthPlan.requiredCheckGrowthPercent.toFixed(1)}%
+            </div>
+            <div className="mt-2 text-xs text-white/40">
+              Альтернатива росту клиентов
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5">
+      <div className="flex items-start justify-between gap-4">
+  <div>
+    <div className="text-sm text-white/50">Сценарий роста</div>
+    <div className="mt-1 text-sm text-white/35">
+      Введи, на сколько хочешь увеличить или уменьшить клиентов, средний чек и расходы.
+      Ниже увидишь, как изменятся выручка, прибыль и средний чек при таких условиях.
+      База расчёта выбирается переключателем справа.
+    </div>
+  </div>
+
+  <div className="flex rounded-full border border-white/10 bg-black/20 p-1">
+    <button
+      type="button"
+      onClick={() => setGrowthBasePeriod(1)}
+      className={`rounded-full px-3 py-1 text-xs transition ${
+        growthBasePeriod === 1
+          ? "bg-violet-500/20 text-violet-300"
+          : "text-white/45 hover:text-white"
+      }`}
+    >
+      1 мес
+    </button>
+    <button
+      type="button"
+      onClick={() => setGrowthBasePeriod(3)}
+      className={`rounded-full px-3 py-1 text-xs transition ${
+        growthBasePeriod === 3
+          ? "bg-violet-500/20 text-violet-300"
+          : "text-white/45 hover:text-white"
+      }`}
+    >
+      3 мес
+    </button>
+  </div>
+</div>
+
+      <div className="mt-5 rounded-[20px] border border-white/10 bg-black/20 p-4">
+        <div className="grid gap-3 md:grid-cols-3">
           <div>
             <label className="mb-2 block text-xs uppercase tracking-[0.12em] text-white/35">
-              + клиентов
+              Изменение количества клиентов, ед.
             </label>
             <input
               type="number"
@@ -571,14 +780,14 @@ const totalTaxForMonths = monthlyTaxRows.reduce(
                   clientsDelta: Number(e.target.value) || 0,
                 }))
               }
-              className="h-[52px] w-full rounded-xl border border-white/10 bg-black/20 px-4 text-base font-medium text-white outline-none"
+              className="h-[52px] w-full rounded-xl border border-white/10 bg-[#0B1120] px-4 text-base font-medium text-white outline-none"
               placeholder="0"
             />
           </div>
 
           <div>
             <label className="mb-2 block text-xs uppercase tracking-[0.12em] text-white/35">
-              % к чеку
+              Изменение среднего чека, %
             </label>
             <input
               type="number"
@@ -589,14 +798,14 @@ const totalTaxForMonths = monthlyTaxRows.reduce(
                   avgCheckDelta: Number(e.target.value) || 0,
                 }))
               }
-              className="h-[52px] w-full rounded-xl border border-white/10 bg-black/20 px-4 text-base font-medium text-white outline-none"
+              className="h-[52px] w-full rounded-xl border border-white/10 bg-[#0B1120] px-4 text-base font-medium text-white outline-none"
               placeholder="0"
             />
           </div>
 
           <div>
             <label className="mb-2 block text-xs uppercase tracking-[0.12em] text-white/35">
-              % к расходам
+              Изменение расходов, %
             </label>
             <input
               type="number"
@@ -607,103 +816,59 @@ const totalTaxForMonths = monthlyTaxRows.reduce(
                   expenseDelta: Number(e.target.value) || 0,
                 }))
               }
-              className="h-[52px] w-full rounded-xl border border-white/10 bg-black/20 px-4 text-base font-medium text-white outline-none"
+              className="h-[52px] w-full rounded-xl border border-white/10 bg-[#0B1120] px-4 text-base font-medium text-white outline-none"
               placeholder="0"
             />
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <div className="h-[148px] rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex h-full flex-col justify-between">
-            <div className="text-sm text-white/50">Выручка при сценарии роста</div>
-            <div className="text-[36px] font-semibold leading-none text-violet-300">
+
+      <div className="mt-4 text-xs text-white/35">
+  При нулевых значениях показывается базовый сценарий на основе данных за{" "}
+  {growthBasePeriod === 1 ? "последний месяц" : "последние 3 месяца"}:
+  выручки, прибыли, среднего чека и числа клиентов.
+</div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="h-[124px] rounded-[18px] border border-white/10 bg-black/20 px-4 py-3">
+          <div className="flex h-full flex-col items-center justify-between text-center">
+            <div className="text-sm text-white/50">Выручка по сценарию</div>
+            <div className="text-[30px] font-semibold leading-none text-violet-300">
               {formatRub(growthMetrics.newRevenue)}
             </div>
             <div className="text-sm text-white/40">
-              Результат по текущим настройкам сценария
+              Итог при текущих настройках
             </div>
           </div>
         </div>
 
-        <div className="h-[148px] rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex h-full flex-col justify-between">
-            <div className="text-sm text-white/50">Прибыль при сценарии роста</div>
-            <div className="text-[36px] font-semibold leading-none text-emerald-300">
+        <div className="h-[124px] rounded-[18px] border border-white/10 bg-black/20 px-4 py-3">
+          <div className="flex h-full flex-col items-center justify-between text-center">
+            <div className="text-sm text-white/50">Прибыль по сценарию</div>
+            <div className="text-[30px] font-semibold leading-none text-emerald-300">
               {formatRub(growthMetrics.newProfit)}
             </div>
             <div className="text-sm text-white/40">
-              Результат по текущим настройкам сценария
+              Итог при текущих настройках
             </div>
           </div>
         </div>
 
-        <div className="h-[148px] rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex h-full flex-col justify-between">
+        <div className="h-[124px] rounded-[18px] border border-white/10 bg-black/20 px-4 py-3">
+          <div className="flex h-full flex-col items-center justify-between text-center">
             <div className="text-sm text-white/50">
-              Средний чек при сценарии роста
-            </div>
-            <div className="text-[36px] font-semibold leading-none text-amber-300">
+  Средний чек по сценарию
+</div>
+            <div className="text-[30px] font-semibold leading-none text-amber-300">
               {formatRub(growthMetrics.newAvgCheck)}
             </div>
             <div className="text-sm text-white/40">
-              Результат по текущим настройкам сценария
+              Итог при текущих настройках
             </div>
           </div>
         </div>
       </div>
     </div>
-
-    <div className="grid h-full gap-4 md:grid-cols-2 xl:grid-cols-2">
-  <div className="min-h-[170px] rounded-[20px] border border-white/10 bg-white/[0.03] p-5">
-    <div className="flex h-full flex-col items-center justify-center text-center">
-      <div className="text-sm text-white/50">Не хватает прибыли</div>
-      <div className="mt-5 text-[42px] font-semibold leading-none text-rose-300">
-        {formatRub(growthPlan.profitGap)}
-      </div>
-      <div className="mt-4 text-sm text-white/35">
-        Дефицит до целевой прибыли
-      </div>
-    </div>
-  </div>
-
-  <div className="min-h-[170px] rounded-[20px] border border-white/10 bg-white/[0.03] p-5">
-    <div className="flex h-full flex-col items-center justify-center text-center">
-      <div className="text-sm text-white/50">Нужная выручка</div>
-      <div className="mt-5 text-[42px] font-semibold leading-none text-violet-300">
-        {formatRub(targetMetrics.requiredRevenue)}
-      </div>
-      <div className="mt-4 text-sm text-white/35">
-        Требуемый объём выручки
-      </div>
-    </div>
-  </div>
-
-  <div className="min-h-[170px] rounded-[20px] border border-white/10 bg-white/[0.03] p-5">
-    <div className="flex h-full flex-col items-center justify-center text-center">
-      <div className="text-sm text-white/50">Нужно клиентов</div>
-      <div className="mt-5 text-[42px] font-semibold leading-none text-emerald-300">
-        {targetMetrics.requiredClients}
-      </div>
-      <div className="mt-4 text-sm text-white/35">
-        Чтобы выйти на цель
-      </div>
-    </div>
-  </div>
-
-  <div className="min-h-[170px] rounded-[20px] border border-white/10 bg-white/[0.03] p-5">
-    <div className="flex h-full flex-col items-center justify-center text-center">
-      <div className="text-sm text-white/50">Или поднять чек</div>
-      <div className="mt-5 text-[42px] font-semibold leading-none text-amber-300">
-        {growthPlan.requiredCheckGrowthPercent.toFixed(1)}%
-      </div>
-      <div className="mt-4 text-sm text-white/35">
-        Если идти через рост среднего чека
-      </div>
-    </div>
-  </div>
-</div>
   </div>
 </SectionCard>
     </div>

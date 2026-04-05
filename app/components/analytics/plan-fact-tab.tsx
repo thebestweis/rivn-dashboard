@@ -32,6 +32,7 @@ interface PlanFactChartRow {
   month: string;
   plan: number;
   fact: number;
+  isSelected?: boolean;
 }
 
 interface PlanFactTabProps {
@@ -176,17 +177,23 @@ export function PlanFactTab({
         </div>
 
                 <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-                    <div className="mb-4 flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-[4px] bg-violet-400" />
-              <span className="text-sm text-white/60">План</span>
-            </div>
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+  <div className="flex flex-wrap items-center gap-4">
+    <div className="flex items-center gap-2">
+      <div className="h-3 w-3 rounded-[4px] bg-violet-400" />
+      <span className="text-sm text-white/60">План</span>
+    </div>
 
-            <div className="flex items-center gap-2">
-              <div className="h-[2px] w-4 bg-emerald-400" />
-              <span className="text-sm text-white/60">Факт</span>
-            </div>
-          </div>
+    <div className="flex items-center gap-2">
+      <div className="h-[2px] w-4 bg-emerald-400" />
+      <span className="text-sm text-white/60">Факт</span>
+    </div>
+  </div>
+
+  <div className="text-sm text-white/45">
+    Выбранный месяц: {formatMonthButtonLabel(selectedMonth)}
+  </div>
+</div>
 
           <div className="h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -226,13 +233,23 @@ export function PlanFactTab({
     return `Период: ${String(label ?? "")}`;
   }}
 />
-                            <Bar
-                dataKey="plan"
-                name="plan"
-                radius={[10, 10, 0, 0]}
-                fill="rgba(139,92,246,0.82)"
-                maxBarSize={44}
-              />
+  <Bar
+  dataKey="plan"
+  name="plan"
+  radius={[10, 10, 0, 0]}
+  maxBarSize={44}
+>
+  {chartData.map((entry) => (
+    <Cell
+      key={`plan-${entry.month}`}
+      fill={
+        entry.isSelected
+          ? "rgba(167,139,250,1)"
+          : "rgba(139,92,246,0.82)"
+      }
+    />
+  ))}
+</Bar>
                             <Line
                 type="monotone"
                 dataKey="fact"

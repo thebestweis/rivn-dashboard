@@ -104,24 +104,33 @@ export function FinancialAnalyticsChart({
               />
               <Tooltip
   formatter={(value, name) => {
-    const labelMap: Record<string, string> = {
+    const map: Record<string, string> = {
       revenue: "Выручка",
       profit: "Прибыль",
-      expenses: "Расходы",
-      fot: "ФОТ",
     };
 
-    const numericValue = Number(value ?? 0);
-    const safeName = String(name ?? "");
-
     return [
-      `₽${numericValue.toLocaleString("ru-RU")}`,
-      labelMap[safeName] ?? safeName,
+      `${Number(value).toLocaleString("ru-RU")} ₽`,
+      map[String(name)] || name,
     ];
   }}
   labelFormatter={(label) => {
-    return `Период: ${String(label ?? "")}`;
+    const [year, month] = String(label).split("-");
+    if (!year || !month) return label;
+
+    const date = new Date(Number(year), Number(month) - 1, 1);
+
+    return date.toLocaleDateString("ru-RU", {
+      month: "long",
+      year: "numeric",
+    });
   }}
+  contentStyle={{
+    background: "#0F1524",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "16px",
+  }}
+  labelStyle={{ color: "rgba(255,255,255,0.6)" }}
 />
               <Area
                 type="monotone"
@@ -176,14 +185,35 @@ export function FinancialAnalyticsChart({
                 width={64}
               />
               <Tooltip
-                contentStyle={{
-                  background: "#0F1524",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: "16px",
-                  color: "white",
-                }}
-                labelStyle={{ color: "rgba(255,255,255,0.6)" }}
-              />
+  formatter={(value, name) => {
+    const map: Record<string, string> = {
+      expenses: "Расходы",
+      fot: "ФОТ",
+    };
+
+    return [
+      `${Number(value).toLocaleString("ru-RU")} ₽`,
+      map[String(name)] || name,
+    ];
+  }}
+  labelFormatter={(label) => {
+    const [year, month] = String(label).split("-");
+    if (!year || !month) return label;
+
+    const date = new Date(Number(year), Number(month) - 1, 1);
+
+    return date.toLocaleDateString("ru-RU", {
+      month: "long",
+      year: "numeric",
+    });
+  }}
+  contentStyle={{
+    background: "#0F1524",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "16px",
+  }}
+  labelStyle={{ color: "rgba(255,255,255,0.6)" }}
+/>
               <Bar dataKey="expenses" fill="#F43F5E" radius={[10, 10, 0, 0]} />
               <Bar dataKey="fot" fill="#F59E0B" radius={[10, 10, 0, 0]} />
             </BarChart>

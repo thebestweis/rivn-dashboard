@@ -129,7 +129,7 @@ function isCurrentMonth(dateString: string) {
   const date = new Date(dateString);
   const now = new Date();
 
-  return (
+return (
     date.getFullYear() === now.getFullYear() &&
     date.getMonth() === now.getMonth()
   );
@@ -172,6 +172,9 @@ const [monthlyPlans, setMonthlyPlans] = useState<
   avgCheckDelta: 0,
   expenseDelta: 0,
 });
+
+const [growthBasePeriod, setGrowthBasePeriod] = useState<1 | 3>(3);
+
 
   const [clients, setClients] = useState<StoredClient[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(true);
@@ -643,18 +646,71 @@ const targetMetrics = useMemo(() => {
 ]);
 
 const growthMetrics = useMemo(() => {
-  const newClients = uniquePayingClientsCount + growthScenario.clientsDelta;
+  const monthsToUse = growthBasePeriod === 1 ? 1 : 3;
+  const recentMonths = revenueDynamics
+    .slice(-monthsToUse)
+    .map((item) => item.month);
 
-  const newAvgCheck =
-    averageCheckNumber * (1 + growthScenario.avgCheckDelta / 100);
+  const recentRevenue = revenueDynamics.slice(-monthsToUse);
+
+  const baseRevenue =
+    recentRevenue.length > 0
+      ? recentRevenue.reduce((sum, item) => sum + item.revenue, 0) /
+        recentRevenue.length
+      : 0;
+
+  const baseProfit =
+    recentRevenue.length > 0
+      ? recentRevenue.reduce((sum, item) => sum + item.profit, 0) /
+        recentRevenue.length
+      : 0;
+
+  const recentPayments = payments.filter((payment) => {
+    if (!payment?.paidAt) return false;
+
+    const monthKey = toSupabaseLikeDate(payment.paidAt).slice(0, 7);
+    return recentMonths.includes(monthKey);
+  });
+
+  const recentPaymentsCount = recentPayments.length;
+
+  const baseAvgCheck =
+    recentPaymentsCount > 0
+      ? recentPayments.reduce(
+          (sum, payment) => sum + parseRubAmount(payment.amount),
+          0
+        ) / recentPaymentsCount
+      : 0;
+
+  const recentClients = new Set(
+    recentPayments.map((payment) => payment.client).filter(Boolean)
+  );
+
+  const baseClients = recentClients.size;
+
+  const baseExpenses = Math.max(
+    0,
+    baseRevenue - baseProfit - baseRevenue * 0.07
+  );
+
+  const newClients = Math.max(
+    0,
+    baseClients + growthScenario.clientsDelta
+  );
+
+  const newAvgCheck = Math.max(
+    0,
+    baseAvgCheck * (1 + growthScenario.avgCheckDelta / 100)
+  );
 
   const newRevenue = newClients * newAvgCheck;
 
-  const newExpenses =
-    totalExpensesNumber * (1 + growthScenario.expenseDelta / 100);
+  const newExpenses = Math.max(
+    0,
+    baseExpenses * (1 + growthScenario.expenseDelta / 100)
+  );
 
-  const newProfit =
-    newRevenue - newExpenses - totalFotNumber - newRevenue * 0.07;
+  const newProfit = newRevenue - newExpenses - newRevenue * 0.07;
 
   return {
     newClients,
@@ -662,13 +718,7 @@ const growthMetrics = useMemo(() => {
     newRevenue,
     newProfit,
   };
-}, [
-  growthScenario,
-  uniquePayingClientsCount,
-  averageCheckNumber,
-  totalExpensesNumber,
-  totalFotNumber,
-]);
+}, [growthScenario, growthBasePeriod, revenueDynamics, payments]);
 
 const growthInsights = useMemo(() => {
   const baseRevenue = totalRevenueNumber;
@@ -944,12 +994,20 @@ const planFactChartData = useMemo(() => {
       };
 
     return {
-      month,
-      plan: plan[planMetric],
-      fact: fact[planMetric],
-    };
+  month,
+  plan: plan[planMetric],
+  fact: fact[planMetric],
+  isSelected: month === planEditorMonth,
+};
   });
-}, [revenueDynamics, expenses, payrollPayouts, monthlyPlans, planMetric]);
+}, [
+  revenueDynamics,
+  expenses,
+  payrollPayouts,
+  monthlyPlans,
+  planMetric,
+  planEditorMonth,
+]);
 
 async function updateCurrentMonthPlan(
   key: "revenue" | "profit" | "expenses" | "fot",
@@ -990,7 +1048,8 @@ async function updateCurrentMonthPlan(
   }
 }
 
-  return (
+return (  
+
   <div className="min-h-screen bg-[#0B0F1A] text-white">
     <div className="flex min-h-screen">
       <AppSidebar />
@@ -1024,6 +1083,8 @@ async function updateCurrentMonthPlan(
   growthInsights={growthInsights}
   growthPlan={growthPlan}
   ceoSummary={ceoSummary}
+  growthBasePeriod={growthBasePeriod}
+setGrowthBasePeriod={setGrowthBasePeriod}
 />
             )
           ) : activeTab === "planfact" ? (
