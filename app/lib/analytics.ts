@@ -1,0 +1,141 @@
+import type {
+  StoredExpense,
+  StoredPayment,
+  StoredPayrollPayout,
+} from "./storage";
+import { parseRubAmount } from "./storage";
+
+interface MonthlyBucket {
+  key: string;
+  label: string;
+  revenue: number;
+  expenses: number;
+  fot: number;
+  tax: number;
+  profit: number;
+}
+
+function parseStoredDate(value: string) {
+  if (!value) return null;
+
+  const isoDate = new Date(value);
+  if (!Number.isNaN(isoDate.getTime())) return isoDate;
+
+  const legacyMatch = value.trim().match(/^(\d{1,2})\.(\d{1,2})$/);
+  if (!legacyMatch) return null;
+
+  const day = Number(legacyMatch[1]);
+  const month = Number(legacyMatch[2]);
+
+  if (!day || !month || month < 1 || month > 12) return null;
+
+  const year = new Date().getFullYear();
+  return new Date(year, month - 1, day);
+}
+
+function monthKey(date: Date) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function monthLabel(date: Date) {
+  return date.toLocaleString("ru-RU", { month: "short" });
+}
+
+function getMonthStartsFromDates(dates: Date[], count = 6) {
+  const valid = dates
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  const baseDate = valid.length > 0 ? valid[valid.length - 1] : new Date();
+
+  const months: Date[] = [];
+
+  for (let i = count - 1; i >= 0; i--) {
+    months.push(new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1));
+  }
+
+  return months;
+}
+
+export function buildFinancialTimeSeries(params: {
+  payments: StoredPayment[];
+  expenses: StoredExpense[];
+  payrollPayouts: StoredPayrollPayout[];
+}) {
+  const paymentDates = params.payments
+    .map((item) => parseStoredDate(item.paidAt))
+    .filter((date): date is Date => Boolean(date));
+
+  const expenseDates = params.expenses
+    .map((item) => parseStoredDate(item.date))
+    .filter((date): date is Date => Boolean(date));
+
+  const payrollDates = params.payrollPayouts
+    .map((item) => parseStoredDate(item.payoutDate))
+    .filter((date): date is Date => Boolean(date));
+
+  const monthStarts = getMonthStartsFromDates(
+    [...paymentDates, ...expenseDates, ...payrollDates],
+    6
+  );
+
+  const buckets: MonthlyBucket[] = monthStarts.map((date) => ({
+    key: monthKey(date),
+    label: monthLabel(date),
+    revenue: 0,
+    expenses: 0,
+    fot: 0,
+    tax: 0,
+    profit: 0,
+  }));
+
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+
+  for (const payment of params.payments) {
+    const date = parseStoredDate(payment.paidAt);
+    if (!date) continue;
+
+    const key = monthKey(date);
+    const bucket = bucketMap.get(key);
+    if (!bucket) continue;
+
+    bucket.revenue += parseRubAmount(payment.amount);
+  }
+
+  for (const expense of params.expenses) {
+    const date = parseStoredDate(expense.date);
+    if (!date) continue;
+
+    const key = monthKey(date);
+    const bucket = bucketMap.get(key);
+    if (!bucket) continue;
+
+    bucket.expenses += parseRubAmount(expense.amount);
+  }
+
+  for (const payout of params.payrollPayouts) {
+    const date = parseStoredDate(payout.payoutDate);
+    if (!date) continue;
+
+    const key = monthKey(date);
+    const bucket = bucketMap.get(key);
+    if (!bucket) continue;
+
+    bucket.fot += parseRubAmount(payout.amount);
+  }
+
+  for (const bucket of buckets) {
+    bucket.tax = Math.round(bucket.revenue * 0.07);
+    bucket.profit = bucket.revenue - bucket.expenses - bucket.fot - bucket.tax;
+  }
+
+  return buckets.map((bucket) => ({
+    period: bucket.label,
+    revenue: bucket.revenue,
+    expenses: bucket.expenses,
+    fot: bucket.fot,
+    profit: Math.max(bucket.profit, 0),
+  }));
+}
