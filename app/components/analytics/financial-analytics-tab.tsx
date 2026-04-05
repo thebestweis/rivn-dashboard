@@ -166,16 +166,17 @@ export function FinancialAnalyticsTab({
 
         return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
       })
-      .filter(Boolean)
+      .filter((value): value is string => Boolean(value))
   )
-).sort((a, b) => String(a).localeCompare(String(b)));
+).sort((a, b) => a.localeCompare(b));
 
-const latestExpenseMonth =
+const latestExpenseMonth: string =
   expenseMonths.length > 0
     ? expenseMonths[expenseMonths.length - 1]
     : new Date().toISOString().slice(0, 7);
 
-const [expenseSelectedMonth, setExpenseSelectedMonth] = useState(latestExpenseMonth);
+const [expenseSelectedMonth, setExpenseSelectedMonth] =
+  useState<string>(latestExpenseMonth);
 
   const totalRevenue = payments.reduce(
     (sum, item) => sum + parseRubAmount(item.amount),
