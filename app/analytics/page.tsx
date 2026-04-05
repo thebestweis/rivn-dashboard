@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppSidebar } from "../components/layout/app-sidebar";
 import { AnalyticsPageHeader } from "../components/analytics/analytics-page-header";
 import { FinancialAnalyticsTab } from "../components/analytics/financial-analytics-tab";
-import { PlanFactTab } from "../components/analytics/plan-fact-tab";
+import { PlanFactTab, type PlanFactRow } from "../components/analytics/plan-fact-tab";
 import { ClientsAnalyticsTab } from "../components/analytics/clients-analytics-tab";
 import { TeamAnalyticsTab } from "../components/analytics/team-analytics-tab";
 import {
@@ -94,9 +94,9 @@ function calculateClientUnitEconomics(params: {
       );
 
       const revenue = clientPayments.reduce(
-        (sum, p) => sum + parseRubAmount(p.amount),
-        0
-      );
+  (sum, p) => sum + parseRubAmount(String(p.amount ?? "")),
+  0
+);
 
       const expensesTotal = clientExpenses.reduce(
         (sum, e) => sum + parseRubAmount(e.amount),
@@ -340,11 +340,11 @@ const totalExpensesNumber = useMemo(() => {
 
   const totalFotNumber = useMemo(() => {
   return payrollPayouts
-    .filter((p) => {
-      if (!p.date) return false;
-      return p.date.startsWith(selectedMonth);
-    })
-    .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
+  .filter((p) => {
+    if (!p.payoutDate) return false;
+    return p.payoutDate.startsWith(selectedMonth);
+  })
+  .reduce((sum, item) => sum + parseRubAmount(String(item.amount ?? "")), 0);
 }, [payrollPayouts, selectedMonth]);
 
   const totalTaxNumber = useMemo(() => {
@@ -367,11 +367,11 @@ const planMonthExpensesNumber = useMemo(() => {
 
 const planMonthFotNumber = useMemo(() => {
   return payrollPayouts
-    .filter((p) => {
-      if (!p.date) return false;
-      return p.date.startsWith(planEditorMonth);
-    })
-    .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
+  .filter((p) => {
+    if (!p.payoutDate) return false;
+    return p.payoutDate.startsWith(selectedMonth);
+  })
+  .reduce((sum, item) => sum + parseRubAmount(String(item.amount ?? "")), 0);
 }, [payrollPayouts, planEditorMonth]);
 
 const planMonthTaxNumber = useMemo(() => {
@@ -833,8 +833,13 @@ const currentMonthPlan = useMemo(() => {
   );
 }, [monthlyPlans, planEditorMonth]);
 
-const planFactRows = useMemo(() => {
-  const rows = [
+const planFactRows = useMemo<PlanFactRow[]>(() => {
+  const rows: Array<{
+    key: PlanFactRow["key"];
+    label: string;
+    planNumber: number;
+    factNumber: number;
+  }> = [
     {
       key: "revenue",
       label: "Выручка",
@@ -906,8 +911,8 @@ const planFactChartData = useMemo(() => {
       .reduce((sum, expense) => sum + parseRubAmount(expense.amount), 0);
 
     const monthFot = payrollPayouts
-      .filter((payout) => payout.date?.startsWith(item.month))
-      .reduce((sum, payout) => sum + parseRubAmount(payout.amount), 0);
+      .filter((payout) => payout.payoutDate?.startsWith(item.month))
+      .reduce((sum, payout) => sum + parseRubAmount(String(payout.amount ?? "")), 0);
 
     factMap.set(item.month, {
       revenue: item.revenue,

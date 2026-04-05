@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import { formatRub } from "../../lib/storage";
 
-interface PlanFactRow {
+export interface PlanFactRow {
   key: "revenue" | "profit" | "expenses" | "fot";
   label: string;
   plan: string;
@@ -208,35 +208,23 @@ export function PlanFactTab({
                 tickFormatter={(value) => `${Math.round(value / 1000)}k`}
               />
               <Tooltip
-  formatter={(value: number, name: string) => {
+  formatter={(value, name) => {
     const labelMap: Record<string, string> = {
       plan: "План",
       fact: "Факт",
     };
 
-    return [formatRub(Number(value)), labelMap[name] ?? name];
-  }}
-  labelFormatter={(label: string) => {
-    const [year, month] = label.split("-");
-    if (!year || !month) return label;
+    const numericValue = Number(value ?? 0);
+    const safeName = String(name ?? "");
 
-    const date = new Date(Number(year), Number(month) - 1, 1);
-
-    return date.toLocaleDateString("ru-RU", {
-      month: "long",
-      year: "numeric",
-    });
+    return [
+      `₽${numericValue.toLocaleString("ru-RU")}`,
+      labelMap[safeName] ?? safeName,
+    ];
   }}
-  contentStyle={{
-    background: "#0F172A",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "16px",
-    color: "#fff",
-        boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
-    padding: "10px 12px",
+  labelFormatter={(label) => {
+    return `Период: ${String(label ?? "")}`;
   }}
-  labelStyle={{ color: "#fff", fontWeight: 600 }}
-  itemStyle={{ color: "#fff" }}
 />
                             <Bar
                 dataKey="plan"

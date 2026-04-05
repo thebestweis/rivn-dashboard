@@ -215,7 +215,7 @@ const paidTotal = factPayments.reduce(
     amount: `₽${Number(payment.amount).toLocaleString("ru-RU")}`,
     status: getPlannedStatus(payment),
     notes: payment.notes ?? "",
-    documentUrl: payment.document_url ?? "",
+    documentUrl: "",
   }));
 const sortedPlanned = mappedPlannedPayments.sort((a, b) => {
   if (a.status === "overdue" && b.status !== "overdue") return -1;

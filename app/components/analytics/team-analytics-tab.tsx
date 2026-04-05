@@ -158,7 +158,7 @@ export function TeamAnalyticsTab({
   });
 
   payrollPayouts.forEach((payout) => {
-    const date = parseDateString(payout.date);
+    const date = parseDateString(payout.payoutDate);
     if (!date) return;
 
     const key = getMonthKey(date);

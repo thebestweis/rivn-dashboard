@@ -61,9 +61,7 @@ export function ExpenseBreakdownDonut({
                   color: "white",
                 }}
                 labelStyle={{ color: "rgba(255,255,255,0.6)" }}
-                formatter={(value: number) =>
-                  `₽${value.toLocaleString("ru-RU")}`
-                }
+                formatter={(value) => `₽${Number(value ?? 0).toLocaleString("ru-RU")}`}
               />
             </PieChart>
           </ResponsiveContainer>

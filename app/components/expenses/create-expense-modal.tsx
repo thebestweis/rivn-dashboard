@@ -1,3 +1,10 @@
+type ExpenseCategory =
+  | "marketing"
+  | "contractor"
+  | "service"
+  | "tax"
+  | "other";
+
 interface CreateExpenseModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -7,7 +14,7 @@ interface CreateExpenseModalProps {
     amount: string;
     date: string;
     client: string;
-  }) => void;
+  }) => void | Promise<void>;
   title: string;
   setTitle: (value: string) => void;
   category: ExpenseCategory;
@@ -23,7 +30,6 @@ interface CreateExpenseModalProps {
     name?: string;
     clientName?: string;
     title?: string;
-    clients: any[];
   }>;
 }
 

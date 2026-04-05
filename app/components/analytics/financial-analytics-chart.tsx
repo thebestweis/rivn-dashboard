@@ -21,11 +21,11 @@ interface FinancialAnalyticsChartProps {
     profit: number;
     expenses: number;
     fot: number;
-    revenueDynamics?: {
-  month: string;
-  revenue: number;
-  profit: number;
-}[];
+  }[];
+  revenueDynamics?: {
+    month: string;
+    revenue: number;
+    profit: number;
   }[];
 }
 
@@ -103,7 +103,7 @@ export function FinancialAnalyticsChart({
                 width={64}
               />
               <Tooltip
-  formatter={(value: number, name: string) => {
+  formatter={(value, name) => {
     const labelMap: Record<string, string> = {
       revenue: "Выручка",
       profit: "Прибыль",
@@ -111,27 +111,17 @@ export function FinancialAnalyticsChart({
       fot: "ФОТ",
     };
 
-    return [formatRub(Number(value)), labelMap[name] ?? name];
-  }}
-  labelFormatter={(label: string) => {
-    const [year, month] = label.split("-");
-    if (!year || !month) return label;
+    const numericValue = Number(value ?? 0);
+    const safeName = String(name ?? "");
 
-    const date = new Date(Number(year), Number(month) - 1, 1);
-
-    return date.toLocaleDateString("ru-RU", {
-      month: "long",
-      year: "numeric",
-    });
+    return [
+      `₽${numericValue.toLocaleString("ru-RU")}`,
+      labelMap[safeName] ?? safeName,
+    ];
   }}
-  contentStyle={{
-    background: "#0F172A",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "16px",
-    color: "#fff",
+  labelFormatter={(label) => {
+    return `Период: ${String(label ?? "")}`;
   }}
-  labelStyle={{ color: "#fff" }}
-  itemStyle={{ color: "#fff" }}
 />
               <Area
                 type="monotone"
