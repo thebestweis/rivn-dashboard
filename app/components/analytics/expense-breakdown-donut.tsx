@@ -2,6 +2,14 @@
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
+const expenseCategoryLabels: Record<string, string> = {
+  marketing: "Маркетинг",
+  contractor: "Подрядчики",
+  service: "Сервисы",
+  tax: "Налоги",
+  other: "Прочее",
+};
+
 interface ExpenseBreakdownItem {
   name: string;
   value: number;
@@ -12,6 +20,14 @@ interface ExpenseBreakdownDonutProps {
 }
 
 const COLORS = ["#7B61FF", "#F59E0B", "#0EA5E9", "#F43F5E", "#10B981"];
+
+const expenseCategoryMap: Record<string, string> = {
+  service: "Сервисы",
+  ads: "Реклама",
+  salary: "Зарплата",
+  rent: "Аренда",
+  other: "Прочее",
+};
 
 export function ExpenseBreakdownDonut({
   data,
@@ -25,7 +41,7 @@ export function ExpenseBreakdownDonut({
         </div>
 
         <span className="rounded-full bg-rose-500/15 px-3 py-1 text-xs text-rose-300">
-          Categories
+          Категории расходов
         </span>
       </div>
 
@@ -68,7 +84,6 @@ export function ExpenseBreakdownDonut({
             <div className="text-3xl font-semibold tracking-tight">
               ₽{total.toLocaleString("ru-RU")}
             </div>
-            <div className="mt-1 text-sm text-white/45">total expenses</div>
           </div>
         </div>
 
@@ -78,7 +93,7 @@ export function ExpenseBreakdownDonut({
 
             return (
               <div
-                key={item.name}
+                key={expenseCategoryMap[item.name] ?? item.name}
                 className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3"
               >
                 <div className="flex items-center gap-3">
@@ -86,7 +101,7 @@ export function ExpenseBreakdownDonut({
                     className="h-3 w-3 rounded-full"
                     style={{ backgroundColor: COLORS[index % COLORS.length] }}
                   />
-                  <span className="text-sm text-white/80">{item.name}</span>
+                  <span className="text-sm text-white/80">{expenseCategoryLabels[item.name] ?? item.name}</span>
                 </div>
 
                 <div className="text-right">

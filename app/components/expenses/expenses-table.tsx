@@ -1,4 +1,13 @@
 import { formatDisplayDate } from "../../lib/storage";
+
+const expenseCategoryLabels: Record<string, string> = {
+  marketing: "Маркетинг",
+  contractor: "Подрядчики",
+  service: "Сервисы",
+  tax: "Налоги",
+  other: "Прочее",
+};
+
 interface ExpenseRow {
   id: string;
   title: string;
@@ -58,13 +67,17 @@ export function ExpensesTable({
                               : "bg-white/10 text-white/60"
                     }`}
                   >
-                    {item.category}
+                    {expenseCategoryLabels[item.category] ?? item.category}
                   </span>
                 </td>
 
-                <td className="px-4 py-3 text-white/75">{formatDisplayDate(item.date)}</td>
+                <td className="px-4 py-3 text-white/75">
+                  {formatDisplayDate(item.date)}
+                </td>
                 <td className="px-4 py-3 text-white/75">{item.client}</td>
-                <td className="px-4 py-3 font-medium text-rose-300">{item.amount}</td>
+                <td className="px-4 py-3 font-medium text-rose-300">
+                  {item.amount}
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
                     <button

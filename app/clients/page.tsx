@@ -24,6 +24,7 @@ export default function ClientsPage() {
 
   const [newName, setNewName] = useState("");
   const [newOwner, setNewOwner] = useState("");
+  const [newOwnerId, setNewOwnerId] = useState("");
   const [newModel, setNewModel] = useState("");
   const [newStatus, setNewStatus] = useState<
     "active" | "paused" | "problem" | "completed"
@@ -88,14 +89,15 @@ export default function ClientsPage() {
   }, [clients, search, status]);
 
   async function handleCreateClient(client: {
-    name: string;
-    status: "active" | "paused" | "problem" | "completed";
-    owner: string;
-    model: string;
-    nextInvoice: string;
-    amount: string;
-    profit: string;
-  }) {
+  name: string;
+  status: "active" | "paused" | "problem" | "completed";
+  owner: string;
+  ownerId?: string | null;
+  model: string;
+  nextInvoice: string;
+  amount: string;
+  profit: string;
+}) {
     try {
       const createdClient = await createClientInSupabase(client);
 
@@ -104,6 +106,7 @@ export default function ClientsPage() {
       setIsCreateOpen(false);
       setNewName("");
       setNewOwner("");
+      setNewOwnerId("");
       setNewModel("");
       setNewStatus("active");
       setNewNextInvoice("");
@@ -186,24 +189,26 @@ export default function ClientsPage() {
           </div>
 
           <CreateClientModal
-            isOpen={isCreateOpen}
-            onClose={() => setIsCreateOpen(false)}
-            onCreate={handleCreateClient}
-            name={newName}
-            setName={setNewName}
-            owner={newOwner}
-            setOwner={setNewOwner}
-            model={newModel}
-            setModel={setNewModel}
-            status={newStatus}
-            setStatus={setNewStatus}
-            nextInvoice={newNextInvoice}
-            setNextInvoice={setNewNextInvoice}
-            amount={newAmount}
-            setAmount={setNewAmount}
-            profit={newProfit}
-            setProfit={setNewProfit}
-          />
+  isOpen={isCreateOpen}
+  onClose={() => setIsCreateOpen(false)}
+  onCreate={handleCreateClient}
+  name={newName}
+  setName={setNewName}
+  owner={newOwner}
+  setOwner={setNewOwner}
+  ownerId={newOwnerId}
+  setOwnerId={setNewOwnerId}
+  model={newModel}
+  setModel={setNewModel}
+  status={newStatus}
+  setStatus={setNewStatus}
+  nextInvoice={newNextInvoice}
+  setNextInvoice={setNewNextInvoice}
+  amount={newAmount}
+  setAmount={setNewAmount}
+  profit={newProfit}
+  setProfit={setNewProfit}
+/>
         </main>
       </div>
 

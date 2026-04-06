@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { useMemo } from "react";
+import { getEmployees, CLIENT_STATUS_LABELS } from "../../lib/storage";
 
 interface ClientRow {
   id: string;
   name: string;
   status: "active" | "paused" | "problem" | "completed";
   owner: string;
+  ownerId?: string | null;
   model: string;
   nextInvoice: string;
   amount: string;
@@ -17,6 +20,10 @@ interface ClientsTableProps {
 }
 
 export function ClientsTable({ clients, onDelete }: ClientsTableProps) {
+    const employeesMap = useMemo(() => {
+    const employees = getEmployees();
+    return new Map(employees.map((employee) => [employee.id, employee]));
+  }, []);
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
       <div className="flex items-center justify-between">
@@ -72,11 +79,15 @@ export function ClientsTable({ clients, onDelete }: ClientsTableProps) {
                             : "bg-white/10 text-white/60"
                     }`}
                   >
-                    {client.status}
+                    {CLIENT_STATUS_LABELS[client.status]}
                   </span>
                 </td>
 
-                <td className="px-4 py-3 text-white/75">{client.owner}</td>
+                <td className="px-4 py-3 text-white/75">
+  {client.ownerId
+    ? employeesMap.get(client.ownerId)?.name ?? client.owner
+    : client.owner || "Не назначен"}
+</td>
                 <td className="px-4 py-3 text-white/75">{client.model}</td>
                 <td className="px-4 py-3 text-white/75">{client.nextInvoice}</td>
                 <td className="px-4 py-3 text-white/75">{client.amount}</td>

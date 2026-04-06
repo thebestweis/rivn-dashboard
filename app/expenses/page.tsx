@@ -72,7 +72,7 @@ function getClientDisplayName(client: ClientItem) {
 
 export default function ExpensesPage() {
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("all");
+  const [category, setCategory] = useState("");
 
   const [clients, setClients] = useState<ClientItem[]>([]);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
@@ -192,18 +192,16 @@ export default function ExpensesPage() {
     };
   }, []);
 
-  const filteredExpenses = useMemo(() => {
-    return expenses.filter((expense) => {
-      const matchesSearch =
-        expense.title.toLowerCase().includes(search.toLowerCase()) ||
-        expense.client.toLowerCase().includes(search.toLowerCase());
+  const filteredExpenses = expenses.filter((item) => {
+  const matchesSearch =
+    !search ||
+    item.title.toLowerCase().includes(search.toLowerCase()) ||
+    item.client.toLowerCase().includes(search.toLowerCase());
 
-      const matchesCategory =
-        category === "all" ? true : expense.category === category;
+  const matchesCategory = !category || item.category === category;
 
-      return matchesSearch && matchesCategory;
-    });
-  }, [expenses, search, category]);
+  return matchesSearch && matchesCategory;
+});
 
   const totals = useMemo(() => {
     const total = expenses.reduce(

@@ -1,4 +1,13 @@
+
+
 export type ClientStatus = "active" | "paused" | "problem" | "completed";
+
+export const CLIENT_STATUS_LABELS: Record<ClientStatus, string> = {
+  active: "Активный",
+  paused: "На паузе",
+  problem: "Проблемный",
+  completed: "Завершён",
+};
 
 export type ExpenseCategory =
   | "marketing"
@@ -7,15 +16,28 @@ export type ExpenseCategory =
   | "tax"
   | "other";
 
+export type EmployeePayType = "fixed_per_paid_project";
+
+export interface StoredEmployee {
+  id: string;
+  name: string;
+  role: string;
+  payType: EmployeePayType;
+  payValue: string;
+  isActive: boolean;
+}
+
 export interface StoredClient {
   id: string;
   name: string;
   status: ClientStatus;
   owner: string;
+  ownerId?: string | null;
   model: string;
   nextInvoice: string;
   amount: string;
   profit: string;
+  notes?: string;
 }
 
 export interface StoredExpense {
@@ -30,25 +52,73 @@ export interface StoredExpense {
 export interface StoredPayment {
   id: string;
   client: string;
+  clientId?: string | null;
   project: string;
+  projectId?: string | null;
   paidAt: string;
   amount: string;
   source: string;
 }
 
+export interface StoredPayrollAccrual {
+  id: string;
+  employee: string;
+  employeeId?: string | null;
+  client: string;
+  clientId?: string | null;
+  project: string;
+  projectId?: string | null;
+  paymentId?: string | null;
+  amount: string;
+  date: string;
+  status: "accrued" | "paid";
+}
+
 export interface StoredPayrollPayout {
   id: string;
   employee: string;
+  employeeId?: string | null;
   payoutDate: string;
   amount: string;
   month: string;
   status: "scheduled" | "paid";
 }
 
+export interface StoredPayrollExtraPayment {
+  id: string;
+  employee: string;
+  employeeId?: string | null;
+  reason: string;
+  date: string;
+  amount: string;
+}
+
 const CLIENTS_KEY = "clients";
 const EXPENSES_KEY = "expenses";
 const PAYMENTS_KEY = "payments";
+const EMPLOYEES_KEY = "employees";
+const PAYROLL_ACCRUALS_KEY = "payroll_accruals";
 const PAYROLL_PAYOUTS_KEY = "payroll_payouts";
+const PAYROLL_EXTRA_PAYMENTS_KEY = "payroll_extra_payments";
+
+const defaultEmployees: StoredEmployee[] = [
+  {
+    id: "1",
+    name: "Дмитрий",
+    role: "Аккаунт-менеджер",
+    payType: "fixed_per_paid_project",
+    payValue: "₽5,000",
+    isActive: true,
+  },
+  {
+    id: "2",
+    name: "Антон",
+    role: "Проектный менеджер",
+    payType: "fixed_per_paid_project",
+    payValue: "₽5,000",
+    isActive: true,
+  },
+];
 
 const defaultClients: StoredClient[] = [
   {
@@ -56,6 +126,7 @@ const defaultClients: StoredClient[] = [
     name: "Client Orion",
     status: "active",
     owner: "Дмитрий",
+    ownerId: "1",
     model: "Fixed monthly",
     nextInvoice: "08.04",
     amount: "₽30,000",
@@ -66,6 +137,7 @@ const defaultClients: StoredClient[] = [
     name: "Client Nova",
     status: "active",
     owner: "Антон",
+    ownerId: "2",
     model: "Split",
     nextInvoice: "10.04",
     amount: "₽15,000",
@@ -76,6 +148,7 @@ const defaultClients: StoredClient[] = [
     name: "Client Delta",
     status: "paused",
     owner: "Дмитрий",
+    ownerId: "1",
     model: "Hybrid",
     nextInvoice: "—",
     amount: "—",
@@ -86,6 +159,7 @@ const defaultClients: StoredClient[] = [
     name: "Client Alpha",
     status: "problem",
     owner: "Антон",
+    ownerId: "2",
     model: "Percent",
     nextInvoice: "05.04",
     amount: "₽22,000",
@@ -140,6 +214,7 @@ const defaultPayments: StoredPayment[] = [
   {
     id: "1",
     client: "Client Orion",
+    clientId: "1",
     project: "Avito Leadgen",
     paidAt: "01.04",
     amount: "₽30,000",
@@ -148,6 +223,7 @@ const defaultPayments: StoredPayment[] = [
   {
     id: "2",
     client: "Client Nova",
+    clientId: "2",
     project: "Ads Growth",
     paidAt: "28.03",
     amount: "₽15,000",
@@ -156,6 +232,7 @@ const defaultPayments: StoredPayment[] = [
   {
     id: "3",
     client: "Client Delta",
+    clientId: "3",
     project: "Hybrid Model",
     paidAt: "20.03",
     amount: "₽25,000",
@@ -163,10 +240,38 @@ const defaultPayments: StoredPayment[] = [
   },
 ];
 
+const defaultPayrollAccruals: StoredPayrollAccrual[] = [
+  {
+    id: "1",
+    employee: "Дмитрий",
+    employeeId: "1",
+    client: "Client Orion",
+    clientId: "1",
+    project: "Avito Leadgen",
+    paymentId: "1",
+    amount: "₽5,000",
+    date: "01.04",
+    status: "accrued",
+  },
+  {
+    id: "2",
+    employee: "Антон",
+    employeeId: "2",
+    client: "Client Nova",
+    clientId: "2",
+    project: "Ads Growth",
+    paymentId: "2",
+    amount: "₽5,000",
+    date: "28.03",
+    status: "paid",
+  },
+];
+
 const defaultPayrollPayouts: StoredPayrollPayout[] = [
   {
     id: "1",
     employee: "Дмитрий",
+    employeeId: "1",
     payoutDate: "01.05",
     amount: "₽25,000",
     month: "Апрель",
@@ -175,10 +280,30 @@ const defaultPayrollPayouts: StoredPayrollPayout[] = [
   {
     id: "2",
     employee: "Антон",
+    employeeId: "2",
     payoutDate: "01.04",
     amount: "₽20,000",
     month: "Март",
     status: "paid",
+  },
+];
+
+const defaultPayrollExtraPayments: StoredPayrollExtraPayment[] = [
+  {
+    id: "1",
+    employee: "Дмитрий",
+    employeeId: "1",
+    reason: "Бонус за перевыполнение",
+    date: "03.04",
+    amount: "₽10,000",
+  },
+  {
+    id: "2",
+    employee: "Антон",
+    employeeId: "2",
+    reason: "Разовая компенсация",
+    date: "28.03",
+    amount: "₽4,000",
   },
 ];
 
@@ -205,6 +330,14 @@ function writeStorage<T>(key: string, value: T) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+export function saveEmployees(employees: StoredEmployee[]) {
+  writeStorage(EMPLOYEES_KEY, employees);
+}
+
+export function getEmployees(): StoredEmployee[] {
+  return readStorage(EMPLOYEES_KEY, defaultEmployees);
+}
+
 export function getClients(): StoredClient[] {
   return readStorage(CLIENTS_KEY, defaultClients);
 }
@@ -229,6 +362,14 @@ export function savePayments(payments: StoredPayment[]) {
   writeStorage(PAYMENTS_KEY, payments);
 }
 
+export function getPayrollAccruals(): StoredPayrollAccrual[] {
+  return readStorage(PAYROLL_ACCRUALS_KEY, defaultPayrollAccruals);
+}
+
+export function savePayrollAccruals(accruals: StoredPayrollAccrual[]) {
+  writeStorage(PAYROLL_ACCRUALS_KEY, accruals);
+}
+
 export function getPayrollPayouts(): StoredPayrollPayout[] {
   return readStorage(PAYROLL_PAYOUTS_KEY, defaultPayrollPayouts);
 }
@@ -237,16 +378,26 @@ export function savePayrollPayouts(payouts: StoredPayrollPayout[]) {
   writeStorage(PAYROLL_PAYOUTS_KEY, payouts);
 }
 
+export function getPayrollExtraPayments(): StoredPayrollExtraPayment[] {
+  return readStorage(PAYROLL_EXTRA_PAYMENTS_KEY, defaultPayrollExtraPayments);
+}
+
+export function savePayrollExtraPayments(
+  extraPayments: StoredPayrollExtraPayment[]
+) {
+  writeStorage(PAYROLL_EXTRA_PAYMENTS_KEY, extraPayments);
+}
+
 export function parseRubAmount(value: string) {
-  const num = Number(value.replace(/[^\d.-]/g, ""));
+  const num = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
   return Number.isFinite(num) ? num : 0;
 }
 
 export function formatRub(value: number) {
   const rounded = Math.round(value || 0);
-
   return new Intl.NumberFormat("ru-RU").format(rounded) + " ₽";
 }
+
 export function formatDisplayDate(value: string) {
   if (!value) return "—";
 
@@ -265,4 +416,8 @@ export function formatDisplayDate(value: string) {
 export function normalizeDateInput(value: string) {
   if (!value) return "";
   return value;
+}
+
+export function generateEntityId(prefix: string) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }

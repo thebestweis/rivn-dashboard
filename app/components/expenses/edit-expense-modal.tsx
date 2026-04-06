@@ -81,10 +81,10 @@ export function EditExpenseModal({
             className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
           >
             <option value="marketing">marketing</option>
-            <option value="contractor">contractor</option>
-            <option value="service">service</option>
-            <option value="tax">tax</option>
-            <option value="other">other</option>
+<option value="contractor">contractor</option>
+<option value="service">service</option>
+<option value="tax">tax</option>
+<option value="other">other</option>
           </select>
 
           <input

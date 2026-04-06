@@ -92,11 +92,11 @@ export function CreateExpenseModal({
             }
             className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
           >
-            <option value="marketing">marketing</option>
-            <option value="contractor">contractor</option>
-            <option value="service">service</option>
-            <option value="tax">tax</option>
-            <option value="other">other</option>
+            <option value="marketing">Маркетинг</option>
+            <option value="contractor">Подрядчик</option>
+            <option value="service">Услуги</option>
+            <option value="tax">Налоги</option>
+            <option value="other">Другое</option>
           </select>
 
           <input

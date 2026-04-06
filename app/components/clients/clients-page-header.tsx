@@ -18,7 +18,7 @@ export function ClientsPageHeader({
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="text-sm text-white/50">Раздел</div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Clients</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Клиенты</h1>
           <p className="mt-2 text-sm text-white/55">
             Управление клиентами, статусами, следующими счетами и прибыльностью.
           </p>

@@ -1,4 +1,12 @@
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import { FinancialAnalyticsChart } from "./financial-analytics-chart";
 import { ExpenseBreakdownDonut } from "./expense-breakdown-donut";
 import { parseRubAmount, formatRub } from "../../lib/storage";
@@ -7,6 +15,7 @@ import { buildFinancialTimeSeries } from "../../lib/analytics";
 interface FinancialAnalyticsTabProps {
   expenses: any[];
   payments: any[];
+    stableRevenue: number;
   payrollPayouts: any[];
     growthBasePeriod: 1 | 3;
   setGrowthBasePeriod: Dispatch<SetStateAction<1 | 3>>;
@@ -119,6 +128,72 @@ function getExpenseDate(expense: any) {
   );
 }
 
+function normalizeDateToMonthKey(value: string) {
+  if (!value) return "";
+
+  if (value.includes("-")) {
+    return value.slice(0, 7);
+  }
+
+  if (value.includes(".")) {
+    const parts = value.split(".");
+
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      if (!day || !month || !year) return "";
+      return `${year}-${month.padStart(2, "0")}`;
+    }
+
+    if (parts.length === 2) {
+      const [, month] = parts;
+      const currentYear = new Date().getFullYear();
+      return `${currentYear}-${month.padStart(2, "0")}`;
+    }
+  }
+
+  return "";
+}
+
+function getMonthsForPeriod(
+  period: "current_month" | "last_3_months" | "last_6_months" | "all_time"
+) {
+  if (period === "all_time") return null;
+
+  const now = new Date();
+  const monthsCount =
+    period === "current_month" ? 1 : period === "last_3_months" ? 3 : 6;
+
+  const result: string[] = [];
+
+  for (let i = 0; i < monthsCount; i++) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push(
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+    );
+  }
+
+  return result;
+}
+
+const monthNamesRu = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
+];
+
+function buildMonthValue(year: number, monthIndex: number) {
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+}
+
 function SectionCard({ eyebrow, title, children }: SectionCardProps) {
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -132,6 +207,7 @@ export function FinancialAnalyticsTab({
   expenses,
   payments,
   payrollPayouts,
+  stableRevenue,
   revenueDynamics,
   forecastMetrics,
   targetProfit,
@@ -150,9 +226,17 @@ export function FinancialAnalyticsTab({
     expenses,
     payments,
     payrollPayouts,
+  
   });
+  const [period, setPeriod] = useState<
+    "current_month" | "last_3_months" | "last_6_months" | "all_time"
+  >("current_month");
 
   const [expensePeriod, setExpensePeriod] = useState<"month" | "year">("month");
+
+  const activePeriodMonths = useMemo(() => {
+  return getMonthsForPeriod(period);
+}, [period]);
 
   const expenseMonths = Array.from(
   new Set(
@@ -177,21 +261,156 @@ const latestExpenseMonth: string =
 
 const [expenseSelectedMonth, setExpenseSelectedMonth] =
   useState<string>(latestExpenseMonth);
+  
+  const chartMonths = useMemo(() => {
+  return revenueDynamics
+    .map((item) => item.month)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}, [revenueDynamics]);
 
-  const totalRevenue = payments.reduce(
-    (sum, item) => sum + parseRubAmount(item.amount),
-    0
+const fallbackChartMonth =
+  chartMonths.length > 0
+    ? chartMonths[chartMonths.length - 1]
+    : new Date().toISOString().slice(0, 7);
+
+const [chartRangeStartMonth, setChartRangeStartMonth] = useState<string>(
+  chartMonths.length > 0
+    ? chartMonths[Math.max(0, chartMonths.length - 6)]
+    : fallbackChartMonth
+);
+
+const [chartRangeEndMonth, setChartRangeEndMonth] =
+  useState<string>(fallbackChartMonth);
+
+const [isChartRangeStartMenuOpen, setIsChartRangeStartMenuOpen] =
+  useState(false);
+const [isChartRangeEndMenuOpen, setIsChartRangeEndMenuOpen] =
+  useState(false);
+
+const [chartRangeStartPickerYear, setChartRangeStartPickerYear] = useState(() => {
+  const [year] = fallbackChartMonth.split("-");
+  return Number(year);
+});
+
+const [chartRangeEndPickerYear, setChartRangeEndPickerYear] = useState(() => {
+  const [year] = fallbackChartMonth.split("-");
+  return Number(year);
+});
+
+const chartRangeStartMenuRef = useRef<HTMLDivElement | null>(null);
+const chartRangeEndMenuRef = useRef<HTMLDivElement | null>(null);
+
+useEffect(() => {
+  if (chartMonths.length === 0) return;
+
+  setChartRangeEndMonth((prev) =>
+    chartMonths.includes(prev) ? prev : chartMonths[chartMonths.length - 1]
   );
 
-  const totalExpenses = expenses.reduce(
-    (sum, item) => sum + parseRubAmount(item.amount),
-    0
+  setChartRangeStartMonth((prev) =>
+    chartMonths.includes(prev)
+      ? prev
+      : chartMonths[Math.max(0, chartMonths.length - 6)]
   );
+}, [chartMonths]);
 
-  const totalFot = payrollPayouts.reduce(
-    (sum, item) => sum + parseRubAmount(item.amount),
-    0
+useEffect(() => {
+  const [year] = chartRangeStartMonth.split("-");
+  if (year) {
+    setChartRangeStartPickerYear(Number(year));
+  }
+}, [chartRangeStartMonth]);
+
+useEffect(() => {
+  const [year] = chartRangeEndMonth.split("-");
+  if (year) {
+    setChartRangeEndPickerYear(Number(year));
+  }
+}, [chartRangeEndMonth]);
+
+useEffect(() => {
+  function handleClickOutside(event: MouseEvent) {
+    if (
+      isChartRangeStartMenuOpen &&
+      chartRangeStartMenuRef.current &&
+      !chartRangeStartMenuRef.current.contains(event.target as Node)
+    ) {
+      setIsChartRangeStartMenuOpen(false);
+    }
+
+    if (
+      isChartRangeEndMenuOpen &&
+      chartRangeEndMenuRef.current &&
+      !chartRangeEndMenuRef.current.contains(event.target as Node)
+    ) {
+      setIsChartRangeEndMenuOpen(false);
+    }
+  }
+
+  document.addEventListener("mousedown", handleClickOutside);
+
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+  };
+}, [isChartRangeStartMenuOpen, isChartRangeEndMenuOpen]);
+
+const normalizedChartRangeStart =
+  chartRangeStartMonth <= chartRangeEndMonth
+    ? chartRangeStartMonth
+    : chartRangeEndMonth;
+
+const normalizedChartRangeEnd =
+  chartRangeStartMonth <= chartRangeEndMonth
+    ? chartRangeEndMonth
+    : chartRangeStartMonth;
+
+const filteredRevenueDynamics = revenueDynamics.filter(
+  (item) =>
+    item.month >= normalizedChartRangeStart &&
+    item.month <= normalizedChartRangeEnd
+);
+
+const filteredFinancialData = financialData.filter((item: any) => {
+  if (!item?.period) return false;
+
+  return (
+    item.period >= normalizedChartRangeStart &&
+    item.period <= normalizedChartRangeEnd
   );
+});
+
+  const totalRevenue = payments
+  .filter((item) => {
+    if (period === "all_time") return true;
+    if (!item.paidAt) return false;
+
+    const monthKey = normalizeDateToMonthKey(item.paidAt);
+    return activePeriodMonths?.includes(monthKey);
+  })
+  .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
+
+  const totalExpenses = expenses
+  .filter((item) => {
+    if (period === "all_time") return true;
+
+    const rawDate = getExpenseDate(item);
+    if (!rawDate) return false;
+
+    const monthKey = normalizeDateToMonthKey(rawDate);
+    return activePeriodMonths?.includes(monthKey);
+  })
+  .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
+
+  const totalFot = payrollPayouts
+  .filter((item) => {
+    if (period === "all_time") return true;
+    if (!item.payoutDate) return false;
+
+    const monthKey = normalizeDateToMonthKey(item.payoutDate);
+    return activePeriodMonths?.includes(monthKey);
+  })
+  .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
 
   const totalTax = Math.round(totalRevenue * 0.07);
   const totalProfit = totalRevenue - totalExpenses - totalFot - totalTax;
@@ -265,7 +484,6 @@ const expenseBreakdownData = Object.entries(grouped).map(([name, value]) => ({
 
   const ltvAdvanced = Math.round(averageCheck * paymentsPerClient);
 
-  const mrr = totalRevenue;
   const monthlyTaxRows = [...revenueDynamics]
   .filter((item) => item.revenue > 0)
   .map((item) => ({
@@ -289,8 +507,50 @@ const taxYTD = monthlyTaxRows
 
   return (
     <div className="space-y-6">
-      <SectionCard eyebrow="Summary" title="Финансовая сводка">
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <SectionCard title="Финансовая сводка">
+  <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
+    <div className="text-xs text-white/40">
+      {period === "current_month"
+        ? "Показатели за текущий месяц (с 1 числа)"
+        : period === "last_3_months"
+        ? "Показатели за последние 3 месяца"
+        : period === "last_6_months"
+        ? "Показатели за последние 6 месяцев"
+        : "Показатели за всё время"}
+    </div>
+
+    <div className="flex rounded-full border border-white/10 bg-black/20 p-1">
+      {[
+        { key: "current_month", label: "Месяц" },
+        { key: "last_3_months", label: "3 мес" },
+        { key: "last_6_months", label: "6 мес" },
+        { key: "all_time", label: "Всё" },
+      ].map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() =>
+            setPeriod(
+              item.key as
+                | "current_month"
+                | "last_3_months"
+                | "last_6_months"
+                | "all_time"
+            )
+          }
+          className={`rounded-full px-3 py-1 text-xs transition ${
+            period === item.key
+              ? "bg-violet-500/20 text-violet-300"
+              : "text-white/45 hover:text-white"
+          }`}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Выручка"
             value={formatRub(totalRevenue)}
@@ -320,10 +580,10 @@ const taxYTD = monthlyTaxRows
       <SectionCard eyebrow="Базовые метрики" title="Ключевые показатели бизнеса">
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <StatCard
-            label="MRR"
-            value={formatRub(mrr)}
-            hint="Текущая выручка за период"
-          />
+  label="Стабильная выручка"
+  value={formatRub(stableRevenue)}
+  hint="Выручка от клиентов, которые платили 2 последних месяца подряд"
+/>
           <StatCard
             label="Средний чек"
             value={formatRub(averageCheck)}
@@ -352,12 +612,172 @@ const taxYTD = monthlyTaxRows
         </div>
       </SectionCard>
 
-      <SectionCard eyebrow="Графики" title="Динамика выручки, прибыли и расходов">
-        <div className="mt-5 space-y-6">
-          <FinancialAnalyticsChart
-            data={financialData}
-            revenueDynamics={revenueDynamics}
-          />
+      <SectionCard eyebrow="" title="">
+  <div className="space-y-6">
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <div className="text-sm text-white/50">Диапазон графиков</div>
+        <div className="mt-1 text-xs text-white/35">
+          Выбери период, за который нужно показать динамику выручки, прибыли,
+          расходов и ФОТ.
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="relative" ref={chartRangeStartMenuRef}>
+          <div className="mb-2 text-xs uppercase tracking-[0.12em] text-white/35">
+            С месяца
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsChartRangeStartMenuOpen((prev) => !prev);
+              setIsChartRangeEndMenuOpen(false);
+            }}
+            className="inline-flex h-[44px] min-w-[180px] items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/[0.05]"
+          >
+            <span>{formatMonthLabel(chartRangeStartMonth)}</span>
+            <span className="ml-3 text-white/35">
+              {isChartRangeStartMenuOpen ? "−" : "+"}
+            </span>
+          </button>
+
+          {isChartRangeStartMenuOpen ? (
+            <div className="absolute right-0 top-[56px] z-30 w-[280px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
+              <div className="mb-4 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setChartRangeStartPickerYear((prev) => prev - 1)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
+                >
+                  ←
+                </button>
+
+                <div className="text-sm font-semibold text-white">
+                  {chartRangeStartPickerYear}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setChartRangeStartPickerYear((prev) => prev + 1)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
+                >
+                  →
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {monthNamesRu.map((monthName, index) => {
+                  const value = buildMonthValue(chartRangeStartPickerYear, index);
+                  const isActive = value === chartRangeStartMonth;
+
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => {
+                        setChartRangeStartMonth(value);
+                        setIsChartRangeStartMenuOpen(false);
+                      }}
+                      className={`rounded-2xl px-3 py-3 text-left text-sm transition ${
+                        isActive
+                          ? "bg-violet-500 text-white shadow-[0_10px_30px_rgba(139,92,246,0.35)]"
+                          : "bg-black/20 text-white/75 hover:bg-white/[0.05] hover:text-white"
+                      }`}
+                    >
+                      <div className="font-medium leading-none">{monthName}</div>
+                      <div className="mt-2 text-xs opacity-80">
+                        {chartRangeStartPickerYear}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="relative" ref={chartRangeEndMenuRef}>
+          <div className="mb-2 text-xs uppercase tracking-[0.12em] text-white/35">
+            По месяц
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsChartRangeEndMenuOpen((prev) => !prev);
+              setIsChartRangeStartMenuOpen(false);
+            }}
+            className="inline-flex h-[44px] min-w-[180px] items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/[0.05]"
+          >
+            <span>{formatMonthLabel(chartRangeEndMonth)}</span>
+            <span className="ml-3 text-white/35">
+              {isChartRangeEndMenuOpen ? "−" : "+"}
+            </span>
+          </button>
+
+          {isChartRangeEndMenuOpen ? (
+            <div className="absolute right-0 top-[56px] z-30 w-[280px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
+              <div className="mb-4 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setChartRangeEndPickerYear((prev) => prev - 1)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
+                >
+                  ←
+                </button>
+
+                <div className="text-sm font-semibold text-white">
+                  {chartRangeEndPickerYear}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setChartRangeEndPickerYear((prev) => prev + 1)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
+                >
+                  →
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {monthNamesRu.map((monthName, index) => {
+                  const value = buildMonthValue(chartRangeEndPickerYear, index);
+                  const isActive = value === chartRangeEndMonth;
+
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => {
+                        setChartRangeEndMonth(value);
+                        setIsChartRangeEndMenuOpen(false);
+                      }}
+                      className={`rounded-2xl px-3 py-3 text-left text-sm transition ${
+                        isActive
+                          ? "bg-violet-500 text-white shadow-[0_10px_30px_rgba(139,92,246,0.35)]"
+                          : "bg-black/20 text-white/75 hover:bg-white/[0.05] hover:text-white"
+                      }`}
+                    >
+                      <div className="font-medium leading-none">{monthName}</div>
+                      <div className="mt-2 text-xs opacity-80">
+                        {chartRangeEndPickerYear}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+
+    <FinancialAnalyticsChart
+      data={filteredFinancialData}
+      revenueDynamics={filteredRevenueDynamics}
+    />
 
           <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
             <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-4">

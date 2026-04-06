@@ -49,7 +49,7 @@ export function AppBreadcrumbs({ items }: AppBreadcrumbsProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm text-white/35">
       {isRoot ? (
-        <span className="text-white/45">Dashboard</span>
+        <span className="text-white/45"></span>
       ) : (
         crumbs.map((crumb, index) => {
           const isLast = index === crumbs.length - 1;

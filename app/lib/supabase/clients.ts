@@ -1,4 +1,5 @@
 import { createClient } from "./client";
+import type { StoredClient } from "../storage";
 
 const supabase = createClient();
 
@@ -12,17 +13,18 @@ export type SupabaseMonthlyPlan = {
   created_at: string;
   updated_at: string;
 };
-import type { StoredClient } from "../storage";
 
 type DbClientRow = {
   id: string;
   name: string;
   status: "active" | "paused" | "problem" | "completed";
   owner: string;
+  owner_id: string | null;
   model: string;
   next_invoice: string | null;
   amount: string | null;
   profit: string | null;
+  notes: string | null;
 };
 
 function mapDbClient(row: DbClientRow): StoredClient {
@@ -31,10 +33,12 @@ function mapDbClient(row: DbClientRow): StoredClient {
     name: row.name,
     status: row.status,
     owner: row.owner,
+    ownerId: row.owner_id,
     model: row.model,
     nextInvoice: row.next_invoice ?? "",
     amount: row.amount ?? "",
     profit: row.profit ?? "",
+    notes: row.notes ?? "",
   };
 }
 
@@ -74,14 +78,16 @@ export async function createClientInSupabase(
   const supabase = createClient();
 
   const payload = {
-    name: client.name,
-    status: client.status,
-    owner: client.owner,
-    model: client.model,
-    next_invoice: client.nextInvoice,
-    amount: client.amount,
-    profit: client.profit,
-  };
+  name: client.name,
+  status: client.status,
+  owner: client.owner,
+  owner_id: client.ownerId ?? null,
+  model: client.model,
+  next_invoice: client.nextInvoice,
+  amount: client.amount,
+  profit: client.profit,
+  notes: client.notes ?? "",
+};
 
   const { data, error } = await supabase
     .from("clients")
@@ -101,15 +107,17 @@ export async function updateClientInSupabase(
   const supabase = createClient();
 
   const payload = {
-    name: client.name,
-    status: client.status,
-    owner: client.owner,
-    model: client.model,
-    next_invoice: client.nextInvoice,
-    amount: client.amount,
-    profit: client.profit,
-    updated_at: new Date().toISOString(),
-  };
+  name: client.name,
+  status: client.status,
+  owner: client.owner,
+  owner_id: client.ownerId ?? null,
+  model: client.model,
+  next_invoice: client.nextInvoice,
+  amount: client.amount,
+  profit: client.profit,
+  notes: client.notes ?? "",
+  updated_at: new Date().toISOString(),
+};
 
   const { data, error } = await supabase
     .from("clients")
@@ -129,4 +137,19 @@ export async function deleteClientInSupabase(id: string): Promise<void> {
   const { error } = await supabase.from("clients").delete().eq("id", id);
 
   if (error) throw error;
+}
+
+export async function fetchMonthlyPlansFromSupabase(): Promise<
+  SupabaseMonthlyPlan[]
+> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("monthly_plans")
+    .select("*")
+    .order("month", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []) as SupabaseMonthlyPlan[];
 }

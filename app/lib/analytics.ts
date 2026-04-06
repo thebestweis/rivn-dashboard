@@ -59,6 +59,29 @@ function getMonthStartsFromDates(dates: Date[], count = 6) {
   return months;
 }
 
+function normalizePayrollPayoutMonth(value: string) {
+  if (!value) return "";
+
+  if (value.includes("-")) {
+    return value.slice(0, 7);
+  }
+
+  const match = value.match(/^(\d{2})\.(\d{2})$/);
+  if (match) {
+    const [, , month] = match;
+    const currentYear = new Date().getFullYear();
+    return `${currentYear}-${month}`;
+  }
+
+  const fullMatch = value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (fullMatch) {
+    const [, , month, year] = fullMatch;
+    return `${year}-${month}`;
+  }
+
+  return "";
+}
+
 export function buildFinancialTimeSeries(params: {
   payments: StoredPayment[];
   expenses: StoredExpense[];
@@ -73,8 +96,16 @@ export function buildFinancialTimeSeries(params: {
     .filter((date): date is Date => Boolean(date));
 
   const payrollDates = params.payrollPayouts
-    .map((item) => parseStoredDate(item.payoutDate))
-    .filter((date): date is Date => Boolean(date));
+  .map((item) => {
+    const monthKeyValue = normalizePayrollPayoutMonth(item.payoutDate);
+    if (!monthKeyValue) return null;
+
+    const [year, month] = monthKeyValue.split("-");
+    if (!year || !month) return null;
+
+    return new Date(Number(year), Number(month) - 1, 1);
+  })
+  .filter((date): date is Date => Boolean(date));
 
   const monthStarts = getMonthStartsFromDates(
     [...paymentDates, ...expenseDates, ...payrollDates],
@@ -116,15 +147,16 @@ export function buildFinancialTimeSeries(params: {
   }
 
   for (const payout of params.payrollPayouts) {
-    const date = parseStoredDate(payout.payoutDate);
-    if (!date) continue;
+  if (!payout.payoutDate) continue;
 
-    const key = monthKey(date);
-    const bucket = bucketMap.get(key);
-    if (!bucket) continue;
+  const key = normalizePayrollPayoutMonth(payout.payoutDate);
+  if (!key) continue;
 
-    bucket.fot += parseRubAmount(payout.amount);
-  }
+  const bucket = bucketMap.get(key);
+  if (!bucket) continue;
+
+  bucket.fot += parseRubAmount(String(payout.amount ?? ""));
+}
 
   for (const bucket of buckets) {
     bucket.tax = Math.round(bucket.revenue * 0.07);
@@ -132,7 +164,8 @@ export function buildFinancialTimeSeries(params: {
   }
 
   return buckets.map((bucket) => ({
-    period: bucket.label,
+    period: bucket.key,
+    periodLabel: bucket.label,
     revenue: bucket.revenue,
     expenses: bucket.expenses,
     fot: bucket.fot,

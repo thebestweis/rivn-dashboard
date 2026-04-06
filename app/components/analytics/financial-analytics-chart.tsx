@@ -173,11 +173,21 @@ export function FinancialAnalyticsChart({
             <BarChart data={data} barGap={10}>
               <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
               <XAxis
-                dataKey="period"
-                tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
-                axisLine={false}
-                tickLine={false}
-              />
+  dataKey="period"
+  tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
+  axisLine={false}
+  tickLine={false}
+  tickFormatter={(value) => {
+    if (!value) return "";
+    const [year, month] = String(value).split("-");
+    if (!year || !month) return String(value);
+
+    const date = new Date(Number(year), Number(month) - 1, 1);
+    return date.toLocaleDateString("ru-RU", {
+      month: "short",
+    });
+  }}
+/>
               <YAxis
                 tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
                 axisLine={false}

@@ -10,10 +10,21 @@ interface PayrollAccrualRow {
 
 interface PayrollAccrualsTableProps {
   items: PayrollAccrualRow[];
+  onEdit?: (item: PayrollAccrualRow) => void;
+  onDelete?: (id: string) => void;
+  onPay?: (id: string) => void;
 }
+
+const accrualStatusLabels: Record<PayrollAccrualRow["status"], string> = {
+  accrued: "Начислено",
+  paid: "Выплачено",
+};
 
 export function PayrollAccrualsTable({
   items,
+  onEdit,
+  onDelete,
+  onPay,
 }: PayrollAccrualsTableProps) {
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -29,6 +40,7 @@ export function PayrollAccrualsTable({
               <th className="px-4 py-3 font-medium">Дата</th>
               <th className="px-4 py-3 font-medium">Сумма</th>
               <th className="px-4 py-3 font-medium">Статус</th>
+              <th className="px-4 py-3 font-medium">Действия</th>
             </tr>
           </thead>
 
@@ -42,7 +54,9 @@ export function PayrollAccrualsTable({
                 <td className="px-4 py-3 text-white/75">{item.client}</td>
                 <td className="px-4 py-3 text-white/75">{item.project}</td>
                 <td className="px-4 py-3 text-white/75">{item.date}</td>
-                <td className="px-4 py-3 font-medium text-violet-300">{item.amount}</td>
+                <td className="px-4 py-3 font-medium text-violet-300">
+                  {item.amount}
+                </td>
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-full px-3 py-1 text-xs ${
@@ -51,11 +65,51 @@ export function PayrollAccrualsTable({
                         : "bg-emerald-500/15 text-emerald-300"
                     }`}
                   >
-                    {item.status}
+                    {accrualStatusLabels[item.status]}
                   </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onEdit?.(item)}
+                      className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white"
+                    >
+                      Редактировать
+                    </button>
+
+                    {item.status === "accrued" ? (
+                      <button
+                        type="button"
+                        onClick={() => onPay?.(item.id)}
+                        className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 transition hover:bg-emerald-500/15"
+                      >
+                        Выплатить
+                      </button>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => onDelete?.(item.id)}
+                      className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/15"
+                    >
+                      Удалить
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
+
+            {items.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-4 py-10 text-center text-sm text-white/45"
+                >
+                  Начислений пока нет.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>

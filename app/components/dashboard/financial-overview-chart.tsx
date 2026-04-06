@@ -14,12 +14,23 @@ import {
 
 interface FinancialOverviewChartProps {
   data: {
-    week: string;
+    label: string;
     revenue: number;
     profit: number;
     expenses: number;
     fot: number;
   }[];
+}
+
+function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat("ru-RU", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("ru-RU").format(value) + " ₽";
 }
 
 export function FinancialOverviewChart({
@@ -61,7 +72,7 @@ export function FinancialOverviewChart({
 
               <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
               <XAxis
-                dataKey="week"
+                dataKey="label"
                 tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
                 axisLine={false}
                 tickLine={false}
@@ -70,9 +81,19 @@ export function FinancialOverviewChart({
                 tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
                 axisLine={false}
                 tickLine={false}
-                width={64}
+                width={72}
+                tickFormatter={(value) => formatCompactNumber(Number(value))}
               />
               <Tooltip
+                formatter={(value: number, name: string) => {
+                  const labelMap: Record<string, string> = {
+                    revenue: "Выручка",
+                    profit: "Прибыль",
+                  };
+
+                  return [formatCurrency(Number(value)), labelMap[name] ?? name];
+                }}
+                labelFormatter={(label) => `Период: ${label}`}
                 contentStyle={{
                   background: "#0F1524",
                   border: "1px solid rgba(255,255,255,0.08)",
@@ -122,7 +143,7 @@ export function FinancialOverviewChart({
             <BarChart data={data} barGap={10}>
               <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
               <XAxis
-                dataKey="week"
+                dataKey="label"
                 tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
                 axisLine={false}
                 tickLine={false}
@@ -131,9 +152,19 @@ export function FinancialOverviewChart({
                 tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
                 axisLine={false}
                 tickLine={false}
-                width={64}
+                width={72}
+                tickFormatter={(value) => formatCompactNumber(Number(value))}
               />
               <Tooltip
+                formatter={(value: number, name: string) => {
+                  const labelMap: Record<string, string> = {
+                    expenses: "Расходы",
+                    fot: "ФОТ",
+                  };
+
+                  return [formatCurrency(Number(value)), labelMap[name] ?? name];
+                }}
+                labelFormatter={(label) => `Период: ${label}`}
                 contentStyle={{
                   background: "#0F1524",
                   border: "1px solid rgba(255,255,255,0.08)",

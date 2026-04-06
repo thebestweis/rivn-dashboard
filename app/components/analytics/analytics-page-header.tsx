@@ -14,7 +14,7 @@ export function AnalyticsPageHeader({
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="text-sm text-white/50">Раздел</div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Analytics</h1>
+          <h1 className="text-2xl font-semibold">Аналитика</h1>
           <p className="mt-2 text-sm text-white/55">
             Финансовая аналитика, план / факт, клиенты, команда и управленческие сигналы.
           </p>
@@ -41,7 +41,7 @@ export function AnalyticsPageHeader({
               : "text-white/60 hover:text-white"
           }`}
         >
-          Plan / Fact
+          План / Факт
         </button>
 
         <button
@@ -52,18 +52,7 @@ export function AnalyticsPageHeader({
               : "text-white/60 hover:text-white"
           }`}
         >
-          Clients
-        </button>
-
-        <button
-          onClick={() => setActiveTab("team")}
-          className={`rounded-xl px-4 py-2 text-sm transition ${
-            activeTab === "team"
-              ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-              : "text-white/60 hover:text-white"
-          }`}
-        >
-          Team
+          Клиенты
         </button>
       </div>
     </div>

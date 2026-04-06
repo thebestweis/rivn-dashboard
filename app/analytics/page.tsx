@@ -6,7 +6,6 @@ import { AnalyticsPageHeader } from "../components/analytics/analytics-page-head
 import { FinancialAnalyticsTab } from "../components/analytics/financial-analytics-tab";
 import { PlanFactTab, type PlanFactRow } from "../components/analytics/plan-fact-tab";
 import { ClientsAnalyticsTab } from "../components/analytics/clients-analytics-tab";
-import { TeamAnalyticsTab } from "../components/analytics/team-analytics-tab";
 import {
   getPayrollPayouts,
   parseRubAmount,
@@ -64,6 +63,29 @@ function toSupabaseLikeDate(value: string) {
   }
 
   return value;
+}
+
+function normalizePayrollPayoutMonth(value: string) {
+  if (!value) return "";
+
+  if (value.includes("-")) {
+    return value.slice(0, 7);
+  }
+
+  const match = value.match(/^(\d{2})\.(\d{2})$/);
+  if (match) {
+    const [, , month] = match;
+    const currentYear = new Date().getFullYear();
+    return `${currentYear}-${month}`;
+  }
+
+  const fullMatch = value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (fullMatch) {
+    const [, , month, year] = fullMatch;
+    return `${year}-${month}`;
+  }
+
+  return "";
 }
 
 function calculateClientUnitEconomics(params: {
@@ -137,13 +159,23 @@ return (
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<
-    "financial" | "planfact" | "clients" | "team"
+    "financial" | "planfact" | "clients"
   >("financial");
 
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
+  const [planFactRangeStartMonth, setPlanFactRangeStartMonth] = useState(() => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+});
+
+const [planFactRangeEndMonth, setPlanFactRangeEndMonth] = useState(() => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+});
 
   const [planEditorMonth, setPlanEditorMonth] = useState(() => {
   const now = new Date();
@@ -343,11 +375,14 @@ const totalExpensesNumber = useMemo(() => {
 
   const totalFotNumber = useMemo(() => {
   return payrollPayouts
-  .filter((p) => {
-    if (!p.payoutDate) return false;
-    return p.payoutDate.startsWith(selectedMonth);
-  })
-  .reduce((sum, item) => sum + parseRubAmount(String(item.amount ?? "")), 0);
+    .filter((p) => {
+      if (!p.payoutDate) return false;
+      return normalizePayrollPayoutMonth(p.payoutDate) === selectedMonth;
+    })
+    .reduce(
+      (sum, item) => sum + parseRubAmount(String(item.amount ?? "")),
+      0
+    );
 }, [payrollPayouts, selectedMonth]);
 
   const totalTaxNumber = useMemo(() => {
@@ -370,11 +405,14 @@ const planMonthExpensesNumber = useMemo(() => {
 
 const planMonthFotNumber = useMemo(() => {
   return payrollPayouts
-  .filter((p) => {
-    if (!p.payoutDate) return false;
-    return p.payoutDate.startsWith(selectedMonth);
-  })
-  .reduce((sum, item) => sum + parseRubAmount(String(item.amount ?? "")), 0);
+    .filter((p) => {
+      if (!p.payoutDate) return false;
+      return normalizePayrollPayoutMonth(p.payoutDate) === planEditorMonth;
+    })
+    .reduce(
+      (sum, item) => sum + parseRubAmount(String(item.amount ?? "")),
+      0
+    );
 }, [payrollPayouts, planEditorMonth]);
 
 const planMonthTaxNumber = useMemo(() => {
@@ -512,8 +550,12 @@ const highRiskClients = useMemo(() => {
     .filter((client) => client.risk >= 2)
     .sort((a, b) => b.risk - a.risk);
 }, [clientRiskList]);
+
 const revenueDynamics = useMemo(() => {
-  const map = new Map<string, { revenue: number; expenses: number }>();
+  const map = new Map<
+    string,
+    { revenue: number; expenses: number; fot: number }
+  >();
 
   payments.forEach((p) => {
     if (!p.paidAt) return;
@@ -521,7 +563,7 @@ const revenueDynamics = useMemo(() => {
     const date = toSupabaseLikeDate(p.paidAt);
     const month = date.slice(0, 7);
 
-    const current = map.get(month) || { revenue: 0, expenses: 0 };
+    const current = map.get(month) || { revenue: 0, expenses: 0, fot: 0 };
 
     current.revenue += parseRubAmount(p.amount);
     map.set(month, current);
@@ -533,20 +575,84 @@ const revenueDynamics = useMemo(() => {
     const date = toSupabaseLikeDate(e.date);
     const month = date.slice(0, 7);
 
-    const current = map.get(month) || { revenue: 0, expenses: 0 };
+    const current = map.get(month) || { revenue: 0, expenses: 0, fot: 0 };
 
     current.expenses += parseRubAmount(e.amount);
     map.set(month, current);
   });
 
+  payrollPayouts.forEach((p) => {
+    if (!p.payoutDate) return;
+
+    const month = normalizePayrollPayoutMonth(p.payoutDate);
+    if (!month) return;
+
+    const current = map.get(month) || { revenue: 0, expenses: 0, fot: 0 };
+
+    current.fot += parseRubAmount(String(p.amount ?? ""));
+    map.set(month, current);
+  });
+
   return Array.from(map.entries())
-    .map(([month, data]) => ({
-      month,
-      revenue: data.revenue,
-      profit: data.revenue - data.expenses,
-    }))
+    .map(([month, data]) => {
+      const tax = data.revenue * 0.07;
+      const profit = data.revenue - data.expenses - data.fot - tax;
+
+      return {
+        month,
+        revenue: data.revenue,
+        profit,
+      };
+    })
     .sort((a, b) => a.month.localeCompare(b.month));
-}, [payments, expenses]);
+}, [payments, expenses, payrollPayouts]);
+
+const stableRevenue = useMemo(() => {
+  const sortedMonths = revenueDynamics
+    .map((item) => item.month)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  if (sortedMonths.length < 2) return 0;
+
+  const lastMonth = sortedMonths[sortedMonths.length - 1];
+  const previousMonth = sortedMonths[sortedMonths.length - 2];
+
+  const clientMonthsMap = new Map<string, Set<string>>();
+  const clientRevenueLastMonth = new Map<string, number>();
+
+  payments.forEach((payment) => {
+    if (!payment.paidAt || !payment.client) return;
+
+    const monthKey = toSupabaseLikeDate(payment.paidAt).slice(0, 7);
+    const clientName = payment.client.trim();
+    if (!clientName) return;
+
+    if (!clientMonthsMap.has(clientName)) {
+      clientMonthsMap.set(clientName, new Set());
+    }
+
+    clientMonthsMap.get(clientName)!.add(monthKey);
+
+    if (monthKey === lastMonth) {
+      const current = clientRevenueLastMonth.get(clientName) ?? 0;
+      clientRevenueLastMonth.set(
+        clientName,
+        current + parseRubAmount(payment.amount)
+      );
+    }
+  });
+
+  let total = 0;
+
+  clientMonthsMap.forEach((months, clientName) => {
+    if (months.has(lastMonth) && months.has(previousMonth)) {
+      total += clientRevenueLastMonth.get(clientName) ?? 0;
+    }
+  });
+
+  return total;
+}, [payments, revenueDynamics]);
 
 const forecastMetrics = useMemo(() => {
   if (revenueDynamics.length < 2) {
@@ -1062,70 +1168,63 @@ return (
             setActiveTab={setActiveTab}
           />
 
-          {activeTab === "financial" ? (
-            isLoadingFinance ? (
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                Загрузка финансовых данных...
-              </div>
-            ) : (
-              <FinancialAnalyticsTab
-  expenses={expenses}
-  payments={payments}
-  payrollPayouts={payrollPayouts}
-  revenueDynamics={revenueDynamics}
-  forecastMetrics={forecastMetrics}
-  targetProfit={targetProfit}
-  setTargetProfit={setTargetProfit}
-  targetMetrics={targetMetrics}
-  growthScenario={growthScenario}
-  setGrowthScenario={setGrowthScenario}
-  growthMetrics={growthMetrics}
-  growthInsights={growthInsights}
-  growthPlan={growthPlan}
-  ceoSummary={ceoSummary}
-  growthBasePeriod={growthBasePeriod}
-setGrowthBasePeriod={setGrowthBasePeriod}
-/>
-            )
-          ) : activeTab === "planfact" ? (
+{activeTab === "financial" ? (
+  isLoadingFinance ? (
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      Загрузка финансовых данных...
+    </div>
+  ) : (
+    <FinancialAnalyticsTab
+      expenses={expenses}
+      payments={payments}
+      payrollPayouts={payrollPayouts}
+      revenueDynamics={revenueDynamics}
+      forecastMetrics={forecastMetrics}
+      targetProfit={targetProfit}
+      setTargetProfit={setTargetProfit}
+      targetMetrics={targetMetrics}
+      growthScenario={growthScenario}
+      setGrowthScenario={setGrowthScenario}
+      growthMetrics={growthMetrics}
+      growthInsights={growthInsights}
+      growthPlan={growthPlan}
+      ceoSummary={ceoSummary}
+      growthBasePeriod={growthBasePeriod}
+      setGrowthBasePeriod={setGrowthBasePeriod}
+      stableRevenue={stableRevenue}
+    />
+  )
+) : activeTab === "planfact" ? (
   <PlanFactTab
-  rows={planFactRows}
-  chartData={planFactChartData}
-  selectedMetric={planMetric}
-  setSelectedMetric={setPlanMetric}
-  selectedMonth={planEditorMonth}
-  setSelectedMonth={setPlanEditorMonth}
-  onPlanChange={updateCurrentMonthPlan}
-/>
-) : activeTab === "clients" ? (
-            isLoadingClients ? (
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                Загрузка клиентов...
-              </div>
-            ) : (
-              <ClientsAnalyticsTab
-                clients={clients}
-                payments={payments}
-                allPaymentRecords={allPaymentRecords}
-                clientUnitEconomics={clientUnitEconomics}
-                topClientsByProfit={topClientsByProfit}
-                lossMakingClients={lossMakingClients}
-                lowMarginClients={lowMarginClients}
-                highRiskClients={highRiskClients}
-                clientRecommendations={clientRecommendations}
-              />
-            )
-          ) : isLoadingFinance ? (
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              Загрузка команды...
-            </div>
-          ) : (
-            <TeamAnalyticsTab
-              expenses={expenses}
-              payments={payments}
-              payrollPayouts={payrollPayouts}
-            />
-          )}
+    rows={planFactRows}
+    chartData={planFactChartData}
+    selectedMetric={planMetric}
+    setSelectedMetric={setPlanMetric}
+    selectedMonth={planEditorMonth}
+    setSelectedMonth={setPlanEditorMonth}
+    onPlanChange={updateCurrentMonthPlan}
+    rangeStartMonth={planFactRangeStartMonth}
+    setRangeStartMonth={setPlanFactRangeStartMonth}
+    rangeEndMonth={planFactRangeEndMonth}
+    setRangeEndMonth={setPlanFactRangeEndMonth}
+  />
+) : isLoadingClients ? (
+  <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    Загрузка клиентов...
+  </div>
+) : (
+  <ClientsAnalyticsTab
+    clients={clients}
+    payments={payments}
+    allPaymentRecords={allPaymentRecords}
+    clientUnitEconomics={clientUnitEconomics}
+    topClientsByProfit={topClientsByProfit}
+    lossMakingClients={lossMakingClients}
+    lowMarginClients={lowMarginClients}
+    highRiskClients={highRiskClients}
+    clientRecommendations={clientRecommendations}
+  />
+)}
         </div>
       </main>
     </div>

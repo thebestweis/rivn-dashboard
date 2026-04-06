@@ -1,3 +1,6 @@
+import { useMemo } from "react";
+import { getEmployees, CLIENT_STATUS_LABELS } from "../../lib/storage";
+
 interface EditClientModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -5,6 +8,7 @@ interface EditClientModalProps {
     name: string;
     status: "active" | "paused" | "problem" | "completed";
     owner: string;
+    ownerId?: string | null;
     model: string;
     nextInvoice: string;
     amount: string;
@@ -14,6 +18,8 @@ interface EditClientModalProps {
   setName: (value: string) => void;
   owner: string;
   setOwner: (value: string) => void;
+  ownerId: string;
+  setOwnerId: (value: string) => void;
   model: string;
   setModel: (value: string) => void;
   status: "active" | "paused" | "problem" | "completed";
@@ -34,6 +40,8 @@ export function EditClientModal({
   setName,
   owner,
   setOwner,
+  ownerId,
+  setOwnerId,
   model,
   setModel,
   status,
@@ -45,6 +53,10 @@ export function EditClientModal({
   profit,
   setProfit,
 }: EditClientModalProps) {
+  const employees = useMemo(() => {
+    return getEmployees().filter((employee) => employee.isActive);
+  }, []);
+
   if (!isOpen) return null;
 
   return (
@@ -74,12 +86,26 @@ export function EditClientModal({
             className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
           />
 
-          <input
-            value={owner}
-            onChange={(e) => setOwner(e.target.value)}
-            placeholder="Ответственный"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
-          />
+          <select
+            value={ownerId}
+            onChange={(e) => {
+              const nextOwnerId = e.target.value;
+              const selectedEmployee = employees.find(
+                (employee) => employee.id === nextOwnerId
+              );
+
+              setOwnerId(nextOwnerId);
+              setOwner(selectedEmployee?.name ?? "");
+            }}
+            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
+          >
+            <option value="">Ответственный сотрудник</option>
+            {employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.name} — {employee.role}
+              </option>
+            ))}
+          </select>
 
           <input
             value={model}
@@ -89,19 +115,19 @@ export function EditClientModal({
           />
 
           <select
-            value={status}
-            onChange={(e) =>
-              setStatus(
-                e.target.value as "active" | "paused" | "problem" | "completed"
-              )
-            }
-            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
-          >
-            <option value="active">active</option>
-            <option value="paused">paused</option>
-            <option value="problem">problem</option>
-            <option value="completed">completed</option>
-          </select>
+  value={status}
+  onChange={(e) =>
+    setStatus(
+      e.target.value as "active" | "paused" | "problem" | "completed"
+    )
+  }
+  className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
+>
+  <option value="active">{CLIENT_STATUS_LABELS.active}</option>
+  <option value="paused">{CLIENT_STATUS_LABELS.paused}</option>
+  <option value="problem">{CLIENT_STATUS_LABELS.problem}</option>
+  <option value="completed">{CLIENT_STATUS_LABELS.completed}</option>
+</select>
 
           <input
             value={nextInvoice}
@@ -137,10 +163,15 @@ export function EditClientModal({
             onClick={() => {
               if (!name.trim()) return;
 
+              const selectedEmployee = employees.find(
+                (employee) => employee.id === ownerId
+              );
+
               onSave({
                 name,
                 status,
-                owner,
+                owner: selectedEmployee?.name ?? owner,
+                ownerId: ownerId || null,
                 model,
                 nextInvoice,
                 amount,

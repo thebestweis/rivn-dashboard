@@ -1,8 +1,8 @@
 interface PaymentsPageHeaderProps {
-  activeTab: "planned" | "fact";
   setActiveTab: (value: "planned" | "fact") => void;
   onCreateInvoice: () => void;
   onCreatePayment: () => void;
+  onOpenNotifications?: () => void;
 }
 
 export function PaymentsPageHeader({
@@ -10,48 +10,55 @@ export function PaymentsPageHeader({
   setActiveTab,
   onCreateInvoice,
   onCreatePayment,
+  onOpenNotifications,
 }: PaymentsPageHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex gap-2 rounded-full bg-white/[0.04] p-1">
-        <button
-          onClick={() => setActiveTab("planned")}
-          className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-            activeTab === "planned"
-              ? "bg-white text-black"
-              : "text-white/60 hover:text-white"
-          }`}
-        >
-          План
-        </button>
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <div className="text-sm text-white/50">Раздел</div>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+            Платежи
+          </h1>
+          <p className="mt-2 text-sm text-white/55">
+            Контроль счетов, ожидаемых поступлений, фактических оплат и просрочек.
+          </p>
+        </div>
 
-        <button
-          onClick={() => setActiveTab("fact")}
-          className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-            activeTab === "fact"
-              ? "bg-white text-black"
-              : "text-white/60 hover:text-white"
-          }`}
-        >
-          Факт
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={onOpenNotifications}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            Уведомления
+          </button>
+
+          <button
+            type="button"
+            onClick={onCreateInvoice}
+            className="rounded-2xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-500/15"
+          >
+            Выставить счёт
+          </button>
+
+          <button
+            type="button"
+            onClick={onCreatePayment}
+            className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+          >
+            Добавить оплату
+          </button>
+        </div>
       </div>
 
-      <div className="flex gap-2">
-        <button
-          onClick={onCreateInvoice}
-          className="rounded-full border border-violet-400/30 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 transition hover:bg-violet-500/20"
-        >
-          Выставить счёт
-        </button>
-
-        <button
-          onClick={onCreatePayment}
-          className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
-        >
-          Добавить оплату
-        </button>
+      <div className="mt-5">
+        <input
+          placeholder="Поиск по клиентам, оплатам, счетам"
+          className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+        />
       </div>
+
     </div>
   );
 }

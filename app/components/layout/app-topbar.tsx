@@ -25,33 +25,26 @@ export function AppTopbar({
 </div>
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/60">
-            Поиск по клиентам, оплатам, расходам
-          </div>
-
-          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-            {["Неделя", "Месяц", "Квартал"].map((item, idx) => (
-              <button
-                key={item}
-                className={`rounded-xl px-4 py-2 text-sm transition ${
-                  idx === 0
-                    ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                    : "text-white/60 hover:text-white"
-                }`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
 
           <div className="flex items-center gap-3">
-            <button className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80">
-              Уведомления
-            </button>
-            <button className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)]">
-              Быстрое действие
-            </button>
-          </div>
+  <a
+    href="https://t.me/weismakeleadgen"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 hover:bg-white/[0.06] transition"
+  >
+    TG основателя
+  </a>
+
+  <a
+    href="https://t.me/thebestweis"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20 transition"
+  >
+    Техническая поддержка
+  </a>
+</div>
         </div>
       </div>
     </header>
