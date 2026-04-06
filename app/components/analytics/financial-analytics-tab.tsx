@@ -507,7 +507,7 @@ const taxYTD = monthlyTaxRows
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Финансовая сводка">
+      <SectionCard eyebrow="Сводка" title="Финансовая сводка">
   <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
     <div className="text-xs text-white/40">
       {period === "current_month"

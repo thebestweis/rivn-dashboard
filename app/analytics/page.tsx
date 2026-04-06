@@ -159,7 +159,7 @@ return (
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<
-    "financial" | "planfact" | "clients"
+    "clients" | "financial" | "planfact" | "team"
   >("financial");
 
   const [selectedMonth, setSelectedMonth] = useState(() => {

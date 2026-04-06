@@ -1,16 +1,14 @@
 interface PaymentsPageHeaderProps {
+  activeTab: "planned" | "fact";
   setActiveTab: (value: "planned" | "fact") => void;
   onCreateInvoice: () => void;
   onCreatePayment: () => void;
-  onOpenNotifications?: () => void;
 }
 
 export function PaymentsPageHeader({
-  activeTab,
   setActiveTab,
   onCreateInvoice,
   onCreatePayment,
-  onOpenNotifications,
 }: PaymentsPageHeaderProps) {
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -27,12 +25,11 @@ export function PaymentsPageHeader({
 
         <div className="flex flex-wrap gap-3">
           <button
-            type="button"
-            onClick={onOpenNotifications}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-          >
-            Уведомления
-          </button>
+  type="button"
+  className="..."
+>
+  ...
+</button>
 
           <button
             type="button"

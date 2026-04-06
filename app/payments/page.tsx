@@ -290,7 +290,7 @@ export default function PaymentsPage() {
           amount: `₽${Number(payment.amount).toLocaleString("ru-RU")}`,
           status: getPlannedStatus(payment),
           notes: payment.notes ?? "",
-          documentUrl: payment.document_url ?? "",
+          documentUrl: "",
         }));
 
       const sortedPlanned = mappedPlannedPayments.sort((a, b) => {
@@ -601,15 +601,17 @@ export default function PaymentsPage() {
         <main className="flex-1">
           <div className="space-y-6 px-5 py-6 lg:px-8">
             <PaymentsPageHeader
-              onCreateInvoice={() => {
-                setMode("invoice");
-                setIsCreateOpen(true);
-              }}
-              onCreatePayment={() => {
-                setMode("payment");
-                setIsCreateOpen(true);
-              }}
-            />
+  activeTab={activeTab}
+  setActiveTab={setActiveTab}
+  onCreateInvoice={() => {
+    setMode("invoice");
+    setIsCreateOpen(true);
+  }}
+  onCreatePayment={() => {
+    setMode("payment");
+    setIsCreateOpen(true);
+  }}
+/>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">

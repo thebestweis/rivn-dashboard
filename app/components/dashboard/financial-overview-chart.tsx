@@ -85,14 +85,15 @@ export function FinancialOverviewChart({
                 tickFormatter={(value) => formatCompactNumber(Number(value))}
               />
               <Tooltip
-                formatter={(value: number, name: string) => {
-                  const labelMap: Record<string, string> = {
-                    revenue: "Выручка",
-                    profit: "Прибыль",
-                  };
+                formatter={(value, name) => {
+  const labelMap: Record<string, string> = {
+    revenue: "Выручка",
+    profit: "Прибыль",
+  };
 
-                  return [formatCurrency(Number(value)), labelMap[name] ?? name];
-                }}
+  return [formatCurrency(Number(value ?? 0)), labelMap[String(name)] ?? String(name)];
+}}
+
                 labelFormatter={(label) => `Период: ${label}`}
                 contentStyle={{
                   background: "#0F1524",
@@ -156,14 +157,14 @@ export function FinancialOverviewChart({
                 tickFormatter={(value) => formatCompactNumber(Number(value))}
               />
               <Tooltip
-                formatter={(value: number, name: string) => {
-                  const labelMap: Record<string, string> = {
-                    expenses: "Расходы",
-                    fot: "ФОТ",
-                  };
+                formatter={(value, name) => {
+  const labelMap: Record<string, string> = {
+    expenses: "Расходы",
+    fot: "ФОТ",
+  };
 
-                  return [formatCurrency(Number(value)), labelMap[name] ?? name];
-                }}
+  return [formatCurrency(Number(value ?? 0)), labelMap[String(name)] ?? String(name)];
+}}
                 labelFormatter={(label) => `Период: ${label}`}
                 contentStyle={{
                   background: "#0F1524",
