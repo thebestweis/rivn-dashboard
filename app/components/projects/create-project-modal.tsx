@@ -1,0 +1,349 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import type { Project, ProjectStatus } from "../../lib/supabase/projects";
+
+type ClientOption = {
+  id: string;
+  name: string;
+};
+
+export type CreateProjectFormValues = {
+  name: string;
+  client_id: string;
+  status: ProjectStatus;
+  start_date: string | null;
+  active_tasks_count: number;
+  revenue: number;
+  profit: number;
+  description: string;
+  project_overview: string;
+  important_links: string;
+};
+
+type CreateProjectModalProps = {
+  isOpen: boolean;
+  clients: ClientOption[];
+  isSubmitting: boolean;
+  mode?: "create" | "edit";
+  initialProject?: Project | null;
+  onClose: () => void;
+  onSubmit: (values: CreateProjectFormValues) => Promise<void>;
+};
+
+const initialFormState: CreateProjectFormValues = {
+  name: "",
+  client_id: "",
+  status: "active",
+  start_date: null,
+  active_tasks_count: 0,
+  revenue: 0,
+  profit: 0,
+  description: "",
+  project_overview: "",
+  important_links: "",
+};
+
+function getFormStateFromProject(project: Project): CreateProjectFormValues {
+  return {
+    name: project.name,
+    client_id: project.client_id,
+    status: project.status,
+    start_date: project.start_date,
+    active_tasks_count: project.active_tasks_count,
+    revenue: project.revenue,
+    profit: project.profit,
+    description: project.description ?? "",
+    project_overview: project.project_overview ?? "",
+    important_links: project.important_links ?? "",
+  };
+}
+
+export function CreateProjectModal({
+  isOpen,
+  clients,
+  isSubmitting,
+  mode = "create",
+  initialProject = null,
+  onClose,
+  onSubmit,
+}: CreateProjectModalProps) {
+  const [form, setForm] = useState<CreateProjectFormValues>(initialFormState);
+  const [formError, setFormError] = useState("");
+
+  useEffect(() => {
+    if (!isOpen) {
+      setForm(initialFormState);
+      setFormError("");
+      return;
+    }
+
+    if (mode === "edit" && initialProject) {
+      setForm(getFormStateFromProject(initialProject));
+      setFormError("");
+      return;
+    }
+
+    if (clients.length > 0) {
+      setForm({
+        ...initialFormState,
+        client_id: clients[0].id,
+      });
+      setFormError("");
+      return;
+    }
+
+    setForm(initialFormState);
+    setFormError("");
+  }, [isOpen, mode, initialProject, clients]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  function updateField<K extends keyof CreateProjectFormValues>(
+    key: K,
+    value: CreateProjectFormValues[K]
+  ) {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError("");
+
+    if (!form.name.trim()) {
+      setFormError("Укажи название проекта");
+      return;
+    }
+
+    if (!form.client_id) {
+      setFormError("Выбери клиента");
+      return;
+    }
+
+    try {
+      await onSubmit({
+  ...form,
+  name: form.name.trim(),
+  description: form.description.trim(),
+  project_overview: form.project_overview.trim(),
+  important_links: form.important_links.trim(),
+});
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : mode === "edit"
+          ? "Не удалось обновить проект"
+          : "Не удалось создать проект";
+
+      setFormError(message);
+    }
+  }
+
+  const title = mode === "edit" ? "Редактировать проект" : "Добавить проект";
+  const description =
+    mode === "edit"
+      ? "Обнови данные проекта и сохрани изменения."
+      : "Создай новый проект и привяжи его к нужному клиенту.";
+  const submitLabel = isSubmitting
+    ? mode === "edit"
+      ? "Сохраняем..."
+      : "Создаём..."
+    : mode === "edit"
+    ? "Сохранить изменения"
+    : "Создать проект";
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4 py-6">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-semibold text-white">{title}</h2>
+            <p className="mt-2 text-sm text-white/55">{description}</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+            disabled={isSubmitting}
+          >
+            Закрыть
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="block">
+              <div className="mb-2 text-sm text-white/65">Название проекта</div>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(event) => updateField("name", event.target.value)}
+                placeholder="Например: Авито продвижение"
+                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30"
+              />
+            </label>
+
+            <label className="block">
+              <div className="mb-2 text-sm text-white/65">Клиент</div>
+              <select
+                value={form.client_id}
+                onChange={(event) => updateField("client_id", event.target.value)}
+                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
+              >
+                {clients.length === 0 ? (
+                  <option value="">Нет доступных клиентов</option>
+                ) : (
+                  clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+
+            <label className="block">
+              <div className="mb-2 text-sm text-white/65">Статус</div>
+              <select
+                value={form.status}
+                onChange={(event) =>
+                  updateField("status", event.target.value as ProjectStatus)
+                }
+                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
+              >
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <div className="mb-2 text-sm text-white/65">Дата начала</div>
+              <input
+                type="date"
+                value={form.start_date ?? ""}
+                onChange={(event) =>
+                  updateField("start_date", event.target.value || null)
+                }
+                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
+              />
+            </label>
+
+            <label className="block">
+              <div className="mb-2 text-sm text-white/65">
+                Активные задачи
+              </div>
+              <input
+                type="number"
+                min={0}
+                value={form.active_tasks_count}
+                onChange={(event) =>
+                  updateField(
+                    "active_tasks_count",
+                    Number(event.target.value || 0)
+                  )
+                }
+                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
+              />
+            </label>
+
+            <label className="block">
+              <div className="mb-2 text-sm text-white/65">Доход</div>
+              <input
+                type="number"
+                min={0}
+                value={form.revenue}
+                onChange={(event) =>
+                  updateField("revenue", Number(event.target.value || 0))
+                }
+                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
+              />
+            </label>
+
+            <label className="block">
+              <div className="mb-2 text-sm text-white/65">Прибыль</div>
+              <input
+                type="number"
+                min={0}
+                value={form.profit}
+                onChange={(event) =>
+                  updateField("profit", Number(event.target.value || 0))
+                }
+                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <div className="mb-2 text-sm text-white/65">Описание проекта</div>
+            <textarea
+              value={form.description}
+              onChange={(event) => updateField("description", event.target.value)}
+              rows={4}
+              placeholder="Коротко опиши суть проекта, важные договорённости или контекст"
+              className="w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+            />
+          </label>
+
+          <label className="block">
+  <div className="mb-2 text-sm text-white/65">Основная информация</div>
+  <textarea
+    value={form.project_overview}
+    onChange={(event) =>
+      updateField("project_overview", event.target.value)
+    }
+    rows={4}
+    placeholder="Важные вводные по проекту, формат работы, особенности, доступы, организационные детали"
+    className="w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+  />
+</label>
+
+          <label className="block">
+            <div className="mb-2 text-sm text-white/65">Важные ссылки</div>
+            <textarea
+              value={form.important_links}
+              onChange={(event) =>
+                updateField("important_links", event.target.value)
+              }
+              rows={4}
+              placeholder="Вставь ссылки через новую строку"
+              className="w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+            />
+          </label>
+
+          {formError ? (
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+              {formError}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
+              disabled={isSubmitting}
+            >
+              Отмена
+            </button>
+
+            <button
+              type="submit"
+              className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isSubmitting || clients.length === 0}
+            >
+              {submitLabel}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

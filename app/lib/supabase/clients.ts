@@ -1,8 +1,6 @@
 import { createClient } from "./client";
 import type { StoredClient } from "../storage";
 
-const supabase = createClient();
-
 export type SupabaseMonthlyPlan = {
   id: string;
   month: string;
@@ -78,16 +76,16 @@ export async function createClientInSupabase(
   const supabase = createClient();
 
   const payload = {
-  name: client.name,
-  status: client.status,
-  owner: client.owner,
-  owner_id: client.ownerId ?? null,
-  model: client.model,
-  next_invoice: client.nextInvoice,
-  amount: client.amount,
-  profit: client.profit,
-  notes: client.notes ?? "",
-};
+    name: client.name,
+    status: client.status,
+    owner: client.owner,
+    owner_id: client.ownerId ?? null,
+    model: client.model,
+    next_invoice: client.nextInvoice,
+    amount: client.amount,
+    profit: client.profit,
+    notes: client.notes ?? "",
+  };
 
   const { data, error } = await supabase
     .from("clients")
@@ -107,17 +105,17 @@ export async function updateClientInSupabase(
   const supabase = createClient();
 
   const payload = {
-  name: client.name,
-  status: client.status,
-  owner: client.owner,
-  owner_id: client.ownerId ?? null,
-  model: client.model,
-  next_invoice: client.nextInvoice,
-  amount: client.amount,
-  profit: client.profit,
-  notes: client.notes ?? "",
-  updated_at: new Date().toISOString(),
-};
+    name: client.name,
+    status: client.status,
+    owner: client.owner,
+    owner_id: client.ownerId ?? null,
+    model: client.model,
+    next_invoice: client.nextInvoice,
+    amount: client.amount,
+    profit: client.profit,
+    notes: client.notes ?? "",
+    updated_at: new Date().toISOString(),
+  };
 
   const { data, error } = await supabase
     .from("clients")
@@ -142,14 +140,5 @@ export async function deleteClientInSupabase(id: string): Promise<void> {
 export async function fetchMonthlyPlansFromSupabase(): Promise<
   SupabaseMonthlyPlan[]
 > {
-  const supabase = createClient();
-
-  const { data, error } = await supabase
-    .from("monthly_plans")
-    .select("*")
-    .order("month", { ascending: false });
-
-  if (error) throw error;
-
-  return (data ?? []) as SupabaseMonthlyPlan[];
+  return [];
 }

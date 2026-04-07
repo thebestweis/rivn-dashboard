@@ -7,6 +7,7 @@ const navItems = [
   { label: "Дашборд", href: "/" },
   { label: "Клиенты", href: "/clients" },
   { label: "Проекты", href: "/projects" },
+  { label: "Все задачи", href: "/tasks" },
   { label: "Платежи", href: "/payments" },
   { label: "Зарплаты", href: "/payroll" },
   { label: "Расходы", href: "/expenses" },
@@ -71,18 +72,6 @@ export function AppSidebar() {
           );
         })}
       </nav>
-
-      <div className="mt-auto rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="text-sm text-slate-500 dark:text-white/60">
-          Текущая неделя
-        </div>
-        <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
-          +12.4%
-        </div>
-        <div className="mt-1 text-sm text-emerald-600 dark:text-emerald-300">
-          Рост выручки к прошлой
-        </div>
-      </div>
     </aside>
   );
 }
