@@ -183,9 +183,21 @@ export default function ProjectPage() {
   }, [projectId]);
 
   useEffect(() => {
-    const taskIdFromUrl = searchParams.get("taskId");
+  const taskIdFromUrl = searchParams.get("taskId");
+
+  if (!taskIdFromUrl) {
+    setSelectedTaskId(null);
+    return;
+  }
+
+  const taskExists = tasks.some((task) => task.id === taskIdFromUrl);
+
+  if (taskExists) {
     setSelectedTaskId(taskIdFromUrl);
-  }, [searchParams]);
+  } else {
+    setSelectedTaskId(null);
+  }
+}, [searchParams, tasks]);
 
   function handleTaskCreated(task: Task) {
     setTasks((prev) => [task, ...prev]);
@@ -217,9 +229,9 @@ export default function ProjectPage() {
   }
 
   function handleTaskClose() {
-    setSelectedTaskId(null);
-    router.replace(`/projects/${projectId}`);
-  }
+  setSelectedTaskId(null);
+  router.replace(`/projects/${projectId}`, { scroll: false });
+}
 
   async function handleSaveOverview() {
     if (!project) return;

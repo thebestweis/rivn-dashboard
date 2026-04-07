@@ -111,6 +111,10 @@ const [projectFilter, setProjectFilter] = useState<string>("all");
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
 
+useEffect(() => {
+  setSelectedTaskId(null);
+}, []);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -200,10 +204,13 @@ const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
     return map;
   }, [tasks]);
 
-  const selectedTask = useMemo(
-    () => (selectedTaskId ? tasks.find((task) => task.id === selectedTaskId) ?? null : null),
-    [tasks, selectedTaskId]
-  );
+  const selectedTask = useMemo(() => {
+  if (!selectedTaskId) {
+    return null;
+  }
+
+  return tasks.find((task) => task.id === selectedTaskId) ?? null;
+}, [tasks, selectedTaskId]);
 
   const weekDays = useMemo<DayColumn[]>(() => {
     return Array.from({ length: 7 }).map((_, index) => {
