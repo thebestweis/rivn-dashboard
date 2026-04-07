@@ -557,16 +557,18 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      <TaskModal
-  isOpen={Boolean(selectedTask)}
-  projectId={projectId}
-  task={selectedTask}
-  tasks={tasks}
-  onClose={handleTaskClose}
-  onTaskUpdated={handleTaskUpdated}
-  onTaskCreated={handleTaskCreated}
-  onTaskOpen={handleTaskOpen}
-/>
+      {selectedTask ? (
+  <TaskModal
+    isOpen={true}
+    projectId={projectId}
+    task={selectedTask}
+    tasks={tasks}
+    onClose={handleTaskClose}
+    onTaskUpdated={handleTaskUpdated}
+    onTaskCreated={handleTaskCreated}
+    onTaskOpen={handleTaskOpen}
+  />
+) : null}
     </div>
   );
 }

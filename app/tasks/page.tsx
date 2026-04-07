@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { addDays, format, isSameDay, startOfWeek } from "date-fns";
 import { ru } from "date-fns/locale";
 import { AppSidebar } from "../components/layout/app-sidebar";
@@ -89,6 +90,7 @@ function createDeadlineForDay(day: Date) {
 }
 
 export default function TasksPage() {
+    const pathname = usePathname();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projectsById, setProjectsById] = useState<Record<string, Project>>({});
   const [projectsList, setProjectsList] = useState<Project[]>([]);
@@ -113,7 +115,7 @@ const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
 
 useEffect(() => {
   setSelectedTaskId(null);
-}, []);
+}, [pathname]);
 
   useEffect(() => {
     let isMounted = true;
@@ -205,11 +207,13 @@ useEffect(() => {
   }, [tasks]);
 
   const selectedTask = useMemo(() => {
-  if (!selectedTaskId) {
+  if (!selectedTaskId || tasks.length === 0) {
     return null;
   }
 
-  return tasks.find((task) => task.id === selectedTaskId) ?? null;
+  const foundTask = tasks.find((task) => task.id === selectedTaskId);
+
+  return foundTask ?? null;
 }, [tasks, selectedTaskId]);
 
   const weekDays = useMemo<DayColumn[]>(() => {
@@ -261,8 +265,8 @@ useEffect(() => {
   }
 
   function handleTaskClose() {
-    setSelectedTaskId(null);
-  }
+  setSelectedTaskId(null);
+}
 
   function handleTaskUpdated(updatedTask: Task) {
     setTasks((prev) =>
@@ -756,16 +760,18 @@ const statusOptions = [
         </div>
       </div>
 
-      <TaskModal
-  isOpen={Boolean(selectedTask)}
-  projectId={selectedTask?.project_id ?? ""}
-  task={selectedTask}
-  tasks={tasks}
-  onClose={handleTaskClose}
-  onTaskUpdated={handleTaskUpdated}
-  onTaskCreated={handleTaskCreated}
-  onTaskOpen={handleTaskOpen}
-/>
+      {selectedTask ? (
+  <TaskModal
+    isOpen={true}
+    projectId={selectedTask.project_id}
+    task={selectedTask}
+    tasks={tasks}
+    onClose={handleTaskClose}
+    onTaskUpdated={handleTaskUpdated}
+    onTaskCreated={handleTaskCreated}
+    onTaskOpen={handleTaskOpen}
+  />
+) : null}
     </div>
   );
 }
