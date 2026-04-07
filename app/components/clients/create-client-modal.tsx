@@ -1,5 +1,9 @@
-import { useMemo } from "react";
-import { getEmployees, CLIENT_STATUS_LABELS } from "../../lib/storage";
+interface EmployeeItem {
+  id: string;
+  name: string;
+  role: string;
+  isActive?: boolean;
+}
 
 interface CreateClientModalProps {
   isOpen: boolean;
@@ -30,7 +34,15 @@ interface CreateClientModalProps {
   setAmount: (value: string) => void;
   profit: string;
   setProfit: (value: string) => void;
+  employees: EmployeeItem[];
 }
+
+const CLIENT_STATUS_LABELS = {
+  active: "Активный",
+  paused: "На паузе",
+  problem: "Проблемный",
+  completed: "Завершён",
+};
 
 export function CreateClientModal({
   isOpen,
@@ -52,12 +64,11 @@ export function CreateClientModal({
   setAmount,
   profit,
   setProfit,
+  employees,
 }: CreateClientModalProps) {
-  const employees = useMemo(() => {
-    return getEmployees().filter((employee) => employee.isActive);
-  }, []);
-
   if (!isOpen) return null;
+
+  const activeEmployees = employees.filter((employee) => employee.isActive !== false);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -90,7 +101,7 @@ export function CreateClientModal({
             value={ownerId}
             onChange={(e) => {
               const nextOwnerId = e.target.value;
-              const selectedEmployee = employees.find(
+              const selectedEmployee = activeEmployees.find(
                 (employee) => employee.id === nextOwnerId
               );
 
@@ -100,7 +111,7 @@ export function CreateClientModal({
             className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
           >
             <option value="">Ответственный сотрудник</option>
-            {employees.map((employee) => (
+            {activeEmployees.map((employee) => (
               <option key={employee.id} value={employee.id}>
                 {employee.name} — {employee.role}
               </option>
@@ -115,19 +126,19 @@ export function CreateClientModal({
           />
 
           <select
-  value={status}
-  onChange={(e) =>
-    setStatus(
-      e.target.value as "active" | "paused" | "problem" | "completed"
-    )
-  }
-  className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
->
-  <option value="active">{CLIENT_STATUS_LABELS.active}</option>
-  <option value="paused">{CLIENT_STATUS_LABELS.paused}</option>
-  <option value="problem">{CLIENT_STATUS_LABELS.problem}</option>
-  <option value="completed">{CLIENT_STATUS_LABELS.completed}</option>
-</select>
+            value={status}
+            onChange={(e) =>
+              setStatus(
+                e.target.value as "active" | "paused" | "problem" | "completed"
+              )
+            }
+            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
+          >
+            <option value="active">{CLIENT_STATUS_LABELS.active}</option>
+            <option value="paused">{CLIENT_STATUS_LABELS.paused}</option>
+            <option value="problem">{CLIENT_STATUS_LABELS.problem}</option>
+            <option value="completed">{CLIENT_STATUS_LABELS.completed}</option>
+          </select>
 
           <input
             value={nextInvoice}
@@ -163,7 +174,7 @@ export function CreateClientModal({
             onClick={() => {
               if (!name.trim()) return;
 
-              const selectedEmployee = employees.find(
+              const selectedEmployee = activeEmployees.find(
                 (employee) => employee.id === ownerId
               );
 

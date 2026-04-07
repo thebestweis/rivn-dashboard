@@ -11,6 +11,7 @@ import { ProjectCard } from "../components/projects/project-card";
 import { ProjectsFilters } from "../components/projects/projects-filters";
 import { ProjectsStats } from "../components/projects/projects-stats";
 import { fetchClientsFromSupabase } from "../lib/supabase/clients";
+import { fetchEmployeesFromSupabase } from "../lib/supabase/employees";
 import {
   createProject,
   deleteProject,
@@ -19,6 +20,7 @@ import {
   type Project,
   type ProjectStatus,
 } from "../lib/supabase/projects";
+import { getAllTasks, type Task } from "../lib/supabase/tasks";
 
 type StatusFilter = "all" | ProjectStatus;
 
@@ -27,9 +29,16 @@ type ClientOption = {
   name: string;
 };
 
+type EmployeeOption = {
+  id: string;
+  name: string;
+};
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [clientNamesById, setClientNamesById] = useState<Record<string, string>>(
     {}
   );
@@ -51,10 +60,13 @@ export default function ProjectsPage() {
         setIsLoading(true);
         setErrorMessage("");
 
-        const [projectsData, clientsData] = await Promise.all([
-          getProjects(),
-          fetchClientsFromSupabase(),
-        ]);
+        const [projectsData, clientsData, employeesData, tasksData] =
+          await Promise.all([
+            getProjects(),
+            fetchClientsFromSupabase(),
+            fetchEmployeesFromSupabase(),
+            getAllTasks(),
+          ]);
 
         if (!isMounted) return;
 
@@ -62,6 +74,13 @@ export default function ProjectsPage() {
           id: client.id,
           name: client.name,
         }));
+
+        const nextEmployees: EmployeeOption[] = employeesData
+          .filter((employee) => employee.isActive)
+          .map((employee) => ({
+            id: employee.id,
+            name: employee.name,
+          }));
 
         const nextClientNamesById = clientsData.reduce<Record<string, string>>(
           (acc, client) => {
@@ -72,7 +91,9 @@ export default function ProjectsPage() {
         );
 
         setProjects(projectsData);
+        setTasks(tasksData);
         setClients(nextClients);
+        setEmployees(nextEmployees);
         setClientNamesById(nextClientNamesById);
       } catch (error) {
         const message =
@@ -103,6 +124,24 @@ export default function ProjectsPage() {
     () => projects.filter((project) => project.status === "active").length,
     [projects]
   );
+
+  const activeTaskCountByProjectId = useMemo(() => {
+    const counts: Record<string, number> = {};
+
+    for (const task of tasks) {
+      const isRootTask = task.parent_task_id === null;
+      const isActiveTask =
+        task.status === "todo" || task.status === "in_progress";
+
+      if (!isRootTask || task.is_archived || !isActiveTask) {
+        continue;
+      }
+
+      counts[task.project_id] = (counts[task.project_id] ?? 0) + 1;
+    }
+
+    return counts;
+  }, [tasks]);
 
   const filteredProjects = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -144,9 +183,9 @@ export default function ProjectsPage() {
         const updatedProject = await updateProject(editingProject.id, {
           name: values.name,
           client_id: values.client_id,
+          employee_id: values.employee_id || null,
           status: values.status,
           start_date: values.start_date,
-          active_tasks_count: values.active_tasks_count,
           revenue: values.revenue,
           profit: values.profit,
           description: values.description,
@@ -168,9 +207,9 @@ export default function ProjectsPage() {
       const createdProject = await createProject({
         name: values.name,
         client_id: values.client_id,
+        employee_id: values.employee_id || null,
         status: values.status,
         start_date: values.start_date,
-        active_tasks_count: values.active_tasks_count,
         revenue: values.revenue,
         profit: values.profit,
         description: values.description,
@@ -317,7 +356,7 @@ export default function ProjectsPage() {
                         }
                         status={project.status}
                         startDate={project.start_date}
-                        activeTasksCount={project.active_tasks_count}
+                        activeTasksCount={activeTaskCountByProjectId[project.id] ?? 0}
                         onDelete={handleDeleteProject}
                         onEdit={handleStartEdit}
                         isDeleting={deletingProjectId === project.id}
@@ -347,6 +386,7 @@ export default function ProjectsPage() {
       <CreateProjectModal
         isOpen={isCreateModalOpen}
         clients={clients}
+        employees={employees}
         isSubmitting={isCreatingProject}
         mode={editingProject ? "edit" : "create"}
         initialProject={editingProject}

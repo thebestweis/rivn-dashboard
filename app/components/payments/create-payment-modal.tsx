@@ -5,21 +5,27 @@ interface ClientItem {
   title?: string;
 }
 
+interface ProjectItem {
+  id: string;
+  name: string;
+  client_id: string;
+}
+
 interface CreatePaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (payment: {
-    client: string;
-    project: string;
+    clientId: string;
+    projectId: string;
     paidAt: string;
     amount: string;
     source: string;
     documentUrl: string;
   }) => void;
-  client: string;
-  setClient: (value: string) => void;
-  project: string;
-  setProject: (value: string) => void;
+  clientId: string;
+  setClientId: (value: string) => void;
+  projectId: string;
+  setProjectId: (value: string) => void;
   paidAt: string;
   setPaidAt: (value: string) => void;
   amount: string;
@@ -29,6 +35,7 @@ interface CreatePaymentModalProps {
   documentUrl: string;
   setDocumentUrl: (value: string) => void;
   clients: ClientItem[];
+  projects: ProjectItem[];
   mode: "invoice" | "payment";
 }
 
@@ -40,10 +47,10 @@ export function CreatePaymentModal({
   isOpen,
   onClose,
   onCreate,
-  client,
-  setClient,
-  project,
-  setProject,
+  clientId,
+  setClientId,
+  projectId,
+  setProjectId,
   paidAt,
   setPaidAt,
   amount,
@@ -53,9 +60,14 @@ export function CreatePaymentModal({
   documentUrl,
   setDocumentUrl,
   clients,
+  projects,
   mode,
 }: CreatePaymentModalProps) {
   if (!isOpen) return null;
+
+  const filteredProjects = projects.filter(
+    (project) => project.client_id === clientId
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -80,8 +92,11 @@ export function CreatePaymentModal({
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <select
-            value={client}
-            onChange={(e) => setClient(e.target.value)}
+            value={clientId}
+            onChange={(e) => {
+              setClientId(e.target.value);
+              setProjectId("");
+            }}
             className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none"
           >
             <option value="">Выбери клиента</option>
@@ -92,12 +107,21 @@ export function CreatePaymentModal({
             ))}
           </select>
 
-          <input
-            value={project}
-            onChange={(e) => setProject(e.target.value)}
-            placeholder="Проект / период"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
-          />
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            disabled={!clientId}
+            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none disabled:opacity-50"
+          >
+            <option value="">
+              {clientId ? "Выбери проект" : "Сначала выбери клиента"}
+            </option>
+            {filteredProjects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
 
           <input
             type="date"
@@ -139,11 +163,11 @@ export function CreatePaymentModal({
 
           <button
             onClick={() => {
-              if (!client.trim()) return;
+              if (!clientId.trim() || !projectId.trim()) return;
 
               onCreate({
-                client,
-                project,
+                clientId,
+                projectId,
                 paidAt,
                 amount,
                 source,

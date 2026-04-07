@@ -12,12 +12,14 @@ import {
   createClientInSupabase,
   deleteClientInSupabase,
 } from "../lib/supabase/clients";
+import { fetchEmployeesFromSupabase } from "../lib/supabase/employees";
 
 export default function ClientsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
 
   const [clients, setClients] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(true);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -43,9 +45,14 @@ export default function ClientsPage() {
 
     async function loadClients() {
       try {
-        const data = await fetchClientsFromSupabase();
+        const [clientsData, employeesData] = await Promise.all([
+          fetchClientsFromSupabase(),
+          fetchEmployeesFromSupabase(),
+        ]);
+
         if (isMounted) {
-          setClients(data);
+          setClients(clientsData);
+          setEmployees(employeesData);
         }
       } catch (error) {
         console.error(error);
@@ -81,23 +88,22 @@ export default function ClientsPage() {
         .toLowerCase()
         .includes(search.toLowerCase());
 
-      const matchesStatus =
-        status === "all" ? true : client.status === status;
+      const matchesStatus = status === "all" ? true : client.status === status;
 
       return matchesSearch && matchesStatus;
     });
   }, [clients, search, status]);
 
   async function handleCreateClient(client: {
-  name: string;
-  status: "active" | "paused" | "problem" | "completed";
-  owner: string;
-  ownerId?: string | null;
-  model: string;
-  nextInvoice: string;
-  amount: string;
-  profit: string;
-}) {
+    name: string;
+    status: "active" | "paused" | "problem" | "completed";
+    owner: string;
+    ownerId?: string | null;
+    model: string;
+    nextInvoice: string;
+    amount: string;
+    profit: string;
+  }) {
     try {
       const createdClient = await createClientInSupabase(client);
 
@@ -155,7 +161,6 @@ export default function ClientsPage() {
         <AppSidebar />
 
         <main className="flex-1">
-
           <div className="space-y-6 px-5 py-6 lg:px-8">
             <ClientsPageHeader
               search={search}
@@ -189,26 +194,27 @@ export default function ClientsPage() {
           </div>
 
           <CreateClientModal
-  isOpen={isCreateOpen}
-  onClose={() => setIsCreateOpen(false)}
-  onCreate={handleCreateClient}
-  name={newName}
-  setName={setNewName}
-  owner={newOwner}
-  setOwner={setNewOwner}
-  ownerId={newOwnerId}
-  setOwnerId={setNewOwnerId}
-  model={newModel}
-  setModel={setNewModel}
-  status={newStatus}
-  setStatus={setNewStatus}
-  nextInvoice={newNextInvoice}
-  setNextInvoice={setNewNextInvoice}
-  amount={newAmount}
-  setAmount={setNewAmount}
-  profit={newProfit}
-  setProfit={setNewProfit}
-/>
+            isOpen={isCreateOpen}
+            onClose={() => setIsCreateOpen(false)}
+            onCreate={handleCreateClient}
+            name={newName}
+            setName={setNewName}
+            owner={newOwner}
+            setOwner={setNewOwner}
+            ownerId={newOwnerId}
+            setOwnerId={setNewOwnerId}
+            model={newModel}
+            setModel={setNewModel}
+            status={newStatus}
+            setStatus={setNewStatus}
+            nextInvoice={newNextInvoice}
+            setNextInvoice={setNewNextInvoice}
+            amount={newAmount}
+            setAmount={setNewAmount}
+            profit={newProfit}
+            setProfit={setNewProfit}
+            employees={employees}
+          />
         </main>
       </div>
 

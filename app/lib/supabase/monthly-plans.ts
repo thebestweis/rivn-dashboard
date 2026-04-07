@@ -1,6 +1,4 @@
-import { createClient } from "./client";
-
-const supabase = createClient();
+import { getAuthedSupabase } from "./auth-user";
 
 export type SupabaseMonthlyPlan = {
   id: string;
@@ -14,9 +12,12 @@ export type SupabaseMonthlyPlan = {
 };
 
 export async function getMonthlyPlansFromSupabase() {
+  const { supabase, userId } = await getAuthedSupabase();
+
   const { data, error } = await supabase
     .from("monthly_plans")
     .select("*")
+    .eq("user_id", userId)
     .order("month", { ascending: true });
 
   if (error) {
@@ -33,7 +34,10 @@ export async function upsertMonthlyPlanInSupabase(params: {
   expenses: number;
   fot: number;
 }) {
+  const { supabase, userId } = await getAuthedSupabase();
+
   const payload = {
+    user_id: userId,
     month: params.month,
     revenue_plan: params.revenue,
     profit_plan: params.profit,
@@ -44,7 +48,7 @@ export async function upsertMonthlyPlanInSupabase(params: {
   const { data, error } = await supabase
     .from("monthly_plans")
     .upsert(payload, {
-      onConflict: "month",
+      onConflict: "user_id,month",
     })
     .select()
     .single();

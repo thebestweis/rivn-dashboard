@@ -16,7 +16,10 @@ export type ExpenseCategory =
   | "tax"
   | "other";
 
-export type EmployeePayType = "fixed_per_paid_project";
+export type EmployeePayType =
+  | "fixed_per_paid_project"
+  | "fixed_salary"
+  | "fixed_salary_plus_project";
 
 export interface StoredEmployee {
   id: string;
@@ -24,6 +27,8 @@ export interface StoredEmployee {
   role: string;
   payType: EmployeePayType;
   payValue: string;
+  fixedSalary?: string;
+  payoutDay?: number;
   isActive: boolean;
 }
 
@@ -396,6 +401,21 @@ export function parseRubAmount(value: string) {
 export function formatRub(value: number) {
   const rounded = Math.round(value || 0);
   return new Intl.NumberFormat("ru-RU").format(rounded) + " ₽";
+}
+
+export function calculateEmployeePayrollAmount(employee: StoredEmployee) {
+  const projectRate = parseRubAmount(employee.payValue ?? "");
+  const fixedSalary = parseRubAmount(employee.fixedSalary ?? "");
+
+  if (employee.payType === "fixed_salary") {
+    return fixedSalary;
+  }
+
+  if (employee.payType === "fixed_salary_plus_project") {
+    return fixedSalary + projectRate;
+  }
+
+  return projectRate;
 }
 
 export function formatDisplayDate(value: string) {

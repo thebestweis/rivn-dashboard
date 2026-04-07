@@ -5,21 +5,27 @@ interface ClientItem {
   title?: string;
 }
 
+interface ProjectItem {
+  id: string;
+  name: string;
+  client_id: string;
+}
+
 interface EditPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (payment: {
-    client: string;
-    project: string;
+    clientId: string;
+    projectId: string;
     paidAt: string;
     amount: string;
     source: string;
     documentUrl: string;
   }) => void;
-  client: string;
-  setClient: (value: string) => void;
-  project: string;
-  setProject: (value: string) => void;
+  clientId: string;
+  setClientId: (value: string) => void;
+  projectId: string;
+  setProjectId: (value: string) => void;
   paidAt: string;
   setPaidAt: (value: string) => void;
   amount: string;
@@ -27,6 +33,7 @@ interface EditPaymentModalProps {
   source: string;
   setSource: (value: string) => void;
   clients: ClientItem[];
+  projects: ProjectItem[];
   mode: "planned" | "fact";
   documentUrl: string;
   setDocumentUrl: (value: string) => void;
@@ -40,10 +47,10 @@ export function EditPaymentModal({
   isOpen,
   onClose,
   onSave,
-  client,
-  setClient,
-  project,
-  setProject,
+  clientId,
+  setClientId,
+  projectId,
+  setProjectId,
   paidAt,
   setPaidAt,
   amount,
@@ -51,11 +58,16 @@ export function EditPaymentModal({
   source,
   setSource,
   clients,
+  projects,
   mode,
   documentUrl,
   setDocumentUrl,
 }: EditPaymentModalProps) {
   if (!isOpen) return null;
+
+  const filteredProjects = projects.filter(
+    (project) => project.client_id === clientId
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -78,8 +90,11 @@ export function EditPaymentModal({
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <select
-            value={client}
-            onChange={(e) => setClient(e.target.value)}
+            value={clientId}
+            onChange={(e) => {
+              setClientId(e.target.value);
+              setProjectId("");
+            }}
             className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none"
           >
             <option value="">Выбери клиента</option>
@@ -90,14 +105,24 @@ export function EditPaymentModal({
             ))}
           </select>
 
-          <input
-            value={project}
-            onChange={(e) => setProject(e.target.value)}
-            placeholder="Проект / период"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
-          />
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            disabled={!clientId}
+            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none disabled:opacity-50"
+          >
+            <option value="">
+              {clientId ? "Выбери проект" : "Сначала выбери клиента"}
+            </option>
+            {filteredProjects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
 
           <input
+            type="date"
             value={paidAt}
             onChange={(e) => setPaidAt(e.target.value)}
             placeholder={mode === "planned" ? "Срок оплаты" : "Дата оплаты"}
@@ -112,15 +137,19 @@ export function EditPaymentModal({
           />
 
           <textarea
-  value={source}
-  onChange={(e) => setSource(e.target.value)}
-  placeholder="Комментарий"
-/>
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            placeholder="Комментарий"
+            rows={4}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 md:col-span-2"
+          />
+
           <input
-  value={documentUrl}
-  onChange={(e) => setDocumentUrl(e.target.value)}
-  placeholder="Ссылка на документ"
-/>
+            value={documentUrl}
+            onChange={(e) => setDocumentUrl(e.target.value)}
+            placeholder="Ссылка на документ"
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 md:col-span-2"
+          />
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-3">
@@ -133,16 +162,16 @@ export function EditPaymentModal({
 
           <button
             onClick={() => {
-              if (!client.trim()) return;
+              if (!clientId.trim() || !projectId.trim()) return;
 
               onSave({
-  client,
-  project,
-  paidAt,
-  amount,
-  source,
-  documentUrl,
-});
+                clientId,
+                projectId,
+                paidAt,
+                amount,
+                source,
+                documentUrl,
+              });
             }}
             className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)]"
           >

@@ -8,12 +8,17 @@ type ClientOption = {
   name: string;
 };
 
+type EmployeeOption = {
+  id: string;
+  name: string;
+};
+
 export type CreateProjectFormValues = {
   name: string;
   client_id: string;
+  employee_id: string;
   status: ProjectStatus;
   start_date: string | null;
-  active_tasks_count: number;
   revenue: number;
   profit: number;
   description: string;
@@ -24,6 +29,7 @@ export type CreateProjectFormValues = {
 type CreateProjectModalProps = {
   isOpen: boolean;
   clients: ClientOption[];
+  employees: EmployeeOption[];
   isSubmitting: boolean;
   mode?: "create" | "edit";
   initialProject?: Project | null;
@@ -34,9 +40,9 @@ type CreateProjectModalProps = {
 const initialFormState: CreateProjectFormValues = {
   name: "",
   client_id: "",
+  employee_id: "",
   status: "active",
   start_date: null,
-  active_tasks_count: 0,
   revenue: 0,
   profit: 0,
   description: "",
@@ -48,9 +54,9 @@ function getFormStateFromProject(project: Project): CreateProjectFormValues {
   return {
     name: project.name,
     client_id: project.client_id,
+    employee_id: project.employee_id ?? "",
     status: project.status,
     start_date: project.start_date,
-    active_tasks_count: project.active_tasks_count,
     revenue: project.revenue,
     profit: project.profit,
     description: project.description ?? "",
@@ -62,6 +68,7 @@ function getFormStateFromProject(project: Project): CreateProjectFormValues {
 export function CreateProjectModal({
   isOpen,
   clients,
+  employees,
   isSubmitting,
   mode = "create",
   initialProject = null,
@@ -88,6 +95,7 @@ export function CreateProjectModal({
       setForm({
         ...initialFormState,
         client_id: clients[0].id,
+        employee_id: "",
       });
       setFormError("");
       return;
@@ -127,19 +135,19 @@ export function CreateProjectModal({
 
     try {
       await onSubmit({
-  ...form,
-  name: form.name.trim(),
-  description: form.description.trim(),
-  project_overview: form.project_overview.trim(),
-  important_links: form.important_links.trim(),
-});
+        ...form,
+        name: form.name.trim(),
+        description: form.description.trim(),
+        project_overview: form.project_overview.trim(),
+        important_links: form.important_links.trim(),
+      });
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : mode === "edit"
-          ? "Не удалось обновить проект"
-          : "Не удалось создать проект";
+            ? "Не удалось обновить проект"
+            : "Не удалось создать проект";
 
       setFormError(message);
     }
@@ -155,8 +163,8 @@ export function CreateProjectModal({
       ? "Сохраняем..."
       : "Создаём..."
     : mode === "edit"
-    ? "Сохранить изменения"
-    : "Создать проект";
+      ? "Сохранить изменения"
+      : "Создать проект";
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4 py-6">
@@ -210,6 +218,26 @@ export function CreateProjectModal({
             </label>
 
             <label className="block">
+              <div className="mb-2 text-sm text-white/65">
+                Ответственный сотрудник
+              </div>
+              <select
+                value={form.employee_id}
+                onChange={(event) =>
+                  updateField("employee_id", event.target.value)
+                }
+                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
+              >
+                <option value="">Не выбран</option>
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
               <div className="mb-2 text-sm text-white/65">Статус</div>
               <select
                 value={form.status}
@@ -231,24 +259,6 @@ export function CreateProjectModal({
                 value={form.start_date ?? ""}
                 onChange={(event) =>
                   updateField("start_date", event.target.value || null)
-                }
-                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
-              />
-            </label>
-
-            <label className="block">
-              <div className="mb-2 text-sm text-white/65">
-                Активные задачи
-              </div>
-              <input
-                type="number"
-                min={0}
-                value={form.active_tasks_count}
-                onChange={(event) =>
-                  updateField(
-                    "active_tasks_count",
-                    Number(event.target.value || 0)
-                  )
                 }
                 className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
               />
@@ -293,17 +303,17 @@ export function CreateProjectModal({
           </label>
 
           <label className="block">
-  <div className="mb-2 text-sm text-white/65">Основная информация</div>
-  <textarea
-    value={form.project_overview}
-    onChange={(event) =>
-      updateField("project_overview", event.target.value)
-    }
-    rows={4}
-    placeholder="Важные вводные по проекту, формат работы, особенности, доступы, организационные детали"
-    className="w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
-  />
-</label>
+            <div className="mb-2 text-sm text-white/65">Основная информация</div>
+            <textarea
+              value={form.project_overview}
+              onChange={(event) =>
+                updateField("project_overview", event.target.value)
+              }
+              rows={4}
+              placeholder="Важные вводные по проекту, формат работы, особенности, доступы, организационные детали"
+              className="w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+            />
+          </label>
 
           <label className="block">
             <div className="mb-2 text-sm text-white/65">Важные ссылки</div>

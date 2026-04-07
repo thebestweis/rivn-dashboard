@@ -4,9 +4,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AppSidebar } from "../../components/layout/app-sidebar";
+import {
+  CreateProjectModal,
+  type CreateProjectFormValues,
+} from "../../components/projects/create-project-modal";
 import { ProjectTasksBoard } from "../../components/tasks/project-tasks-board";
 import { TaskModal } from "../../components/tasks/task-modal";
 import { fetchClientsFromSupabase } from "../../lib/supabase/clients";
+import { fetchEmployeesFromSupabase } from "../../lib/supabase/employees";
 import {
   getProjectById,
   updateProject,
@@ -17,6 +22,16 @@ import {
   type Task,
   type TaskStatus,
 } from "../../lib/supabase/tasks";
+
+type ClientOption = {
+  id: string;
+  name: string;
+};
+
+type EmployeeOption = {
+  id: string;
+  name: string;
+};
 
 function getStatusLabel(status: string) {
   switch (status) {
@@ -67,11 +82,18 @@ function normalizeLinks(raw: string | null) {
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean)
-    .map((value, index) => ({
-      id: `${index}-${value}`,
-      label: value,
-      href: value,
-    }));
+    .map((value, index) => {
+      const href =
+        value.startsWith("http://") || value.startsWith("https://")
+          ? value
+          : `https://${value}`;
+
+      return {
+        id: `${index}-${value}`,
+        label: value,
+        href,
+      };
+    });
 }
 
 function PencilButton({
@@ -112,8 +134,12 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [clientName, setClientName] = useState<string>("—");
   const [clientId, setClientId] = useState<string | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -123,6 +149,9 @@ export default function ProjectPage() {
   const [linksDraft, setLinksDraft] = useState("");
   const [isSavingOverview, setIsSavingOverview] = useState(false);
   const [isSavingLinks, setIsSavingLinks] = useState(false);
+
+  const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
+  const [isSavingProject, setIsSavingProject] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -138,12 +167,22 @@ export default function ProjectPage() {
           throw new Error("Проект не найден");
         }
 
-        const [clients, projectTasks] = await Promise.all([
+        const [clientsData, employeesData, projectTasks] = await Promise.all([
           fetchClientsFromSupabase(),
+          fetchEmployeesFromSupabase(),
           getTasksByProject(projectId),
         ]);
 
-        const client = clients.find((item) => item.id === projectData.client_id);
+        const client = clientsData.find(
+          (item) => item.id === projectData.client_id
+        );
+
+        const activeEmployees: EmployeeOption[] = employeesData
+          .filter((employee) => employee.isActive)
+          .map((employee) => ({
+            id: employee.id,
+            name: employee.name,
+          }));
 
         if (!isMounted) {
           return;
@@ -151,10 +190,19 @@ export default function ProjectPage() {
 
         setProject(projectData);
         setTasks(projectTasks);
+        setClients(
+          clientsData.map((item) => ({
+            id: item.id,
+            name: item.name,
+          }))
+        );
+        setEmployees(activeEmployees);
         setClientName(client?.name ?? "Без клиента");
         setClientId(client?.id ?? null);
         setOverviewDraft(
-          projectData.project_overview?.trim() || projectData.description?.trim() || ""
+          projectData.project_overview?.trim() ||
+            projectData.description?.trim() ||
+            ""
         );
         setLinksDraft(projectData.important_links ?? "");
       } catch (error) {
@@ -183,21 +231,37 @@ export default function ProjectPage() {
   }, [projectId]);
 
   useEffect(() => {
-  const taskIdFromUrl = searchParams.get("taskId");
+    const taskIdFromUrl = searchParams.get("taskId");
 
-  if (!taskIdFromUrl) {
-    setSelectedTaskId(null);
-    return;
-  }
+    if (!taskIdFromUrl) {
+      setSelectedTaskId(null);
+      return;
+    }
 
-  const taskExists = tasks.some((task) => task.id === taskIdFromUrl);
+    const taskExists = tasks.some((task) => task.id === taskIdFromUrl);
 
-  if (taskExists) {
-    setSelectedTaskId(taskIdFromUrl);
-  } else {
-    setSelectedTaskId(null);
-  }
-}, [searchParams, tasks]);
+    if (taskExists) {
+      setSelectedTaskId(taskIdFromUrl);
+    } else {
+      setSelectedTaskId(null);
+    }
+  }, [searchParams, tasks]);
+
+  const assignedEmployeeName = useMemo(() => {
+    if (!project?.employee_id) return "Не назначен";
+
+    const employee = employees.find((item) => item.id === project.employee_id);
+    return employee?.name ?? "Не назначен";
+  }, [employees, project?.employee_id]);
+
+  const selectedTask = selectedTaskId
+    ? tasks.find((task) => task.id === selectedTaskId) ?? null
+    : null;
+
+  const links = useMemo(
+    () => normalizeLinks(project?.important_links ?? null),
+    [project?.important_links]
+  );
 
   function handleTaskCreated(task: Task) {
     setTasks((prev) => [task, ...prev]);
@@ -225,13 +289,13 @@ export default function ProjectPage() {
 
   function handleTaskOpen(taskId: string) {
     setSelectedTaskId(taskId);
-    router.replace(`/projects/${projectId}?taskId=${taskId}`);
+    router.replace(`/projects/${projectId}?taskId=${taskId}`, { scroll: false });
   }
 
   function handleTaskClose() {
-  setSelectedTaskId(null);
-  router.replace(`/projects/${projectId}`, { scroll: false });
-}
+    setSelectedTaskId(null);
+    router.replace(`/projects/${projectId}`, { scroll: false });
+  }
 
   async function handleSaveOverview() {
     if (!project) return;
@@ -242,9 +306,9 @@ export default function ProjectPage() {
       const updatedProject = await updateProject(project.id, {
         name: project.name,
         client_id: project.client_id,
+        employee_id: project.employee_id ?? null,
         status: project.status,
         start_date: project.start_date,
-        active_tasks_count: project.active_tasks_count,
         revenue: project.revenue,
         profit: project.profit,
         description: project.description ?? "",
@@ -272,9 +336,9 @@ export default function ProjectPage() {
       const updatedProject = await updateProject(project.id, {
         name: project.name,
         client_id: project.client_id,
+        employee_id: project.employee_id ?? null,
         status: project.status,
         start_date: project.start_date,
-        active_tasks_count: project.active_tasks_count,
         revenue: project.revenue,
         profit: project.profit,
         description: project.description ?? "",
@@ -293,15 +357,45 @@ export default function ProjectPage() {
     }
   }
 
-  const selectedTask =
-    selectedTaskId
-      ? tasks.find((task) => task.id === selectedTaskId) ?? null
-      : null;
+  async function handleSubmitProject(values: CreateProjectFormValues) {
+    if (!project) return;
 
-  const links = useMemo(
-    () => normalizeLinks(project?.important_links ?? null),
-    [project?.important_links]
-  );
+    try {
+      setIsSavingProject(true);
+
+      const updatedProject = await updateProject(project.id, {
+        name: values.name,
+        client_id: values.client_id,
+        employee_id: values.employee_id || null,
+        status: values.status,
+        start_date: values.start_date,
+        revenue: values.revenue,
+        profit: values.profit,
+        description: values.description,
+        project_overview: values.project_overview,
+        important_links: values.important_links,
+      });
+
+      const nextClient =
+        clients.find((item) => item.id === updatedProject.client_id) ?? null;
+
+      setProject(updatedProject);
+      setClientName(nextClient?.name ?? "Без клиента");
+      setClientId(nextClient?.id ?? null);
+      setOverviewDraft(
+        updatedProject.project_overview?.trim() ||
+          updatedProject.description?.trim() ||
+          ""
+      );
+      setLinksDraft(updatedProject.important_links ?? "");
+      setIsEditProjectModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      throw error;
+    } finally {
+      setIsSavingProject(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#0B0F1A] text-white">
@@ -334,101 +428,113 @@ export default function ProjectPage() {
                           <span>Клиент: {clientName}</span>
                           <span className="text-white/25">•</span>
                           <span>Дата старта: {formatDate(project.start_date)}</span>
+                          <span className="text-white/25">•</span>
+                          <span>Ответственный: {assignedEmployeeName}</span>
                         </div>
 
                         <div className="mt-5 flex flex-wrap items-center gap-3">
-  <span
-    className={`inline-flex rounded-full border px-4 py-2 text-sm font-medium ${getStatusClasses(
-      project.status
-    )}`}
-  >
-    {getStatusLabel(project.status)}
-  </span>
+                          <span
+                            className={`inline-flex rounded-full border px-4 py-2 text-sm font-medium ${getStatusClasses(
+                              project.status
+                            )}`}
+                          >
+                            {getStatusLabel(project.status)}
+                          </span>
 
-  {clientId ? (
-    <Link
-      href="/clients"
-      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-    >
-      Открыть клиента
-    </Link>
-  ) : null}
+                          {clientId ? (
+                            <Link
+                              href="/clients"
+                              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                            >
+                              Открыть клиента
+                            </Link>
+                          ) : null}
 
-  <button
-    type="button"
-    onClick={() => navigator.clipboard.writeText(window.location.href)}
-    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-  >
-    Скопировать ссылку
-  </button>
-</div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigator.clipboard.writeText(window.location.href)
+                            }
+                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                          >
+                            Скопировать ссылку
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setIsEditProjectModalOpen(true)}
+                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                          >
+                            Редактировать паспорт
+                          </button>
+                        </div>
                       </div>
 
                       <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
-  <div className="flex items-start justify-between gap-3">
-    <div className="text-sm text-white/45">
-      Основная информация по проекту
-    </div>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="text-sm text-white/45">
+                            Основная информация по проекту
+                          </div>
 
-    <PencilButton
-      onClick={() => {
-        setOverviewDraft(
-          project.project_overview?.trim() ||
-            project.description?.trim() ||
-            ""
-        );
-        setIsEditingOverview(true);
-      }}
-      title="Редактировать информацию"
-    />
-  </div>
+                          <PencilButton
+                            onClick={() => {
+                              setOverviewDraft(
+                                project.project_overview?.trim() ||
+                                  project.description?.trim() ||
+                                  ""
+                              );
+                              setIsEditingOverview(true);
+                            }}
+                            title="Редактировать информацию"
+                          />
+                        </div>
 
-  {isEditingOverview ? (
-    <div className="mt-4">
-      <textarea
-        value={overviewDraft}
-        onChange={(event) => setOverviewDraft(event.target.value)}
-        rows={10}
-        placeholder="Добавь основную информацию по проекту"
-        className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30"
-      />
+                        {isEditingOverview ? (
+                          <div className="mt-4">
+                            <textarea
+                              value={overviewDraft}
+                              onChange={(event) => setOverviewDraft(event.target.value)}
+                              rows={10}
+                              placeholder="Добавь основную информацию по проекту"
+                              className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30"
+                            />
 
-      <div className="mt-4 flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            setOverviewDraft(
-              project.project_overview?.trim() ||
-                project.description?.trim() ||
-                ""
-            );
-            setIsEditingOverview(false);
-          }}
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
-        >
-          Отмена
-        </button>
+                            <div className="mt-4 flex justify-end gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOverviewDraft(
+                                    project.project_overview?.trim() ||
+                                      project.description?.trim() ||
+                                      ""
+                                  );
+                                  setIsEditingOverview(false);
+                                }}
+                                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+                              >
+                                Отмена
+                              </button>
 
-        <button
-          type="button"
-          onClick={handleSaveOverview}
-          disabled={isSavingOverview}
-          className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
-        >
-          {isSavingOverview ? "Сохраняем..." : "Сохранить"}
-        </button>
-      </div>
-    </div>
-  ) : (
-    <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
-  <div className="max-h-[192px] overflow-y-auto whitespace-pre-line pr-2 text-sm leading-6 text-white/90 scrollbar-thin">
-    {project.project_overview?.trim() ||
-      project.description?.trim() ||
-      "Основная информация по проекту пока не заполнена."}
-  </div>
-</div>
-  )}
-</div>
+                              <button
+                                type="button"
+                                onClick={handleSaveOverview}
+                                disabled={isSavingOverview}
+                                className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
+                              >
+                                {isSavingOverview ? "Сохраняем..." : "Сохранить"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
+                            <div className="max-h-[192px] overflow-y-auto whitespace-pre-line pr-2 text-sm leading-6 text-white/90 scrollbar-thin">
+                              {project.project_overview?.trim() ||
+                                project.description?.trim() ||
+                                "Основная информация по проекту пока не заполнена."}
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
                       <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
                         <div className="flex items-start justify-between gap-3">
@@ -477,26 +583,26 @@ export default function ProjectPage() {
                           </div>
                         ) : (
                           <div className="mt-4">
-  {links.length > 0 ? (
-    <div className="max-h-[204px] space-y-3 overflow-y-auto pr-2 scrollbar-thin">
-      {links.map((link) => (
-        <a
-          key={link.id}
-          href={link.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/85 transition hover:bg-white/[0.06] hover:text-white"
-        >
-          {link.label}
-        </a>
-      ))}
-    </div>
-  ) : (
-    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-4 text-sm text-white/35">
-      Ссылки пока не добавлены
-    </div>
-  )}
-</div>
+                            {links.length > 0 ? (
+                              <div className="max-h-[204px] space-y-3 overflow-y-auto pr-2 scrollbar-thin">
+                                {links.map((link) => (
+                                  <a
+                                    key={link.id}
+                                    href={link.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/85 transition hover:bg-white/[0.06] hover:text-white"
+                                  >
+                                    {link.label}
+                                  </a>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-4 text-sm text-white/35">
+                                Ссылки пока не добавлены
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -511,13 +617,13 @@ export default function ProjectPage() {
                     </div>
 
                     <ProjectTasksBoard
-  projectId={project.id}
-  tasks={tasks}
-  onTaskCreated={handleTaskCreated}
-  onTaskStatusChanged={handleTaskStatusChanged}
-  onTaskOpen={handleTaskOpen}
-  onSubtaskToggle={handleTaskStatusChanged}
-/>
+                      projectId={project.id}
+                      tasks={tasks}
+                      onTaskCreated={handleTaskCreated}
+                      onTaskStatusChanged={handleTaskStatusChanged}
+                      onTaskOpen={handleTaskOpen}
+                      onSubtaskToggle={handleTaskStatusChanged}
+                    />
                   </section>
 
                   <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -557,18 +663,35 @@ export default function ProjectPage() {
         </div>
       </div>
 
+      {project ? (
+        <CreateProjectModal
+          isOpen={isEditProjectModalOpen}
+          clients={clients}
+          employees={employees}
+          isSubmitting={isSavingProject}
+          mode="edit"
+          initialProject={project}
+          onClose={() => {
+            if (!isSavingProject) {
+              setIsEditProjectModalOpen(false);
+            }
+          }}
+          onSubmit={handleSubmitProject}
+        />
+      ) : null}
+
       {selectedTask ? (
-  <TaskModal
-    isOpen={true}
-    projectId={projectId}
-    task={selectedTask}
-    tasks={tasks}
-    onClose={handleTaskClose}
-    onTaskUpdated={handleTaskUpdated}
-    onTaskCreated={handleTaskCreated}
-    onTaskOpen={handleTaskOpen}
-  />
-) : null}
+        <TaskModal
+          isOpen={true}
+          projectId={projectId}
+          task={selectedTask}
+          tasks={tasks}
+          onClose={handleTaskClose}
+          onTaskUpdated={handleTaskUpdated}
+          onTaskCreated={handleTaskCreated}
+          onTaskOpen={handleTaskOpen}
+        />
+      ) : null}
     </div>
   );
 }

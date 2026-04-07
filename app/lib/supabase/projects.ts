@@ -1,4 +1,4 @@
-import { createClient } from "./client";
+import { getAuthedSupabase } from "./auth-user";
 
 export type ProjectStatus = "active" | "paused" | "completed";
 
@@ -6,9 +6,9 @@ export type Project = {
   id: string;
   name: string;
   client_id: string;
+    employee_id: string | null;
   status: ProjectStatus;
   start_date: string | null;
-  active_tasks_count: number;
   revenue: number;
   profit: number;
   description: string | null;
@@ -24,9 +24,9 @@ export type ProjectWithClient = Project & {
 export type CreateProjectInput = {
   name: string;
   client_id: string;
+    employee_id?: string | null;
   status?: ProjectStatus;
   start_date?: string | null;
-  active_tasks_count?: number;
   revenue?: number;
   profit?: number;
   description?: string;
@@ -39,9 +39,9 @@ function mapProject(row: any): Project {
     id: row.id,
     name: row.name,
     client_id: row.client_id,
+        employee_id: row.employee_id ?? null,
     status: row.status,
     start_date: row.start_date,
-    active_tasks_count: Number(row.active_tasks_count ?? 0),
     revenue: Number(row.revenue ?? 0),
     profit: Number(row.profit ?? 0),
     description: row.description ?? null,
@@ -52,11 +52,12 @@ function mapProject(row: any): Project {
 }
 
 export async function getProjects(): Promise<Project[]> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("projects")
     .select("*")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -67,14 +68,15 @@ export async function getProjects(): Promise<Project[]> {
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
+    user_id: userId,
     name: input.name,
     client_id: input.client_id,
+        employee_id: input.employee_id ?? null,
     status: input.status ?? "active",
     start_date: input.start_date ?? null,
-    active_tasks_count: input.active_tasks_count ?? 0,
     revenue: input.revenue ?? 0,
     profit: input.profit ?? 0,
     description: input.description?.trim() || null,
@@ -99,14 +101,14 @@ export async function updateProject(
   projectId: string,
   input: CreateProjectInput
 ): Promise<Project> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
     name: input.name,
     client_id: input.client_id,
+        employee_id: input.employee_id ?? null,
     status: input.status ?? "active",
     start_date: input.start_date ?? null,
-    active_tasks_count: input.active_tasks_count ?? 0,
     revenue: input.revenue ?? 0,
     profit: input.profit ?? 0,
     description: input.description?.trim() || null,
@@ -118,6 +120,7 @@ export async function updateProject(
     .from("projects")
     .update(payload)
     .eq("id", projectId)
+    .eq("user_id", userId)
     .select("*")
     .single();
 
@@ -129,9 +132,13 @@ export async function updateProject(
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
-  const { error } = await supabase.from("projects").delete().eq("id", projectId);
+  const { error } = await supabase
+    .from("projects")
+    .delete()
+    .eq("id", projectId)
+    .eq("user_id", userId);
 
   if (error) {
     throw new Error(`Не удалось удалить проект: ${error.message}`);
@@ -139,12 +146,13 @@ export async function deleteProject(projectId: string): Promise<void> {
 }
 
 export async function getProjectById(projectId: string): Promise<Project | null> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("projects")
     .select("*")
     .eq("id", projectId)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) {

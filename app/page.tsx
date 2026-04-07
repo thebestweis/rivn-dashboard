@@ -23,6 +23,8 @@ import {
   fetchPayrollExtraPaymentsFromSupabase,
 } from "./lib/supabase/payroll";
 
+import { createClient } from "./lib/supabase/client";
+
 type SupabasePaymentItem = {
   id: string;
   client_id: string | null;
@@ -159,6 +161,12 @@ export default function Home() {
   const [dashboardPeriod, setDashboardPeriod] = useState<"30d" | "90d" | "all">(
     "30d"
   );
+
+  async function handleLogout() {
+  const supabase = createClient();
+  await supabase.auth.signOut();
+  window.location.href = "/login";
+}
 
   const [planFactStartMonth, setPlanFactStartMonth] = useState("2026-04");
 const [planFactEndMonth, setPlanFactEndMonth] = useState("2026-04");
@@ -681,6 +689,14 @@ const periodPlans = useMemo(() => {
       >
         Техническая поддержка
       </a>
+
+      <button
+  type="button"
+  onClick={handleLogout}
+  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+>
+  Выйти
+</button>
     </>
   }
 />

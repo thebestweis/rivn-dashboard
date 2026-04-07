@@ -1,7 +1,7 @@
 "use client";
 
 import { AppToast } from "../components/ui/app-toast";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppSidebar } from "../components/layout/app-sidebar";
 import { PaymentsPageHeader } from "../components/payments/payments-page-header";
 import { PlannedPaymentsTable } from "../components/payments/planned-payments-table";
@@ -11,26 +11,26 @@ import { EditPaymentModal } from "../components/payments/edit-payment-modal";
 import { EmptyState } from "../components/ui/empty-state";
 
 import {
-  generateEntityId,
-  getEmployees,
-  parseRubAmount,
-} from "../lib/storage";
+  sendInvoiceCreatedNotification,
+  sendPaymentReceivedNotification,
+} from "../lib/notifications-client";
 
+import { generateEntityId, parseRubAmount } from "../lib/storage";
 import { fetchClientsFromSupabase } from "../lib/supabase/clients";
+import { fetchEmployeesFromSupabase } from "../lib/supabase/employees";
 import {
   createPaymentInSupabase,
   deletePaymentFromSupabase,
   getPaymentsFromSupabase,
   updatePaymentInSupabase,
 } from "../lib/supabase/payments";
-
 import {
   createPayrollAccrualInSupabase,
   fetchPayrollAccrualsFromSupabase,
   updatePayrollAccrualInSupabase,
   deletePayrollAccrualFromSupabase,
 } from "../lib/supabase/payroll";
-
+import { getProjects } from "../lib/supabase/projects";
 import type { PaymentFormData } from "../lib/types/payment";
 
 interface ClientItem {
@@ -42,18 +42,39 @@ interface ClientItem {
   ownerId?: string | null;
 }
 
+interface ProjectItem {
+  id: string;
+  name: string;
+  client_id: string;
+  employee_id?: string | null;
+}
+
+interface EmployeeItem {
+  id: string;
+  name: string;
+  role: string;
+  payType: "fixed_per_paid_project" | "fixed_salary" | "fixed_salary_plus_project";
+  payValue: string;
+  isActive: boolean;
+}
+
 interface FactPaymentRow {
   id: string;
+  clientId: string;
   client: string;
+  projectId: string | null;
   project: string;
   paidAt: string;
   amount: string;
   source: string;
+  documentUrl: string;
 }
 
 interface PlannedPaymentRow {
   id: string;
+  clientId: string;
   client: string;
+  projectId: string | null;
   project: string;
   invoiceDate: string;
   paymentDate: string;
@@ -122,6 +143,8 @@ export default function PaymentsPage() {
   );
 
   const [clients, setClients] = useState<ClientItem[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [factPayments, setFactPayments] = useState<FactPaymentRow[]>([]);
   const [plannedPayments, setPlannedPayments] = useState<PlannedPaymentRow[]>(
     []
@@ -134,15 +157,15 @@ export default function PaymentsPage() {
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<"planned" | "fact">("fact");
 
-  const [newClient, setNewClient] = useState("");
-  const [newProject, setNewProject] = useState("");
+  const [newClientId, setNewClientId] = useState("");
+  const [newProjectId, setNewProjectId] = useState("");
   const [newPaidAt, setNewPaidAt] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newSource, setNewSource] = useState("");
   const [newDocumentUrl, setNewDocumentUrl] = useState("");
 
-  const [editClient, setEditClient] = useState("");
-  const [editProject, setEditProject] = useState("");
+  const [editClientId, setEditClientId] = useState("");
+  const [editProjectId, setEditProjectId] = useState("");
   const [editPaidAt, setEditPaidAt] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editSource, setEditSource] = useState("");
@@ -172,27 +195,24 @@ export default function PaymentsPage() {
     0
   );
 
+  const projectsMap = useMemo(() => {
+    return new Map(projects.map((project) => [project.id, project]));
+  }, [projects]);
+
   function getClientNameById(id: string) {
     const client = clients.find((c) => c.id === id);
     return client ? getClientDisplayName(client) : "Клиент";
   }
 
-  function findClientIdByName(name: string) {
-    const normalized = name.trim().toLowerCase();
-
-    const targetClient = clients.find((client) => {
-      const displayName = getClientDisplayName(client).trim().toLowerCase();
-      return displayName === normalized;
-    });
-
-    return targetClient?.id ?? null;
+  function getProjectNameById(id: string | null | undefined) {
+    if (!id) return "";
+    return projectsMap.get(id)?.name ?? "";
   }
 
   async function syncPayrollAccrualForPayment(params: {
     paymentId: string;
     clientId: string;
-    clientName: string;
-    project: string;
+    projectId: string | null;
     paidAt: string;
     shouldExist: boolean;
   }) {
@@ -208,19 +228,32 @@ export default function PaymentsPage() {
       return;
     }
 
-    const targetClient = clients.find((client) => client.id === params.clientId);
+    if (!params.projectId) {
+      if (existingAccrual) {
+        await deletePayrollAccrualFromSupabase(existingAccrual.id);
+      }
+      return;
+    }
 
-    const employees = getEmployees();
+    const project = projects.find((item) => item.id === params.projectId);
+    const client = clients.find((item) => item.id === params.clientId);
+
+    if (!project || !client || !project.employee_id) {
+      if (existingAccrual) {
+        await deletePayrollAccrualFromSupabase(existingAccrual.id);
+      }
+      return;
+    }
+
     const employee = employees.find(
-      (item) => item.id === targetClient?.ownerId && item.isActive
+      (item) =>
+        item.id === project.employee_id &&
+        item.isActive &&
+        (item.payType === "fixed_per_paid_project" ||
+          item.payType === "fixed_salary_plus_project")
     );
 
-    const hasValidPayrollBinding =
-      !!targetClient?.ownerId &&
-      !!employee &&
-      employee.payType === "fixed_per_paid_project";
-
-    if (!hasValidPayrollBinding) {
+    if (!employee) {
       if (existingAccrual) {
         await deletePayrollAccrualFromSupabase(existingAccrual.id);
       }
@@ -230,10 +263,10 @@ export default function PaymentsPage() {
     const nextAccrualData = {
       employee: employee.name,
       employeeId: employee.id,
-      client: params.clientName,
-      clientId: params.clientId,
-      project: params.project,
-      projectId: null,
+      client: getClientDisplayName(client),
+      clientId: client.id,
+      project: project.name,
+      projectId: project.id,
       paymentId: params.paymentId,
       amount: employee.payValue,
       date: params.paidAt,
@@ -255,16 +288,29 @@ export default function PaymentsPage() {
     try {
       setLoadingPayments(true);
 
-      const [clientsData, paymentsData] = await Promise.all([
-        fetchClientsFromSupabase(),
-        getPaymentsFromSupabase(),
-      ]);
+      const [clientsData, projectsData, employeesData, paymentsData] =
+        await Promise.all([
+          fetchClientsFromSupabase(),
+          getProjects(),
+          fetchEmployeesFromSupabase(),
+          getPaymentsFromSupabase(),
+        ]);
 
       const safeClients = (clientsData ?? []) as ClientItem[];
+      const safeProjects = (projectsData ?? []) as ProjectItem[];
+      const safeEmployees = (employeesData ?? []) as EmployeeItem[];
+
       setClients(safeClients);
+      setProjects(safeProjects);
+      setEmployees(safeEmployees);
 
       const clientMap = safeClients.reduce<PaymentClientMap>((acc, client) => {
         acc[client.id] = getClientDisplayName(client);
+        return acc;
+      }, {});
+
+      const projectMap = safeProjects.reduce<Record<string, string>>((acc, project) => {
+        acc[project.id] = project.name;
         return acc;
       }, {});
 
@@ -272,25 +318,30 @@ export default function PaymentsPage() {
         .filter((payment) => payment.status === "paid")
         .map((payment) => ({
           id: payment.id,
+          clientId: payment.client_id,
           client: clientMap[payment.client_id] ?? "Неизвестный клиент",
-          project: payment.period_label ?? "",
+          projectId: payment.project_id ?? null,
+          project: payment.project_id ? projectMap[payment.project_id] ?? "" : "",
           paidAt: fromSupabaseDate(payment.paid_date),
           amount: String(payment.amount),
           source: payment.notes ?? "",
+          documentUrl: payment.document_url ?? "",
         }));
 
       const mappedPlannedPayments: PlannedPaymentRow[] = paymentsData
         .filter((payment) => payment.status !== "paid")
         .map((payment) => ({
           id: payment.id,
+          clientId: payment.client_id,
           client: clientMap[payment.client_id] ?? "Неизвестный клиент",
-          project: payment.period_label ?? "",
+          projectId: payment.project_id ?? null,
+          project: payment.project_id ? projectMap[payment.project_id] ?? "" : "",
           invoiceDate: fromSupabaseDate(payment.created_at?.slice(0, 10) ?? null),
           paymentDate: fromSupabaseDate(payment.due_date),
           amount: `₽${Number(payment.amount).toLocaleString("ru-RU")}`,
           status: getPlannedStatus(payment),
           notes: payment.notes ?? "",
-          documentUrl: "",
+          documentUrl: payment.document_url ?? "",
         }));
 
       const sortedPlanned = mappedPlannedPayments.sort((a, b) => {
@@ -315,19 +366,23 @@ export default function PaymentsPage() {
   }, []);
 
   async function handleCreatePayment(payment: {
-    client: string;
-    project: string;
+    clientId: string;
+    projectId: string;
     paidAt: string;
     amount: string;
     source: string;
     documentUrl: string;
   }) {
     try {
-      const clientId = payment.client;
-
-      if (!clientId) {
+      if (!payment.clientId) {
         setToastType("error");
         setToastMessage("Выбери клиента");
+        return;
+      }
+
+      if (!payment.projectId) {
+        setToastType("error");
+        setToastMessage("Выбери проект");
         return;
       }
 
@@ -335,35 +390,64 @@ export default function PaymentsPage() {
       const isInvoice = mode === "invoice";
 
       const payload: PaymentFormData = {
-        client_id: clientId,
+        client_id: payment.clientId,
+        project_id: payment.projectId,
         amount: parseRubAmount(payment.amount),
         due_date: supabaseDate,
         paid_date: isInvoice ? null : supabaseDate,
         status: isInvoice ? "pending" : "paid",
-        period_label: payment.project,
+        period_label: getProjectNameById(payment.projectId),
         notes: payment.source,
         document_url: payment.documentUrl || null,
       };
-
-      setActiveTab(isInvoice ? "planned" : "fact");
-      setToastType("success");
-      setToastMessage(isInvoice ? "Счёт выставлен" : "Оплата добавлена");
-      setIsCreateOpen(false);
 
       const createdPayment = await createPaymentInSupabase(payload);
 
       await syncPayrollAccrualForPayment({
         paymentId: createdPayment.id,
-        clientId,
-        clientName: getClientNameById(clientId),
-        project: payment.project,
+        clientId: payment.clientId,
+        projectId: payment.projectId,
         paidAt: payment.paidAt,
         shouldExist: !isInvoice,
       });
 
+      if (!isInvoice) {
+  try {
+    await sendPaymentReceivedNotification({
+      paymentId: createdPayment.id,
+      clientName: getClientNameById(payment.clientId),
+      projectName: getProjectNameById(payment.projectId),
+      amount: payment.amount,
+      paidAt: payment.paidAt,
+    });
+  } catch (notificationError) {
+    console.error(
+      "Ошибка отправки Telegram-уведомления о полученной оплате:",
+      notificationError
+    );
+  }
+}
+
+if (isInvoice) {
+  try {
+    await sendInvoiceCreatedNotification({
+      paymentId: createdPayment.id,
+      clientName: getClientNameById(payment.clientId),
+      projectName: getProjectNameById(payment.projectId),
+      amount: payment.amount,
+      dueDate: payment.paidAt,
+    });
+  } catch (notificationError) {
+    console.error(
+      "Ошибка отправки Telegram-уведомления о создании счёта:",
+      notificationError
+    );
+  }
+}
+
       setIsCreateOpen(false);
-      setNewClient("");
-      setNewProject("");
+      setNewClientId("");
+      setNewProjectId("");
       setNewPaidAt("");
       setNewAmount("");
       setNewSource("");
@@ -371,6 +455,7 @@ export default function PaymentsPage() {
 
       await loadPaymentsData();
 
+      setActiveTab(isInvoice ? "planned" : "fact");
       setToastType("success");
       setToastMessage(isInvoice ? "Счёт создан" : "Оплата создана");
     } catch (error) {
@@ -383,9 +468,7 @@ export default function PaymentsPage() {
   }
 
   function handleStartEdit(payment: FactPaymentRow) {
-    const clientId = findClientIdByName(payment.client);
-
-    if (!clientId) {
+    if (!payment.clientId) {
       setToastType("error");
       setToastMessage("Не удалось определить клиента");
       return;
@@ -393,12 +476,16 @@ export default function PaymentsPage() {
 
     setEditMode("fact");
     setEditingPaymentId(payment.id);
-    setEditClient(clientId);
-    setEditProject(payment.project);
-    setEditPaidAt(payment.paidAt);
+    setEditClientId(payment.clientId);
+    setEditProjectId(payment.projectId ?? "");
+    setEditPaidAt(
+      payment.paidAt.includes(".")
+        ? toSupabaseDate(payment.paidAt)
+        : payment.paidAt
+    );
     setEditAmount(payment.amount);
     setEditSource(payment.source);
-    setEditDocumentUrl("");
+    setEditDocumentUrl(payment.documentUrl ?? "");
     setIsEditOpen(true);
   }
 
@@ -411,19 +498,15 @@ export default function PaymentsPage() {
       return;
     }
 
-    const clientId = findClientIdByName(target.client);
-
-    if (!clientId) {
-      setToastType("error");
-      setToastMessage("Не удалось определить клиента");
-      return;
-    }
-
     setEditMode("planned");
     setEditingPaymentId(target.id);
-    setEditClient(clientId);
-    setEditProject(target.project);
-    setEditPaidAt(target.paymentDate);
+    setEditClientId(target.clientId);
+    setEditProjectId(target.projectId ?? "");
+    setEditPaidAt(
+      target.paymentDate.includes(".")
+        ? toSupabaseDate(target.paymentDate)
+        : target.paymentDate
+    );
     setEditAmount(target.amount);
     setEditSource(target.notes);
     setEditDocumentUrl(target.documentUrl);
@@ -431,8 +514,8 @@ export default function PaymentsPage() {
   }
 
   async function handleSaveEdit(updatedPayment: {
-    client: string;
-    project: string;
+    clientId: string;
+    projectId: string;
     paidAt: string;
     amount: string;
     source: string;
@@ -441,11 +524,15 @@ export default function PaymentsPage() {
     if (!editingPaymentId) return;
 
     try {
-      const clientId = updatedPayment.client;
-
-      if (!clientId) {
+      if (!updatedPayment.clientId) {
         setToastType("error");
         setToastMessage("Выбери клиента");
+        return;
+      }
+
+      if (!updatedPayment.projectId) {
+        setToastType("error");
+        setToastMessage("Выбери проект");
         return;
       }
 
@@ -453,12 +540,13 @@ export default function PaymentsPage() {
       const shouldExist = editMode === "fact";
 
       const payload: PaymentFormData = {
-        client_id: clientId,
+        client_id: updatedPayment.clientId,
+        project_id: updatedPayment.projectId,
         amount: parseRubAmount(updatedPayment.amount),
         due_date: supabaseDate,
         paid_date: shouldExist ? supabaseDate : null,
         status: shouldExist ? "paid" : "pending",
-        period_label: updatedPayment.project,
+        period_label: getProjectNameById(updatedPayment.projectId),
         notes: updatedPayment.source,
         document_url: updatedPayment.documentUrl || null,
       };
@@ -467,10 +555,9 @@ export default function PaymentsPage() {
 
       await syncPayrollAccrualForPayment({
         paymentId: editingPaymentId,
-        clientId,
-        clientName: getClientNameById(clientId),
-        project: updatedPayment.project,
-        paidAt: updatedPayment.paidAt,
+        clientId: updatedPayment.clientId,
+        projectId: updatedPayment.projectId,
+        paidAt: fromSupabaseDate(supabaseDate),
         shouldExist,
       });
 
@@ -502,22 +589,22 @@ export default function PaymentsPage() {
         return;
       }
 
-      const paymentDate = new Date().toISOString().slice(0, 10);
-      const clientId = findClientIdByName(target.client);
-
-      if (!clientId) {
+      if (!target.clientId || !target.projectId) {
         setToastType("error");
-        setToastMessage("Не удалось определить клиента для счёта");
+        setToastMessage("У счёта не хватает клиента или проекта");
         return;
       }
 
+      const paymentDate = new Date().toISOString().slice(0, 10);
+
       const payload: PaymentFormData = {
-        client_id: clientId,
+        client_id: target.clientId,
+        project_id: target.projectId,
         amount: parseRubAmount(target.amount),
         due_date: toSupabaseDate(target.paymentDate),
         paid_date: paymentDate,
         status: "paid",
-        period_label: target.project,
+        period_label: getProjectNameById(target.projectId),
         notes: target.notes,
         document_url: target.documentUrl || null,
       };
@@ -526,12 +613,26 @@ export default function PaymentsPage() {
 
       await syncPayrollAccrualForPayment({
         paymentId: id,
-        clientId,
-        clientName: target.client,
-        project: target.project,
+        clientId: target.clientId,
+        projectId: target.projectId,
         paidAt: fromSupabaseDate(paymentDate),
         shouldExist: true,
       });
+
+      try {
+  await sendPaymentReceivedNotification({
+    paymentId: id,
+    clientName: target.client,
+    projectName: target.project,
+    amount: target.amount,
+    paidAt: fromSupabaseDate(paymentDate),
+  });
+} catch (notificationError) {
+  console.error(
+    "Ошибка отправки Telegram-уведомления о полученной оплате:",
+    notificationError
+  );
+}
 
       await loadPaymentsData();
 
@@ -569,8 +670,7 @@ export default function PaymentsPage() {
       await syncPayrollAccrualForPayment({
         paymentId,
         clientId: "",
-        clientName: "",
-        project: "",
+        projectId: null,
         paidAt: "",
         shouldExist: false,
       });
@@ -601,17 +701,17 @@ export default function PaymentsPage() {
         <main className="flex-1">
           <div className="space-y-6 px-5 py-6 lg:px-8">
             <PaymentsPageHeader
-  activeTab={activeTab}
-  setActiveTab={setActiveTab}
-  onCreateInvoice={() => {
-    setMode("invoice");
-    setIsCreateOpen(true);
-  }}
-  onCreatePayment={() => {
-    setMode("payment");
-    setIsCreateOpen(true);
-  }}
-/>
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              onCreateInvoice={() => {
+                setMode("invoice");
+                setIsCreateOpen(true);
+              }}
+              onCreatePayment={() => {
+                setMode("payment");
+                setIsCreateOpen(true);
+              }}
+            />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
@@ -720,10 +820,11 @@ export default function PaymentsPage() {
             onClose={() => setIsCreateOpen(false)}
             onCreate={handleCreatePayment}
             clients={clients}
-            client={newClient}
-            setClient={setNewClient}
-            project={newProject}
-            setProject={setNewProject}
+            projects={projects}
+            clientId={newClientId}
+            setClientId={setNewClientId}
+            projectId={newProjectId}
+            setProjectId={setNewProjectId}
             paidAt={newPaidAt}
             setPaidAt={setNewPaidAt}
             amount={newAmount}
@@ -739,10 +840,10 @@ export default function PaymentsPage() {
             isOpen={isEditOpen}
             onClose={() => setIsEditOpen(false)}
             onSave={handleSaveEdit}
-            client={editClient}
-            setClient={setEditClient}
-            project={editProject}
-            setProject={setEditProject}
+            clientId={editClientId}
+            setClientId={setEditClientId}
+            projectId={editProjectId}
+            setProjectId={setEditProjectId}
             paidAt={editPaidAt}
             setPaidAt={setEditPaidAt}
             amount={editAmount}
@@ -750,6 +851,7 @@ export default function PaymentsPage() {
             source={editSource}
             setSource={setEditSource}
             clients={clients}
+            projects={projects}
             mode={editMode}
             documentUrl={editDocumentUrl}
             setDocumentUrl={setEditDocumentUrl}

@@ -1,4 +1,108 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  defaultTelegramSettings,
+  getTelegramSettings,
+  saveTelegramSettings,
+  sendTelegramTestMessage,
+  type TelegramSettings,
+} from "@/app/lib/telegram-settings";
+
+const notificationItems: Array<{
+  key: keyof TelegramSettings;
+  label: string;
+}> = [
+  { key: "reports_enabled", label: "Еженедельные и ежемесячные отчёты" },
+  { key: "event_notifications_enabled", label: "Событийные уведомления" },
+  { key: "payment_reminders_enabled", label: "Напоминания по оплатам" },
+  { key: "task_reminders_enabled", label: "Напоминания по дедлайнам задач" },
+  { key: "daily_task_digest_enabled", label: "Ежедневный список задач" },
+  {
+    key: "analytics_status_changes_enabled",
+    label: "Изменения статусов клиентов в аналитике",
+  },
+];
+
 export function TelegramSettingsTab() {
+  const [settings, setSettings] = useState<TelegramSettings>(defaultTelegramSettings);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [statusType, setStatusType] = useState<"success" | "error" | "">("");
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const data = await getTelegramSettings();
+        setSettings(data);
+      } catch (error) {
+        setStatusType("error");
+        setStatusMessage(
+          error instanceof Error ? error.message : "Не удалось загрузить настройки"
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadSettings();
+  }, []);
+
+  function updateField<K extends keyof TelegramSettings>(
+    key: K,
+    value: TelegramSettings[K]
+  ) {
+    setSettings((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  }
+
+  async function handleSave() {
+    try {
+      setIsSaving(true);
+      setStatusMessage("");
+      setStatusType("");
+
+      await saveTelegramSettings(settings);
+
+      setStatusType("success");
+      setStatusMessage("Настройки Telegram успешно сохранены");
+    } catch (error) {
+      setStatusType("error");
+      setStatusMessage(
+        error instanceof Error ? error.message : "Не удалось сохранить настройки"
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleSendTest() {
+    try {
+      setIsSendingTest(true);
+      setStatusMessage("");
+      setStatusType("");
+
+      await saveTelegramSettings(settings);
+      await sendTelegramTestMessage();
+
+      setStatusType("success");
+      setStatusMessage("Тестовое сообщение отправлено в Telegram");
+    } catch (error) {
+      setStatusType("error");
+      setStatusMessage(
+        error instanceof Error
+          ? error.message
+          : "Не удалось отправить тестовое сообщение"
+      );
+    } finally {
+      setIsSendingTest(false);
+    }
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-2">
       <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -7,14 +111,88 @@ export function TelegramSettingsTab() {
 
         <div className="mt-5 space-y-4">
           <div className="rounded-2xl bg-white/[0.04] p-4">
-            <div className="text-sm text-white/50">Bot token</div>
-            <div className="mt-1 text-sm text-white/75">••••••••••••••••••••••</div>
+            <label className="text-sm text-white/50">Bot token</label>
+            <input
+              type="password"
+              value={settings.bot_token}
+              onChange={(event) => updateField("bot_token", event.target.value)}
+              placeholder="Вставь токен бота"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
+              disabled={isLoading || isSaving || isSendingTest}
+            />
           </div>
 
           <div className="rounded-2xl bg-white/[0.04] p-4">
-            <div className="text-sm text-white/50">Chat ID</div>
-            <div className="mt-1 text-sm text-white/75">Не подключен</div>
+            <label className="text-sm text-white/50">Chat ID</label>
+            <input
+              type="text"
+              value={settings.chat_id}
+              onChange={(event) => updateField("chat_id", event.target.value)}
+              placeholder="Например: 511872773"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
+              disabled={isLoading || isSaving || isSendingTest}
+            />
+            <p className="mt-2 text-xs text-white/40">
+              Для личного Telegram чата используй chat_id, который ты получил через
+              getUpdates.
+            </p>
           </div>
+
+          <div className="rounded-2xl bg-white/[0.04] p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-sm text-white/80">Включить Telegram уведомления</div>
+                <div className="mt-1 text-xs text-white/40">
+                  Главный переключатель для всех Telegram уведомлений
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => updateField("is_enabled", !settings.is_enabled)}
+                disabled={isLoading || isSaving || isSendingTest}
+                className={`rounded-full px-4 py-2 text-xs font-medium transition ${
+                  settings.is_enabled
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : "bg-white/10 text-white/50"
+                }`}
+              >
+                {settings.is_enabled ? "Включено" : "Выключено"}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+  type="button"
+  onClick={handleSave}
+  disabled={isLoading || isSaving || isSendingTest}
+  className="rounded-2xl border border-emerald-400/20 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {isSaving ? "Сохраняем..." : "Сохранить"}
+</button>
+
+            <button
+              type="button"
+              onClick={handleSendTest}
+              disabled={isLoading || isSaving || isSendingTest}
+              className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSendingTest ? "Отправляем..." : "Отправить тест"}
+            </button>
+          </div>
+
+          {statusMessage ? (
+            <div
+              className={`rounded-2xl px-4 py-3 text-sm ${
+                statusType === "success"
+                  ? "bg-emerald-500/10 text-emerald-300"
+                  : "bg-red-500/10 text-red-300"
+              }`}
+            >
+              {statusMessage}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -23,23 +201,31 @@ export function TelegramSettingsTab() {
         <h2 className="mt-1 text-xl font-semibold">Типы уведомлений</h2>
 
         <div className="mt-5 space-y-3">
-          {[
-            "Сегодня выставить счёт",
-            "Оплата просрочена",
-            "День выплаты ЗП",
-            "Рост расходов",
-            "Падение прибыли",
-          ].map((item) => (
-            <div
-              key={item}
-              className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3"
-            >
-              <span className="text-sm text-white/80">{item}</span>
-              <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs text-emerald-300">
-                on
-              </span>
-            </div>
-          ))}
+          {notificationItems.map((item) => {
+            const enabled = Boolean(settings[item.key]);
+
+            return (
+              <div
+                key={item.key}
+                className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3"
+              >
+                <span className="max-w-[70%] text-sm text-white/80">{item.label}</span>
+
+                <button
+                  type="button"
+                  onClick={() => updateField(item.key, !enabled as TelegramSettings[typeof item.key])}
+                  disabled={isLoading || isSaving || isSendingTest}
+                  className={`rounded-full px-3 py-1 text-xs transition ${
+                    enabled
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : "bg-white/10 text-white/50"
+                  }`}
+                >
+                  {enabled ? "on" : "off"}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

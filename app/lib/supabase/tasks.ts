@@ -1,4 +1,4 @@
-import { createClient } from "./client";
+import { getAuthedSupabase } from "./auth-user";
 
 export type TaskStatus = "todo" | "in_progress" | "done";
 
@@ -40,12 +40,13 @@ function mapTask(row: any): Task {
 }
 
 export async function getTasksByProject(projectId: string): Promise<Task[]> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("tasks")
     .select("*")
     .eq("project_id", projectId)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -56,11 +57,12 @@ export async function getTasksByProject(projectId: string): Promise<Task[]> {
 }
 
 export async function createTask(input: CreateTaskInput): Promise<Task> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("tasks")
     .insert({
+      user_id: userId,
       project_id: input.project_id,
       parent_task_id: input.parent_task_id ?? null,
       title: input.title,
@@ -80,7 +82,7 @@ export async function updateTaskStatus(
   taskId: string,
   status: TaskStatus
 ): Promise<void> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { error } = await supabase
     .from("tasks")
@@ -88,7 +90,8 @@ export async function updateTaskStatus(
       status,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", taskId);
+    .eq("id", taskId)
+    .eq("user_id", userId);
 
   if (error) {
     throw new Error(`Ошибка обновления задачи: ${error.message}`);
@@ -103,12 +106,13 @@ export type UpdateTaskInput = {
 };
 
 export async function getTaskById(taskId: string): Promise<Task | null> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("tasks")
     .select("*")
     .eq("id", taskId)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) {
@@ -126,7 +130,7 @@ export async function updateTask(
   taskId: string,
   input: UpdateTaskInput
 ): Promise<Task> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
     ...(input.title !== undefined ? { title: input.title } : {}),
@@ -140,6 +144,7 @@ export async function updateTask(
     .from("tasks")
     .update(payload)
     .eq("id", taskId)
+    .eq("user_id", userId)
     .select("*")
     .single();
 
@@ -155,11 +160,12 @@ export async function createSubtask(
   projectId: string,
   title: string
 ): Promise<Task> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("tasks")
     .insert({
+      user_id: userId,
       project_id: projectId,
       parent_task_id: parentTaskId,
       title,
@@ -176,11 +182,12 @@ export async function createSubtask(
 }
 
 export async function getAllTasks(): Promise<Task[]> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("tasks")
     .select("*")
+    .eq("user_id", userId)
     .eq("is_archived", false)
     .order("deadline_at", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
@@ -196,7 +203,7 @@ export async function updateTaskDeadline(
   taskId: string,
   deadlineAt: string | null
 ): Promise<Task> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("tasks")
@@ -205,6 +212,7 @@ export async function updateTaskDeadline(
       updated_at: new Date().toISOString(),
     })
     .eq("id", taskId)
+    .eq("user_id", userId)
     .select("*")
     .single();
 

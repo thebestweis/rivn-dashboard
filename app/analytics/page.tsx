@@ -7,7 +7,6 @@ import { FinancialAnalyticsTab } from "../components/analytics/financial-analyti
 import { PlanFactTab, type PlanFactRow } from "../components/analytics/plan-fact-tab";
 import { ClientsAnalyticsTab } from "../components/analytics/clients-analytics-tab";
 import {
-  getPayrollPayouts,
   parseRubAmount,
   formatRub,
   type StoredClient,
@@ -22,6 +21,8 @@ import {
   getMonthlyPlansFromSupabase,
   upsertMonthlyPlanInSupabase,
 } from "../lib/supabase/monthly-plans";
+
+import { fetchPayrollPayoutsFromSupabase } from "../lib/supabase/payroll";
 
 
 type ClientUnitEconomicsRow = {
@@ -216,9 +217,7 @@ const [growthBasePeriod, setGrowthBasePeriod] = useState<1 | 3>(3);
   const [allPaymentRecords, setAllPaymentRecords] = useState<any[]>([]);
   const [isLoadingFinance, setIsLoadingFinance] = useState(true);
 
-  const [payrollPayouts] = useState<StoredPayrollPayout[]>(() =>
-    getPayrollPayouts()
-  );
+  const [payrollPayouts, setPayrollPayouts] = useState<StoredPayrollPayout[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -228,13 +227,19 @@ const [growthBasePeriod, setGrowthBasePeriod] = useState<1 | 3>(3);
         setIsLoadingClients(true);
         setIsLoadingFinance(true);
 
-        const [clientsData, expensesData, paymentsData, monthlyPlansData] =
-  await Promise.all([
-    fetchClientsFromSupabase(),
-    getExpensesFromSupabase(),
-    getPaymentsFromSupabase(),
-    getMonthlyPlansFromSupabase(),
-  ]);
+        const [
+  clientsData,
+  expensesData,
+  paymentsData,
+  monthlyPlansData,
+  payrollPayoutsData,
+] = await Promise.all([
+  fetchClientsFromSupabase(),
+  getExpensesFromSupabase(),
+  getPaymentsFromSupabase(),
+  getMonthlyPlansFromSupabase(),
+  fetchPayrollPayoutsFromSupabase(),
+]);
 
         if (!isMounted) return;
 
@@ -284,6 +289,8 @@ const mappedAllPayments = paymentsData.map((item) => ({
 setExpenses(mappedExpenses);
 setPayments(mappedPayments);
 setAllPaymentRecords(mappedAllPayments);
+
+setPayrollPayouts(payrollPayoutsData ?? []);
 const mappedMonthlyPlans = monthlyPlansData.reduce<
   Record<
     string,

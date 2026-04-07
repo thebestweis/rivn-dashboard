@@ -20,7 +20,6 @@ export default function SettingsPage() {
         <AppSidebar />
 
         <main className="flex-1">
-
           <div className="space-y-6 px-5 py-6 lg:px-8">
             <SettingsPageHeader
               activeTab={activeTab}
@@ -35,9 +34,9 @@ export default function SettingsPage() {
               <UsersSettingsTab />
             ) : activeTab === "telegram" ? (
               <TelegramSettingsTab />
-            ) : (
+            ) : activeTab === "system" ? (
               <SystemSettingsTab />
-            )}
+            ) : null}
           </div>
         </main>
       </div>

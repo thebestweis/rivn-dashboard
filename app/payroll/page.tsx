@@ -10,18 +10,26 @@ import { AppToast } from "../components/ui/app-toast";
 
 import {
   generateEntityId,
-  getEmployees,
   parseRubAmount,
+  calculateEmployeePayrollAmount,
+  formatRub,
   type StoredEmployee,
   type StoredPayrollAccrual,
   type StoredPayrollExtraPayment,
   type StoredPayrollPayout,
 } from "../lib/storage";
 
+import { fetchEmployeesFromSupabase } from "../lib/supabase/employees";
+import {
+  ensureSystemSettings,
+  type SystemSettings,
+} from "../lib/supabase/system-settings";
+
 import {
   fetchPayrollAccrualsFromSupabase,
   fetchPayrollExtraPaymentsFromSupabase,
   fetchPayrollPayoutsFromSupabase,
+  createPayrollAccrualInSupabase,
   createPayrollPayoutInSupabase,
   createPayrollExtraPaymentInSupabase,
   updatePayrollAccrualInSupabase,
@@ -32,12 +40,35 @@ import {
   deletePayrollExtraPaymentFromSupabase,
 } from "../lib/supabase/payroll";
 
+import {
+  sendSalaryAccruedNotification,
+  sendSalaryPaidNotification,
+} from "../lib/notifications-client";
+
 function getTodayDisplayDate() {
   const today = new Date();
   const day = String(today.getDate()).padStart(2, "0");
   const month = String(today.getMonth() + 1).padStart(2, "0");
   const year = today.getFullYear();
   return `${day}.${month}.${year}`;
+}
+
+function getDefaultPayrollDate(payrollDay?: number | null) {
+  const today = new Date();
+  const safeDay = Math.min(Math.max(Number(payrollDay || 1), 1), 31);
+
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+  const targetDay = Math.min(safeDay, lastDayOfMonth);
+
+  const result = new Date(year, month, targetDay);
+
+  const day = String(result.getDate()).padStart(2, "0");
+  const monthValue = String(result.getMonth() + 1).padStart(2, "0");
+  const yearValue = result.getFullYear();
+
+  return `${day}.${monthValue}.${yearValue}`;
 }
 
 function getMonthLabelFromDate(value: string) {
@@ -69,16 +100,53 @@ function getMonthLabelFromDate(value: string) {
   return `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
 }
 
+function getCurrentMonthAccrualLabel() {
+  return getMonthLabelFromDate(getTodayDisplayDate());
+}
+
+function isSalaryAccrualForMonth(
+  item: StoredPayrollAccrual,
+  employeeId: string,
+  monthLabel: string
+) {
+  return (
+    item.employeeId === employeeId &&
+    item.client === "Оклад" &&
+    item.project === `Оклад за ${monthLabel}`
+  );
+}
+
+
+
+
+
+function hasPayoutForMonth(
+  payouts: StoredPayrollPayout[],
+  employeeId: string | null | undefined,
+  employeeName: string,
+  monthLabel: string
+) {
+  return payouts.some((item) => {
+    const sameMonth = item.month === monthLabel;
+    const sameEmployee = employeeId
+      ? item.employeeId === employeeId
+      : item.employee === employeeName;
+
+    return sameMonth && sameEmployee;
+  });
+}
+
 export default function PayrollPage() {
-  const [activeTab, setActiveTab] = useState<
-    "accruals" | "payouts" | "extra"
-  >("accruals");
+  const [employees, setEmployees] = useState<StoredEmployee[]>([]);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+
+  const [activeTab, setActiveTab] = useState<"accruals" | "payouts" | "extra">(
+    "accruals"
+  );
 
   const [accruals, setAccruals] = useState<StoredPayrollAccrual[]>([]);
   const [payouts, setPayouts] = useState<StoredPayrollPayout[]>([]);
-  const [extraPayments, setExtraPayments] = useState<
-    StoredPayrollExtraPayment[]
-  >([]);
+  const [extraPayments, setExtraPayments] = useState<StoredPayrollExtraPayment[]>([]);
   const [isLoadingPayroll, setIsLoadingPayroll] = useState(true);
 
   const [toastMessage, setToastMessage] = useState("");
@@ -87,16 +155,16 @@ export default function PayrollPage() {
   );
 
   const [isPeriodPickerOpen, setIsPeriodPickerOpen] = useState(false);
-const [periodPreset, setPeriodPreset] = useState<
-  "last7" | "last30" | "last90" | "thisMonth" | "prevMonth" | "custom"
->("last30");
-const [customDateFrom, setCustomDateFrom] = useState("");
-const [customDateTo, setCustomDateTo] = useState("");
+  const [periodPreset, setPeriodPreset] = useState<
+    "last7" | "last30" | "last90" | "thisMonth" | "prevMonth" | "custom"
+  >("last30");
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
 
   const [search, setSearch] = useState("");
-const [employeeFilter, setEmployeeFilter] = useState("all");
-const [monthFilter, setMonthFilter] = useState("all");
-const [statusFilter, setStatusFilter] = useState("all");
+  const [employeeFilter, setEmployeeFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const [isEditAccrualOpen, setIsEditAccrualOpen] = useState(false);
   const [editingAccrualId, setEditingAccrualId] = useState<string | null>(null);
@@ -116,9 +184,9 @@ const [statusFilter, setStatusFilter] = useState("all");
   const [editPayoutDate, setEditPayoutDate] = useState("");
   const [editPayoutAmount, setEditPayoutAmount] = useState("");
   const [editPayoutMonth, setEditPayoutMonth] = useState("");
-  const [editPayoutStatus, setEditPayoutStatus] = useState<
-    "scheduled" | "paid"
-  >("paid");
+  const [editPayoutStatus, setEditPayoutStatus] = useState<"scheduled" | "paid">(
+    "paid"
+  );
 
   const [isEditExtraOpen, setIsEditExtraOpen] = useState(false);
   const [editingExtraId, setEditingExtraId] = useState<string | null>(null);
@@ -137,9 +205,9 @@ const [statusFilter, setStatusFilter] = useState("all");
   const [createPayoutDate, setCreatePayoutDate] = useState("");
   const [createPayoutAmount, setCreatePayoutAmount] = useState("");
   const [createPayoutMonth, setCreatePayoutMonth] = useState("");
-  const [createPayoutStatus, setCreatePayoutStatus] = useState<
-    "scheduled" | "paid"
-  >("paid");
+  const [createPayoutStatus, setCreatePayoutStatus] = useState<"scheduled" | "paid">(
+    "paid"
+  );
   const [createExtraReason, setCreateExtraReason] = useState("");
 
   useEffect(() => {
@@ -159,10 +227,18 @@ const [statusFilter, setStatusFilter] = useState("all");
       try {
         setIsLoadingPayroll(true);
 
-        const [accrualsData, payoutsData, extraData] = await Promise.all([
+        const [
+          accrualsData,
+          payoutsData,
+          extraData,
+          employeesData,
+          settingsData,
+        ] = await Promise.all([
           fetchPayrollAccrualsFromSupabase(),
           fetchPayrollPayoutsFromSupabase(),
           fetchPayrollExtraPaymentsFromSupabase(),
+          fetchEmployeesFromSupabase(),
+          ensureSystemSettings(),
         ]);
 
         if (!isMounted) return;
@@ -170,6 +246,8 @@ const [statusFilter, setStatusFilter] = useState("all");
         setAccruals(accrualsData);
         setPayouts(payoutsData);
         setExtraPayments(extraData);
+        setEmployees(employeesData);
+        setSystemSettings(settingsData);
       } catch (error) {
         console.error(error);
         if (isMounted) {
@@ -190,16 +268,14 @@ const [statusFilter, setStatusFilter] = useState("all");
     };
   }, []);
 
-  const employees = useMemo<StoredEmployee[]>(() => {
-    return getEmployees().filter((employee) => employee.isActive);
-  }, []);
-
   const employeeOptions = useMemo(() => {
-    return employees.map((employee) => ({
-      id: employee.id,
-      name: employee.name,
-      role: employee.role,
-    }));
+    return employees
+      .filter((employee) => employee.isActive)
+      .map((employee) => ({
+        id: employee.id,
+        name: employee.name,
+        role: employee.role,
+      }));
   }, [employees]);
 
   const projectOptions = useMemo(() => {
@@ -212,78 +288,106 @@ const [statusFilter, setStatusFilter] = useState("all");
     );
   }, [accruals]);
 
+  const employeesMap = useMemo(() => {
+    return new Map(employees.map((employee) => [employee.id, employee]));
+  }, [employees]);
+
+  function getEmployeeAmountById(employeeId: string | null | undefined) {
+    if (!employeeId) {
+      return systemSettings?.default_employee_pay || "₽5,000";
+    }
+
+    const employee = employeesMap.get(employeeId);
+
+    if (!employee) {
+      return systemSettings?.default_employee_pay || "₽5,000";
+    }
+
+    return formatRub(calculateEmployeePayrollAmount(employee));
+  }
+
   const employeeFilterOptions = useMemo(() => {
-  return Array.from(
-    new Set(
-      [
-        ...accruals.map((item) => item.employee),
-        ...payouts.map((item) => item.employee),
-        ...extraPayments.map((item) => item.employee),
-      ].filter(Boolean)
-    )
-  );
-}, [accruals, payouts, extraPayments]);
+    return Array.from(
+      new Set(
+        [
+          ...accruals.map((item) => item.employee),
+          ...payouts.map((item) => item.employee),
+          ...extraPayments.map((item) => item.employee),
+        ].filter(Boolean)
+      )
+    );
+  }, [accruals, payouts, extraPayments]);
 
-const monthFilterOptions = useMemo(() => {
-  return Array.from(
-    new Set([
-      ...accruals.map((item) => getMonthLabelFromDate(item.date)),
-      ...payouts.map((item) => item.month),
-      ...extraPayments.map((item) => getMonthLabelFromDate(item.date)),
-    ])
-  );
-}, [accruals, payouts, extraPayments]);
+  const monthFilterOptions = useMemo(() => {
+    return Array.from(
+      new Set([
+        ...accruals.map((item) => getMonthLabelFromDate(item.date)),
+        ...payouts.map((item) => item.month),
+        ...extraPayments.map((item) => getMonthLabelFromDate(item.date)),
+      ])
+    );
+  }, [accruals, payouts, extraPayments]);
 
-function parseDisplayDateToDate(value: string) {
-  if (!value) return null;
+  function parseDisplayDateToDate(value: string) {
+    if (!value) return null;
 
-  if (value.includes(".")) {
-    const [day, month, year] = value.split(".");
-    if (!day || !month || !year) return null;
+    if (value.includes(".")) {
+      const [day, month, year] = value.split(".");
+      if (!day || !month || !year) return null;
 
-    const date = new Date(Number(year), Number(month) - 1, Number(day));
-    date.setHours(0, 0, 0, 0);
-    return date;
+      const date = new Date(Number(year), Number(month) - 1, Number(day));
+      date.setHours(0, 0, 0, 0);
+      return date;
+    }
+
+    if (value.includes("-")) {
+      const [year, month, day] = value.split("-");
+      if (!day || !month || !year) return null;
+
+      const date = new Date(Number(year), Number(month) - 1, Number(day));
+      date.setHours(0, 0, 0, 0);
+      return date;
+    }
+
+    return null;
   }
 
-  if (value.includes("-")) {
+  function formatDateToInputValue(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function formatInputDateToDisplay(value: string) {
+    if (!value) return "";
+
     const [year, month, day] = value.split("-");
-    if (!day || !month || !year) return null;
+    if (!day || !month || !year) return value;
 
-    const date = new Date(Number(year), Number(month) - 1, Number(day));
-    date.setHours(0, 0, 0, 0);
-    return date;
+    return `${day}.${month}.${year}`;
   }
-
-  return null;
-}
-
-function formatDateToInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatInputDateToDisplay(value: string) {
-  if (!value) return "";
-
-  const [year, month, day] = value.split("-");
-  if (!day || !month || !year) return value;
-
-  return `${day}.${month}.${year}`;
-}
 
   async function reloadPayrollData() {
-    const [accrualsData, payoutsData, extraData] = await Promise.all([
+    const [
+      accrualsData,
+      payoutsData,
+      extraData,
+      employeesData,
+      settingsData,
+    ] = await Promise.all([
       fetchPayrollAccrualsFromSupabase(),
       fetchPayrollPayoutsFromSupabase(),
       fetchPayrollExtraPaymentsFromSupabase(),
+      fetchEmployeesFromSupabase(),
+      ensureSystemSettings(),
     ]);
 
     setAccruals(accrualsData);
     setPayouts(payoutsData);
     setExtraPayments(extraData);
+    setEmployees(employeesData);
+    setSystemSettings(settingsData);
   }
 
   const visibleAccruals = useMemo(() => {
@@ -306,178 +410,233 @@ function formatInputDateToDisplay(value: string) {
       }, 0);
   }, [payouts]);
 
-  const totalExtra = useMemo(() => {
-  return extraPayments
-    .filter((item) => isDateInSelectedPeriod(item.date))
-    .reduce((sum, item) => {
-      return sum + parseRubAmount(item.amount);
-    }, 0);
-}, [extraPayments, isDateInSelectedPeriod]);
-
   const selectedPeriod = useMemo(() => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  let from: Date | null = null;
-  let to: Date | null = null;
-  let label = "Последние 30 дней";
+    let from: Date | null = null;
+    let to: Date | null = null;
+    let label = "Последние 30 дней";
 
-  if (periodPreset === "last7") {
-    const start = new Date(today);
-    start.setDate(today.getDate() - 6);
-    from = start;
-    to = today;
-    label = "Последние 7 дней";
-  }
-
-  if (periodPreset === "last30") {
-    const start = new Date(today);
-    start.setDate(today.getDate() - 29);
-    from = start;
-    to = today;
-    label = "Последние 30 дней";
-  }
-
-  if (periodPreset === "last90") {
-    const start = new Date(today);
-    start.setDate(today.getDate() - 89);
-    from = start;
-    to = today;
-    label = "Последние 90 дней";
-  }
-
-  if (periodPreset === "thisMonth") {
-    from = new Date(today.getFullYear(), today.getMonth(), 1);
-    to = today;
-    label = "Текущий месяц";
-  }
-
-  if (periodPreset === "prevMonth") {
-    const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    from = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
-    to = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 0);
-    to.setHours(0, 0, 0, 0);
-    label = "Прошлый месяц";
-  }
-
-  if (periodPreset === "custom") {
-    from = customDateFrom ? parseDisplayDateToDate(customDateFrom) : null;
-    to = customDateTo ? parseDisplayDateToDate(customDateTo) : null;
-
-    if (from && to) {
-      label = `${customDateFrom} — ${customDateTo}`;
-    } else {
-      label = "Свой период";
+    if (periodPreset === "last7") {
+      const start = new Date(today);
+      start.setDate(today.getDate() - 6);
+      from = start;
+      to = today;
+      label = "Последние 7 дней";
     }
+
+    if (periodPreset === "last30") {
+      const start = new Date(today);
+      start.setDate(today.getDate() - 29);
+      from = start;
+      to = today;
+      label = "Последние 30 дней";
+    }
+
+    if (periodPreset === "last90") {
+      const start = new Date(today);
+      start.setDate(today.getDate() - 89);
+      from = start;
+      to = today;
+      label = "Последние 90 дней";
+    }
+
+    if (periodPreset === "thisMonth") {
+      from = new Date(today.getFullYear(), today.getMonth(), 1);
+      to = today;
+      label = "Текущий месяц";
+    }
+
+    if (periodPreset === "prevMonth") {
+      const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      from = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
+      to = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 0);
+      to.setHours(0, 0, 0, 0);
+      label = "Прошлый месяц";
+    }
+
+    if (periodPreset === "custom") {
+      from = customDateFrom ? parseDisplayDateToDate(customDateFrom) : null;
+      to = customDateTo ? parseDisplayDateToDate(customDateTo) : null;
+
+      if (from && to) {
+        label = `${customDateFrom} — ${customDateTo}`;
+      } else {
+        label = "Свой период";
+      }
+    }
+
+    return { from, to, label };
+  }, [periodPreset, customDateFrom, customDateTo]);
+
+  function isDateInSelectedPeriod(value: string) {
+    const targetDate = parseDisplayDateToDate(value);
+    if (!targetDate) return false;
+
+    if (selectedPeriod.from && targetDate < selectedPeriod.from) return false;
+    if (selectedPeriod.to && targetDate > selectedPeriod.to) return false;
+
+    return true;
   }
 
-  return { from, to, label };
-}, [periodPreset, customDateFrom, customDateTo]);
-
-function isDateInSelectedPeriod(value: string) {
-  const targetDate = parseDisplayDateToDate(value);
-  if (!targetDate) return false;
-
-  if (selectedPeriod.from && targetDate < selectedPeriod.from) return false;
-  if (selectedPeriod.to && targetDate > selectedPeriod.to) return false;
-
-  return true;
-}
+  const totalExtra = useMemo(() => {
+    return extraPayments
+      .filter((item) => isDateInSelectedPeriod(item.date))
+      .reduce((sum, item) => {
+        return sum + parseRubAmount(item.amount);
+      }, 0);
+  }, [extraPayments, selectedPeriod]);
 
   const pendingEmployeePayouts = useMemo(() => {
-    const groups = new Map<
-      string,
-      {
-        employee: string;
-        employeeId: string | null;
-        total: number;
-        accrualIds: string[];
-        month: string;
-      }
-    >();
+  const currentMonthLabel = getMonthLabelFromDate(getTodayDisplayDate());
 
-    accruals
-      .filter((item) => item.status === "accrued")
-      .forEach((item) => {
-        const key = item.employeeId || item.employee;
-        const existing = groups.get(key);
+  const groups = new Map<
+    string,
+    {
+      employee: string;
+      employeeId: string | null;
+      total: number;
+      accrualIds: string[];
+      month: string;
+      salaryPart: number;
+      projectPart: number;
+      payType: StoredEmployee["payType"] | null;
+    }
+  >();
 
-        if (existing) {
-          existing.total += parseRubAmount(item.amount);
-          existing.accrualIds.push(item.id);
-          return;
+  const activeEmployees = employees.filter((employee) => employee.isActive);
+
+  activeEmployees.forEach((employee) => {
+    const alreadyHasPayoutThisMonth = hasPayoutForMonth(
+      payouts,
+      employee.id,
+      employee.name,
+      currentMonthLabel
+    );
+
+    const alreadyHasSalaryAccrualThisMonth = accruals.some((item) =>
+      isSalaryAccrualForMonth(item, employee.id, currentMonthLabel)
+    );
+
+    const baseSalary =
+      !alreadyHasPayoutThisMonth &&
+      !alreadyHasSalaryAccrualThisMonth &&
+      (employee.payType === "fixed_salary" ||
+        employee.payType === "fixed_salary_plus_project")
+        ? parseRubAmount(employee.fixedSalary || "0")
+        : 0;
+
+    groups.set(employee.id, {
+      employee: employee.name,
+      employeeId: employee.id,
+      total: baseSalary,
+      accrualIds: [],
+      month: currentMonthLabel,
+      salaryPart: baseSalary,
+      projectPart: 0,
+      payType: employee.payType,
+    });
+  });
+
+  accruals
+    .filter((item) => item.status === "accrued")
+    .forEach((item) => {
+      const key = item.employeeId || item.employee;
+      const amount = parseRubAmount(item.amount);
+      const existing = groups.get(key);
+
+      const isSalaryAccrual =
+        item.employeeId
+          ? isSalaryAccrualForMonth(item, item.employeeId, currentMonthLabel)
+          : false;
+
+      if (existing) {
+        existing.total += amount;
+
+        if (isSalaryAccrual) {
+          existing.salaryPart += amount;
+        } else {
+          existing.projectPart += amount;
         }
 
-        groups.set(key, {
-          employee: item.employee,
-          employeeId: item.employeeId ?? null,
-          total: parseRubAmount(item.amount),
-          accrualIds: [item.id],
-          month: getMonthLabelFromDate(item.date),
-        });
-      });
+        existing.accrualIds.push(item.id);
+        return;
+      }
 
-    return Array.from(groups.values());
-  }, [accruals]);
+      groups.set(key, {
+        employee: item.employee,
+        employeeId: item.employeeId ?? null,
+        total: amount,
+        accrualIds: [item.id],
+        month: getMonthLabelFromDate(item.date),
+        salaryPart: isSalaryAccrual ? amount : 0,
+        projectPart: isSalaryAccrual ? 0 : amount,
+        payType: null,
+      });
+    });
+
+  return Array.from(groups.values()).filter((item) => item.total > 0);
+}, [accruals, employees, payouts]);
 
   const filteredAccruals = useMemo(() => {
-  return visibleAccruals.filter((item) => {
-    const matchesSearch =
-      item.employee.toLowerCase().includes(search.toLowerCase()) ||
-      item.client.toLowerCase().includes(search.toLowerCase()) ||
-      item.project.toLowerCase().includes(search.toLowerCase());
+    return visibleAccruals.filter((item) => {
+      const matchesSearch =
+        item.employee.toLowerCase().includes(search.toLowerCase()) ||
+        item.client.toLowerCase().includes(search.toLowerCase()) ||
+        item.project.toLowerCase().includes(search.toLowerCase());
 
-    const matchesEmployee =
-      employeeFilter === "all" ? true : item.employee === employeeFilter;
+      const matchesEmployee =
+        employeeFilter === "all" ? true : item.employee === employeeFilter;
 
-    const matchesMonth =
-      monthFilter === "all"
-        ? true
-        : getMonthLabelFromDate(item.date) === monthFilter;
+      const matchesMonth =
+        monthFilter === "all"
+          ? true
+          : getMonthLabelFromDate(item.date) === monthFilter;
 
-    const matchesStatus =
-      statusFilter === "all" ? true : item.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "all" ? true : item.status === statusFilter;
 
-    return matchesSearch && matchesEmployee && matchesMonth && matchesStatus;
-  });
-}, [visibleAccruals, search, employeeFilter, monthFilter, statusFilter]);
+      return matchesSearch && matchesEmployee && matchesMonth && matchesStatus;
+    });
+  }, [visibleAccruals, search, employeeFilter, monthFilter, statusFilter]);
 
-const filteredPayouts = useMemo(() => {
-  return payouts.filter((item) => {
-    const matchesSearch = item.employee
-      .toLowerCase()
-      .includes(search.toLowerCase());
+  const filteredPayouts = useMemo(() => {
+    return payouts.filter((item) => {
+      const matchesSearch = item.employee
+        .toLowerCase()
+        .includes(search.toLowerCase());
 
-    const matchesEmployee =
-      employeeFilter === "all" ? true : item.employee === employeeFilter;
+      const matchesEmployee =
+        employeeFilter === "all" ? true : item.employee === employeeFilter;
 
-    const matchesMonth =
-      monthFilter === "all" ? true : item.month === monthFilter;
+      const matchesMonth =
+        monthFilter === "all" ? true : item.month === monthFilter;
 
-    const matchesStatus =
-      statusFilter === "all" ? true : item.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "all" ? true : item.status === statusFilter;
 
-    return matchesSearch && matchesEmployee && matchesMonth && matchesStatus;
-  });
-}, [payouts, search, employeeFilter, monthFilter, statusFilter]);
+      return matchesSearch && matchesEmployee && matchesMonth && matchesStatus;
+    });
+  }, [payouts, search, employeeFilter, monthFilter, statusFilter]);
 
-const filteredExtraPayments = useMemo(() => {
-  return extraPayments.filter((item) => {
-    const matchesSearch =
-      item.employee.toLowerCase().includes(search.toLowerCase()) ||
-      item.reason.toLowerCase().includes(search.toLowerCase());
+  const filteredExtraPayments = useMemo(() => {
+    return extraPayments.filter((item) => {
+      const matchesSearch =
+        item.employee.toLowerCase().includes(search.toLowerCase()) ||
+        item.reason.toLowerCase().includes(search.toLowerCase());
 
-    const matchesEmployee =
-      employeeFilter === "all" ? true : item.employee === employeeFilter;
+      const matchesEmployee =
+        employeeFilter === "all" ? true : item.employee === employeeFilter;
 
-    const matchesMonth =
-      monthFilter === "all"
-        ? true
-        : getMonthLabelFromDate(item.date) === monthFilter;
+      const matchesMonth =
+        monthFilter === "all"
+          ? true
+          : getMonthLabelFromDate(item.date) === monthFilter;
 
-    return matchesSearch && matchesEmployee && matchesMonth;
-  });
-}, [extraPayments, search, employeeFilter, monthFilter]);
+      return matchesSearch && matchesEmployee && matchesMonth;
+    });
+  }, [extraPayments, search, employeeFilter, monthFilter]);
 
   function handleStartEditAccrual(item: StoredPayrollAccrual) {
     setEditingAccrualId(item.id);
@@ -670,15 +829,33 @@ const filteredExtraPayments = useMemo(() => {
         )
       );
 
+            const createdPayoutId = generateEntityId("payroll_payout");
+      const payoutAmount = `₽${targetGroup.total.toLocaleString("ru-RU")}`;
+
       await createPayrollPayoutInSupabase({
-        id: generateEntityId("payroll_payout"),
+        id: createdPayoutId,
         employee: targetGroup.employee,
         employeeId: targetGroup.employeeId,
         payoutDate,
-        amount: `₽${targetGroup.total.toLocaleString("ru-RU")}`,
+        amount: payoutAmount,
         month: targetGroup.month,
         status: "paid",
       });
+
+      try {
+        await sendSalaryPaidNotification({
+          payoutId: createdPayoutId,
+          employeeName: targetGroup.employee,
+          amount: payoutAmount,
+          payoutDate,
+          monthLabel: targetGroup.month,
+        });
+      } catch (notificationError) {
+        console.error(
+          "Ошибка отправки Telegram-уведомления о выплате зарплаты:",
+          notificationError
+        );
+      }
 
       await reloadPayrollData();
 
@@ -737,15 +914,33 @@ const filteredExtraPayments = useMemo(() => {
           )
         );
 
+                const createdPayoutId = generateEntityId("payroll_payout");
+        const payoutAmount = `₽${group.total.toLocaleString("ru-RU")}`;
+
         await createPayrollPayoutInSupabase({
-          id: generateEntityId("payroll_payout"),
+          id: createdPayoutId,
           employee: group.employee,
           employeeId: group.employeeId,
           payoutDate,
-          amount: `₽${group.total.toLocaleString("ru-RU")}`,
+          amount: payoutAmount,
           month: group.month,
           status: "paid",
         });
+
+        try {
+          await sendSalaryPaidNotification({
+            payoutId: createdPayoutId,
+            employeeName: group.employee,
+            amount: payoutAmount,
+            payoutDate,
+            monthLabel: group.month,
+          });
+        } catch (notificationError) {
+          console.error(
+            "Ошибка отправки Telegram-уведомления о выплате зарплаты:",
+            notificationError
+          );
+        }
       }
 
       await reloadPayrollData();
@@ -938,811 +1133,962 @@ const filteredExtraPayments = useMemo(() => {
   }
 
   async function handleCreateManualPayout() {
-    if (!createEmployee.trim()) {
-      setToastType("error");
-      setToastMessage("Выбери сотрудника");
-      return;
-    }
+  if (!createEmployee.trim()) {
+    setToastType("error");
+    setToastMessage("Выбери сотрудника");
+    return;
+  }
 
-    if (!createPayoutDate.trim()) {
-      setToastType("error");
-      setToastMessage("Укажи дату");
-      return;
-    }
+  if (!createPayoutDate.trim()) {
+    setToastType("error");
+    setToastMessage("Укажи дату");
+    return;
+  }
 
-    if (!createPayoutAmount.trim()) {
-      setToastType("error");
-      setToastMessage("Укажи сумму");
-      return;
-    }
+  const normalizedCreateAmount =
+    createPayoutAmount.trim() ||
+    getEmployeeAmountById(createEmployeeId || null);
 
-    try {
-      if (createPayoutType === "payout") {
-        if (!createPayoutMonth.trim()) {
-          setToastType("error");
-          setToastMessage("Укажи месяц");
-          return;
-        }
+  try {
+    if (createPayoutType === "payout") {
+      if (!createPayoutMonth.trim()) {
+        setToastType("error");
+        setToastMessage("Укажи месяц");
+        return;
+      }
 
-        await createPayrollPayoutInSupabase({
-          id: generateEntityId("payroll_payout"),
+      if (createPayoutStatus === "scheduled") {
+        await createPayrollAccrualInSupabase({
+          id: generateEntityId("payroll_accrual"),
           employee: createEmployee,
           employeeId: createEmployeeId || null,
-          payoutDate: createPayoutDate,
-          amount: createPayoutAmount,
-          month: createPayoutMonth,
-          status: createPayoutStatus,
+          client: "Ручное начисление",
+          clientId: null,
+          project: `Плановая зарплата — ${createPayoutMonth}`,
+          projectId: null,
+          paymentId: null,
+          amount: normalizedCreateAmount,
+          date: createPayoutDate,
+          status: "accrued",
         });
 
         await reloadPayrollData();
         handleCloseCreatePayout();
-        setActiveTab("payouts");
+        setActiveTab("accruals");
         setToastType("success");
-        setToastMessage("Выплата добавлена");
+        setToastMessage("Запланированная выплата добавлена в начисления");
         return;
       }
 
-      if (!createExtraReason.trim()) {
-        setToastType("error");
-        setToastMessage("Укажи причину внеплановой выплаты");
-        return;
-      }
+            const createdPayoutId = generateEntityId("payroll_payout");
 
-      await createPayrollExtraPaymentInSupabase({
-        id: generateEntityId("payroll_extra"),
+      await createPayrollPayoutInSupabase({
+        id: createdPayoutId,
         employee: createEmployee,
         employeeId: createEmployeeId || null,
-        reason: createExtraReason,
-        date: createPayoutDate,
-        amount: createPayoutAmount,
+        payoutDate: createPayoutDate,
+        amount: normalizedCreateAmount,
+        month: createPayoutMonth,
+        status: "paid",
       });
+
+      try {
+        await sendSalaryPaidNotification({
+          payoutId: createdPayoutId,
+          employeeName: createEmployee,
+          amount: normalizedCreateAmount,
+          payoutDate: createPayoutDate,
+          monthLabel: createPayoutMonth,
+        });
+      } catch (notificationError) {
+        console.error(
+          "Ошибка отправки Telegram-уведомления о выплате зарплаты:",
+          notificationError
+        );
+      }
 
       await reloadPayrollData();
       handleCloseCreatePayout();
-      setActiveTab("extra");
+      setActiveTab("payouts");
       setToastType("success");
-      setToastMessage("Внеплановая выплата добавлена");
-    } catch (error) {
-      console.error(error);
-      setToastType("error");
-      setToastMessage("Не удалось добавить выплату");
+      setToastMessage("Выплата добавлена");
+      return;
     }
+
+    if (!createExtraReason.trim()) {
+      setToastType("error");
+      setToastMessage("Укажи причину внеплановой выплаты");
+      return;
+    }
+
+    await createPayrollExtraPaymentInSupabase({
+      id: generateEntityId("payroll_extra"),
+      employee: createEmployee,
+      employeeId: createEmployeeId || null,
+      reason: createExtraReason,
+      date: createPayoutDate,
+      amount: normalizedCreateAmount,
+    });
+
+    await reloadPayrollData();
+    handleCloseCreatePayout();
+    setActiveTab("extra");
+    setToastType("success");
+    setToastMessage("Внеплановая выплата добавлена");
+  } catch (error) {
+    console.error(error);
+    setToastType("error");
+    setToastMessage("Не удалось добавить выплату");
+  }
+}
+
+async function handleAccrueSalaries() {
+  const monthLabel = getCurrentMonthAccrualLabel();
+
+  const targetEmployees = employees.filter(
+    (employee) =>
+      employee.isActive &&
+      (employee.payType === "fixed_salary" ||
+        employee.payType === "fixed_salary_plus_project") &&
+      parseRubAmount(employee.fixedSalary || "0") > 0
+  );
+
+  if (targetEmployees.length === 0) {
+    setToastType("info");
+    setToastMessage("Нет сотрудников с окладной системой оплаты");
+    return;
   }
 
+  const employeesWithoutAccrual = targetEmployees.filter((employee) => {
+    const hasSalaryAccrual = accruals.some((item) =>
+      isSalaryAccrualForMonth(item, employee.id, monthLabel)
+    );
+
+    const hasMonthPayout = hasPayoutForMonth(
+      payouts,
+      employee.id,
+      employee.name,
+      monthLabel
+    );
+
+    return !hasSalaryAccrual && !hasMonthPayout;
+  });
+
+  if (employeesWithoutAccrual.length === 0) {
+    setToastType("info");
+    setToastMessage("Окладные начисления за этот месяц уже созданы");
+    return;
+  }
+
+  try {
+    for (const employee of employeesWithoutAccrual) {
+      await createPayrollAccrualInSupabase({
+        id: generateEntityId("payroll_accrual"),
+        employee: employee.name,
+        employeeId: employee.id,
+        client: "Оклад",
+        clientId: null,
+        project: `Оклад за ${monthLabel}`,
+        projectId: null,
+        paymentId: null,
+        amount: employee.fixedSalary || "₽0",
+        date: getTodayDisplayDate(),
+        status: "accrued",
+      });
+    }
+
+        try {
+      const totalAmount = employeesWithoutAccrual.reduce((sum, employee) => {
+        return sum + parseRubAmount(employee.fixedSalary || "0");
+      }, 0);
+
+      await sendSalaryAccruedNotification({
+        accrualMonth: monthLabel,
+        employeesCount: employeesWithoutAccrual.length,
+        totalAmount: formatRub(totalAmount),
+      });
+    } catch (notificationError) {
+      console.error(
+        "Ошибка отправки Telegram-уведомления о начислении окладов:",
+        notificationError
+      );
+    }
+
+    await reloadPayrollData();
+
+    setActiveTab("accruals");
+    setToastType("success");
+    setToastMessage(
+      `Окладные начисления созданы: ${employeesWithoutAccrual.length}`
+    );
+  } catch (error) {
+    console.error(error);
+    setToastType("error");
+    setToastMessage("Не удалось создать окладные начисления");
+  }
+}
+
+
   return (
-    <div className="min-h-screen bg-[#0B0F1A] text-white">
-      <div className="flex min-h-screen">
-        <AppSidebar />
+  <div className="min-h-screen bg-[#0B0F1A] text-white">
+    <div className="flex min-h-screen">
+      <AppSidebar />
 
-        <main className="flex-1">
-          <div className="space-y-6 px-5 py-6 lg:px-8">
-            <PayrollPageHeader
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              onAddPayout={() => {
-                setCreatePayoutDate(getTodayDisplayDate());
-                setIsCreatePayoutOpen(true);
-              }}
-            />
+      <main className="flex-1">
+        <div className="space-y-6 px-5 py-6 lg:px-8">
+          <PayrollPageHeader
+  activeTab={activeTab}
+  setActiveTab={setActiveTab}
+  onAccrueSalaries={handleAccrueSalaries}
+  onAddPayout={() => {
+    setCreatePayoutDate(getDefaultPayrollDate(systemSettings?.payroll_day));
+    setIsCreatePayoutOpen(true);
+  }}
+/>
 
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-    <div>
-      <div className="text-sm text-white/50">Сводка за период</div>
-      <div className="mt-1 text-sm text-white/70">
-        {selectedPeriod.label}
-      </div>
-    </div>
-
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setIsPeriodPickerOpen((prev) => !prev)}
-        className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-      >
-        Изменить период
-      </button>
-
-      {isPeriodPickerOpen ? (
-        <div className="absolute right-0 top-[calc(100%+12px)] z-30 w-[360px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-          <div className="text-sm text-white/50">Быстрый выбор</div>
-
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {[
-              { key: "last7", label: "7 дней" },
-              { key: "last30", label: "30 дней" },
-              { key: "last90", label: "90 дней" },
-              { key: "thisMonth", label: "Этот месяц" },
-              { key: "prevMonth", label: "Прошлый месяц" },
-              { key: "custom", label: "Свой период" },
-            ].map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() =>
-                  setPeriodPreset(
-                    item.key as
-                      | "last7"
-                      | "last30"
-                      | "last90"
-                      | "thisMonth"
-                      | "prevMonth"
-                      | "custom"
-                  )
-                }
-                className={`rounded-xl px-3 py-2 text-sm transition ${
-                  periodPreset === item.key
-                    ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                    : "bg-white/[0.04] text-white/70 hover:text-white"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {periodPreset === "custom" ? (
-            <div className="mt-4 grid gap-3">
-              <div>
-                <label className="mb-2 block text-sm text-white/55">Дата от</label>
-                <input
-                  type="date"
-                  value={customDateFrom ? formatDateToInputValue(parseDisplayDateToDate(customDateFrom) ?? new Date()) : ""}
-                  onChange={(e) =>
-                    setCustomDateFrom(formatInputDateToDisplay(e.target.value))
-                  }
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-white/55">Дата до</label>
-                <input
-                  type="date"
-                  value={customDateTo ? formatDateToInputValue(parseDisplayDateToDate(customDateTo) ?? new Date()) : ""}
-                  onChange={(e) =>
-                    setCustomDateTo(formatInputDateToDisplay(e.target.value))
-                  }
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
-                />
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setIsPeriodPickerOpen(false)}
-              className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-            >
-              Готово
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  </div>
-
-  <div className="mt-5 grid gap-4 md:grid-cols-3">
-    <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
-      <div className="text-sm text-white/55">Начислено</div>
-      <div className="mt-3 text-2xl font-semibold tracking-tight text-violet-300">
-        ₽{totalAccrued.toLocaleString("ru-RU")}
-      </div>
-    </div>
-
-    <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
-      <div className="text-sm text-white/55">Выплачено</div>
-      <div className="mt-3 text-2xl font-semibold tracking-tight text-emerald-300">
-        ₽{totalPaid.toLocaleString("ru-RU")}
-      </div>
-    </div>
-
-    <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
-      <div className="text-sm text-white/55">Внеплановые</div>
-      <div className="mt-3 text-2xl font-semibold tracking-tight text-amber-300">
-        ₽{totalExtra.toLocaleString("ru-RU")}
-      </div>
-    </div>
-  </div>
+<div className="flex justify-end">
+  <button
+    type="button"
+    onClick={handleAccrueSalaries}
+    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+  >
+    Начислить оклады
+  </button>
 </div>
-            {isLoadingPayroll ? (
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60">
-                Загрузка payroll...
+
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <div className="text-sm text-white/50">Сводка за период</div>
+                <div className="mt-1 text-sm text-white/70">
+                  {selectedPeriod.label}
+                </div>
               </div>
-            ) : activeTab === "accruals" ? (
-              <>
-                <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-sm text-white/50">
-                      Готово к выплате
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsPeriodPickerOpen((prev) => !prev)}
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                >
+                  Изменить период
+                </button>
+
+                {isPeriodPickerOpen ? (
+                  <div className="absolute right-0 top-[calc(100%+12px)] z-30 w-[360px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+                    <div className="text-sm text-white/50">Быстрый выбор</div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {[
+                        { key: "last7", label: "7 дней" },
+                        { key: "last30", label: "30 дней" },
+                        { key: "last90", label: "90 дней" },
+                        { key: "thisMonth", label: "Этот месяц" },
+                        { key: "prevMonth", label: "Прошлый месяц" },
+                        { key: "custom", label: "Свой период" },
+                      ].map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() =>
+                            setPeriodPreset(
+                              item.key as
+                                | "last7"
+                                | "last30"
+                                | "last90"
+                                | "thisMonth"
+                                | "prevMonth"
+                                | "custom"
+                            )
+                          }
+                          className={`rounded-xl px-3 py-2 text-sm transition ${
+                            periodPreset === item.key
+                              ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+                              : "bg-white/[0.04] text-white/70 hover:text-white"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handlePayAllEmployees}
-                      disabled={pendingEmployeePayouts.length === 0}
-                      className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                        pendingEmployeePayouts.length === 0
-                          ? "cursor-not-allowed bg-white/[0.04] text-white/35"
-                          : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
-                      }`}
-                    >
-                      Оплатить всё
-                    </button>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {pendingEmployeePayouts.length > 0 ? (
-                      pendingEmployeePayouts.map((item) => (
-                        <div
-                          key={item.employeeId || item.employee}
-                          className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
-                        >
-                          <div className="text-sm text-white/45">
-                            Сотрудник
-                          </div>
-                          <div className="mt-1 text-lg font-semibold">
-                            {item.employee}
-                          </div>
-
-                          <div className="mt-4 text-sm text-white/45">
-                            К выплате
-                          </div>
-                          <div className="mt-1 text-2xl font-semibold text-emerald-300">
-                            ₽{item.total.toLocaleString("ru-RU")}
-                          </div>
-
-                          <div className="mt-2 text-sm text-white/50">
-                            {item.month}
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handlePayEmployee(item.employeeId || item.employee)
+                    {periodPreset === "custom" ? (
+                      <div className="mt-4 grid gap-3">
+                        <div>
+                          <label className="mb-2 block text-sm text-white/55">
+                            Дата от
+                          </label>
+                          <input
+                            type="date"
+                            value={
+                              customDateFrom
+                                ? formatDateToInputValue(
+                                    parseDisplayDateToDate(customDateFrom) ??
+                                      new Date()
+                                  )
+                                : ""
                             }
-                            className="mt-4 rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                          >
-                            Выплатить сотруднику
-                          </button>
+                            onChange={(e) =>
+                              setCustomDateFrom(
+                                formatInputDateToDisplay(e.target.value)
+                              )
+                            }
+                            className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
+                          />
                         </div>
-                      ))
-                    ) : (
-                      <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/45 md:col-span-2 xl:col-span-3">
-                        Сейчас нет начислений со статусом «Начислено», готовых к
-                        общей выплате.
+
+                        <div>
+                          <label className="mb-2 block text-sm text-white/55">
+                            Дата до
+                          </label>
+                          <input
+                            type="date"
+                            value={
+                              customDateTo
+                                ? formatDateToInputValue(
+                                    parseDisplayDateToDate(customDateTo) ??
+                                      new Date()
+                                  )
+                                : ""
+                            }
+                            onChange={(e) =>
+                              setCustomDateTo(
+                                formatInputDateToDisplay(e.target.value)
+                              )
+                            }
+                            className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
+                          />
+                        </div>
                       </div>
-                    )}
+                    ) : null}
+
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setIsPeriodPickerOpen(false)}
+                        className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+                      >
+                        Готово
+                      </button>
+                    </div>
                   </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+                <div className="text-sm text-white/55">Начислено</div>
+                <div className="mt-3 text-2xl font-semibold tracking-tight text-violet-300">
+                  ₽{totalAccrued.toLocaleString("ru-RU")}
                 </div>
+              </div>
 
-                <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-  <div className="flex items-center gap-3 overflow-x-auto">
-    <input
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-      placeholder="Поиск по сотруднику, клиенту, проекту..."
-      className="h-[48px] min-w-[320px] flex-[1.4] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-    />
-
-    <select
-      value={employeeFilter}
-      onChange={(e) => setEmployeeFilter(e.target.value)}
-      className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-    >
-      <option value="all">Все сотрудники</option>
-      {employeeFilterOptions.map((employee) => (
-        <option key={employee} value={employee}>
-          {employee}
-        </option>
-      ))}
-    </select>
-
-    <select
-      value={monthFilter}
-      onChange={(e) => setMonthFilter(e.target.value)}
-      className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-    >
-      <option value="all">Все месяцы</option>
-      {monthFilterOptions.map((month) => (
-        <option key={month} value={month}>
-          {month}
-        </option>
-      ))}
-    </select>
-
-    {activeTab === "accruals" ? (
-      <select
-        value={statusFilter}
-        onChange={(e) => setStatusFilter(e.target.value)}
-        className="h-[48px] min-w-[190px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-      >
-        <option value="all">Все статусы</option>
-        {activeTab === "accruals" ? (
-          <>
-            <option value="accrued">Начислено</option>
-            <option value="paid">Выплачено</option>
-          </>
-        ) : (
-          <>
-            <option value="scheduled">Запланировано</option>
-            <option value="paid">Выплачено</option>
-          </>
-        )}
-      </select>
-    ) : null}
-
-    <button
-      type="button"
-      onClick={() => {
-        setSearch("");
-        setEmployeeFilter("all");
-        setMonthFilter("all");
-        setStatusFilter("all");
-      }}
-      className="h-[48px] min-w-[180px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-    >
-      Сбросить
-    </button>
-  </div>
-</div>
-
-
-                <PayrollAccrualsTable
-  items={filteredAccruals}
-  onEdit={handleStartEditAccrual}
-  onDelete={handleDeleteAccrual}
-  onPay={handlePaySingleAccrual}
-/>
-              </>
-            ) : activeTab === "payouts" ? (
-              <PayrollPayoutsTable
-  items={filteredPayouts}
-  onEdit={handleStartEditPayout}
-  onDelete={handleDeletePayout}
-/>
-            ) : (
-              <PayrollExtraTable
-  items={filteredExtraPayments}
-  onEdit={handleStartEditExtra}
-  onDelete={handleDeleteExtra}
-/>
-            )}
-          </div>
-
-          {isEditAccrualOpen ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-              <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-sm text-white/50">Начисление</div>
-                    <h3 className="mt-1 text-xl font-semibold text-white">
-                      Редактирование начисления
-                    </h3>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleCloseEditAccrual}
-                    className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
-                  >
-                    Закрыть
-                  </button>
+              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+                <div className="text-sm text-white/55">Выплачено</div>
+                <div className="mt-3 text-2xl font-semibold tracking-tight text-emerald-300">
+                  ₽{totalPaid.toLocaleString("ru-RU")}
                 </div>
+              </div>
 
-                <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <select
-                    value={editEmployeeId}
-                    onChange={(e) => {
-                      const nextEmployeeId = e.target.value;
-                      const selectedEmployee = employees.find(
-                        (employee) => employee.id === nextEmployeeId
-                      );
-
-                      setEditEmployeeId(nextEmployeeId);
-                      setEditEmployee(selectedEmployee?.name ?? "");
-                    }}
-                    className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                  >
-                    <option value="">Выбери сотрудника</option>
-                    {employeeOptions.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.name} — {employee.role}
-                      </option>
-                    ))}
-                  </select>
-
-                  <input
-                    value={editClient}
-                    onChange={(e) => setEditClient(e.target.value)}
-                    placeholder="Клиент"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                  />
-
-                  <select
-                    value={editProject}
-                    onChange={(e) => setEditProject(e.target.value)}
-                    className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                  >
-                    <option value="">Выбери проект</option>
-                    {projectOptions.map((project) => (
-                      <option key={project} value={project}>
-                        {project}
-                      </option>
-                    ))}
-                  </select>
-
-                  <input
-                    value={editAmount}
-                    onChange={(e) => setEditAmount(e.target.value)}
-                    placeholder="Сумма"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                  />
-
-                  <input
-                    value={editDate}
-                    onChange={(e) => setEditDate(e.target.value)}
-                    placeholder="Дата"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                  />
-
-                  <select
-                    value={editStatus}
-                    onChange={(e) =>
-                      setEditStatus(e.target.value as "accrued" | "paid")
-                    }
-                    className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                  >
-                    <option value="accrued">Начислено</option>
-                    <option value="paid">Выплачено</option>
-                  </select>
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCloseEditAccrual}
-                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-                  >
-                    Отмена
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSaveAccrual}
-                    className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                  >
-                    Сохранить
-                  </button>
+              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+                <div className="text-sm text-white/55">Внеплановые</div>
+                <div className="mt-3 text-2xl font-semibold tracking-tight text-amber-300">
+                  ₽{totalExtra.toLocaleString("ru-RU")}
                 </div>
               </div>
             </div>
-          ) : null}
+          </div>
 
-          {isEditPayoutOpen ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-              <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-sm text-white/50">Выплата</div>
-                    <h3 className="mt-1 text-xl font-semibold text-white">
-                      Редактирование выплаты
-                    </h3>
-                  </div>
+          {isLoadingPayroll ? (
+            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60">
+              Загрузка payroll...
+            </div>
+          ) : activeTab === "accruals" ? (
+            <>
+              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="text-sm text-white/50">Готово к выплате</div>
 
                   <button
                     type="button"
-                    onClick={handleCloseEditPayout}
-                    className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+                    onClick={handlePayAllEmployees}
+                    disabled={pendingEmployeePayouts.length === 0}
+                    className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                      pendingEmployeePayouts.length === 0
+                        ? "cursor-not-allowed bg-white/[0.04] text-white/35"
+                        : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
+                    }`}
                   >
-                    Закрыть
+                    Оплатить всё
                   </button>
                 </div>
 
-                <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <select
-                    value={editPayoutEmployeeId}
-                    onChange={(e) => {
-                      const nextEmployeeId = e.target.value;
-                      const selectedEmployee = employees.find(
-                        (employee) => employee.id === nextEmployeeId
-                      );
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {pendingEmployeePayouts.length > 0 ? (
+                    pendingEmployeePayouts.map((item) => (
+                      <div
+                        key={item.employeeId || item.employee}
+                        className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
+                      >
+                        <div className="text-sm text-white/45">Сотрудник</div>
+                        <div className="mt-1 text-lg font-semibold">
+                          {item.employee}
+                        </div>
 
-                      setEditPayoutEmployeeId(nextEmployeeId);
-                      setEditPayoutEmployee(selectedEmployee?.name ?? "");
-                    }}
-                    className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                        <div className="mt-4 text-sm text-white/45">
+                          К выплате
+                        </div>
+                        <div className="mt-1 text-2xl font-semibold text-emerald-300">
+                          ₽{item.total.toLocaleString("ru-RU")}
+                        </div>
+
+                        <div className="mt-2 space-y-1 text-sm text-white/50">
+  <div>{item.month}</div>
+
+  {item.salaryPart > 0 ? (
+    <div>Оклад: {formatRub(item.salaryPart)}</div>
+  ) : null}
+
+  {item.projectPart > 0 ? (
+    <div>Проектная часть: {formatRub(item.projectPart)}</div>
+  ) : null}
+</div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handlePayEmployee(item.employeeId || item.employee)
+                          }
+                          className="mt-4 rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+                        >
+                          Выплатить сотруднику
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/45 md:col-span-2 xl:col-span-3">
+                      Сейчас нет начислений со статусом «Начислено», готовых к
+                      общей выплате.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+                <div className="flex items-center gap-3 overflow-x-auto">
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Поиск по сотруднику, клиенту, проекту..."
+                    className="h-[48px] min-w-[320px] flex-[1.4] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                  />
+
+                  <select
+                    value={employeeFilter}
+                    onChange={(e) => setEmployeeFilter(e.target.value)}
+                    className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
                   >
-                    <option value="">Выбери сотрудника</option>
-                    {employeeOptions.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.name} — {employee.role}
+                    <option value="all">Все сотрудники</option>
+                    {employeeFilterOptions.map((employee) => (
+                      <option key={employee} value={employee}>
+                        {employee}
                       </option>
                     ))}
                   </select>
 
+                  <select
+                    value={monthFilter}
+                    onChange={(e) => setMonthFilter(e.target.value)}
+                    className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                  >
+                    <option value="all">Все месяцы</option>
+                    {monthFilterOptions.map((month) => (
+                      <option key={month} value={month}>
+                        {month}
+                      </option>
+                    ))}
+                  </select>
+
+                  {activeTab === "accruals" ? (
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="h-[48px] min-w-[190px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                    >
+                      <option value="all">Все статусы</option>
+                      <option value="accrued">Начислено</option>
+                      <option value="paid">Выплачено</option>
+                    </select>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch("");
+                      setEmployeeFilter("all");
+                      setMonthFilter("all");
+                      setStatusFilter("all");
+                    }}
+                    className="h-[48px] min-w-[180px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    Сбросить
+                  </button>
+                </div>
+              </div>
+
+              <PayrollAccrualsTable
+                items={filteredAccruals}
+                onEdit={handleStartEditAccrual}
+                onDelete={handleDeleteAccrual}
+                onPay={handlePaySingleAccrual}
+              />
+            </>
+          ) : activeTab === "payouts" ? (
+            <PayrollPayoutsTable
+              items={filteredPayouts}
+              onEdit={handleStartEditPayout}
+              onDelete={handleDeletePayout}
+            />
+          ) : (
+            <PayrollExtraTable
+              items={filteredExtraPayments}
+              onEdit={handleStartEditExtra}
+              onDelete={handleDeleteExtra}
+            />
+          )}
+        </div>
+
+        {isEditAccrualOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm text-white/50">Начисление</div>
+                  <h3 className="mt-1 text-xl font-semibold text-white">
+                    Редактирование начисления
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCloseEditAccrual}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+                >
+                  Закрыть
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <select
+                  value={editEmployeeId}
+                  onChange={(e) => {
+                    const nextEmployeeId = e.target.value;
+                    const selectedEmployee = employees.find(
+                      (employee) => employee.id === nextEmployeeId
+                    );
+
+                    setEditEmployeeId(nextEmployeeId);
+                    setEditEmployee(selectedEmployee?.name ?? "");
+                  }}
+                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                >
+                  <option value="">Выбери сотрудника</option>
+                  {employeeOptions.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.name} — {employee.role}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  value={editClient}
+                  onChange={(e) => setEditClient(e.target.value)}
+                  placeholder="Клиент"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                <select
+                  value={editProject}
+                  onChange={(e) => setEditProject(e.target.value)}
+                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                >
+                  <option value="">Выбери проект</option>
+                  {projectOptions.map((project) => (
+                    <option key={project} value={project}>
+                      {project}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  placeholder="Сумма"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                <input
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  placeholder="Дата"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                <select
+                  value={editStatus}
+                  onChange={(e) =>
+                    setEditStatus(e.target.value as "accrued" | "paid")
+                  }
+                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                >
+                  <option value="accrued">Начислено</option>
+                  <option value="paid">Выплачено</option>
+                </select>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseEditAccrual}
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                >
+                  Отмена
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveAccrual}
+                  className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+                >
+                  Сохранить
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isEditPayoutOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm text-white/50">Выплата</div>
+                  <h3 className="mt-1 text-xl font-semibold text-white">
+                    Редактирование выплаты
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCloseEditPayout}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+                >
+                  Закрыть
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <select
+                  value={editPayoutEmployeeId}
+                  onChange={(e) => {
+                    const nextEmployeeId = e.target.value;
+                    const selectedEmployee = employees.find(
+                      (employee) => employee.id === nextEmployeeId
+                    );
+
+                    setEditPayoutEmployeeId(nextEmployeeId);
+                    setEditPayoutEmployee(selectedEmployee?.name ?? "");
+                  }}
+                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                >
+                  <option value="">Выбери сотрудника</option>
+                  {employeeOptions.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.name} — {employee.role}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  value={editPayoutMonth}
+                  onChange={(e) => setEditPayoutMonth(e.target.value)}
+                  placeholder="Месяц"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                <input
+                  value={editPayoutDate}
+                  onChange={(e) => setEditPayoutDate(e.target.value)}
+                  placeholder="Дата выплаты"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                <input
+                  value={editPayoutAmount}
+                  onChange={(e) => setEditPayoutAmount(e.target.value)}
+                  placeholder="Сумма"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                <select
+                  value={editPayoutStatus}
+                  onChange={(e) =>
+                    setEditPayoutStatus(e.target.value as "scheduled" | "paid")
+                  }
+                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none md:col-span-2"
+                >
+                  <option value="scheduled">Запланировано</option>
+                  <option value="paid">Выплачено</option>
+                </select>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseEditPayout}
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                >
+                  Отмена
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSavePayout}
+                  className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+                >
+                  Сохранить
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isEditExtraOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm text-white/50">Внеплановая выплата</div>
+                  <h3 className="mt-1 text-xl font-semibold text-white">
+                    Редактирование внеплановой выплаты
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCloseEditExtra}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+                >
+                  Закрыть
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <select
+                  value={editExtraEmployeeId}
+                  onChange={(e) => {
+                    const nextEmployeeId = e.target.value;
+                    const selectedEmployee = employees.find(
+                      (employee) => employee.id === nextEmployeeId
+                    );
+
+                    setEditExtraEmployeeId(nextEmployeeId);
+                    setEditExtraEmployee(selectedEmployee?.name ?? "");
+                  }}
+                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                >
+                  <option value="">Выбери сотрудника</option>
+                  {employeeOptions.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.name} — {employee.role}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  value={editExtraDate}
+                  onChange={(e) => setEditExtraDate(e.target.value)}
+                  placeholder="Дата"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                <input
+                  value={editExtraReason}
+                  onChange={(e) => setEditExtraReason(e.target.value)}
+                  placeholder="Причина"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 md:col-span-2"
+                />
+
+                <input
+                  value={editExtraAmount}
+                  onChange={(e) => setEditExtraAmount(e.target.value)}
+                  placeholder="Сумма"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 md:col-span-2"
+                />
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseEditExtra}
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                >
+                  Отмена
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveExtra}
+                  className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+                >
+                  Сохранить
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isCreatePayoutOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm text-white/50">Новая выплата</div>
+                  <h3 className="mt-1 text-xl font-semibold text-white">
+                    Добавить выплату
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCloseCreatePayout}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+                >
+                  Закрыть
+                </button>
+              </div>
+
+              <div className="mt-6 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCreatePayoutType("payout")}
+                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                    createPayoutType === "payout"
+                      ? "bg-emerald-500/20 text-emerald-300"
+                      : "bg-white/[0.04] text-white/60 hover:text-white"
+                  }`}
+                >
+                  Плановая выплата
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCreatePayoutType("extra")}
+                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                    createPayoutType === "extra"
+                      ? "bg-amber-500/20 text-amber-300"
+                      : "bg-white/[0.04] text-white/60 hover:text-white"
+                  }`}
+                >
+                  Внеплановая выплата
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <select
+                  value={createEmployeeId}
+                  onChange={(e) => {
+                    const nextEmployeeId = e.target.value;
+                    const selectedEmployee = employees.find(
+                      (employee) => employee.id === nextEmployeeId
+                    );
+
+                    setCreateEmployeeId(nextEmployeeId);
+                    setCreateEmployee(selectedEmployee?.name ?? "");
+                  }}
+                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                >
+                  <option value="">Выбери сотрудника</option>
+                  {employeeOptions.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.name} — {employee.role}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  value={createPayoutDate}
+                  onChange={(e) => setCreatePayoutDate(e.target.value)}
+                  placeholder="Дата"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                <input
+                  value={createPayoutAmount}
+                  onChange={(e) => setCreatePayoutAmount(e.target.value)}
+                  placeholder="Сумма"
+                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                {createPayoutType === "payout" ? (
                   <input
-                    value={editPayoutMonth}
-                    onChange={(e) => setEditPayoutMonth(e.target.value)}
+                    value={createPayoutMonth}
+                    onChange={(e) => setCreatePayoutMonth(e.target.value)}
                     placeholder="Месяц"
                     className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
                   />
-
+                ) : (
                   <input
-                    value={editPayoutDate}
-                    onChange={(e) => setEditPayoutDate(e.target.value)}
-                    placeholder="Дата выплаты"
+                    value={createExtraReason}
+                    onChange={(e) => setCreateExtraReason(e.target.value)}
+                    placeholder="Причина"
                     className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
                   />
+                )}
 
-                  <input
-                    value={editPayoutAmount}
-                    onChange={(e) => setEditPayoutAmount(e.target.value)}
-                    placeholder="Сумма"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                  />
-
+                {createPayoutType === "payout" ? (
                   <select
-                    value={editPayoutStatus}
+                    value={createPayoutStatus}
                     onChange={(e) =>
-                      setEditPayoutStatus(e.target.value as "scheduled" | "paid")
+                      setCreatePayoutStatus(
+                        e.target.value as "scheduled" | "paid"
+                      )
                     }
                     className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none md:col-span-2"
                   >
-                    <option value="scheduled">Запланировано</option>
                     <option value="paid">Выплачено</option>
+                    <option value="scheduled">Запланировано</option>
                   </select>
-                </div>
+                ) : null}
+              </div>
 
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCloseEditPayout}
-                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-                  >
-                    Отмена
-                  </button>
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseCreatePayout}
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                >
+                  Отмена
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={handleSavePayout}
-                    className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                  >
-                    Сохранить
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleCreateManualPayout}
+                  className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+                >
+                  Сохранить
+                </button>
               </div>
             </div>
-          ) : null}
-
-          {isEditExtraOpen ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-              <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-sm text-white/50">
-                      Внеплановая выплата
-                    </div>
-                    <h3 className="mt-1 text-xl font-semibold text-white">
-                      Редактирование внеплановой выплаты
-                    </h3>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleCloseEditExtra}
-                    className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
-                  >
-                    Закрыть
-                  </button>
-                </div>
-
-                <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <select
-                    value={editExtraEmployeeId}
-                    onChange={(e) => {
-                      const nextEmployeeId = e.target.value;
-                      const selectedEmployee = employees.find(
-                        (employee) => employee.id === nextEmployeeId
-                      );
-
-                      setEditExtraEmployeeId(nextEmployeeId);
-                      setEditExtraEmployee(selectedEmployee?.name ?? "");
-                    }}
-                    className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                  >
-                    <option value="">Выбери сотрудника</option>
-                    {employeeOptions.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.name} — {employee.role}
-                      </option>
-                    ))}
-                  </select>
-
-                  <input
-                    value={editExtraDate}
-                    onChange={(e) => setEditExtraDate(e.target.value)}
-                    placeholder="Дата"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                  />
-
-                  <input
-                    value={editExtraReason}
-                    onChange={(e) => setEditExtraReason(e.target.value)}
-                    placeholder="Причина"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 md:col-span-2"
-                  />
-
-                  <input
-                    value={editExtraAmount}
-                    onChange={(e) => setEditExtraAmount(e.target.value)}
-                    placeholder="Сумма"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 md:col-span-2"
-                  />
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCloseEditExtra}
-                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-                  >
-                    Отмена
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSaveExtra}
-                    className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                  >
-                    Сохранить
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {isCreatePayoutOpen ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-              <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-sm text-white/50">Новая выплата</div>
-                    <h3 className="mt-1 text-xl font-semibold text-white">
-                      Добавить выплату
-                    </h3>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleCloseCreatePayout}
-                    className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
-                  >
-                    Закрыть
-                  </button>
-                </div>
-
-                <div className="mt-6 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCreatePayoutType("payout")}
-                    className={`rounded-xl px-4 py-2 text-sm transition ${
-                      createPayoutType === "payout"
-                        ? "bg-emerald-500/20 text-emerald-300"
-                        : "bg-white/[0.04] text-white/60 hover:text-white"
-                    }`}
-                  >
-                    Плановая выплата
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setCreatePayoutType("extra")}
-                    className={`rounded-xl px-4 py-2 text-sm transition ${
-                      createPayoutType === "extra"
-                        ? "bg-amber-500/20 text-amber-300"
-                        : "bg-white/[0.04] text-white/60 hover:text-white"
-                    }`}
-                  >
-                    Внеплановая выплата
-                  </button>
-                </div>
-
-                <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <select
-                    value={createEmployeeId}
-                    onChange={(e) => {
-                      const nextEmployeeId = e.target.value;
-                      const selectedEmployee = employees.find(
-                        (employee) => employee.id === nextEmployeeId
-                      );
-
-                      setCreateEmployeeId(nextEmployeeId);
-                      setCreateEmployee(selectedEmployee?.name ?? "");
-                    }}
-                    className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                  >
-                    <option value="">Выбери сотрудника</option>
-                    {employeeOptions.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.name} — {employee.role}
-                      </option>
-                    ))}
-                  </select>
-
-                  <input
-                    value={createPayoutDate}
-                    onChange={(e) => setCreatePayoutDate(e.target.value)}
-                    placeholder="Дата"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                  />
-
-                  <input
-                    value={createPayoutAmount}
-                    onChange={(e) => setCreatePayoutAmount(e.target.value)}
-                    placeholder="Сумма"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                  />
-
-                  {createPayoutType === "payout" ? (
-                    <input
-                      value={createPayoutMonth}
-                      onChange={(e) => setCreatePayoutMonth(e.target.value)}
-                      placeholder="Месяц"
-                      className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                    />
-                  ) : (
-                    <input
-                      value={createExtraReason}
-                      onChange={(e) => setCreateExtraReason(e.target.value)}
-                      placeholder="Причина"
-                      className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                    />
-                  )}
-
-                  {createPayoutType === "payout" ? (
-                    <select
-                      value={createPayoutStatus}
-                      onChange={(e) =>
-                        setCreatePayoutStatus(
-                          e.target.value as "scheduled" | "paid"
-                        )
-                      }
-                      className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none md:col-span-2"
-                    >
-                      <option value="paid">Выплачено</option>
-                      <option value="scheduled">Запланировано</option>
-                    </select>
-                  ) : null}
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCloseCreatePayout}
-                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-                  >
-                    Отмена
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleCreateManualPayout}
-                    className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                  >
-                    Сохранить
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </main>
-      </div>
-
-      {toastMessage ? (
-        <AppToast message={toastMessage} type={toastType} />
-      ) : null}
+          </div>
+        ) : null}
+      </main>
     </div>
-  );
+
+    {toastMessage ? (
+      <AppToast message={toastMessage} type={toastType} />
+    ) : null}
+  </div>
+);
 }

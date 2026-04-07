@@ -1,9 +1,9 @@
-import { createClient } from "./client";
 import type {
   StoredPayrollAccrual,
   StoredPayrollExtraPayment,
   StoredPayrollPayout,
 } from "../storage";
+import { getAuthedSupabase } from "./auth-user";
 
 type DbPayrollAccrualRow = {
   id: string;
@@ -82,11 +82,12 @@ function mapPayrollExtraPayment(
 export async function fetchPayrollAccrualsFromSupabase(): Promise<
   StoredPayrollAccrual[]
 > {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("payroll_accruals")
     .select("*")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -97,10 +98,11 @@ export async function fetchPayrollAccrualsFromSupabase(): Promise<
 export async function createPayrollAccrualInSupabase(
   accrual: StoredPayrollAccrual
 ): Promise<StoredPayrollAccrual> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
     id: accrual.id,
+    user_id: userId,
     employee: accrual.employee,
     employee_id: accrual.employeeId ?? null,
     client: accrual.client,
@@ -128,7 +130,7 @@ export async function updatePayrollAccrualInSupabase(
   id: string,
   accrual: Omit<StoredPayrollAccrual, "id">
 ): Promise<StoredPayrollAccrual> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
     employee: accrual.employee,
@@ -147,6 +149,7 @@ export async function updatePayrollAccrualInSupabase(
     .from("payroll_accruals")
     .update(payload)
     .eq("id", id)
+    .eq("user_id", userId)
     .select()
     .single();
 
@@ -156,9 +159,13 @@ export async function updatePayrollAccrualInSupabase(
 }
 
 export async function deletePayrollAccrualFromSupabase(id: string): Promise<void> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
-  const { error } = await supabase.from("payroll_accruals").delete().eq("id", id);
+  const { error } = await supabase
+    .from("payroll_accruals")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
@@ -166,11 +173,12 @@ export async function deletePayrollAccrualFromSupabase(id: string): Promise<void
 export async function fetchPayrollPayoutsFromSupabase(): Promise<
   StoredPayrollPayout[]
 > {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("payroll_payouts")
     .select("*")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -181,10 +189,11 @@ export async function fetchPayrollPayoutsFromSupabase(): Promise<
 export async function createPayrollPayoutInSupabase(
   payout: StoredPayrollPayout
 ): Promise<StoredPayrollPayout> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
     id: payout.id,
+    user_id: userId,
     employee: payout.employee,
     employee_id: payout.employeeId ?? null,
     payout_date: payout.payoutDate,
@@ -208,7 +217,7 @@ export async function updatePayrollPayoutInSupabase(
   id: string,
   payout: Omit<StoredPayrollPayout, "id">
 ): Promise<StoredPayrollPayout> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
     employee: payout.employee,
@@ -223,6 +232,7 @@ export async function updatePayrollPayoutInSupabase(
     .from("payroll_payouts")
     .update(payload)
     .eq("id", id)
+    .eq("user_id", userId)
     .select()
     .single();
 
@@ -232,9 +242,13 @@ export async function updatePayrollPayoutInSupabase(
 }
 
 export async function deletePayrollPayoutFromSupabase(id: string): Promise<void> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
-  const { error } = await supabase.from("payroll_payouts").delete().eq("id", id);
+  const { error } = await supabase
+    .from("payroll_payouts")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
@@ -242,11 +256,12 @@ export async function deletePayrollPayoutFromSupabase(id: string): Promise<void>
 export async function fetchPayrollExtraPaymentsFromSupabase(): Promise<
   StoredPayrollExtraPayment[]
 > {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("payroll_extra_payments")
     .select("*")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -257,10 +272,11 @@ export async function fetchPayrollExtraPaymentsFromSupabase(): Promise<
 export async function createPayrollExtraPaymentInSupabase(
   extra: StoredPayrollExtraPayment
 ): Promise<StoredPayrollExtraPayment> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
     id: extra.id,
+    user_id: userId,
     employee: extra.employee,
     employee_id: extra.employeeId ?? null,
     reason: extra.reason,
@@ -283,7 +299,7 @@ export async function updatePayrollExtraPaymentInSupabase(
   id: string,
   extra: Omit<StoredPayrollExtraPayment, "id">
 ): Promise<StoredPayrollExtraPayment> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
     employee: extra.employee,
@@ -297,6 +313,7 @@ export async function updatePayrollExtraPaymentInSupabase(
     .from("payroll_extra_payments")
     .update(payload)
     .eq("id", id)
+    .eq("user_id", userId)
     .select()
     .single();
 
@@ -308,12 +325,30 @@ export async function updatePayrollExtraPaymentInSupabase(
 export async function deletePayrollExtraPaymentFromSupabase(
   id: string
 ): Promise<void> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { error } = await supabase
     .from("payroll_extra_payments")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", userId);
 
   if (error) throw error;
+}
+
+export async function findPayrollAccrualByPaymentId(
+  paymentId: string
+): Promise<StoredPayrollAccrual | null> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("payroll_accruals")
+    .select("*")
+    .eq("payment_id", paymentId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return mapPayrollAccrual(data as DbPayrollAccrualRow);
 }

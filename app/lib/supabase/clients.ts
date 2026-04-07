@@ -1,5 +1,6 @@
-import { createClient } from "./client";
 import type { StoredClient } from "../storage";
+import { getAuthedSupabase } from "./auth-user";
+import { getMonthlyPlansFromSupabase } from "./monthly-plans";
 
 export type SupabaseMonthlyPlan = {
   id: string;
@@ -41,11 +42,12 @@ function mapDbClient(row: DbClientRow): StoredClient {
 }
 
 export async function fetchClientsFromSupabase(): Promise<StoredClient[]> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("clients")
     .select("*")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -56,12 +58,13 @@ export async function fetchClientsFromSupabase(): Promise<StoredClient[]> {
 export async function fetchClientByIdFromSupabase(
   id: string
 ): Promise<StoredClient | null> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const { data, error } = await supabase
     .from("clients")
     .select("*")
     .eq("id", id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) throw error;
@@ -73,9 +76,10 @@ export async function fetchClientByIdFromSupabase(
 export async function createClientInSupabase(
   client: Omit<StoredClient, "id">
 ): Promise<StoredClient> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
+    user_id: userId,
     name: client.name,
     status: client.status,
     owner: client.owner,
@@ -102,7 +106,7 @@ export async function updateClientInSupabase(
   id: string,
   client: Omit<StoredClient, "id">
 ): Promise<StoredClient> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
   const payload = {
     name: client.name,
@@ -121,6 +125,7 @@ export async function updateClientInSupabase(
     .from("clients")
     .update(payload)
     .eq("id", id)
+    .eq("user_id", userId)
     .select()
     .single();
 
@@ -130,9 +135,13 @@ export async function updateClientInSupabase(
 }
 
 export async function deleteClientInSupabase(id: string): Promise<void> {
-  const supabase = createClient();
+  const { supabase, userId } = await getAuthedSupabase();
 
-  const { error } = await supabase.from("clients").delete().eq("id", id);
+  const { error } = await supabase
+    .from("clients")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
@@ -140,5 +149,5 @@ export async function deleteClientInSupabase(id: string): Promise<void> {
 export async function fetchMonthlyPlansFromSupabase(): Promise<
   SupabaseMonthlyPlan[]
 > {
-  return [];
+  return getMonthlyPlansFromSupabase();
 }
