@@ -1,11 +1,14 @@
 import { formatDisplayDate } from "../../lib/storage";
 interface FactPaymentRow {
   id: string;
+  clientId: string;
   client: string;
+  projectId: string | null;
   project: string;
   paidAt: string;
   amount: string;
   source: string;
+  documentUrl: string;
 }
 
 interface FactPaymentsTableProps {

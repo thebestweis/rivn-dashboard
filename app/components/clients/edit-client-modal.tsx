@@ -34,7 +34,7 @@ interface EditClientModalProps {
   setAmount: (value: string) => void;
   profit: string;
   setProfit: (value: string) => void;
-  employees: EmployeeItem[];
+  employees?: EmployeeItem[];
 }
 
 const CLIENT_STATUS_LABELS = {
@@ -64,7 +64,7 @@ export function EditClientModal({
   setAmount,
   profit,
   setProfit,
-  employees,
+  employees = [],
 }: EditClientModalProps) {
   if (!isOpen) return null;
 

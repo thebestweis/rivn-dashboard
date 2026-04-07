@@ -23,7 +23,7 @@ function mapEmployee(row: DbEmployeeRow): StoredEmployee {
     payType: row.pay_type,
     payValue: row.pay_value,
     fixedSalary: row.fixed_salary ?? "",
-    payoutDay: row.payout_day ?? null,
+    payoutDay: row.payout_day ?? undefined,
     isActive: row.is_active,
   };
 }

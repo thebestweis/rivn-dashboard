@@ -5,6 +5,8 @@ import type {
 } from "../storage";
 import { getAuthedSupabase } from "./auth-user";
 
+import { createClient } from "@/app/lib/supabase/client";
+
 type DbPayrollAccrualRow = {
   id: string;
   employee: string;
