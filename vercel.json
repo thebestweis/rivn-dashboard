@@ -3,28 +3,6 @@
     {
       "path": "/api/cron/payment-reminders",
       "schedule": "0 8 * * *"
-    }
-  ]
-}
-
-{
-  "crons": [
-    {
-      "path": "/api/cron/payment-reminders",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/daily-tasks",
-      "schedule": "0 6 * * *"
-    }
-  ]
-}
-
-{
-  "crons": [
-    {
-      "path": "/api/cron/payment-reminders",
-      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/daily-tasks",
@@ -33,36 +11,30 @@
     {
       "path": "/api/cron/analytics-status-check",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-report",
+      "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/monthly-report",
+      "schedule": "0 6 1 * *"
+    },
+    {
+      "path": "/api/cron/task-deadline-reminder",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/overdue-task-reminder",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/daily-briefing",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/payment-critical-alerts",
+      "schedule": "0 7 * * *"
     }
   ]
-}
-
-{
-  "path": "/api/cron/weekly-report",
-  "schedule": "0 6 * * 1"
-}
-
-{
-  "path": "/api/cron/monthly-report",
-  "schedule": "0 6 1 * *"
-}
-
-{
-  "path": "/api/cron/task-deadline-reminder",
-  "schedule": "*/10 * * * *"
-}
-
-{
-  "path": "/api/cron/overdue-task-reminder",
-  "schedule": "0 6 * * *"
-}
-
-{
-  "path": "/api/cron/daily-briefing",
-  "schedule": "0 6 * * *"
-}
-
-{
-  "path": "/api/cron/payment-critical-alerts",
-  "schedule": "0 7 * * *"
 }
