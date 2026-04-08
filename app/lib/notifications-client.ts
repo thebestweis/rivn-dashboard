@@ -161,3 +161,43 @@ export async function sendSalaryPaidNotification(
 
   return data;
 }
+
+type SendClientStatusChangedNotificationParams = {
+  clientId: string;
+  clientName: string;
+  previousStatus: string;
+  nextStatus: string;
+};
+
+export async function sendClientStatusChangedNotification(
+  params: SendClientStatusChangedNotificationParams
+) {
+  const supabase = createClient();
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("Нет access token");
+  }
+
+  const response = await fetch("/api/notifications/client-status-changed", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify(params),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error || "Не удалось отправить уведомление об изменении статуса клиента"
+    );
+  }
+
+  return data;
+}

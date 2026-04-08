@@ -24,6 +24,9 @@ import {
 
 import { fetchPayrollPayoutsFromSupabase } from "../lib/supabase/payroll";
 
+import { createClient } from "../lib/supabase/client";
+import { sendClientStatusChangedNotification } from "../lib/notifications-client";
+
 
 type ClientUnitEconomicsRow = {
   clientId: string;
@@ -87,6 +90,18 @@ function normalizePayrollPayoutMonth(value: string) {
   }
 
   return "";
+}
+
+function toComparableDateForAnalytics(value: string) {
+  if (!value) return "";
+
+  if (value.includes(".")) {
+    const [day, month, year] = value.split(".");
+    if (!day || !month || !year) return "";
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  return value;
 }
 
 function calculateClientUnitEconomics(params: {
@@ -156,6 +171,24 @@ return (
     date.getFullYear() === now.getFullYear() &&
     date.getMonth() === now.getMonth()
   );
+}
+
+type AnalyticsHealthStatus = "healthy" | "low_margin" | "problem";
+
+function getNextAnalyticsStatus(params: {
+  profit: number;
+  margin: number | null;
+  hasOverduePayment: boolean;
+}) {
+  if (params.hasOverduePayment || params.profit < 0) {
+    return "problem" as AnalyticsHealthStatus;
+  }
+
+  if (params.margin !== null && params.margin < 20) {
+    return "low_margin" as AnalyticsHealthStatus;
+  }
+
+  return "healthy" as AnalyticsHealthStatus;
 }
 
 export default function AnalyticsPage() {
@@ -1120,6 +1153,103 @@ const planFactChartData = useMemo(() => {
   monthlyPlans,
   planMetric,
   planEditorMonth,
+]);
+
+useEffect(() => {
+  if (isLoadingClients || isLoadingFinance) return;
+  if (clients.length === 0) return;
+
+  let isCancelled = false;
+
+  async function syncClientAnalyticsStatuses() {
+    try {
+      const supabase = createClient();
+
+      for (const client of clients) {
+        if (isCancelled) return;
+
+        const clientEconomics = clientUnitEconomics.find(
+          (item) => item.clientId === client.id
+        );
+
+        const hasOverduePayment = allPaymentRecords.some((payment) => {
+          if (payment.clientId !== client.id) return false;
+          if (payment.status === "paid") return false;
+          if (!payment.dueDate) return false;
+
+          const normalized = toComparableDateForAnalytics(payment.dueDate);
+          if (!normalized) return false;
+
+          const today = new Date();
+          const due = new Date(normalized);
+
+          today.setHours(0, 0, 0, 0);
+          due.setHours(0, 0, 0, 0);
+
+          return due < today;
+        });
+
+        const nextStatus = getNextAnalyticsStatus({
+          profit: clientEconomics?.profit ?? 0,
+          margin: clientEconomics?.margin ?? null,
+          hasOverduePayment,
+        });
+
+        const previousStatus =
+          ((client as StoredClient & { analytics_status?: string }).analytics_status ??
+            "healthy") as AnalyticsHealthStatus;
+
+        if (previousStatus === nextStatus) {
+          continue;
+        }
+
+        const { error: updateError } = await supabase
+          .from("clients")
+          .update({
+            analytics_status: nextStatus,
+            analytics_status_updated_at: new Date().toISOString(),
+          })
+          .eq("id", client.id);
+
+        if (updateError) {
+          console.error(
+            "Ошибка сохранения analytics_status клиента:",
+            client.name,
+            updateError
+          );
+          continue;
+        }
+
+        try {
+          await sendClientStatusChangedNotification({
+            clientId: client.id,
+            clientName: client.name,
+            previousStatus,
+            nextStatus,
+          });
+        } catch (notificationError) {
+          console.error(
+            "Ошибка отправки Telegram-уведомления об изменении статуса клиента:",
+            notificationError
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Ошибка синка analytics_status:", error);
+    }
+  }
+
+  syncClientAnalyticsStatuses();
+
+  return () => {
+    isCancelled = true;
+  };
+}, [
+  clients,
+  clientUnitEconomics,
+  allPaymentRecords,
+  isLoadingClients,
+  isLoadingFinance,
 ]);
 
 async function updateCurrentMonthPlan(
