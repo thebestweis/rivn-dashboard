@@ -1,9 +1,39 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/app/lib/supabase/server";
-import { sendTelegramMessage } from "@/app/lib/notifications/telegram";
 
 function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
+}
+
+async function sendTelegramMessage(params: {
+  botToken: string;
+  chatId: string;
+  text: string;
+}) {
+  const { botToken, chatId, text } = params;
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${botToken}/sendMessage`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Telegram API error: ${response.status} ${errorText}`);
+  }
+
+  return response.json();
 }
 
 export async function GET() {
@@ -13,7 +43,6 @@ export async function GET() {
     const today = new Date();
     const todayStr = formatDate(today);
 
-    // 1. Получаем настройки Telegram
     const { data: settings } = await supabase
       .from("telegram_settings")
       .select("*");
@@ -22,7 +51,6 @@ export async function GET() {
       return NextResponse.json({ success: true, sent: 0 });
     }
 
-    // 2. Получаем задачи
     const { data: tasks, error } = await supabase
       .from("tasks")
       .select("*");
