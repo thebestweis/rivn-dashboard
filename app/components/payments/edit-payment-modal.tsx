@@ -22,6 +22,7 @@ interface EditPaymentModalProps {
     source: string;
     documentUrl: string;
   }) => void;
+    isSubmitting?: boolean;
   clientId: string;
   setClientId: (value: string) => void;
   projectId: string;
@@ -47,6 +48,7 @@ export function EditPaymentModal({
   isOpen,
   onClose,
   onSave,
+    isSubmitting = false,
   clientId,
   setClientId,
   projectId,
@@ -161,22 +163,27 @@ export function EditPaymentModal({
           </button>
 
           <button
-            onClick={() => {
-              if (!clientId.trim() || !projectId.trim()) return;
+  disabled={isSubmitting}
+  onClick={() => {
+    if (!clientId.trim() || !projectId.trim() || isSubmitting) return;
 
-              onSave({
-                clientId,
-                projectId,
-                paidAt,
-                amount,
-                source,
-                documentUrl,
-              });
-            }}
-            className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)]"
-          >
-            Сохранить изменения
-          </button>
+    onSave({
+      clientId,
+      projectId,
+      paidAt,
+      amount,
+      source,
+      documentUrl,
+    });
+  }}
+  className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+    isSubmitting
+      ? "cursor-not-allowed bg-white/[0.04] text-white/35"
+      : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
+  }`}
+>
+  {isSubmitting ? "Сохранение..." : "Сохранить изменения"}
+</button>
         </div>
       </div>
     </div>

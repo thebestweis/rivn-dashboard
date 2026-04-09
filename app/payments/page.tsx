@@ -152,7 +152,11 @@ export default function PaymentsPage() {
   const [loadingPayments, setLoadingPayments] = useState(true);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreatingPayment, setIsCreatingPayment] = useState(false);
+  const [processingPaymentId, setProcessingPaymentId] = useState<string | null>(null);
   const [mode, setMode] = useState<"invoice" | "payment">("invoice");
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<"planned" | "fact">("fact");
@@ -373,7 +377,9 @@ export default function PaymentsPage() {
     source: string;
     documentUrl: string;
   }) {
+    if (isCreatingPayment) return;
     try {
+  setIsCreatingPayment(true);
       if (!payment.clientId) {
         setToastType("error");
         setToastMessage("Выбери клиента");
@@ -459,12 +465,14 @@ if (isInvoice) {
       setToastType("success");
       setToastMessage(isInvoice ? "Счёт создан" : "Оплата создана");
     } catch (error) {
-      console.error("Ошибка создания payment:", error);
-      const message =
-        error instanceof Error ? error.message : "Не удалось создать";
-      setToastType("error");
-      setToastMessage(message);
-    }
+  console.error("Ошибка создания payment:", error);
+  const message =
+    error instanceof Error ? error.message : "Не удалось создать";
+  setToastType("error");
+  setToastMessage(message);
+} finally {
+  setIsCreatingPayment(false);
+}
   }
 
   function handleStartEdit(payment: FactPaymentRow) {
@@ -521,9 +529,11 @@ if (isInvoice) {
     source: string;
     documentUrl: string;
   }) {
+    if (isSavingPayment) return;
     if (!editingPaymentId) return;
 
     try {
+  setIsSavingPayment(true);
       if (!updatedPayment.clientId) {
         setToastType("error");
         setToastMessage("Выбери клиента");
@@ -571,16 +581,20 @@ if (isInvoice) {
         editMode === "planned" ? "Счёт сохранён" : "Оплата сохранена"
       );
     } catch (error) {
-      console.error("Ошибка обновления payment:", error);
-      const message =
-        error instanceof Error ? error.message : "Не удалось сохранить";
-      setToastType("error");
-      setToastMessage(message);
-    }
+  console.error("Ошибка обновления payment:", error);
+  const message =
+    error instanceof Error ? error.message : "Не удалось сохранить";
+  setToastType("error");
+  setToastMessage(message);
+} finally {
+  setIsSavingPayment(false);
+}
   }
 
   async function handleMarkAsPaid(id: string) {
+    if (processingPaymentId === id) return;
     try {
+  setProcessingPaymentId(id);
       const target = plannedPayments.find((item) => item.id === id);
 
       if (!target) {
@@ -639,15 +653,18 @@ if (isInvoice) {
       setToastType("success");
       setToastMessage(`Счёт для "${target.client}" отмечен как оплаченный`);
     } catch (error) {
-      console.error("Ошибка отметки оплаты:", error);
-      const message =
-        error instanceof Error ? error.message : "Не удалось отметить оплату";
-      setToastType("error");
-      setToastMessage(message);
-    }
+  console.error("Ошибка отметки оплаты:", error);
+  const message =
+    error instanceof Error ? error.message : "Не удалось отметить оплату";
+  setToastType("error");
+  setToastMessage(message);
+} finally {
+  setProcessingPaymentId(null);
+}
   }
 
   async function handleDeletePayment(paymentId: string) {
+    if (deletingPaymentId === paymentId) return;
     const target =
       factPayments.find((item) => item.id === paymentId) ||
       plannedPayments.find((item) => item.id === paymentId);
@@ -665,6 +682,7 @@ if (isInvoice) {
     if (!confirmed) return;
 
     try {
+  setDeletingPaymentId(paymentId);
       await deletePaymentFromSupabase(paymentId);
 
       await syncPayrollAccrualForPayment({
@@ -685,12 +703,14 @@ if (isInvoice) {
       setToastType("success");
       setToastMessage(`Оплата для "${target.client}" удалена`);
     } catch (error) {
-      console.error("Ошибка удаления payment:", error);
-      const message =
-        error instanceof Error ? error.message : "Не удалось удалить оплату";
-      setToastType("error");
-      setToastMessage(message);
-    }
+  console.error("Ошибка удаления payment:", error);
+  const message =
+    error instanceof Error ? error.message : "Не удалось удалить оплату";
+  setToastType("error");
+  setToastMessage(message);
+} finally {
+  setDeletingPaymentId(null);
+}
   }
 
   return (
@@ -779,11 +799,13 @@ if (isInvoice) {
                   />
                 ) : plannedPayments.length > 0 ? (
                   <PlannedPaymentsTable
-                    items={plannedPayments}
-                    onMarkPaid={handleMarkAsPaid}
-                    onEdit={handleStartEditPlanned}
-                    onDelete={handleDeletePayment}
-                  />
+  items={plannedPayments}
+  onMarkPaid={handleMarkAsPaid}
+  onEdit={handleStartEditPlanned}
+  onDelete={handleDeletePayment}
+  processingPaymentId={processingPaymentId}
+  deletingPaymentId={deletingPaymentId}
+/>
                 ) : (
                   <EmptyState
                     title="Плановых счетов пока нет"
@@ -797,10 +819,11 @@ if (isInvoice) {
                 />
               ) : factPayments.length > 0 ? (
                 <FactPaymentsTable
-                  items={factPayments}
-                  onEdit={handleStartEdit}
-                  onDelete={handleDeletePayment}
-                />
+  items={factPayments}
+  onEdit={handleStartEdit}
+  onDelete={handleDeletePayment}
+  deletingPaymentId={deletingPaymentId}
+/>
               ) : (
                 <EmptyState
                   title="Оплаченных счетов пока нет"
@@ -819,6 +842,7 @@ if (isInvoice) {
             isOpen={isCreateOpen}
             onClose={() => setIsCreateOpen(false)}
             onCreate={handleCreatePayment}
+            isSubmitting={isCreatingPayment}
             clients={clients}
             projects={projects}
             clientId={newClientId}
@@ -840,6 +864,7 @@ if (isInvoice) {
             isOpen={isEditOpen}
             onClose={() => setIsEditOpen(false)}
             onSave={handleSaveEdit}
+            isSubmitting={isSavingPayment}
             clientId={editClientId}
             setClientId={setEditClientId}
             projectId={editProjectId}

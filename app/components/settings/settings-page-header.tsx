@@ -14,7 +14,7 @@ export function SettingsPageHeader({
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="text-sm text-white/50">Раздел</div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Settings</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Настройки</h1>
           <p className="mt-2 text-sm text-white/55">
             Сотрудники, категории расходов, пользователи, Telegram и системные параметры.
           </p>
@@ -26,61 +26,61 @@ export function SettingsPageHeader({
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1 w-fit">
-        <button
-          onClick={() => setActiveTab("employees")}
-          className={`rounded-xl px-4 py-2 text-sm transition ${
-            activeTab === "employees"
-              ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-              : "text-white/60 hover:text-white"
-          }`}
-        >
-          Employees
-        </button>
+  <button
+    onClick={() => setActiveTab("employees")}
+    className={`rounded-xl px-4 py-2 text-sm transition ${
+      activeTab === "employees"
+        ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+        : "text-white/60 hover:text-white"
+    }`}
+  >
+    Сотрудники
+  </button>
 
-        <button
-          onClick={() => setActiveTab("categories")}
-          className={`rounded-xl px-4 py-2 text-sm transition ${
-            activeTab === "categories"
-              ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-              : "text-white/60 hover:text-white"
-          }`}
-        >
-          Expense Categories
-        </button>
+  <button
+    onClick={() => setActiveTab("categories")}
+    className={`rounded-xl px-4 py-2 text-sm transition ${
+      activeTab === "categories"
+        ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+        : "text-white/60 hover:text-white"
+    }`}
+  >
+    Категории расходов
+  </button>
 
-        <button
-          onClick={() => setActiveTab("users")}
-          className={`rounded-xl px-4 py-2 text-sm transition ${
-            activeTab === "users"
-              ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-              : "text-white/60 hover:text-white"
-          }`}
-        >
-          Users
-        </button>
+  <button
+    onClick={() => setActiveTab("users")}
+    className={`rounded-xl px-4 py-2 text-sm transition ${
+      activeTab === "users"
+        ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+        : "text-white/60 hover:text-white"
+    }`}
+  >
+    Пользователи
+  </button>
 
-        <button
-          onClick={() => setActiveTab("telegram")}
-          className={`rounded-xl px-4 py-2 text-sm transition ${
-            activeTab === "telegram"
-              ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-              : "text-white/60 hover:text-white"
-          }`}
-        >
-          Telegram
-        </button>
+  <button
+    onClick={() => setActiveTab("telegram")}
+    className={`rounded-xl px-4 py-2 text-sm transition ${
+      activeTab === "telegram"
+        ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+        : "text-white/60 hover:text-white"
+    }`}
+  >
+    Telegram
+  </button>
 
-        <button
-          onClick={() => setActiveTab("system")}
-          className={`rounded-xl px-4 py-2 text-sm transition ${
-            activeTab === "system"
-              ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-              : "text-white/60 hover:text-white"
-          }`}
-        >
-          System
-        </button>
-      </div>
+  <button
+    onClick={() => setActiveTab("system")}
+    className={`rounded-xl px-4 py-2 text-sm transition ${
+      activeTab === "system"
+        ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+        : "text-white/60 hover:text-white"
+    }`}
+  >
+    Система
+  </button>
+</div>
     </div>
   );
 }

@@ -15,13 +15,16 @@ interface FactPaymentsTableProps {
   items: FactPaymentRow[];
   onEdit?: (payment: FactPaymentRow) => void;
   onDelete?: (paymentId: string) => void;
+  deletingPaymentId?: string | null;
 }
 
 export function FactPaymentsTable({
   items,
   onEdit,
   onDelete,
+  deletingPaymentId,
 }: FactPaymentsTableProps) {
+
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
       <div className="text-sm text-white/50">Фактические оплаты</div>
@@ -61,11 +64,16 @@ export function FactPaymentsTable({
                       Редактировать
                     </button>
                     <button
-                      onClick={() => onDelete?.(item.id)}
-                      className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 hover:bg-rose-500/15"
-                    >
-                      Удалить
-                    </button>
+  disabled={deletingPaymentId === item.id}
+  onClick={() => onDelete?.(item.id)}
+  className={`rounded-xl px-3 py-2 text-xs transition ${
+    deletingPaymentId === item.id
+      ? "cursor-not-allowed bg-white/[0.04] text-white/35"
+      : "border border-rose-500/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/15"
+  }`}
+>
+  {deletingPaymentId === item.id ? "Удаление..." : "Удалить"}
+</button>
                   </div>
                 </td>
               </tr>

@@ -46,10 +46,10 @@ export function ClientsPageHeader({
           className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
         >
           <option value="all">Все статусы</option>
-          <option value="active">active</option>
-          <option value="paused">paused</option>
-          <option value="problem">problem</option>
-          <option value="completed">completed</option>
+          <option value="active">Активный</option>
+<option value="paused">На паузе</option>
+<option value="problem">Проблемный</option>
+<option value="completed">Завершён</option>
         </select>
       </div>
     </div>

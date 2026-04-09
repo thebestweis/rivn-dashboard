@@ -68,7 +68,9 @@ export function EditClientModal({
 }: EditClientModalProps) {
   if (!isOpen) return null;
 
-  const activeEmployees = employees.filter((employee) => employee.isActive !== false);
+   const availableEmployees = employees.filter(
+    (employee) => employee.isActive !== false || employee.id === ownerId
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -101,7 +103,7 @@ export function EditClientModal({
             value={ownerId}
             onChange={(e) => {
               const nextOwnerId = e.target.value;
-              const selectedEmployee = activeEmployees.find(
+              const selectedEmployee = availableEmployees.find(
                 (employee) => employee.id === nextOwnerId
               );
 
@@ -111,7 +113,7 @@ export function EditClientModal({
             className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
           >
             <option value="">Ответственный сотрудник</option>
-            {activeEmployees.map((employee) => (
+            {availableEmployees.map((employee) => (
               <option key={employee.id} value={employee.id}>
                 {employee.name} — {employee.role}
               </option>
@@ -143,7 +145,7 @@ export function EditClientModal({
           <input
             value={nextInvoice}
             onChange={(e) => setNextInvoice(e.target.value)}
-            placeholder="Следующий счёт"
+            placeholder="День оплаты"
             className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
           />
 
@@ -174,7 +176,7 @@ export function EditClientModal({
             onClick={() => {
               if (!name.trim()) return;
 
-              const selectedEmployee = activeEmployees.find(
+              const selectedEmployee = availableEmployees.find(
                 (employee) => employee.id === ownerId
               );
 

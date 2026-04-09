@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import styles from "./landing-page.module.css";
 
 export default function LandingPage() {
@@ -95,63 +97,66 @@ export default function LandingPage() {
   ];
 
   const plans = [
-    {
-      name: "Базовый",
-      price: "500 ₽",
-      featured: false,
-      subtitle: "Для фрилансеров и специалистов",
-      items: [
-        "Клиенты и проекты",
-        "Финансы и платежи",
-        "Аналитика бизнеса",
-        "14 дней бесплатно",
-      ],
-    },
-    {
-      name: "Расширенный",
-      price: "750 ₽",
-      featured: true,
-      subtitle: "Для роста и командной работы",
-      items: [
-        "Всё из базового",
-        "Добавление сотрудников",
-        "Контроль процессов",
-        "Командная работа",
-      ],
-    },
-    {
-      name: "AI",
-      price: "3 000 ₽",
-      featured: false,
-      subtitle: "Для масштабирования",
-      items: ["Всё из расширенного", "AI-помощник", "Рекомендации по росту", "Поиск слабых мест"],
-    },
-  ];
+  {
+    name: "Базовый",
+    price: "990 ₽",
+    featured: false,
+    subtitle: "Для фрилансеров и специалистов",
+    items: [
+      "Клиенты и проекты",
+      "Финансы и платежи",
+      "Аналитика бизнеса",
+      "14 дней бесплатно",
+    ],
+  },
+  {
+    name: "Расширенный",
+    price: "1 990 ₽",
+    featured: true,
+    subtitle: "Для роста и командной работы",
+    items: [
+      "Всё из базового",
+      "Добавление сотрудников",
+      "Контроль процессов",
+      "Командная работа",
+    ],
+  },
+  {
+    name: "AI",
+    price: "3 990 ₽",
+    featured: false,
+    subtitle: "Для масштабирования",
+    items: [
+      "Всё из расширенного",
+      "AI-помощник",
+      "Рекомендации по росту",
+      "Поиск слабых мест",
+    ],
+  },
+];
 
   const faqItems = [
-    {
-      q: "Это сложно?",
-      a: "Нет. Интерфейс сделан так, чтобы ты быстро разобрался и начал работать без долгого внедрения.",
-      open: true,
-    },
-    {
-      q: "Нужно ли долго настраивать?",
-      a: "Нет. Базовая логика уже заложена, поэтому запуск не превращается в длинный и дорогой процесс внедрения.",
-      open: false,
-    },
-    {
-      q: "Подойдёт ли мне RIVN OS?",
-      a: "Да, если у тебя есть клиенты, проекты, платежи и необходимость держать всё под контролем без лишнего хаоса.",
-      open: false,
-    },
-    {
-      q: "Будет ли бизнес-клуб?",
-      a: "Да, в будущем мы планируем закрытое сообщество для пользователей. На старте фокус остаётся на сильном продукте и реальной полезности системы.",
-      open: false,
-    },
-  ];
+  {
+    q: "Это сложно?",
+    a: "Нет. Интерфейс сделан так, чтобы ты быстро разобрался и начал работать без долгого внедрения.",
+  },
+  {
+    q: "Нужно ли долго настраивать?",
+    a: "Нет. Базовая логика уже заложена, поэтому запуск не превращается в длинный и дорогой процесс внедрения.",
+  },
+  {
+    q: "Подойдёт ли мне RIVN OS?",
+    a: "Да, если у тебя есть клиенты, проекты, платежи и необходимость держать всё под контролем без лишнего хаоса.",
+  },
+  {
+    q: "Будет ли бизнес-клуб?",
+    a: "Да, в будущем мы планируем закрытое сообщество для пользователей. На старте фокус остаётся на сильном продукте и реальной полезности системы.",
+  },
+];
 
-  const fadeUp = {
+const [openFaqIndex, setOpenFaqIndex] = useState<number>(0);
+
+const fadeUp = {
     initial: { opacity: 0, y: 28 },
     whileInView: { opacity: 1, y: 0 },
     viewport: { once: true, amount: 0.15 },
@@ -201,9 +206,16 @@ export default function LandingPage() {
         <div className={styles.container}>
           <motion.header {...fadeUp} className={styles.header}>
             <div className={styles.brand}>
-              <div className={styles.brandIcon}>R</div>
+              <div className={styles.brandIcon}>
+  <Image
+    src="/logorivnos.png"
+    alt="RIVN OS logo"
+    width={32}
+    height={32}
+    className={styles.brandLogoImage}
+  />
+</div>
               <div>
-                <div className={styles.brandLabel}>Операционная система бизнеса</div>
                 <div className={styles.brandName}>RIVN OS</div>
               </div>
             </div>
@@ -227,13 +239,26 @@ export default function LandingPage() {
             </nav>
 
             <div className={styles.headerActions}>
-              <Link href="/login" className={styles.secondaryHeaderBtn}>
-                Telegram основателя
-              </Link>
-              <Link href="/login" className={styles.primaryHeaderBtn}>
-                Поддержка
-              </Link>
-            </div>
+  <a
+  href="https://t.me/weismakeleadgen"
+  target="_blank"
+  rel="noreferrer"
+  className={styles.secondaryHeaderBtn}
+>
+  Telegram основателя
+</a>
+  <a
+  href="https://t.me/thebestweis"
+  target="_blank"
+  rel="noreferrer"
+  className={styles.secondaryHeaderBtn}
+>
+  Поддержка
+</a>
+  <Link href="/dashboard" className={styles.primaryHeaderBtn}>
+    Войти в дашборд
+  </Link>
+</div>
           </motion.header>
 
           <section id="hero" className={styles.hero}>
@@ -328,10 +353,10 @@ export default function LandingPage() {
       >
         <div className={styles.sectionHead}>
           <h2 className={styles.sectionTitle}>
-            Почему бизнес
-            <br />
-            не растёт
-          </h2>
+  Мы решили проблему
+  <br />
+  отсутствия роста бизнеса
+</h2>
           <p className={styles.sectionText}>
             У большинства фрилансеров, digital-специалистов и агентств проблема не в опыте и
             не в количестве клиентов. Проблема в том, что рост идёт поверх хаоса, а не поверх
@@ -375,9 +400,9 @@ export default function LandingPage() {
             операционная система бизнеса
           </h2>
           <p className={styles.solutionText}>
-            Ты видишь в одном месте финансы, клиентов, задачи, команду и точки роста. Не ещё
-            один сервис, а основу, на которой можно спокойно масштабировать бизнес.
-          </p>
+  Ты видишь в одном месте финансы, клиентов, задачи, команду и точки роста. Мы
+  сделали систему, на которой можно спокойно масштабировать бизнес.
+</p>
 
           <div className={styles.solutionActions}>
             <Link href="/login" className={styles.primaryCta}>
@@ -548,10 +573,10 @@ export default function LandingPage() {
 
                           <div className={styles.projectList}>
                             {[
-                              ["KRAFFIK", "Дизайн и трафик", "В работе"],
-                              ["Waylo", "Аналитика и рост", "Ожидает оплату"],
-                              ["300LUX", "Сопровождение", "Стабильно"],
-                            ].map(([name, desc, status]) => (
+  ["Altura", "Дизайн и трафик", "В работе"],
+  ["Neonix", "Аналитика и рост", "Ожидает оплату"],
+  ["Velaris", "Сопровождение", "Стабильно"],
+].map(([name, desc, status]) => (
                               <motion.div
                                 key={name}
                                 whileHover={{ x: 4 }}
@@ -625,10 +650,10 @@ export default function LandingPage() {
                           <div className={styles.previewPanelLabel}>AI-сигналы</div>
                           <div className={styles.signalList}>
                             {[
-                              "У клиента Waylo риск просрочки оплаты",
-                              "Маржинальность снизилась на 8%",
-                              "Проект 300LUX можно масштабировать",
-                            ].map((signal) => (
+  "У клиента Neonix риск просрочки оплаты",
+  "Маржинальность снизилась на 8%",
+  "Проект Velaris можно масштабировать",
+].map((signal) => (
                               <motion.div
                                 key={signal}
                                 whileHover={{ x: 4 }}
@@ -816,26 +841,51 @@ export default function LandingPage() {
           </div>
 
           <div className={styles.faqList}>
-            {faqItems.map((item, index) => (
-              <motion.div
-                key={item.q}
-                initial={{ opacity: 0, y: 18 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.45, delay: index * 0.05 }}
-                whileHover={{ y: -2 }}
-                className={styles.faqItem}
-              >
-                <div className={styles.faqHead}>
-                  <div>
-                    <h3 className={styles.faqQuestion}>{item.q}</h3>
-                    {item.open ? <p className={styles.faqAnswer}>{item.a}</p> : null}
-                  </div>
-                  <div className={styles.faqToggle}>{item.open ? "−" : "+"}</div>
-                </div>
-              </motion.div>
-            ))}
+  {faqItems.map((item, index) => {
+    const isOpen = openFaqIndex === index;
+
+    return (
+      <motion.div
+        key={item.q}
+        initial={{ opacity: 0, y: 18 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.45, delay: index * 0.05 }}
+        whileHover={{ y: -2 }}
+        className={styles.faqItem}
+      >
+        <button
+          type="button"
+          onClick={() => setOpenFaqIndex(isOpen ? -1 : index)}
+          className={styles.faqButton}
+        >
+          <div className={styles.faqHead}>
+            <div>
+              <h3 className={styles.faqQuestion}>{item.q}</h3>
+
+              <AnimatePresence initial={false}>
+                {isOpen ? (
+                  <motion.div
+                    key="answer"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.28, ease: "easeInOut" }}
+                    className={styles.faqAnswerWrap}
+                  >
+                    <p className={styles.faqAnswer}>{item.a}</p>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
+
+            <div className={styles.faqToggle}>{isOpen ? "−" : "+"}</div>
           </div>
+        </button>
+      </motion.div>
+    );
+  })}
+</div>
         </div>
       </motion.section>
 
@@ -845,14 +895,22 @@ export default function LandingPage() {
             <div className={styles.footerLeft}>
               <div className={styles.footerLead}>Оставайся на связи</div>
               <div className={styles.footerBrand}>
-                <div className={styles.footerBrandIcon}>R</div>
-                <div>
-                  <div className={styles.footerBrandName}>RIVN OS</div>
-                  <div className={styles.footerBrandText}>
-                    Операционная система для агентств, фрилансеров и digital-команд.
-                  </div>
-                </div>
-              </div>
+  <div className={styles.footerBrandIcon}>
+    <Image
+      src="/logorivnos.png"
+      alt="RIVN OS logo"
+      width={28}
+      height={28}
+      className={styles.footerBrandLogoImage}
+    />
+  </div>
+  <div>
+    <div className={styles.footerBrandName}>RIVN OS</div>
+    <div className={styles.footerBrandText}>
+      Операционная система для агентств, фрилансеров и digital-команд.
+    </div>
+  </div>
+</div>
               <p className={styles.footerDescription}>
                 RIVN OS объединяет клиентов, финансы, аналитику, задачи и команду в одной
                 системе, чтобы владелец бизнеса видел картину целиком и принимал решения
@@ -861,32 +919,56 @@ export default function LandingPage() {
             </div>
 
             <div className={styles.footerRight}>
-              <div className={styles.footerInputRow}>
-                <input
-                  type="email"
-                  placeholder="Введите ваш email"
-                  className={styles.footerInput}
-                />
-                <button className={styles.footerArrow}>↗</button>
-              </div>
+              <a
+  href="https://t.me/thebestweis"
+  target="_blank"
+  rel="noreferrer"
+  className={styles.footerInputRow}
+>
+  <div className={styles.footerInputFake}>Написать в техническую поддержку</div>
+  <span className={styles.footerArrow}>↗</span>
+</a>
 
               <div className={styles.footerIcons}>
-                {["tg", "vk", "yt", "in"].map((icon) => (
-                  <button key={icon} className={styles.footerIconBtn}>
-                    {icon}
-                  </button>
-                ))}
-              </div>
+  <a
+    href="https://t.me/weismakeleadgen"
+    target="_blank"
+    rel="noreferrer"
+    className={styles.footerIconBtn}
+  >
+    tg
+  </a>
+
+  <a
+    href="https://vk.ru/dearweis"
+    target="_blank"
+    rel="noreferrer"
+    className={styles.footerIconBtn}
+  >
+    vk
+  </a>
+
+  <a
+    href="https://www.youtube.com/@WeisHidden"
+    target="_blank"
+    rel="noreferrer"
+    className={styles.footerIconBtn}
+  >
+    yt
+  </a>
+
+  <span className={styles.footerIconBtn}>in</span>
+</div>
             </div>
           </div>
 
           <div className={styles.footerBottom}>
-            <div>©2026 Все права защищены. RIVN OS</div>
-            <div className={styles.footerLinks}>
-              <a href="#">Условия использования</a>
-              <a href="#">Политика конфиденциальности</a>
-            </div>
-          </div>
+  <div>©2026 RIVN OS. Все права защищены.</div>
+  <div className={styles.footerLinks}>
+    <a href="#">Условия использования</a>
+    <a href="#">Политика конфиденциальности</a>
+  </div>
+</div>
         </div>
       </footer>
     </main>

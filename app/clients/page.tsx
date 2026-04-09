@@ -5,11 +5,13 @@ import { ClientsPageHeader } from "../components/clients/clients-page-header";
 import { AppSidebar } from "../components/layout/app-sidebar";
 import { ClientsTable } from "../components/dashboard/clients-table";
 import { CreateClientModal } from "../components/clients/create-client-modal";
+import { EditClientModal } from "../components/clients/edit-client-modal";
 import { EmptyState } from "../components/ui/empty-state";
 import { AppToast } from "../components/ui/app-toast";
 import {
   fetchClientsFromSupabase,
   createClientInSupabase,
+  updateClientInSupabase,
   deleteClientInSupabase,
 } from "../lib/supabase/clients";
 import { fetchEmployeesFromSupabase } from "../lib/supabase/employees";
@@ -23,6 +25,19 @@ export default function ClientsPage() {
   const [isLoadingClients, setIsLoadingClients] = useState(true);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingClientId, setEditingClientId] = useState("");
+
+  const [editName, setEditName] = useState("");
+  const [editOwner, setEditOwner] = useState("");
+  const [editOwnerId, setEditOwnerId] = useState("");
+  const [editModel, setEditModel] = useState("");
+  const [editStatus, setEditStatus] = useState<
+    "active" | "paused" | "problem" | "completed"
+  >("active");
+  const [editNextInvoice, setEditNextInvoice] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editProfit, setEditProfit] = useState("");
 
   const [newName, setNewName] = useState("");
   const [newOwner, setNewOwner] = useState("");
@@ -128,6 +143,27 @@ export default function ClientsPage() {
     }
   }
 
+    function handleOpenEditClient(clientId: string) {
+    const target = clients.find((item) => item.id === clientId);
+
+    if (!target) {
+      setToastType("error");
+      setToastMessage("Клиент не найден");
+      return;
+    }
+
+    setEditingClientId(target.id);
+    setEditName(target.name);
+    setEditOwner(target.owner ?? "");
+    setEditOwnerId(target.ownerId ?? "");
+    setEditModel(target.model ?? "");
+    setEditStatus(target.status);
+    setEditNextInvoice(target.nextInvoice ?? "");
+    setEditAmount(target.amount ?? "");
+    setEditProfit(target.profit ?? "");
+    setIsEditOpen(true);
+  }
+  
   async function handleDeleteClient(clientId: string) {
     const target = clients.find((item) => item.id === clientId);
 
@@ -155,6 +191,37 @@ export default function ClientsPage() {
     }
   }
 
+    async function handleSaveClient(client: {
+    name: string;
+    status: "active" | "paused" | "problem" | "completed";
+    owner: string;
+    ownerId?: string | null;
+    model: string;
+    nextInvoice: string;
+    amount: string;
+    profit: string;
+  }) {
+    if (!editingClientId) return;
+
+    try {
+      const updatedClient = await updateClientInSupabase(editingClientId, client);
+
+      setClients((prev) =>
+        prev.map((item) => (item.id === editingClientId ? updatedClient : item))
+      );
+
+      setIsEditOpen(false);
+      setEditingClientId("");
+
+      setToastType("success");
+      setToastMessage(`Клиент "${client.name}" сохранён`);
+    } catch (error) {
+      console.error(error);
+      setToastType("error");
+      setToastMessage("Не удалось сохранить клиента");
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#0B0F1A] text-white">
       <div className="flex min-h-screen">
@@ -176,9 +243,10 @@ export default function ClientsPage() {
               </div>
             ) : filteredClients.length > 0 ? (
               <ClientsTable
-                clients={filteredClients}
-                onDelete={handleDeleteClient}
-              />
+  clients={filteredClients}
+  onDelete={handleDeleteClient}
+  onEdit={handleOpenEditClient}
+/>
             ) : (
               <EmptyState
                 title={clients.length === 0 ? "Клиентов пока нет" : "Ничего не найдено"}
@@ -213,6 +281,29 @@ export default function ClientsPage() {
             setAmount={setNewAmount}
             profit={newProfit}
             setProfit={setNewProfit}
+            employees={employees}
+          />
+
+                    <EditClientModal
+            isOpen={isEditOpen}
+            onClose={() => setIsEditOpen(false)}
+            onSave={handleSaveClient}
+            name={editName}
+            setName={setEditName}
+            owner={editOwner}
+            setOwner={setEditOwner}
+            ownerId={editOwnerId}
+            setOwnerId={setEditOwnerId}
+            model={editModel}
+            setModel={setEditModel}
+            status={editStatus}
+            setStatus={setEditStatus}
+            nextInvoice={editNextInvoice}
+            setNextInvoice={setEditNextInvoice}
+            amount={editAmount}
+            setAmount={setEditAmount}
+            profit={editProfit}
+            setProfit={setEditProfit}
             employees={employees}
           />
         </main>

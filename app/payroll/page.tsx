@@ -1346,15 +1346,6 @@ async function handleAccrueSalaries() {
   }}
 />
 
-<div className="flex justify-end">
-  <button
-    type="button"
-    onClick={handleAccrueSalaries}
-    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-  >
-    Начислить оклады
-  </button>
-</div>
 
           <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -1501,162 +1492,182 @@ async function handleAccrueSalaries() {
           </div>
 
           {isLoadingPayroll ? (
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60">
-              Загрузка payroll...
-            </div>
-          ) : activeTab === "accruals" ? (
-            <>
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="text-sm text-white/50">Готово к выплате</div>
+  <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60">
+    Загрузка payroll...
+  </div>
+) : (
+  <>
+    {activeTab === "accruals" ? (
+      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="flex items-center justify-between gap-4">
+          <div className="text-sm text-white/50">Готово к выплате</div>
 
-                  <button
-                    type="button"
-                    onClick={handlePayAllEmployees}
-                    disabled={pendingEmployeePayouts.length === 0}
-                    className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                      pendingEmployeePayouts.length === 0
-                        ? "cursor-not-allowed bg-white/[0.04] text-white/35"
-                        : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
-                    }`}
-                  >
-                    Оплатить всё
-                  </button>
+          <button
+            type="button"
+            onClick={handlePayAllEmployees}
+            disabled={pendingEmployeePayouts.length === 0}
+            className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+              pendingEmployeePayouts.length === 0
+                ? "cursor-not-allowed bg-white/[0.04] text-white/35"
+                : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
+            }`}
+          >
+            Оплатить всё
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {pendingEmployeePayouts.length > 0 ? (
+            pendingEmployeePayouts.map((item) => (
+              <div
+                key={item.employeeId || item.employee}
+                className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
+              >
+                <div className="text-sm text-white/45">Сотрудник</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {item.employee}
                 </div>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {pendingEmployeePayouts.length > 0 ? (
-                    pendingEmployeePayouts.map((item) => (
-                      <div
-                        key={item.employeeId || item.employee}
-                        className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
-                      >
-                        <div className="text-sm text-white/45">Сотрудник</div>
-                        <div className="mt-1 text-lg font-semibold">
-                          {item.employee}
-                        </div>
-
-                        <div className="mt-4 text-sm text-white/45">
-                          К выплате
-                        </div>
-                        <div className="mt-1 text-2xl font-semibold text-emerald-300">
-                          ₽{item.total.toLocaleString("ru-RU")}
-                        </div>
-
-                        <div className="mt-2 space-y-1 text-sm text-white/50">
-  <div>{item.month}</div>
-
-  {item.salaryPart > 0 ? (
-    <div>Оклад: {formatRub(item.salaryPart)}</div>
-  ) : null}
-
-  {item.projectPart > 0 ? (
-    <div>Проектная часть: {formatRub(item.projectPart)}</div>
-  ) : null}
-</div>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handlePayEmployee(item.employeeId || item.employee)
-                          }
-                          className="mt-4 rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                        >
-                          Выплатить сотруднику
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/45 md:col-span-2 xl:col-span-3">
-                      Сейчас нет начислений со статусом «Начислено», готовых к
-                      общей выплате.
-                    </div>
-                  )}
+                <div className="mt-4 text-sm text-white/45">
+                  К выплате
                 </div>
-              </div>
+                <div className="mt-1 text-2xl font-semibold text-emerald-300">
+                  ₽{item.total.toLocaleString("ru-RU")}
+                </div>
 
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                <div className="flex items-center gap-3 overflow-x-auto">
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Поиск по сотруднику, клиенту, проекту..."
-                    className="h-[48px] min-w-[320px] flex-[1.4] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                  />
+                <div className="mt-2 space-y-1 text-sm text-white/50">
+                  <div>{item.month}</div>
 
-                  <select
-                    value={employeeFilter}
-                    onChange={(e) => setEmployeeFilter(e.target.value)}
-                    className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                  >
-                    <option value="all">Все сотрудники</option>
-                    {employeeFilterOptions.map((employee) => (
-                      <option key={employee} value={employee}>
-                        {employee}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={monthFilter}
-                    onChange={(e) => setMonthFilter(e.target.value)}
-                    className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                  >
-                    <option value="all">Все месяцы</option>
-                    {monthFilterOptions.map((month) => (
-                      <option key={month} value={month}>
-                        {month}
-                      </option>
-                    ))}
-                  </select>
-
-                  {activeTab === "accruals" ? (
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="h-[48px] min-w-[190px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                    >
-                      <option value="all">Все статусы</option>
-                      <option value="accrued">Начислено</option>
-                      <option value="paid">Выплачено</option>
-                    </select>
+                  {item.salaryPart > 0 ? (
+                    <div>Оклад: {formatRub(item.salaryPart)}</div>
                   ) : null}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearch("");
-                      setEmployeeFilter("all");
-                      setMonthFilter("all");
-                      setStatusFilter("all");
-                    }}
-                    className="h-[48px] min-w-[180px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-                  >
-                    Сбросить
-                  </button>
+                  {item.projectPart > 0 ? (
+                    <div>Проектная часть: {formatRub(item.projectPart)}</div>
+                  ) : null}
                 </div>
-              </div>
 
-              <PayrollAccrualsTable
-                items={filteredAccruals}
-                onEdit={handleStartEditAccrual}
-                onDelete={handleDeleteAccrual}
-                onPay={handlePaySingleAccrual}
-              />
-            </>
-          ) : activeTab === "payouts" ? (
-            <PayrollPayoutsTable
-              items={filteredPayouts}
-              onEdit={handleStartEditPayout}
-              onDelete={handleDeletePayout}
-            />
+                <button
+                  type="button"
+                  onClick={() =>
+                    handlePayEmployee(item.employeeId || item.employee)
+                  }
+                  className="mt-4 rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+                >
+                  Выплатить сотруднику
+                </button>
+              </div>
+            ))
           ) : (
-            <PayrollExtraTable
-              items={filteredExtraPayments}
-              onEdit={handleStartEditExtra}
-              onDelete={handleDeleteExtra}
-            />
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/45 md:col-span-2 xl:col-span-3">
+              Сейчас нет начислений со статусом «Начислено», готовых к
+              общей выплате.
+            </div>
           )}
+        </div>
+      </div>
+    ) : null}
+
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="flex items-center gap-3 overflow-x-auto">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={
+            activeTab === "accruals"
+              ? "Поиск по сотруднику, клиенту, проекту..."
+              : activeTab === "payouts"
+                ? "Поиск по сотруднику..."
+                : "Поиск по сотруднику, причине..."
+          }
+          className="h-[48px] min-w-[320px] flex-[1.4] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+        />
+
+        <select
+          value={employeeFilter}
+          onChange={(e) => setEmployeeFilter(e.target.value)}
+          className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+        >
+          <option value="all">Все сотрудники</option>
+          {employeeFilterOptions.map((employee) => (
+            <option key={employee} value={employee}>
+              {employee}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(e.target.value)}
+          className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+        >
+          <option value="all">Все месяцы</option>
+          {monthFilterOptions.map((month) => (
+            <option key={month} value={month}>
+              {month}
+            </option>
+          ))}
+        </select>
+
+        {activeTab === "accruals" || activeTab === "payouts" ? (
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-[48px] min-w-[190px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+          >
+            <option value="all">Все статусы</option>
+
+            {activeTab === "accruals" ? (
+              <>
+                <option value="accrued">Начислено</option>
+                <option value="paid">Выплачено</option>
+              </>
+            ) : (
+              <>
+                <option value="scheduled">Запланировано</option>
+                <option value="paid">Выплачено</option>
+              </>
+            )}
+          </select>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => {
+            setSearch("");
+            setEmployeeFilter("all");
+            setMonthFilter("all");
+            setStatusFilter("all");
+          }}
+          className="h-[48px] min-w-[180px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          Сбросить
+        </button>
+      </div>
+    </div>
+
+    {activeTab === "accruals" ? (
+      <PayrollAccrualsTable
+        items={filteredAccruals}
+        onEdit={handleStartEditAccrual}
+        onDelete={handleDeleteAccrual}
+        onPay={handlePaySingleAccrual}
+      />
+    ) : activeTab === "payouts" ? (
+      <PayrollPayoutsTable
+        items={filteredPayouts}
+        onEdit={handleStartEditPayout}
+        onDelete={handleDeletePayout}
+      />
+    ) : (
+      <PayrollExtraTable
+        items={filteredExtraPayments}
+        onEdit={handleStartEditExtra}
+        onDelete={handleDeleteExtra}
+      />
+    )}
+  </>
+)}
         </div>
 
         {isEditAccrualOpen ? (

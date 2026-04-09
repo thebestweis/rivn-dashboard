@@ -45,10 +45,10 @@ export default function RegisterPage() {
       }
 
       if (data.session) {
-        router.replace("/");
-        router.refresh();
-        return;
-      }
+  router.replace("/dashboard");
+  router.refresh();
+  return;
+}
 
       setSuccessMessage(
         "Аккаунт создан. Проверь почту и подтверди email, если подтверждение включено в Supabase."
@@ -65,7 +65,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-[#0B0F1A] px-4 py-8 text-white">
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center">
-        <div className="w-full rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+        <div className="w-full rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.96),rgba(10,14,26,0.96))] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
           <div className="text-sm text-white/45">RIVN Control</div>
           <h1 className="mt-2 text-3xl font-semibold">Регистрация</h1>
           <p className="mt-2 text-sm text-white/60">
@@ -81,7 +81,7 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@example.com"
-                className="h-12 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="h-12 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30 transition focus:border-[#6F5AFF]/50 focus:bg-[#101A29] focus:ring-1 focus:ring-[#6F5AFF]/30"
                 required
               />
             </label>
@@ -94,7 +94,7 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Минимум 6 символов"
-                className="h-12 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="h-12 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30 transition focus:border-[#6F5AFF]/50 focus:bg-[#101A29] focus:ring-1 focus:ring-[#6F5AFF]/30"
                 required
               />
             </label>
@@ -107,30 +107,33 @@ export default function RegisterPage() {
                 value={passwordRepeat}
                 onChange={(event) => setPasswordRepeat(event.target.value)}
                 placeholder="Повтори пароль"
-                className="h-12 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="h-12 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30 transition focus:border-[#6F5AFF]/50 focus:bg-[#101A29] focus:ring-1 focus:ring-[#6F5AFF]/30"
                 required
               />
             </label>
 
             {errorMessage ? (
-              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
-                {errorMessage}
-              </div>
+              <div className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-200 shadow-[0_8px_24px_rgba(239,68,68,0.08)]">
+  {errorMessage}
+</div>
             ) : null}
 
             {successMessage ? (
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-                {successMessage}
-              </div>
+              <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-200 shadow-[0_8px_24px_rgba(16,185,129,0.08)]">
+  {successMessage}
+</div>
             ) : null}
 
             <button
-              type="submit"
-              disabled={isSubmitting}
-              className="h-12 w-full rounded-2xl bg-white text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSubmitting ? "Создаём аккаунт..." : "Создать аккаунт"}
-            </button>
+  type="submit"
+  disabled={isSubmitting}
+  style={{
+    background: "linear-gradient(90deg, #6F5AFF 0%, #8B7BFF 100%)",
+  }}
+  className="mt-2 h-12 w-full rounded-full text-sm font-semibold text-white shadow-[0_10px_30px_rgba(111,90,255,0.35)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(111,90,255,0.45)] active:translate-y-[1px] active:shadow-[0_8px_20px_rgba(111,90,255,0.28)] disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {isSubmitting ? "Создаём аккаунт..." : "Создать аккаунт"}
+</button>
           </form>
 
           <div className="mt-5 text-sm text-white/55">

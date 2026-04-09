@@ -15,6 +15,8 @@ interface PlannedPaymentsTableProps {
   onMarkPaid: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  processingPaymentId?: string | null;
+  deletingPaymentId?: string | null;
 }
 
 export function PlannedPaymentsTable({
@@ -22,7 +24,10 @@ export function PlannedPaymentsTable({
   onMarkPaid,
   onEdit,
   onDelete,
+  processingPaymentId,
+  deletingPaymentId,
 }: PlannedPaymentsTableProps) {
+
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
       <div className="text-sm text-white/50">Плановые счета</div>
@@ -107,20 +112,30 @@ export function PlannedPaymentsTable({
 
                     {item.status !== "paid" ? (
                       <button
-                        onClick={() => onMarkPaid(item.id)}
-                        className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20"
-                      >
-                        Оплачено
-                      </button>
+  disabled={processingPaymentId === item.id}
+  onClick={() => onMarkPaid(item.id)}
+  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+    processingPaymentId === item.id
+      ? "cursor-not-allowed bg-white/[0.04] text-white/35"
+      : "border border-emerald-400/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+  }`}
+>
+  {processingPaymentId === item.id ? "Обработка..." : "Оплачено"}
+</button>
                       
                     ) : (
                       <span className="text-xs text-white/35">—</span>
                     )}
                     <button
+  disabled={deletingPaymentId === item.id}
   onClick={() => onDelete(item.id)}
-  className="rounded-full border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-300 transition hover:bg-rose-500/20"
+  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+    deletingPaymentId === item.id
+      ? "cursor-not-allowed bg-white/[0.04] text-white/35"
+      : "border border-rose-400/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20"
+  }`}
 >
-  Удалить
+  {deletingPaymentId === item.id ? "Удаление..." : "Удалить"}
 </button>
                   </div>
                 </td>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { label: "Дашборд", href: "/" },
+  { label: "Дашборд", href: "/dashboard" },
   { label: "Клиенты", href: "/clients" },
   { label: "Проекты", href: "/projects" },
   { label: "Все задачи", href: "/tasks" },
@@ -16,10 +16,6 @@ const navItems = [
 ];
 
 function isItemActive(pathname: string, href: string) {
-  if (href === "/") {
-    return pathname === "/";
-  }
-
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

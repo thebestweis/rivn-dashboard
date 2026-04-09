@@ -1,10 +1,12 @@
 import { TopClientsChart } from "./top-clients-chart";
-import { parseRubAmount } from "../../lib/storage";
 
 type ClientUnitEconomicsRow = {
   clientId: string;
   clientName: string;
   revenue: number;
+  directExpenses: number;
+  fot: number;
+  tax: number;
   expenses: number;
   profit: number;
   margin: number | null;
@@ -77,18 +79,32 @@ export function ClientsAnalyticsTab({
   highRiskClients,
   clientRecommendations,
 }: ClientsAnalyticsTabProps) {
-  const preparedClients = [...clients].map((client) => {
-    const revenue = parseRubAmount(client.amount);
-    const profit = parseRubAmount(client.profit);
-    const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
+  const economicsMap = new Map(
+  clientUnitEconomics.map((item) => [item.clientId, item])
+);
 
-    return {
-      ...client,
-      revenue,
-      profitValue: profit,
-      margin,
-    };
-  });
+
+const preparedClients = [...clients].map((client) => {
+  const economics = economicsMap.get(client.id);
+
+  const revenue = economics?.revenue ?? 0;
+  const profitValue = economics?.profit ?? 0;
+  const margin =
+    economics?.margin !== null && economics?.margin !== undefined
+      ? Math.round(economics.margin)
+      : 0;
+
+  return {
+    ...client,
+    revenue,
+    profitValue,
+    margin,
+    directExpenses: economics?.directExpenses ?? 0,
+    fot: economics?.fot ?? 0,
+    tax: economics?.tax ?? 0,
+    totalExpenses: economics?.expenses ?? 0,
+  };
+});
 
   const chartData = [...preparedClients]
     .map((client) => ({
@@ -140,10 +156,10 @@ export function ClientsAnalyticsTab({
     .sort((a, b) => a.margin - b.margin)
     .slice(0, 5);
 
-  const clientRevenueMap = payments.reduce<Record<string, number>>((acc, p) => {
-    acc[p.client] = (acc[p.client] || 0) + parseRubAmount(p.amount);
-    return acc;
-  }, {});
+  const clientRevenueMap = preparedClients.reduce<Record<string, number>>((acc, client) => {
+  acc[client.name] = client.revenue;
+  return acc;
+}, {});
 
   const pendingPayments = allPaymentRecords.filter((p) => p.status === "pending");
 
@@ -181,14 +197,14 @@ export function ClientsAnalyticsTab({
     });
 
   const pendingRevenue = pendingPayments.reduce(
-    (sum, p) => sum + parseRubAmount(p.amount),
-    0
-  );
+  (sum, p) => sum + Number(p.amount || 0),
+  0
+);
 
   const overdueRevenue = overduePayments.reduce(
-    (sum, p) => sum + parseRubAmount(p.amount),
-    0
-  );
+  (sum, p) => sum + Number(p.amount || 0),
+  0
+);
 
   const debtorsMap = overduePayments.reduce<
     Record<string, { client: string; amount: number; count: number }>
@@ -203,7 +219,7 @@ export function ClientsAnalyticsTab({
       };
     }
 
-    acc[key].amount += parseRubAmount(payment.amount);
+    acc[key].amount += Number(payment.amount || 0);
     acc[key].count += 1;
 
     return acc;
@@ -216,8 +232,8 @@ export function ClientsAnalyticsTab({
   const clientsWithoutPayments = clients.filter((c) => !clientRevenueMap[c.name]);
 
   const totalClients = clients.length;
-  const activeClients = Object.keys(clientRevenueMap).length;
-  const inactiveClients = totalClients - activeClients;
+const activeClients = clients.filter((client) => client.status === "active").length;
+const inactiveClients = clientsWithoutPayments.length;
 
   return (
     <div className="space-y-6">
@@ -359,7 +375,7 @@ export function ClientsAnalyticsTab({
                             : "text-white/70"
                       }`}
                     >
-                      {formatMoney(parseRubAmount(p.amount))}
+                      {formatMoney(Number(p.amount || 0))}
                     </div>
                   </div>
                 ))
@@ -468,63 +484,87 @@ export function ClientsAnalyticsTab({
       </div>
 
       <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-        <div className="text-sm text-white/50">Clients analytics</div>
+        <div className="text-sm text-white/50">Аналитика клиентов</div>
         <h2 className="mt-1 text-xl font-semibold">Клиенты и прибыльность</h2>
 
         <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
           <table className="w-full text-left text-sm">
             <thead className="bg-white/[0.04] text-white/45">
-              <tr>
-                <th className="px-4 py-3 font-medium">Клиент</th>
-                <th className="px-4 py-3 font-medium">Выручка</th>
-                <th className="px-4 py-3 font-medium">Прибыль</th>
-                <th className="px-4 py-3 font-medium">Маржа</th>
-                <th className="px-4 py-3 font-medium">Модель</th>
-                <th className="px-4 py-3 font-medium">Следующий счёт</th>
-                <th className="px-4 py-3 font-medium">Статус</th>
-              </tr>
-            </thead>
+  <tr>
+    <th className="px-4 py-3 font-medium">Клиент</th>
+    <th className="px-4 py-3 font-medium">Выручка</th>
+    <th className="px-4 py-3 font-medium">Прямые расходы</th>
+    <th className="px-4 py-3 font-medium">ФОТ</th>
+    <th className="px-4 py-3 font-medium">Налог</th>
+    <th className="px-4 py-3 font-medium">Прибыль</th>
+    <th className="px-4 py-3 font-medium">Маржа</th>
+    <th className="px-4 py-3 font-medium">День оплаты</th>
+    <th className="px-4 py-3 font-medium">Статус</th>
+  </tr>
+</thead>
 
             <tbody>
-              {preparedClients.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
-                >
-                  <td className="px-4 py-3 font-medium">{row.name}</td>
-                  <td className="px-4 py-3 font-medium text-violet-300">
-                    {formatMoney(row.revenue)}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-emerald-300">
-                    {formatMoney(row.profitValue)}
-                  </td>
-                  <td className="px-4 py-3 text-white/75">{row.margin}%</td>
-                  <td className="px-4 py-3 text-white/75">{row.model}</td>
-                  <td className="px-4 py-3 text-white/75">{row.nextInvoice}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs ${
-                        row.status === "active"
-                          ? "bg-emerald-500/15 text-emerald-300"
-                          : row.status === "paused"
-                            ? "bg-amber-500/15 text-amber-300"
-                            : row.status === "problem"
-                              ? "bg-rose-500/15 text-rose-300"
-                              : "bg-white/10 text-white/60"
-                      }`}
-                    >
-                      {getStatusLabel(row.status)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+  {preparedClients.map((row) => (
+    <tr
+      key={row.id}
+      className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
+    >
+      <td className="px-4 py-3 font-medium">{row.name}</td>
+
+      <td className="px-4 py-3 font-medium text-violet-300">
+        {formatMoney(row.revenue)}
+      </td>
+
+      <td className="px-4 py-3 text-white/75">
+        {formatMoney(row.directExpenses)}
+      </td>
+
+      <td className="px-4 py-3 text-white/75">
+        {formatMoney(row.fot)}
+      </td>
+
+      <td className="px-4 py-3 text-white/75">
+        {formatMoney(row.tax)}
+      </td>
+
+      <td
+        className={`px-4 py-3 font-medium ${
+          row.profitValue >= 0 ? "text-emerald-300" : "text-rose-300"
+        }`}
+      >
+        {formatMoney(row.profitValue)}
+      </td>
+
+      <td className="px-4 py-3 text-white/75">
+        {row.revenue > 0 ? `${row.margin}%` : "—"}
+      </td>
+
+      <td className="px-4 py-3 text-white/75">{row.nextInvoice || "—"}</td>
+
+      <td className="px-4 py-3">
+        <span
+          className={`rounded-full px-3 py-1 text-xs ${
+            row.status === "active"
+              ? "bg-emerald-500/15 text-emerald-300"
+              : row.status === "paused"
+                ? "bg-amber-500/15 text-amber-300"
+                : row.status === "problem"
+                  ? "bg-rose-500/15 text-rose-300"
+                  : "bg-white/10 text-white/60"
+          }`}
+        >
+          {getStatusLabel(row.status)}
+        </span>
+      </td>
+    </tr>
+  ))}
+</tbody>
           </table>
         </div>
       </div>
 
       <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-        <div className="text-sm text-white/50">Unit economics</div>
+        <div className="text-sm text-white/50">Юнит-экономика</div>
         <h2 className="mt-1 text-xl font-semibold">
           Рейтинг клиентов по прибыли
         </h2>
@@ -555,45 +595,60 @@ export function ClientsAnalyticsTab({
         <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
           <table className="w-full text-left text-sm">
             <thead className="bg-white/[0.04] text-white/45">
-              <tr>
-                <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Клиент</th>
-                <th className="px-4 py-3 font-medium">Выручка</th>
-                <th className="px-4 py-3 font-medium">Расходы</th>
-                <th className="px-4 py-3 font-medium">Прибыль</th>
-                <th className="px-4 py-3 font-medium">Маржа</th>
-              </tr>
-            </thead>
+  <tr>
+    <th className="px-4 py-3 font-medium">#</th>
+    <th className="px-4 py-3 font-medium">Клиент</th>
+    <th className="px-4 py-3 font-medium">Выручка</th>
+    <th className="px-4 py-3 font-medium">Прямые расходы</th>
+    <th className="px-4 py-3 font-medium">ФОТ</th>
+    <th className="px-4 py-3 font-medium">Налог</th>
+    <th className="px-4 py-3 font-medium">Прибыль</th>
+    <th className="px-4 py-3 font-medium">Маржа</th>
+  </tr>
+</thead>
 
             <tbody>
-              {topClientsByProfit.map((client, index) => (
-                <tr
-                  key={client.clientId}
-                  className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
-                >
-                  <td className="px-4 py-3 text-white/75">{index + 1}</td>
-                  <td className="px-4 py-3 font-medium text-white">
-                    {client.clientName}
-                  </td>
-                  <td className="px-4 py-3 text-violet-300">
-                    {formatMoney(client.revenue)}
-                  </td>
-                  <td className="px-4 py-3 text-white/75">
-                    {formatMoney(client.expenses)}
-                  </td>
-                  <td
-                    className={`px-4 py-3 font-medium ${
-                      client.profit >= 0 ? "text-emerald-300" : "text-rose-300"
-                    }`}
-                  >
-                    {formatMoney(client.profit)}
-                  </td>
-                  <td className="px-4 py-3 text-white/75">
-                    {client.margin !== null ? `${client.margin}%` : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+  {topClientsByProfit.map((client, index) => (
+    <tr
+      key={client.clientId}
+      className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
+    >
+      <td className="px-4 py-3 text-white/75">{index + 1}</td>
+
+      <td className="px-4 py-3 font-medium text-white">
+        {client.clientName}
+      </td>
+
+      <td className="px-4 py-3 text-violet-300">
+        {formatMoney(client.revenue)}
+      </td>
+
+      <td className="px-4 py-3 text-white/75">
+        {formatMoney(client.directExpenses)}
+      </td>
+
+      <td className="px-4 py-3 text-white/75">
+        {formatMoney(client.fot)}
+      </td>
+
+      <td className="px-4 py-3 text-white/75">
+        {formatMoney(client.tax)}
+      </td>
+
+      <td
+        className={`px-4 py-3 font-medium ${
+          client.profit >= 0 ? "text-emerald-300" : "text-rose-300"
+        }`}
+      >
+        {formatMoney(client.profit)}
+      </td>
+
+      <td className="px-4 py-3 text-white/75">
+        {client.margin !== null ? `${client.margin}%` : "—"}
+      </td>
+    </tr>
+  ))}
+</tbody>
           </table>
         </div>
         <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">

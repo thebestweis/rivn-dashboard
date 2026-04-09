@@ -393,8 +393,16 @@ export function savePayrollExtraPayments(
   writeStorage(PAYROLL_EXTRA_PAYMENTS_KEY, extraPayments);
 }
 
-export function parseRubAmount(value: string) {
-  const num = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
+export function parseRubAmount(value: string | number | null | undefined) {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+
+  const normalized = String(value)
+    .replace(/\s/g, "")
+    .replace(/₽/g, "")
+    .replace(/,/g, ".");
+
+  const num = Number(normalized.replace(/[^\d.-]/g, ""));
   return Number.isFinite(num) ? num : 0;
 }
 

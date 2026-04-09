@@ -17,6 +17,8 @@ import {
   fetchClientByIdFromSupabase,
   updateClientInSupabase,
 } from "../../lib/supabase/clients";
+
+import { fetchEmployeesFromSupabase } from "../../lib/supabase/employees";
 import { getPaymentsFromSupabase } from "../../lib/supabase/payments";
 import { getExpensesFromSupabase } from "../../lib/supabase/expenses";
 import { fetchPayrollAccrualsFromSupabase } from "../../lib/supabase/payroll";
@@ -111,9 +113,10 @@ export default function ClientDetailsPage() {
   const [client, setClient] = useState<StoredClient | null>(null);
   const [isLoadingClient, setIsLoadingClient] = useState(true);
 
-  const [payments, setPayments] = useState<SupabasePaymentItem[]>([]);
+    const [payments, setPayments] = useState<SupabasePaymentItem[]>([]);
   const [expenses, setExpenses] = useState<SupabaseExpenseItem[]>([]);
   const [payrollAccruals, setPayrollAccruals] = useState<SupabasePayrollAccrualItem[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -154,13 +157,19 @@ const [isSavingNotes, setIsSavingNotes] = useState(false);
       try {
         setIsLoadingClient(true);
 
-        const [clientData, paymentsData, expensesData, payrollAccrualsData] =
-          await Promise.all([
-            fetchClientByIdFromSupabase(clientId),
-            getPaymentsFromSupabase(),
-            getExpensesFromSupabase(),
-            fetchPayrollAccrualsFromSupabase(),
-          ]);
+                const [
+          clientData,
+          paymentsData,
+          expensesData,
+          payrollAccrualsData,
+          employeesData,
+        ] = await Promise.all([
+          fetchClientByIdFromSupabase(clientId),
+          getPaymentsFromSupabase(),
+          getExpensesFromSupabase(),
+          fetchPayrollAccrualsFromSupabase(),
+          fetchEmployeesFromSupabase(),
+        ]);
 
         if (!isMounted) return;
 
@@ -170,6 +179,7 @@ const [isSavingNotes, setIsSavingNotes] = useState(false);
         setPayrollAccruals(
           (payrollAccrualsData ?? []) as SupabasePayrollAccrualItem[]
         );
+                setEmployees(employeesData ?? []);
 
         if (clientData) {
           setEditName(clientData.name);
@@ -494,7 +504,6 @@ const [isSavingNotes, setIsSavingNotes] = useState(false);
         <main className="flex-1">
           <div className="space-y-6 px-5 py-6 lg:px-8">
             <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              <div className="text-sm text-white/45">Clients / {currentClient.name}</div>
 
               <div className="mt-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div>
@@ -537,7 +546,7 @@ const [isSavingNotes, setIsSavingNotes] = useState(false);
 
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
               {[
-                { label: "След. счёт", value: currentClient.nextInvoice },
+                { label: "День оплаты", value: currentClient.nextInvoice },
                 { label: "Сумма счёта", value: currentClient.amount },
                 { label: "Выручка", value: currentClient.revenue },
                 { label: "Затраты", value: currentClient.totalCosts },
@@ -773,7 +782,7 @@ const [isSavingNotes, setIsSavingNotes] = useState(false);
             </section>
           </div>
 
-          <EditClientModal
+                              <EditClientModal
             isOpen={isEditOpen}
             onClose={() => setIsEditOpen(false)}
             onSave={handleSave}
@@ -793,6 +802,7 @@ const [isSavingNotes, setIsSavingNotes] = useState(false);
             setAmount={setEditAmount}
             profit={editProfit}
             setProfit={setEditProfit}
+            employees={employees}
           />
         </main>
       </div>

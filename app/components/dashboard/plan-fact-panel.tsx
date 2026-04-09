@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 interface PlanFactPanelProps {
   title?: string;
   subtitle?: string;
@@ -77,9 +79,51 @@ export function PlanFactPanel({
         </div>
       </div>
 
-      {!hasPlan ? (
-        <div className="mt-5 rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/55">
-          Для выбранного периода пока нет плановых значений.
+            {!hasPlan ? (
+        <div className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-5">
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-400/20 bg-violet-400/10 text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.14)]">
+              <span className="text-lg font-semibold">+</span>
+            </div>
+
+            <div className="flex-1">
+              <div className="text-base font-medium text-white">
+                Пока нет плана на выбранный период
+              </div>
+
+              <div className="mt-2 max-w-[520px] text-sm leading-6 text-white/55">
+                Когда ты добавишь плановые значения по выручке, прибыли, расходам и ФОТ,
+                здесь появится наглядное сравнение плана и факта по месяцу или диапазону месяцев.
+              </div>
+
+              <div className="mt-4">
+  <Link
+    href="/analytics?tab=planfact"
+    style={{
+      background: "linear-gradient(90deg, #6F5AFF 0%, #8B7BFF 100%)",
+    }}
+    className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium text-white shadow-[0_10px_30px_rgba(111,90,255,0.35)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(111,90,255,0.42)] active:translate-y-[1px] active:shadow-[0_8px_20px_rgba(111,90,255,0.26)]"
+  >
+    Добавить план
+  </Link>
+</div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/60">
+                  Выручка
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/60">
+                  Прибыль
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/60">
+                  Расходы
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/60">
+                  ФОТ
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="mt-5 space-y-4">

@@ -111,6 +111,11 @@ function getMonthShortLabel(date: Date) {
   });
 }
 
+function getCurrentMonthValue() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function formatMonthLabel(monthKey: string) {
   const [year, month] = monthKey.split("-");
   if (!year || !month) return monthKey;
@@ -167,8 +172,8 @@ export default function Home() {
   window.location.href = "/login";
 }
 
-  const [planFactStartMonth, setPlanFactStartMonth] = useState("2026-04");
-const [planFactEndMonth, setPlanFactEndMonth] = useState("2026-04");
+ const [planFactStartMonth, setPlanFactStartMonth] = useState(getCurrentMonthValue);
+const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
 
   useEffect(() => {
     let isMounted = true;
@@ -450,8 +455,24 @@ const [planFactEndMonth, setPlanFactEndMonth] = useState("2026-04");
   ]);
 
   const availablePlanMonths = useMemo(() => {
-  return Array.from(new Set(monthlyPlans.map((item) => item.month))).sort();
+  const months = Array.from(new Set(monthlyPlans.map((item) => item.month))).sort();
+
+  if (months.length === 0) {
+    return [getCurrentMonthValue()];
+  }
+
+  return months;
 }, [monthlyPlans]);
+
+  useEffect(() => {
+    if (!availablePlanMonths.includes(planFactStartMonth)) {
+      setPlanFactStartMonth(availablePlanMonths[0]);
+    }
+
+    if (!availablePlanMonths.includes(planFactEndMonth)) {
+      setPlanFactEndMonth(availablePlanMonths[0]);
+    }
+  }, [availablePlanMonths, planFactStartMonth, planFactEndMonth]);
 
 const selectedPlanMonthKeys = useMemo(() => {
   if (!planFactStartMonth || !planFactEndMonth) {
@@ -664,7 +685,6 @@ const periodPlans = useMemo(() => {
 
         <main className="flex-1">
           <AppTopbar
-  eyebrow="Раздел"
   title="Дашборд"
   description="Ключевые показатели, сигналы внимания и общая картина по агентству."
   showSearch={false}
@@ -673,26 +693,27 @@ const periodPlans = useMemo(() => {
   customActions={
     <>
       <a
-        href="https://t.me/weismakeleadgen"
-        target="_blank"
-        rel="noreferrer"
-        className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-      >
-        TG основателя
-      </a>
-      <a
-        href="https://t.me/thebestweis"
-        target="_blank"
-        rel="noreferrer"
-        className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-      >
-        Техническая поддержка
-      </a>
+  href="https://t.me/weismakeleadgen"
+  target="_blank"
+  rel="noreferrer"
+  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+>
+  TG основателя
+</a>
 
-      <button
+<a
+  href="https://t.me/thebestweis"
+  target="_blank"
+  rel="noreferrer"
+  className="rounded-2xl border border-emerald-400/15 bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition hover:bg-emerald-400/18 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)]"
+>
+  Техническая поддержка
+</a>
+
+<button
   type="button"
   onClick={handleLogout}
-  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
 >
   Выйти
 </button>
@@ -701,22 +722,25 @@ const periodPlans = useMemo(() => {
 />
 
           <div className="space-y-6 px-5 py-6 lg:px-8">
-            <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.96),rgba(13,18,30,0.96))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <div className="text-sm text-white/50">Период дашборда</div>
-                  <div className="mt-1 text-sm text-white/70">
-                    Все ключевые показатели и графики считаются {periodLabel}
-                  </div>
-                </div>
+  <div className="text-sm text-white/45">Период дашборда</div>
+  <div className="mt-1 text-base font-medium text-white">
+    Все ключевые показатели и графики считаются {periodLabel}
+  </div>
+  <div className="mt-1 text-sm text-white/45">
+    Можно быстро переключаться между коротким, длинным и полным периодом.
+  </div>
+</div>
 
-                <div className="flex w-fit items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+                <div className="flex w-fit items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                   <button
                     type="button"
                     onClick={() => setDashboardPeriod("30d")}
                     className={`rounded-xl px-4 py-2 text-sm transition ${
                       dashboardPeriod === "30d"
-                        ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+                        ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
                         : "text-white/60 hover:text-white"
                     }`}
                   >
@@ -728,7 +752,7 @@ const periodPlans = useMemo(() => {
                     onClick={() => setDashboardPeriod("90d")}
                     className={`rounded-xl px-4 py-2 text-sm transition ${
                       dashboardPeriod === "90d"
-                        ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+                        ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
                         : "text-white/60 hover:text-white"
                     }`}
                   >
@@ -740,7 +764,7 @@ const periodPlans = useMemo(() => {
                     onClick={() => setDashboardPeriod("all")}
                     className={`rounded-xl px-4 py-2 text-sm transition ${
                       dashboardPeriod === "all"
-                        ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+                        ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
                         : "text-white/60 hover:text-white"
                     }`}
                   >
