@@ -31,6 +31,8 @@ interface CreateExpenseModalProps {
     clientName?: string;
     title?: string;
   }>;
+  canManageExpenses?: boolean;
+  isSubmitting?: boolean;
 }
 
 export function CreateExpenseModal({
@@ -48,8 +50,27 @@ export function CreateExpenseModal({
   client,
   setClient,
   clients,
+  canManageExpenses = false,
+  isSubmitting = false,
 }: CreateExpenseModalProps) {
   if (!isOpen) return null;
+
+  const isDisabled = !canManageExpenses || isSubmitting;
+  const isValid = Boolean(title.trim());
+
+  async function handleCreate() {
+    if (!canManageExpenses) return;
+    if (isSubmitting) return;
+    if (!title.trim()) return;
+
+    await onCreate({
+      title: title.trim(),
+      category,
+      amount,
+      date,
+      client,
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -63,34 +84,35 @@ export function CreateExpenseModal({
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 hover:text-white"
+            disabled={isSubmitting}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Закрыть
           </button>
         </div>
+
+        {!canManageExpenses ? (
+          <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            У вас нет прав на создание расходов. Доступен только просмотр.
+          </div>
+        ) : null}
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Название расхода"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+            disabled={isDisabled}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50"
           />
 
           <select
             value={category}
-            onChange={(e) =>
-              setCategory(
-                e.target.value as
-                  | "marketing"
-                  | "contractor"
-                  | "service"
-                  | "tax"
-                  | "other"
-              )
-            }
-            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
+            onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
+            disabled={isDisabled}
+            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="marketing">Маркетинг</option>
             <option value="contractor">Подрядчик</option>
@@ -103,53 +125,50 @@ export function CreateExpenseModal({
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Сумма"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+            disabled={isDisabled}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50"
           />
 
           <input
-  type="date"
-  value={date}
-  onChange={(e) => setDate(e.target.value)}
-  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none"
-/>
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            disabled={isDisabled}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          />
 
           <select
-  value={client}
-  onChange={(e) => setClient(e.target.value)}
-  className="w-full rounded-xl bg-[#0B0F1A] border border-white/10 px-4 py-3"
->
-  <option value="">Выбери клиента</option>
-  {clients.map((c) => (
-    <option key={c.id} value={c.id}>
-      {c.name || c.clientName || c.title}
-    </option>
-  ))}
-</select>
+            value={client}
+            onChange={(e) => setClient(e.target.value)}
+            disabled={isDisabled}
+            className="md:col-span-2 w-full rounded-2xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">Выбери клиента</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name || c.clientName || c.title || "Без названия"}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80"
+            disabled={isSubmitting}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition disabled:cursor-not-allowed disabled:opacity-50"
           >
             Отмена
           </button>
 
           <button
-            onClick={() => {
-              if (!title.trim()) return;
-
-              onCreate({
-                title,
-                category,
-                amount,
-                date,
-                client,
-              });
-            }}
-            className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)]"
+            type="button"
+            onClick={handleCreate}
+            disabled={isDisabled || !isValid}
+            className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Создать расход
+            {isSubmitting ? "Создание..." : "Создать расход"}
           </button>
         </div>
       </div>

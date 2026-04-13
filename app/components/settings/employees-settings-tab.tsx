@@ -9,6 +9,10 @@ import {
   deleteEmployeeFromSupabase,
 } from "../../lib/supabase/employees";
 import { ensureSystemSettings } from "../../lib/supabase/system-settings";
+import { useAppContextState } from "../../providers/app-context-provider";
+import { AppToast } from "../ui/app-toast";
+import { BillingAccessBanner } from "../ui/billing-access-banner";
+import { getBillingErrorMessage } from "../../lib/billing-errors";
 
 type EmployeeFormState = {
   id: string | null;
@@ -36,6 +40,11 @@ const initialFormState: EmployeeFormState = {
 };
 
 export function EmployeesSettingsTab() {
+  const {
+    billingAccess,
+    isLoading: isAppContextLoading,
+  } = useAppContextState();
+
   const [employees, setEmployees] = useState<StoredEmployee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -45,6 +54,15 @@ export function EmployeesSettingsTab() {
   const [form, setForm] = useState<EmployeeFormState>(initialFormState);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error" | "info">(
+    "success"
+  );
+
+  const isBillingReadOnly = billingAccess?.isReadOnly ?? false;
+  const teamEnabled = billingAccess?.teamEnabled ?? false;
+  const canManageEmployees = !isBillingReadOnly && teamEnabled;
 
   async function loadEmployees() {
     try {
@@ -61,6 +79,8 @@ export function EmployeesSettingsTab() {
       );
     } catch (error) {
       console.error("Ошибка загрузки сотрудников:", error);
+      setToastType("error");
+      setToastMessage("Не удалось загрузить сотрудников");
     } finally {
       setIsLoading(false);
     }
@@ -70,6 +90,21 @@ export function EmployeesSettingsTab() {
     loadEmployees();
   }, []);
 
+  useEffect(() => {
+    if (canManageEmployees) return;
+    setIsModalOpen(false);
+  }, [canManageEmployees]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+
+    const timer = setTimeout(() => {
+      setToastMessage("");
+    }, 2200);
+
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
   const sortedEmployees = useMemo(() => {
     return [...employees].sort(
       (a, b) => Number(b.isActive) - Number(a.isActive)
@@ -77,6 +112,18 @@ export function EmployeesSettingsTab() {
   }, [employees]);
 
   function openCreateModal() {
+    if (isBillingReadOnly) {
+      setToastType("error");
+      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
+
+    if (!teamEnabled) {
+      setToastType("error");
+      setToastMessage("Функция команды доступна только на тарифе Team и выше.");
+      return;
+    }
+
     setErrors({});
     setForm({
       id: null,
@@ -92,6 +139,18 @@ export function EmployeesSettingsTab() {
   }
 
   function openEditModal(employee: StoredEmployee) {
+    if (isBillingReadOnly) {
+      setToastType("error");
+      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
+
+    if (!teamEnabled) {
+      setToastType("error");
+      setToastMessage("Функция команды доступна только на тарифе Team и выше.");
+      return;
+    }
+
     setErrors({});
     setForm({
       id: employee.id,
@@ -124,6 +183,18 @@ export function EmployeesSettingsTab() {
   }
 
   async function handleSaveEmployee() {
+    if (isBillingReadOnly) {
+      setToastType("error");
+      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
+
+    if (!teamEnabled) {
+      setToastType("error");
+      setToastMessage("Функция команды доступна только на тарифе Team и выше.");
+      return;
+    }
+
     const newErrors: Record<string, string> = {};
 
     if (!form.name.trim()) {
@@ -176,6 +247,9 @@ export function EmployeesSettingsTab() {
             employee.id === updated.id ? updated : employee
           )
         );
+
+        setToastType("success");
+        setToastMessage(`Сотрудник "${updated.name}" сохранён`);
       } else {
         const created = await createEmployeeInSupabase({
           name: form.name.trim(),
@@ -188,18 +262,42 @@ export function EmployeesSettingsTab() {
         });
 
         setEmployees((prev) => [created, ...prev]);
+
+        setToastType("success");
+        setToastMessage(`Сотрудник "${created.name}" создан`);
       }
 
       closeModal();
     } catch (error) {
       console.error("Ошибка сохранения сотрудника:", error);
-      window.alert("Не удалось сохранить сотрудника");
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
     } finally {
       setIsSaving(false);
     }
   }
 
   async function handleDeleteEmployee(employeeId: string) {
+    if (isBillingReadOnly) {
+      setToastType("error");
+      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
+
+    if (!teamEnabled) {
+      setToastType("error");
+      setToastMessage("Функция команды доступна только на тарифе Team и выше.");
+      return;
+    }
+
+    const target = employees.find((employee) => employee.id === employeeId);
+
+    if (!target) {
+      setToastType("error");
+      setToastMessage("Сотрудник не найден");
+      return;
+    }
+
     const shouldDelete = window.confirm(
       "Удалить сотрудника? Это действие нельзя отменить."
     );
@@ -211,15 +309,27 @@ export function EmployeesSettingsTab() {
       setEmployees((prev) =>
         prev.filter((employee) => employee.id !== employeeId)
       );
+      setToastType("success");
+      setToastMessage(`Сотрудник "${target.name}" удалён`);
     } catch (error) {
       console.error("Ошибка удаления сотрудника:", error);
-      window.alert("Не удалось удалить сотрудника");
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
     }
   }
 
   return (
     <>
       <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <BillingAccessBanner
+          isLoading={isAppContextLoading}
+          isBillingReadOnly={isBillingReadOnly}
+          canManage={teamEnabled}
+          readOnlyMessage="Подписка неактивна. Раздел сотрудников доступен только в режиме просмотра, пока тариф не будет активирован."
+          roleRestrictedMessage="Функция команды доступна только на тарифе Team и выше."
+          className="mb-5"
+        />
+
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm text-white/50">Сотрудники</div>
@@ -238,7 +348,8 @@ export function EmployeesSettingsTab() {
           <button
             type="button"
             onClick={openCreateModal}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+            disabled={!canManageEmployees}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Добавить сотрудника
           </button>
@@ -281,8 +392,8 @@ export function EmployeesSettingsTab() {
                       {item.payType === "fixed_per_paid_project"
                         ? "За проект"
                         : item.payType === "fixed_salary"
-                        ? "Оклад"
-                        : "Оклад + проект"}
+                          ? "Оклад"
+                          : "Оклад + проект"}
                     </td>
                     <td className="px-4 py-3 text-white/75">{item.payValue}</td>
                     <td className="px-4 py-3 text-white/75">
@@ -307,7 +418,8 @@ export function EmployeesSettingsTab() {
                         <button
                           type="button"
                           onClick={() => openEditModal(item)}
-                          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white"
+                          disabled={!canManageEmployees}
+                          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Редактировать
                         </button>
@@ -315,7 +427,8 @@ export function EmployeesSettingsTab() {
                         <button
                           type="button"
                           onClick={() => handleDeleteEmployee(item.id)}
-                          className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/15"
+                          disabled={!canManageEmployees}
+                          className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Удалить
                         </button>
@@ -579,6 +692,8 @@ export function EmployeesSettingsTab() {
           </div>
         </div>
       ) : null}
+
+      {toastMessage ? <AppToast message={toastMessage} type={toastType} /> : null}
     </>
   );
 }

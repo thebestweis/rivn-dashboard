@@ -38,9 +38,9 @@ export function ProjectsFilters({
           onChange={(event) => onStatusChange(event.target.value as StatusFilter)}
         >
           <option value="all">Все статусы</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="completed">Completed</option>
+          <option value="active">Активный</option>
+          <option value="paused">На паузе</option>
+          <option value="completed">Завершён</option>
         </select>
       </div>
 

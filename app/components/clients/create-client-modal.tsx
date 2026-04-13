@@ -143,7 +143,7 @@ export function CreateClientModal({
           <input
             value={nextInvoice}
             onChange={(e) => setNextInvoice(e.target.value)}
-            placeholder="Следующий счёт"
+            placeholder="День оплаты"
             className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
           />
 

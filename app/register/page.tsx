@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
+import {
+  createReferralAttributionForUser,
+  storeReferralCodeInBrowser,
+} from "../lib/supabase/referrals";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,6 +19,16 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  useEffect(() => {
+    const refCode = searchParams.get("ref");
+
+    if (!refCode) return;
+
+    storeReferralCodeInBrowser(refCode).catch((error) => {
+      console.error("Не удалось сохранить referral code:", error);
+    });
+  }, [searchParams]);
 
   async function handleRegister(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -44,11 +59,19 @@ export default function RegisterPage() {
         throw error;
       }
 
+      if (data.user) {
+        try {
+          await createReferralAttributionForUser(data.user.id);
+        } catch (referralError) {
+          console.error("Ошибка создания реферальной привязки:", referralError);
+        }
+      }
+
       if (data.session) {
-  router.replace("/dashboard");
-  router.refresh();
-  return;
-}
+        router.replace("/dashboard");
+        router.refresh();
+        return;
+      }
 
       setSuccessMessage(
         "Аккаунт создан. Проверь почту и подтверди email, если подтверждение включено в Supabase."
@@ -114,26 +137,26 @@ export default function RegisterPage() {
 
             {errorMessage ? (
               <div className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-200 shadow-[0_8px_24px_rgba(239,68,68,0.08)]">
-  {errorMessage}
-</div>
+                {errorMessage}
+              </div>
             ) : null}
 
             {successMessage ? (
               <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-200 shadow-[0_8px_24px_rgba(16,185,129,0.08)]">
-  {successMessage}
-</div>
+                {successMessage}
+              </div>
             ) : null}
 
             <button
-  type="submit"
-  disabled={isSubmitting}
-  style={{
-    background: "linear-gradient(90deg, #6F5AFF 0%, #8B7BFF 100%)",
-  }}
-  className="mt-2 h-12 w-full rounded-full text-sm font-semibold text-white shadow-[0_10px_30px_rgba(111,90,255,0.35)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(111,90,255,0.45)] active:translate-y-[1px] active:shadow-[0_8px_20px_rgba(111,90,255,0.28)] disabled:cursor-not-allowed disabled:opacity-60"
->
-  {isSubmitting ? "Создаём аккаунт..." : "Создать аккаунт"}
-</button>
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                background: "linear-gradient(90deg, #6F5AFF 0%, #8B7BFF 100%)",
+              }}
+              className="mt-2 h-12 w-full rounded-full text-sm font-semibold text-white shadow-[0_10px_30px_rgba(111,90,255,0.35)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(111,90,255,0.45)] active:translate-y-[1px] active:shadow-[0_8px_20px_rgba(111,90,255,0.28)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting ? "Создаём аккаунт..." : "Создать аккаунт"}
+            </button>
           </form>
 
           <div className="mt-5 text-sm text-white/55">

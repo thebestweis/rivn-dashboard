@@ -1,11 +1,13 @@
-import { getAuthedSupabase } from "./auth-user";
+import { getAppContext } from "./app-context";
 import type { EmployeePayType, StoredEmployee } from "../storage";
 
 type DbEmployeeRow = {
   id: string;
   user_id: string;
+  workspace_id: string;
   name: string;
   role: string;
+  email: string | null; // ✅ ДОБАВИЛИ
   pay_type: EmployeePayType;
   pay_value: string;
   fixed_salary: string | null;
@@ -29,12 +31,12 @@ function mapEmployee(row: DbEmployeeRow): StoredEmployee {
 }
 
 export async function fetchEmployeesFromSupabase(): Promise<StoredEmployee[]> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace } = await getAppContext();
 
   const { data, error } = await supabase
     .from("employees")
     .select("*")
-    .eq("user_id", userId)
+    .eq("workspace_id", workspace.id)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -47,12 +49,14 @@ export async function fetchEmployeesFromSupabase(): Promise<StoredEmployee[]> {
 export async function createEmployeeInSupabase(
   employee: Omit<StoredEmployee, "id">
 ): Promise<StoredEmployee> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace, user } = await getAppContext();
 
   const payload = {
-    user_id: userId,
+    user_id: user.id,
+    workspace_id: workspace.id,
     name: employee.name,
     role: employee.role,
+    email: "temp@email.com", // 🔥 ВРЕМЕННЫЙ ФИКС
     pay_type: employee.payType,
     pay_value: employee.payValue,
     fixed_salary: employee.fixedSalary?.trim() || null,
@@ -67,7 +71,9 @@ export async function createEmployeeInSupabase(
     .single();
 
   if (error) {
-    throw new Error(`Не удалось создать сотрудника: ${error.message}`);
+    throw new Error(
+      `Не удалось создать сотрудника: ${error.message} (${error.code ?? "no_code"})`
+    );
   }
 
   return mapEmployee(data as DbEmployeeRow);
@@ -77,7 +83,7 @@ export async function updateEmployeeInSupabase(
   id: string,
   employee: Omit<StoredEmployee, "id">
 ): Promise<StoredEmployee> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace } = await getAppContext();
 
   const payload = {
     name: employee.name,
@@ -94,7 +100,7 @@ export async function updateEmployeeInSupabase(
     .from("employees")
     .update(payload)
     .eq("id", id)
-    .eq("user_id", userId)
+    .eq("workspace_id", workspace.id)
     .select("*")
     .single();
 
@@ -106,13 +112,13 @@ export async function updateEmployeeInSupabase(
 }
 
 export async function deleteEmployeeFromSupabase(id: string): Promise<void> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace } = await getAppContext();
 
   const { error } = await supabase
     .from("employees")
     .delete()
     .eq("id", id)
-    .eq("user_id", userId);
+    .eq("workspace_id", workspace.id);
 
   if (error) {
     throw new Error(`Не удалось удалить сотрудника: ${error.message}`);

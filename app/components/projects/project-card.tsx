@@ -12,6 +12,7 @@ type ProjectCardProps = {
   onDelete?: (projectId: string) => void;
   onEdit?: (projectId: string) => void;
   isDeleting?: boolean;
+  canManageProject?: boolean;
 };
 
 function getStatusLabel(status: ProjectCardStatus) {
@@ -66,6 +67,7 @@ export function ProjectCard({
   onDelete,
   onEdit,
   isDeleting = false,
+  canManageProject = false,
 }: ProjectCardProps) {
   return (
     <Link
@@ -95,9 +97,7 @@ export function ProjectCard({
       <div className="mt-4 space-y-3">
         <div>
           <div className="text-xs text-white/40">Клиент</div>
-          <div className="mt-1 truncate text-sm text-white/90">
-            {clientName}
-          </div>
+          <div className="mt-1 truncate text-sm text-white/90">{clientName}</div>
         </div>
 
         <div>
@@ -122,45 +122,49 @@ export function ProjectCard({
           </span>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          {onEdit ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onEdit(id);
-              }}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
-            >
-              Редактировать
-            </button>
-          ) : null}
+        {canManageProject ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {onEdit ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onEdit(id);
+                }}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
+              >
+                Редактировать
+              </button>
+            ) : null}
 
-          {onDelete ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
+            {onDelete ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
 
-                const isConfirmed = window.confirm(
-                  `Удалить проект "${name}"?`
-                );
+                  const isConfirmed = window.confirm(
+                    `Удалить проект "${name}"?`
+                  );
 
-                if (!isConfirmed || isDeleting) {
-                  return;
-                }
+                  if (!isConfirmed || isDeleting) {
+                    return;
+                  }
 
-                onDelete(id);
-              }}
-              className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-200 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Удаляем..." : "Удалить"}
-            </button>
-          ) : null}
-        </div>
+                  onDelete(id);
+                }}
+                className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-200 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Удаляем..." : "Удалить"}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mt-3 text-xs text-white/30">Только просмотр</div>
+        )}
       </div>
     </Link>
   );

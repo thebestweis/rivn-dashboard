@@ -4,8 +4,9 @@ import "react-day-picker/dist/style.css";
 
 import { ru } from "date-fns/locale";
 import { format } from "date-fns";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DayPicker } from "react-day-picker";
+import { AppToast } from "../ui/app-toast";
 import {
   createSubtask,
   updateTask,
@@ -18,6 +19,14 @@ import {
   getTaskComments,
   type TaskComment,
 } from "../../lib/supabase/task-comments";
+import {
+  getWorkspaceMembers,
+  type WorkspaceMemberItem,
+} from "../../lib/supabase/workspace-members";
+import { canEditTasks, isAppRole, type AppRole } from "../../lib/permissions";
+import { useAppContextState } from "../../providers/app-context-provider";
+import { getBillingErrorMessage } from "../../lib/billing-errors";
+import { BillingAccessBanner } from "../ui/billing-access-banner";
 
 type TaskModalProps = {
   isOpen: boolean;
@@ -130,6 +139,10 @@ function combineDateAndTime(date: Date | undefined, time: string) {
   return next.toISOString();
 }
 
+function getMemberLabel(member: WorkspaceMemberItem) {
+  return member.email || "Без email";
+}
+
 export function TaskModal({
   isOpen,
   projectId,
@@ -140,6 +153,16 @@ export function TaskModal({
   onTaskCreated,
   onTaskOpen,
 }: TaskModalProps) {
+  const {
+    role,
+    billingAccess,
+    isLoading: isAppContextLoading,
+  } = useAppContextState();
+
+  const currentRole: AppRole | null = isAppRole(role) ? role : null;
+  const canManageTasks = currentRole ? canEditTasks(currentRole) : false;
+  const isBillingReadOnly = billingAccess?.isReadOnly ?? false;
+  const canManageTasksWithBilling = canManageTasks && !isBillingReadOnly;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -148,6 +171,15 @@ export function TaskModal({
   const [deadlineTime, setDeadlineTime] = useState("");
   const [isDeadlinePickerOpen, setIsDeadlinePickerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberItem[]>(
+    []
+  );
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
+
+  const [isAssigneesDropdownOpen, setIsAssigneesDropdownOpen] = useState(false);
+const assigneesDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const [subtaskDraft, setSubtaskDraft] = useState("");
   const [isCreatingSubtask, setIsCreatingSubtask] = useState(false);
@@ -158,15 +190,63 @@ export function TaskModal({
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [isCreatingComment, setIsCreatingComment] = useState(false);
 
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error" | "info">(
+    "success"
+  );
+
   const subtasks = useMemo(() => {
     if (!task) return [];
-    return tasks.filter((item) => item.parent_task_id === task.id && !item.is_archived);
+    return tasks.filter(
+      (item) => item.parent_task_id === task.id && !item.is_archived
+    );
   }, [task, tasks]);
 
   const doneSubtasksCount = useMemo(
     () => subtasks.filter((subtask) => subtask.status === "done").length,
     [subtasks]
   );
+
+  const activeWorkspaceMembers = useMemo(() => {
+    return workspaceMembers.filter((member) => member.status === "active");
+  }, [workspaceMembers]);
+
+  const selectedAssigneeLabels = useMemo(() => {
+    if (selectedAssigneeIds.length === 0) {
+      return [];
+    }
+
+    const membersMap = new Map(
+      activeWorkspaceMembers.map((member) => [member.id, member])
+    );
+
+    return selectedAssigneeIds
+      .map((id) => membersMap.get(id))
+      .filter((member): member is WorkspaceMemberItem => Boolean(member))
+      .map(getMemberLabel);
+  }, [activeWorkspaceMembers, selectedAssigneeIds]);
+
+  const assigneesFieldLabel = useMemo(() => {
+  if (isLoadingMembers) {
+    return "Загружаем участников...";
+  }
+
+  if (selectedAssigneeLabels.length === 0) {
+    return "Выбрать исполнителей";
+  }
+
+  if (selectedAssigneeLabels.length === 1) {
+    return selectedAssigneeLabels[0];
+  }
+
+  if (selectedAssigneeLabels.length === 2) {
+    return `${selectedAssigneeLabels[0]}, ${selectedAssigneeLabels[1]}`;
+  }
+
+  return `${selectedAssigneeLabels[0]}, ${selectedAssigneeLabels[1]} + ещё ${
+    selectedAssigneeLabels.length - 2
+  }`;
+}, [isLoadingMembers, selectedAssigneeLabels]);
 
   const deadlineLabel = useMemo(() => {
     if (!deadlineDate) {
@@ -183,6 +263,39 @@ export function TaskModal({
   }, [deadlineDate, deadlineTime]);
 
   useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+
+    async function loadMembers() {
+      try {
+        setIsLoadingMembers(true);
+        const members = await getWorkspaceMembers();
+
+        if (isMounted) {
+          setWorkspaceMembers(members);
+        }
+      } catch (error) {
+        console.error("Ошибка загрузки участников кабинета:", error);
+
+        if (isMounted) {
+          setWorkspaceMembers([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingMembers(false);
+        }
+      }
+    }
+
+    loadMembers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
     if (!isOpen || !task) {
       return;
     }
@@ -194,101 +307,198 @@ export function TaskModal({
     setStatus(task.status);
     setDeadlineDate(parsedDeadline.date);
     setDeadlineTime(parsedDeadline.time);
+    setSelectedAssigneeIds(
+      (task.assignees ?? []).map((assignee) => assignee.workspace_member_id)
+    );
     setSubtaskDraft("");
-    setCommentDraft("");
-    setIsDeadlinePickerOpen(false);
+setCommentDraft("");
+setIsDeadlinePickerOpen(false);
+setIsAssigneesDropdownOpen(false);
   }, [isOpen, task]);
 
   useEffect(() => {
-  if (!isOpen || !task) {
-    setComments([]);
-    return;
-  }
+  if (canManageTasksWithBilling) return;
 
-  let isMounted = true;
-  const currentTaskId = task.id;
+  setIsDeadlinePickerOpen(false);
+  setIsAssigneesDropdownOpen(false);
+}, [canManageTasksWithBilling]);
 
-  async function loadComments() {
-    try {
-      setIsLoadingComments(true);
-      const data = await getTaskComments(currentTaskId);
+  useEffect(() => {
+  function handleClickOutside(event: MouseEvent) {
+    if (!assigneesDropdownRef.current) return;
 
-      if (isMounted) {
-        setComments(data);
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      if (isMounted) {
-        setIsLoadingComments(false);
-      }
+    if (
+      !assigneesDropdownRef.current.contains(event.target as Node)
+    ) {
+      setIsAssigneesDropdownOpen(false);
     }
   }
 
-  loadComments();
+  if (isAssigneesDropdownOpen) {
+    document.addEventListener("mousedown", handleClickOutside);
+  }
 
   return () => {
-    isMounted = false;
+    document.removeEventListener("mousedown", handleClickOutside);
   };
-}, [isOpen, task]);
+}, [isAssigneesDropdownOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !task) {
+      setComments([]);
+      return;
+    }
+
+    let isMounted = true;
+    const currentTaskId = task.id;
+
+    async function loadComments() {
+      try {
+        setIsLoadingComments(true);
+        const data = await getTaskComments(currentTaskId);
+
+        if (isMounted) {
+          setComments(data);
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (isMounted) {
+          setIsLoadingComments(false);
+        }
+      }
+    }
+
+    loadComments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, task]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+
+    const timer = setTimeout(() => {
+      setToastMessage("");
+    }, 2200);
+
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
+  function handleToggleAssignee(memberId: string) {
+    if (!canManageTasksWithBilling) {
+      return;
+    }
+
+    setSelectedAssigneeIds((prev) =>
+      prev.includes(memberId)
+        ? prev.filter((id) => id !== memberId)
+        : [...prev, memberId]
+    );
+  }
 
   async function handleSave() {
-  if (!task) {
-    return;
-  }
+    if (!task) {
+      return;
+    }
 
-  const trimmedTitle = title.trim();
+    if (!canManageTasks) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на редактирование задач");
+      return;
+    }
 
-  if (!trimmedTitle) {
-    window.alert("Укажи название задачи");
-    return;
-  }
+    if (isBillingReadOnly) {
+      setToastType("error");
+      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
 
-  try {
-    setIsSaving(true);
+    const trimmedTitle = title.trim();
 
-    const updatedTask = await updateTask(task.id, {
+    if (!trimmedTitle) {
+      setToastType("error");
+      setToastMessage("Укажи название задачи");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      const updatedTask = await updateTask(task.id, {
         title: trimmedTitle,
         description: description.trim() || null,
         status,
         deadline_at: combineDateAndTime(deadlineDate, deadlineTime),
+        assignee_ids: selectedAssigneeIds,
       });
 
       onTaskUpdated(updatedTask);
+      setToastType("success");
+      setToastMessage("Задача сохранена");
     } catch (error) {
       console.error(error);
-      window.alert("Не удалось сохранить задачу");
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
     } finally {
       setIsSaving(false);
     }
   }
 
   async function handleCreateSubtask() {
-  if (!task) {
-    return;
-  }
+    if (!task) {
+      return;
+    }
 
-  const nextTitle = subtaskDraft.trim();
+    if (!canManageTasks) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на создание подзадач");
+      return;
+    }
 
-  if (!nextTitle) {
-    return;
-  }
+    if (isBillingReadOnly) {
+      setToastType("error");
+      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
 
-  try {
-    setIsCreatingSubtask(true);
+    const nextTitle = subtaskDraft.trim();
 
-    const createdSubtask = await createSubtask(task.id, projectId, nextTitle);
+    if (!nextTitle) {
+      return;
+    }
+
+    try {
+      setIsCreatingSubtask(true);
+
+      const createdSubtask = await createSubtask(task.id, projectId, nextTitle);
       onTaskCreated(createdSubtask);
       setSubtaskDraft("");
+      setToastType("success");
+      setToastMessage("Подзадача создана");
     } catch (error) {
       console.error(error);
-      window.alert("Не удалось создать подзадачу");
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
     } finally {
       setIsCreatingSubtask(false);
     }
   }
 
   async function handleToggleSubtask(subtask: Task) {
+    if (!canManageTasks) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на изменение подзадач");
+      return;
+    }
+
+    if (isBillingReadOnly) {
+      setToastType("error");
+      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
+
     const nextStatus = getNextSubtaskStatus(subtask.status);
 
     try {
@@ -303,32 +513,48 @@ export function TaskModal({
       });
     } catch (error) {
       console.error(error);
-      window.alert("Не удалось обновить подзадачу");
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
     } finally {
       setUpdatingSubtaskId(null);
     }
   }
 
   async function handleCreateComment() {
-  if (!task) {
-    return;
-  }
+    if (!task) {
+      return;
+    }
 
-  const nextText = commentDraft.trim();
+    if (!canManageTasks) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на добавление комментариев");
+      return;
+    }
 
-  if (!nextText) {
-    return;
-  }
+    if (isBillingReadOnly) {
+      setToastType("error");
+      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
 
-  try {
-    setIsCreatingComment(true);
+    const nextText = commentDraft.trim();
 
-    const createdComment = await createTaskComment(task.id, nextText);
+    if (!nextText) {
+      return;
+    }
+
+    try {
+      setIsCreatingComment(true);
+
+      const createdComment = await createTaskComment(task.id, nextText);
       setComments((prev) => [...prev, createdComment]);
       setCommentDraft("");
+      setToastType("success");
+      setToastMessage("Комментарий добавлен");
     } catch (error) {
       console.error(error);
-      window.alert("Не удалось добавить комментарий");
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
     } finally {
       setIsCreatingComment(false);
     }
@@ -348,7 +574,8 @@ export function TaskModal({
                 type="text"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="mt-2 w-full bg-transparent text-3xl font-semibold tracking-tight text-white outline-none placeholder:text-white/20"
+                readOnly={!canManageTasksWithBilling}
+                className="mt-2 w-full bg-transparent text-3xl font-semibold tracking-tight text-white outline-none placeholder:text-white/20 read-only:cursor-default"
                 placeholder="Название задачи"
               />
 
@@ -357,11 +584,17 @@ export function TaskModal({
                   <button
                     key={item}
                     type="button"
-                    onClick={() => setStatus(item)}
+                    onClick={() => {
+                      if (!canManageTasksWithBilling) return;
+                      setStatus(item);
+                    }}
+                    disabled={!canManageTasksWithBilling}
                     className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getStatusButtonClasses(
                       item,
                       status
-                    )}`}
+                    )} ${
+                      !canManageTasksWithBilling ? "cursor-default opacity-80" : ""
+                    }`}
                   >
                     {getStatusLabel(item)}
                   </button>
@@ -381,19 +614,129 @@ export function TaskModal({
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
           <div className="space-y-5">
+            <BillingAccessBanner
+              isLoading={isAppContextLoading}
+              isBillingReadOnly={isBillingReadOnly}
+              canManage={canManageTasks}
+              readOnlyMessage="Подписка неактивна. Задача доступна только для просмотра, пока тариф не будет активирован."
+              roleRestrictedMessage="У тебя доступ только на просмотр задачи. Редактирование, подзадачи и комментарии недоступны."
+            />
+
+            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+  <div className="text-sm text-white/45">Исполнители</div>
+
+  <div className="mt-4 relative" ref={assigneesDropdownRef}>
+    <button
+      type="button"
+      onClick={() => {
+        if (!canManageTasksWithBilling || activeWorkspaceMembers.length === 0) {
+          return;
+        }
+
+        setIsAssigneesDropdownOpen((prev) => !prev);
+      }}
+      disabled={
+        !canManageTasksWithBilling ||
+        isLoadingMembers ||
+        activeWorkspaceMembers.length === 0
+      }
+      className="flex h-12 w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-left text-sm text-white transition hover:bg-white/[0.06] disabled:cursor-default disabled:opacity-70"
+    >
+      <span
+        className={
+          selectedAssigneeIds.length > 0 ? "text-white" : "text-white/35"
+        }
+      >
+        {activeWorkspaceMembers.length === 0 && !isLoadingMembers
+          ? "Нет доступных исполнителей"
+          : assigneesFieldLabel}
+      </span>
+
+      <span className="ml-3 text-white/35">
+        {isAssigneesDropdownOpen ? "−" : "+"}
+      </span>
+    </button>
+
+    {isAssigneesDropdownOpen ? (
+      <div className="absolute left-0 right-0 top-[56px] z-30 max-h-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-[#121826] p-2 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+        {activeWorkspaceMembers.map((member) => {
+          const isSelected = selectedAssigneeIds.includes(member.id);
+
+          return (
+            <button
+              key={member.id}
+              type="button"
+              onClick={() => handleToggleAssignee(member.id)}
+              className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
+                isSelected
+                  ? "bg-emerald-400/10 text-emerald-300"
+                  : "text-white/75 hover:bg-white/[0.05] hover:text-white"
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">
+                  {getMemberLabel(member)}
+                </div>
+                <div className="mt-1 text-xs text-white/40">
+                  {member.role}
+                </div>
+              </div>
+
+              <div
+                className={`ml-3 h-4 w-4 shrink-0 rounded-full border ${
+                  isSelected
+                    ? "border-emerald-400 bg-emerald-400"
+                    : "border-white/25"
+                }`}
+              />
+            </button>
+          );
+        })}
+      </div>
+    ) : null}
+  </div>
+
+  <div className="mt-4 text-xs leading-5 text-white/35">
+    Можно выбрать одного или нескольких исполнителей.
+  </div>
+
+  {selectedAssigneeLabels.length > 0 ? (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {selectedAssigneeLabels.map((label) => (
+        <div
+          key={label}
+          className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70"
+        >
+          {label}
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="mt-3 text-xs text-white/30">
+      Исполнители пока не назначены
+    </div>
+  )}
+</section>
+
             <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
               <div className="text-sm text-white/45">Дедлайн</div>
 
               <div className="mt-3">
                 <button
                   type="button"
-                  onClick={() => setIsDeadlinePickerOpen((prev) => !prev)}
-                  className="flex h-11 w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-left text-sm text-white transition hover:bg-white/[0.06]"
+                  onClick={() => {
+                    if (!canManageTasksWithBilling) return;
+                    setIsDeadlinePickerOpen((prev) => !prev);
+                  }}
+                  disabled={!canManageTasksWithBilling}
+                  className="flex h-11 w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-left text-sm text-white transition hover:bg-white/[0.06] disabled:cursor-default disabled:opacity-80"
                 >
                   <span className={deadlineDate ? "text-white" : "text-white/35"}>
                     {deadlineLabel}
                   </span>
-                  <span className="text-white/35">Открыть</span>
+                  <span className="text-white/35">
+                    {canManageTasksWithBilling ? "Открыть" : "Просмотр"}
+                  </span>
                 </button>
               </div>
 
@@ -408,26 +751,24 @@ export function TaskModal({
                       showOutsideDays
                       className="text-white"
                       classNames={{
-  months: "flex flex-col",
-  month: "space-y-4",
-  caption: "flex items-center justify-between px-1 py-1",
-  caption_label: "text-sm font-medium text-white",
-  nav: "flex items-center gap-2",
-  nav_button:
-    "flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10",
-  table: "w-full border-separate border-spacing-1",
-  head_row: "",
-  head_cell:
-    "h-9 w-10 text-center align-middle text-[11px] font-medium text-white/35",
-  row: "",
-  cell: "h-10 w-10 text-center align-middle",
-  day: "h-10 w-10 rounded-xl text-sm text-white transition hover:bg-white/10",
-  day_selected:
-    "bg-white text-black hover:bg-white/90",
-  day_today:
-    "border border-white/20 bg-white/[0.05]",
-  day_outside: "text-white/20",
-}}
+                        months: "flex flex-col",
+                        month: "space-y-4",
+                        caption: "flex items-center justify-between px-1 py-1",
+                        caption_label: "text-sm font-medium text-white",
+                        nav: "flex items-center gap-2",
+                        nav_button:
+                          "flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10",
+                        table: "w-full border-separate border-spacing-1",
+                        head_row: "",
+                        head_cell:
+                          "h-9 w-10 text-center align-middle text-[11px] font-medium text-white/35",
+                        row: "",
+                        cell: "h-10 w-10 text-center align-middle",
+                        day: "h-10 w-10 rounded-xl text-sm text-white transition hover:bg-white/10",
+                        day_selected: "bg-white text-black hover:bg-white/90",
+                        day_today: "border border-white/20 bg-white/[0.05]",
+                        day_outside: "text-white/20",
+                      }}
                     />
                   </div>
 
@@ -476,8 +817,9 @@ export function TaskModal({
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 rows={6}
+                readOnly={!canManageTasksWithBilling}
                 placeholder="Опиши задачу, контекст, критерии готовности и важные детали"
-                className="mt-4 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30"
+                className="mt-4 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30 read-only:cursor-default"
               />
             </section>
 
@@ -512,51 +854,65 @@ export function TaskModal({
                       key={subtask.id}
                       className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3"
                     >
-                      <button
-                        type="button"
-                        onClick={() => handleToggleSubtask(subtask)}
-                        disabled={updatingSubtaskId === subtask.id}
-                        className={`mt-0.5 h-5 w-5 shrink-0 rounded-full border transition ${
-                          subtask.status === "done"
-                            ? "border-emerald-400 bg-emerald-400"
-                            : "border-white/30 bg-transparent hover:border-white/60"
-                        }`}
-                      />
+                      {canManageTasksWithBilling ? (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSubtask(subtask)}
+                          disabled={updatingSubtaskId === subtask.id}
+                          className={`mt-0.5 h-5 w-5 shrink-0 rounded-full border transition ${
+                            subtask.status === "done"
+                              ? "border-emerald-400 bg-emerald-400"
+                              : "border-white/30 bg-transparent hover:border-white/60"
+                          }`}
+                        />
+                      ) : (
+                        <div
+                          className={`mt-0.5 h-5 w-5 shrink-0 rounded-full border ${
+                            subtask.status === "done"
+                              ? "border-emerald-400 bg-emerald-400"
+                              : "border-white/30 bg-transparent"
+                          }`}
+                        />
+                      )}
 
                       <button
-  type="button"
-  onClick={() => onTaskOpen(subtask.id)}
-  className={`min-w-0 flex-1 text-left text-sm leading-6 text-white transition hover:text-white/80 ${
-    subtask.status === "done"
-      ? "line-through opacity-55"
-      : ""
-  }`}
->
-  {subtask.title}
-</button>
+                        type="button"
+                        onClick={() => onTaskOpen(subtask.id)}
+                        className={`min-w-0 flex-1 text-left text-sm leading-6 text-white transition hover:text-white/80 ${
+                          subtask.status === "done" ? "line-through opacity-55" : ""
+                        }`}
+                      >
+                        {subtask.title}
+                      </button>
                     </div>
                   ))
                 )}
               </div>
 
-              <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
-                <input
-                  type="text"
-                  value={subtaskDraft}
-                  onChange={(event) => setSubtaskDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      handleCreateSubtask();
-                    }
-                  }}
-                  placeholder="Новая подзадача"
-                  className="h-10 w-full bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/30"
-                />
-              </div>
+              {canManageTasksWithBilling ? (
+                <>
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+                    <input
+                      type="text"
+                      value={subtaskDraft}
+                      onChange={(event) => setSubtaskDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handleCreateSubtask();
+                        }
+                      }}
+                      placeholder="Новая подзадача"
+                      className="h-10 w-full bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/30"
+                    />
+                  </div>
 
-              {isCreatingSubtask ? (
-                <div className="mt-2 text-xs text-white/35">Создаём подзадачу...</div>
+                  {isCreatingSubtask ? (
+                    <div className="mt-2 text-xs text-white/35">
+                      Создаём подзадачу...
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </section>
 
@@ -565,7 +921,9 @@ export function TaskModal({
 
               <div className="mt-4 space-y-3">
                 {isLoadingComments ? (
-                  <div className="text-sm text-white/35">Загрузка комментариев...</div>
+                  <div className="text-sm text-white/35">
+                    Загрузка комментариев...
+                  </div>
                 ) : comments.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/35">
                     Комментариев пока нет
@@ -587,26 +945,30 @@ export function TaskModal({
                 )}
               </div>
 
-              <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
-                <textarea
-                  value={commentDraft}
-                  onChange={(event) => setCommentDraft(event.target.value)}
-                  rows={3}
-                  placeholder="Напиши комментарий по задаче"
-                  className="w-full bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/30"
-                />
-              </div>
+              {canManageTasksWithBilling ? (
+                <>
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+                    <textarea
+                      value={commentDraft}
+                      onChange={(event) => setCommentDraft(event.target.value)}
+                      rows={3}
+                      placeholder="Напиши комментарий по задаче"
+                      className="w-full bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/30"
+                    />
+                  </div>
 
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleCreateComment}
-                  disabled={isCreatingComment}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 disabled:opacity-60"
-                >
-                  {isCreatingComment ? "Отправляем..." : "Добавить комментарий"}
-                </button>
-              </div>
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleCreateComment}
+                      disabled={isCreatingComment}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 disabled:opacity-60"
+                    >
+                      {isCreatingComment ? "Отправляем..." : "Добавить комментарий"}
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </section>
           </div>
         </div>
@@ -618,20 +980,24 @@ export function TaskModal({
               onClick={onClose}
               className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
             >
-              Отмена
+              Закрыть
             </button>
 
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving || !title.trim()}
-              className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSaving ? "Сохраняем..." : "Сохранить"}
-            </button>
+            {canManageTasksWithBilling ? (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving || !title.trim()}
+                className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSaving ? "Сохраняем..." : "Сохранить"}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
+
+      {toastMessage ? <AppToast message={toastMessage} type={toastType} /> : null}
     </div>
   );
 }

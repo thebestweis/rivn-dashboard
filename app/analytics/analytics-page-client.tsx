@@ -1,8 +1,18 @@
 "use client";
 
+import { AccessDenied } from "../components/access/access-denied";
+import { usePageAccess } from "../lib/use-page-access";
+
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AppSidebar } from "../components/layout/app-sidebar";
+
+import {
+  canManageFinance,
+  isAppRole,
+  type AppRole,
+} from "../lib/permissions";
+import { useAppContextState } from "../providers/app-context-provider";
+
 import { AnalyticsPageHeader } from "../components/analytics/analytics-page-header";
 import { FinancialAnalyticsTab } from "../components/analytics/financial-analytics-tab";
 import {
@@ -208,7 +218,16 @@ function isCurrentMonth(dateString: string) {
 }
 
 export default function AnalyticsPage() {
+      const { role, isLoading: isAppContextLoading } = useAppContextState();
+
+  const currentRole: AppRole | null = isAppRole(role) ? role : null;
+  const canEditAnalyticsPlans = currentRole
+    ? canManageFinance(currentRole)
+    : false;
+
   const searchParams = useSearchParams();
+  const { isLoading: isAccessLoading, hasAccess: hasAnalyticsAccess } =
+  usePageAccess("analytics");
   const initialTab = searchParams.get("tab");
 
   const [activeTab, setActiveTab] = useState<
@@ -294,132 +313,140 @@ export default function AnalyticsPage() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    let isMounted = true;
+    useEffect(() => {
+  if (isAppContextLoading || isAccessLoading) return;
 
-    async function loadAnalyticsData() {
-      try {
-        setIsLoadingClients(true);
-        setIsLoadingFinance(true);
+  if (!hasAnalyticsAccess) {
+    setIsLoadingClients(false);
+    setIsLoadingFinance(false);
+    return;
+  }
 
-        const [
-          clientsData,
-          expensesData,
-          paymentsData,
-          monthlyPlansData,
-          payrollPayoutsData,
-          payrollAccrualsData,
-          extraPaymentsData,
-        ] = await Promise.all([
-          fetchClientsFromSupabase(),
-          getExpensesFromSupabase(),
-          getPaymentsFromSupabase(),
-          getMonthlyPlansFromSupabase(),
-          fetchPayrollPayoutsFromSupabase(),
-          fetchPayrollAccrualsFromSupabase(),
-          fetchPayrollExtraPaymentsFromSupabase(),
-        ]);
+  let isMounted = true;
 
-        if (!isMounted) return;
+  async function loadAnalyticsData() {
+    try {
+      setIsLoadingClients(true);
+      setIsLoadingFinance(true);
 
-        const safeClients = clientsData ?? [];
-        const safeExpenses = expensesData ?? [];
-        const safePayments = paymentsData ?? [];
-        const safeMonthlyPlans = monthlyPlansData ?? [];
-        const safePayrollPayouts = payrollPayoutsData ?? [];
-        const safePayrollAccruals = payrollAccrualsData ?? [];
-        const safeExtraPayments = extraPaymentsData ?? [];
+      const [
+        clientsData,
+        expensesData,
+        paymentsData,
+        monthlyPlansData,
+        payrollPayoutsData,
+        payrollAccrualsData,
+        extraPaymentsData,
+      ] = await Promise.all([
+        fetchClientsFromSupabase(),
+        getExpensesFromSupabase(),
+        getPaymentsFromSupabase(),
+        getMonthlyPlansFromSupabase(),
+        fetchPayrollPayoutsFromSupabase(),
+        fetchPayrollAccrualsFromSupabase(),
+        fetchPayrollExtraPaymentsFromSupabase(),
+      ]);
 
-        setClients(safeClients);
+      if (!isMounted) return;
 
-        const clientNameMap = new Map(
-          safeClients.map((client) => [client.id, client.name])
-        );
+      const safeClients = clientsData ?? [];
+      const safeExpenses = expensesData ?? [];
+      const safePayments = paymentsData ?? [];
+      const safeMonthlyPlans = monthlyPlansData ?? [];
+      const safePayrollPayouts = payrollPayoutsData ?? [];
+      const safePayrollAccruals = payrollAccrualsData ?? [];
+      const safeExtraPayments = extraPaymentsData ?? [];
 
-        const mappedExpenses = safeExpenses.map((item) => ({
+      setClients(safeClients);
+
+      const clientNameMap = new Map(
+        safeClients.map((client) => [client.id, client.name])
+      );
+
+      const mappedExpenses = safeExpenses.map((item) => ({
+        id: item.id,
+        title: item.title,
+        category: item.category as StoredExpense["category"],
+        amount: String(item.amount),
+        date: fromSupabaseDate(item.expense_date),
+        client: item.notes ?? "",
+        client_id: item.client_id ?? null,
+      })) as Array<
+        StoredExpense & {
+          client_id?: string | null;
+        }
+      >;
+
+      const mappedPayments: StoredPayment[] = safePayments
+        .filter((item) => item.status === "paid")
+        .map((item) => ({
           id: item.id,
-          title: item.title,
-          category: item.category as StoredExpense["category"],
-          amount: String(item.amount),
-          date: fromSupabaseDate(item.expense_date),
-          client: item.notes ?? "",
-          client_id: item.client_id ?? null,
-        })) as Array<
-          StoredExpense & {
-            client_id?: string | null;
-          }
-        >;
-
-        const mappedPayments: StoredPayment[] = safePayments
-          .filter((item) => item.status === "paid")
-          .map((item) => ({
-            id: item.id,
-            client: clientNameMap.get(item.client_id) ?? "Неизвестный клиент",
-            clientId: item.client_id ?? null,
-            project: item.period_label ?? "",
-            paidAt: fromSupabaseDate(item.paid_date),
-            amount: String(item.amount),
-            source: item.notes ?? "",
-          }));
-
-        const mappedAllPayments = safePayments.map((item) => ({
-          id: item.id,
-          clientId: item.client_id,
           client: clientNameMap.get(item.client_id) ?? "Неизвестный клиент",
-          amount: String(item.amount),
-          status: item.status as "paid" | "pending",
-          dueDate: fromSupabaseDate(item.due_date),
-          paidDate: fromSupabaseDate(item.paid_date),
+          clientId: item.client_id ?? null,
           project: item.period_label ?? "",
-          notes: item.notes ?? "",
+          paidAt: fromSupabaseDate(item.paid_date),
+          amount: String(item.amount),
+          source: item.notes ?? "",
         }));
 
-        setExpenses(mappedExpenses);
-        setPayments(mappedPayments);
-        setAllPaymentRecords(mappedAllPayments);
+      const mappedAllPayments = safePayments.map((item) => ({
+        id: item.id,
+        clientId: item.client_id,
+        client: clientNameMap.get(item.client_id) ?? "Неизвестный клиент",
+        amount: String(item.amount),
+        status: item.status as "paid" | "pending",
+        dueDate: fromSupabaseDate(item.due_date),
+        paidDate: fromSupabaseDate(item.paid_date),
+        project: item.period_label ?? "",
+        notes: item.notes ?? "",
+      }));
 
-        setPayrollPayouts(safePayrollPayouts);
-        setPayrollAccruals(safePayrollAccruals);
-        setExtraPayments(safeExtraPayments);
+      setExpenses(mappedExpenses);
+      setPayments(mappedPayments);
+      setAllPaymentRecords(mappedAllPayments);
 
-        const mappedMonthlyPlans = safeMonthlyPlans.reduce<
-          Record<
-            string,
-            {
-              revenue: number;
-              profit: number;
-              expenses: number;
-              fot: number;
-            }
-          >
-        >((acc, item) => {
-          acc[item.month] = {
-            revenue: Number(item.revenue_plan) || 0,
-            profit: Number(item.profit_plan) || 0,
-            expenses: Number(item.expenses_plan) || 0,
-            fot: Number(item.fot_plan) || 0,
-          };
+      setPayrollPayouts(safePayrollPayouts);
+      setPayrollAccruals(safePayrollAccruals);
+      setExtraPayments(safeExtraPayments);
 
-          return acc;
-        }, {});
+      const mappedMonthlyPlans = safeMonthlyPlans.reduce<
+        Record<
+          string,
+          {
+            revenue: number;
+            profit: number;
+            expenses: number;
+            fot: number;
+          }
+        >
+      >((acc, item) => {
+        acc[item.month] = {
+          revenue: Number(item.revenue_plan) || 0,
+          profit: Number(item.profit_plan) || 0,
+          expenses: Number(item.expenses_plan) || 0,
+          fot: Number(item.fot_plan) || 0,
+        };
 
-        setMonthlyPlans(mappedMonthlyPlans);
-      } catch (error) {
-        console.error("Ошибка загрузки analytics:", error);
-      } finally {
-        if (isMounted) {
-          setIsLoadingClients(false);
-          setIsLoadingFinance(false);
-        }
+        return acc;
+      }, {});
+
+      setMonthlyPlans(mappedMonthlyPlans);
+    } catch (error) {
+      console.error("Ошибка загрузки analytics:", error);
+    } finally {
+      if (isMounted) {
+        setIsLoadingClients(false);
+        setIsLoadingFinance(false);
       }
     }
+  }
 
-    loadAnalyticsData();
+  loadAnalyticsData();
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  return () => {
+    isMounted = false;
+  };
+}, [isAppContextLoading, isAccessLoading, hasAnalyticsAccess]);
 
   const filteredPayments = useMemo(() => {
     return payments.filter((p) => {
@@ -784,69 +811,61 @@ export default function AnalyticsPage() {
   }, [payments, revenueDynamics]);
 
   const forecastMetrics = useMemo(() => {
-    if (revenueDynamics.length < 2) {
-      return {
-        avgRevenue: 0,
-        avgProfit: 0,
-        realisticRevenue: 0,
-        realisticProfit: 0,
-        aggressiveRevenue: 0,
-        aggressiveProfit: 0,
-      };
-    }
-
-    const lastMonths = revenueDynamics.slice(-3);
-
-    const avgRevenue =
-      lastMonths.reduce((sum, item) => sum + item.revenue, 0) /
-      lastMonths.length;
-
-    const avgProfit =
-      lastMonths.reduce((sum, item) => sum + item.profit, 0) /
-      lastMonths.length;
-
-    const growthRates = [];
-    for (let i = 1; i < lastMonths.length; i++) {
-      const prev = lastMonths[i - 1].revenue;
-      const curr = lastMonths[i].revenue;
-
-      if (prev > 0) {
-        growthRates.push((curr - prev) / prev);
-      }
-    }
-
-    const avgGrowth =
-      growthRates.length > 0
-        ? growthRates.reduce((sum, g) => sum + g, 0) / growthRates.length
-        : 0;
-
-    const aggressiveGrowth = avgGrowth * 1.5;
-
-    const lastRevenue = lastMonths[lastMonths.length - 1].revenue;
-
-    let realisticRevenue = lastRevenue;
-    let aggressiveRevenue = lastRevenue;
-
-    for (let i = 0; i < 3; i++) {
-      realisticRevenue += realisticRevenue * avgGrowth;
-      aggressiveRevenue += aggressiveRevenue * aggressiveGrowth;
-    }
-
-    const realisticProfit =
-      avgRevenue > 0 ? (realisticRevenue / avgRevenue) * avgProfit : 0;
-
-    const aggressiveProfit =
-      avgRevenue > 0 ? (aggressiveRevenue / avgRevenue) * avgProfit : 0;
-
+  if (revenueDynamics.length < 1) {
     return {
-      avgRevenue,
-      avgProfit,
-      realisticRevenue,
-      realisticProfit,
-      aggressiveRevenue,
-      aggressiveProfit,
+      avgRevenue: 0,
+      avgProfit: 0,
+      realisticRevenue: 0,
+      realisticProfit: 0,
+      aggressiveRevenue: 0,
+      aggressiveProfit: 0,
     };
-  }, [revenueDynamics]);
+  }
+
+  const lastMonths = revenueDynamics.slice(-3);
+
+  const avgRevenue =
+    lastMonths.reduce((sum, item) => sum + item.revenue, 0) /
+    lastMonths.length;
+
+  const avgProfit =
+    lastMonths.reduce((sum, item) => sum + item.profit, 0) /
+    lastMonths.length;
+
+  const growthRates: number[] = [];
+
+  for (let i = 1; i < lastMonths.length; i++) {
+    const prev = lastMonths[i - 1].revenue;
+    const curr = lastMonths[i].revenue;
+
+    if (prev > 0) {
+      growthRates.push((curr - prev) / prev);
+    }
+  }
+
+  const avgGrowth =
+    growthRates.length > 0
+      ? growthRates.reduce((sum, value) => sum + value, 0) / growthRates.length
+      : 0;
+
+  const realisticRevenue = avgRevenue * 3;
+  const realisticProfit = avgProfit * 3;
+
+  const aggressiveMonthlyRevenue = avgRevenue * (1 + avgGrowth);
+  const aggressiveMonthlyProfit = avgProfit * (1 + avgGrowth);
+
+  const aggressiveRevenue = aggressiveMonthlyRevenue * 3;
+  const aggressiveProfit = aggressiveMonthlyProfit * 3;
+
+  return {
+    avgRevenue,
+    avgProfit,
+    realisticRevenue,
+    realisticProfit,
+    aggressiveRevenue,
+    aggressiveProfit,
+  };
+}, [revenueDynamics]);
 
   const targetMetrics = useMemo(() => {
     const averageRevenuePerClient =
@@ -1258,6 +1277,9 @@ export default function AnalyticsPage() {
     key: "revenue" | "profit" | "expenses" | "fot",
     value: number
   ) {
+        if (!canEditAnalyticsPlans) {
+      return;
+    }
     const current = monthlyPlans[planEditorMonth] ?? {
       revenue: 500000,
       profit: 220000,
@@ -1288,17 +1310,30 @@ export default function AnalyticsPage() {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-[#0B0F1A] text-white">
-      <div className="flex min-h-screen">
-        <AppSidebar />
-
-        <main className="flex-1">
-          <div className="space-y-6 px-5 py-6 lg:px-8">
+    return (
+    <main className="flex-1">
+      <div className="space-y-6 px-5 py-6 lg:px-8">
+                {isAccessLoading || isAppContextLoading ? (
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            Проверяем доступ...
+          </div>
+        ) : !hasAnalyticsAccess ? (
+          <AccessDenied
+            title="Нет доступа к аналитике"
+            description="У тебя нет прав для просмотра аналитики этого кабинета."
+          />
+        ) : (
+                    <>
             <AnalyticsPageHeader
               activeTab={activeTab}
               setActiveTab={setActiveTab}
             />
+
+            {activeTab === "planfact" && !canEditAnalyticsPlans ? (
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                У тебя доступ только на просмотр plan/fact. Изменение плановых значений недоступно.
+              </div>
+            ) : null}
 
             {activeTab === "financial" ? (
               isLoadingFinance ? (
@@ -1327,18 +1362,19 @@ export default function AnalyticsPage() {
                 />
               )
             ) : activeTab === "planfact" ? (
-              <PlanFactTab
+                                          <PlanFactTab
                 rows={planFactRows}
                 chartData={planFactChartData}
                 selectedMetric={planMetric}
                 setSelectedMetric={setPlanMetric}
                 selectedMonth={planEditorMonth}
                 setSelectedMonth={setPlanEditorMonth}
-                onPlanChange={updateCurrentMonthPlan}
                 rangeStartMonth={planFactRangeStartMonth}
                 setRangeStartMonth={setPlanFactRangeStartMonth}
                 rangeEndMonth={planFactRangeEndMonth}
                 setRangeEndMonth={setPlanFactRangeEndMonth}
+                onPlanChange={canEditAnalyticsPlans ? updateCurrentMonthPlan : async () => {}}
+                canEditPlan={canEditAnalyticsPlans}
               />
             ) : isLoadingClients ? (
               <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -1357,9 +1393,9 @@ export default function AnalyticsPage() {
                 clientRecommendations={clientRecommendations}
               />
             )}
-          </div>
-        </main>
+          </>
+        )}
       </div>
-    </div>
+    </main>
   );
 }

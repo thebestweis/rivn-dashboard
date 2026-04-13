@@ -8,6 +8,7 @@ interface ExpensesPageHeaderProps {
   category: string;
   setCategory: (value: string) => void;
   onAddExpense: () => void;
+  canAddExpense?: boolean;
 }
 
 const expenseCategoryOptions = [
@@ -25,6 +26,7 @@ export function ExpensesPageHeader({
   category,
   setCategory,
   onAddExpense,
+  canAddExpense = false,
 }: ExpensesPageHeaderProps) {
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const categoryMenuRef = useRef<HTMLDivElement | null>(null);
@@ -52,6 +54,11 @@ export function ExpensesPageHeader({
     };
   }, []);
 
+  function handleAddExpense() {
+    if (!canAddExpense) return;
+    onAddExpense();
+  }
+
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
@@ -65,13 +72,20 @@ export function ExpensesPageHeader({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onAddExpense}
-          className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-        >
-          Добавить расход
-        </button>
+        {canAddExpense ? (
+          <button
+            type="button"
+            onClick={handleAddExpense}
+            disabled={!canAddExpense}
+            className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Добавить расход
+          </button>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/55">
+            Режим просмотра
+          </div>
+        )}
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-[1.2fr_220px]">

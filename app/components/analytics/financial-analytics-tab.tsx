@@ -12,6 +12,8 @@ import { ExpenseBreakdownDonut } from "./expense-breakdown-donut";
 import { parseRubAmount, formatRub } from "../../lib/storage";
 import { buildFinancialTimeSeries } from "../../lib/analytics";
 
+import { ensureSystemSettings } from "../../lib/supabase/system-settings";
+
 interface FinancialAnalyticsTabProps {
   expenses: any[];
   payments: any[];
@@ -412,7 +414,23 @@ const filteredFinancialData = financialData.filter((item: any) => {
   })
   .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
 
-  const totalTax = Math.round(totalRevenue * 0.07);
+  const [systemSettings, setSystemSettings] = useState<{
+  tax_rate: number;
+} | null>(null);
+
+useEffect(() => {
+  async function loadSettings() {
+    const settings = await ensureSystemSettings();
+    setSystemSettings(settings);
+  }
+
+  loadSettings();
+}, []);
+
+const totalTax = Math.round(
+  totalRevenue * ((systemSettings?.tax_rate ?? 7) / 100)
+);
+
   const totalProfit = totalRevenue - totalExpenses - totalFot - totalTax;
 
   const [selectedExpenseYear, selectedExpenseMonth] = expenseSelectedMonth.split("-");

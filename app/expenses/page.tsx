@@ -1,9 +1,9 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "../components/ui/empty-state";
 import { AppToast } from "../components/ui/app-toast";
-import { useEffect, useMemo, useState } from "react";
-import { AppSidebar } from "../components/layout/app-sidebar";
+import { AccessDenied } from "../components/access/access-denied";
 import { ExpensesPageHeader } from "../components/expenses/expenses-page-header";
 import { ExpensesSummary } from "../components/expenses/expenses-summary";
 import { ExpensesTable } from "../components/expenses/expenses-table";
@@ -17,7 +17,10 @@ import {
   deleteExpenseFromSupabase,
 } from "../lib/supabase/expenses";
 import { fetchClientsFromSupabase } from "../lib/supabase/clients";
-import type { Expense, ExpenseFormData } from "../lib/types/expense";
+import type { ExpenseFormData } from "../lib/types/expense";
+import { canManageFinance, isAppRole, type AppRole } from "../lib/permissions";
+import { useAppContextState } from "../providers/app-context-provider";
+import { usePageAccess } from "../lib/use-page-access";
 
 type ExpenseCategory =
   | "marketing"
@@ -33,6 +36,7 @@ interface ExpenseItem {
   amount: string;
   date: string;
   client: string;
+  clientId?: string | null;
 }
 
 interface ClientItem {
@@ -58,9 +62,7 @@ function fromSupabaseDate(value: string | null) {
   if (!value) return "";
 
   if (value.includes("-")) {
-    const [year, month, day] = value.split("-");
-    if (!day || !month || !year) return value;
-    return `${day}.${month}.${year}`;
+    return value;
   }
 
   return value;
@@ -71,6 +73,12 @@ function getClientDisplayName(client: ClientItem) {
 }
 
 export default function ExpensesPage() {
+  const { role } = useAppContextState();
+  const { isLoading: isAccessLoading, hasAccess } = usePageAccess("expenses");
+
+  const currentRole: AppRole | null = isAppRole(role) ? role : null;
+  const canManageExpenses = currentRole ? canManageFinance(currentRole) : false;
+
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
 
@@ -81,6 +89,10 @@ export default function ExpensesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+
+  const [isCreatingExpense, setIsCreatingExpense] = useState(false);
+  const [isSavingExpense, setIsSavingExpense] = useState(false);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
 
   const [newTitle, setNewTitle] = useState("");
   const [newCategory, setNewCategory] =
@@ -106,26 +118,21 @@ export default function ExpensesPage() {
     return client ? getClientDisplayName(client) : "Клиент";
   }
 
-  function findClientIdByName(name: string) {
-    const normalized = name.trim().toLowerCase();
-
-    const targetClient = clients.find((client) => {
-      const displayName = getClientDisplayName(client).trim().toLowerCase();
-      return displayName === normalized;
-    });
-
-    return targetClient?.id ?? null;
+  function resetCreateForm() {
+    setNewTitle("");
+    setNewCategory("marketing");
+    setNewAmount("");
+    setNewDate("");
+    setNewClient("");
   }
 
-  function mapSupabaseExpenseToUi(expense: Expense): ExpenseItem {
-    return {
-      id: expense.id,
-      title: expense.title,
-      category: (expense.category as ExpenseCategory) || "other",
-      amount: String(expense.amount),
-      date: fromSupabaseDate(expense.expense_date),
-      client: expense.client_id ? getClientNameById(expense.client_id) : "",
-    };
+  function resetEditForm() {
+    setEditTitle("");
+    setEditCategory("marketing");
+    setEditAmount("");
+    setEditDate("");
+    setEditClient("");
+    setEditingExpenseId(null);
   }
 
   useEffect(() => {
@@ -139,6 +146,8 @@ export default function ExpensesPage() {
   }, [toastMessage]);
 
   useEffect(() => {
+    if (!hasAccess) return;
+
     let isMounted = true;
 
     async function loadPageData() {
@@ -165,6 +174,7 @@ export default function ExpensesPage() {
           category: (expense.category as ExpenseCategory) || "other",
           amount: String(expense.amount),
           date: fromSupabaseDate(expense.expense_date),
+          clientId: expense.client_id ?? "",
           client: expense.client_id
             ? clientNameMap.get(expense.client_id) ?? "Клиент"
             : "",
@@ -190,18 +200,18 @@ export default function ExpensesPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [hasAccess]);
 
   const filteredExpenses = expenses.filter((item) => {
-  const matchesSearch =
-    !search ||
-    item.title.toLowerCase().includes(search.toLowerCase()) ||
-    item.client.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch =
+      !search ||
+      item.title.toLowerCase().includes(search.toLowerCase()) ||
+      item.client.toLowerCase().includes(search.toLowerCase());
 
-  const matchesCategory = !category || item.category === category;
+    const matchesCategory = !category || item.category === category;
 
-  return matchesSearch && matchesCategory;
-});
+    return matchesSearch && matchesCategory;
+  });
 
   const totals = useMemo(() => {
     const total = expenses.reduce(
@@ -231,7 +241,17 @@ export default function ExpensesPage() {
     date: string;
     client: string;
   }) {
+    if (!canManageExpenses) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на создание расходов");
+      return;
+    }
+
+    if (isCreatingExpense) return;
+
     try {
+      setIsCreatingExpense(true);
+
       const clientId = expense.client;
 
       if (!clientId) {
@@ -256,18 +276,14 @@ export default function ExpensesPage() {
         title: createdExpense.title,
         category: (createdExpense.category as ExpenseCategory) || "other",
         amount: String(createdExpense.amount),
-        date: expense.date,
+        date: fromSupabaseDate(createdExpense.expense_date),
+        clientId,
         client: getClientNameById(clientId),
       };
 
       setExpenses((prev) => [mappedExpense, ...prev]);
-
       setIsCreateOpen(false);
-      setNewTitle("");
-      setNewCategory("marketing");
-      setNewAmount("");
-      setNewDate("");
-      setNewClient("");
+      resetCreateForm();
 
       setToastType("success");
       setToastMessage(`Расход "${expense.title}" создан`);
@@ -279,16 +295,26 @@ export default function ExpensesPage() {
 
       setToastType("error");
       setToastMessage(message);
+    } finally {
+      setIsCreatingExpense(false);
     }
   }
 
   function handleStartEdit(expense: ExpenseItem) {
+    if (!canManageExpenses) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на редактирование расходов");
+      return;
+    }
+
+    if (isSavingExpense) return;
+
     setEditingExpenseId(expense.id);
     setEditTitle(expense.title);
     setEditCategory(expense.category);
     setEditAmount(expense.amount);
-    setEditDate(expense.date);
-    setEditClient(expense.client);
+    setEditDate(toSupabaseDate(expense.date));
+    setEditClient(expense.clientId ?? "");
     setIsEditOpen(true);
   }
 
@@ -299,16 +325,23 @@ export default function ExpensesPage() {
     date: string;
     client: string;
   }) {
+    if (!canManageExpenses) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на редактирование расходов");
+      return;
+    }
+
     if (!editingExpenseId) return;
+    if (isSavingExpense) return;
 
     try {
-      const clientId = findClientIdByName(updatedExpense.client);
+      setIsSavingExpense(true);
+
+      const clientId = updatedExpense.client;
 
       if (!clientId) {
         setToastType("error");
-        setToastMessage(
-          "Клиент не найден. Выбери или введи имя точно как в разделе Clients."
-        );
+        setToastMessage("Выбери клиента");
         return;
       }
 
@@ -331,7 +364,8 @@ export default function ExpensesPage() {
         title: savedExpense.title,
         category: (savedExpense.category as ExpenseCategory) || "other",
         amount: String(savedExpense.amount),
-        date: updatedExpense.date,
+        date: fromSupabaseDate(savedExpense.expense_date),
+        clientId,
         client: getClientNameById(clientId),
       };
 
@@ -340,7 +374,7 @@ export default function ExpensesPage() {
       );
 
       setIsEditOpen(false);
-      setEditingExpenseId(null);
+      resetEditForm();
 
       setToastType("success");
       setToastMessage(`Расход "${updatedExpense.title}" сохранён`);
@@ -352,10 +386,20 @@ export default function ExpensesPage() {
 
       setToastType("error");
       setToastMessage(message);
+    } finally {
+      setIsSavingExpense(false);
     }
   }
 
   async function handleDeleteExpense(expenseId: string) {
+    if (!canManageExpenses) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на удаление расходов");
+      return;
+    }
+
+    if (deletingExpenseId) return;
+
     const target = expenses.find((item) => item.id === expenseId);
 
     if (!target) {
@@ -371,13 +415,15 @@ export default function ExpensesPage() {
     if (!confirmed) return;
 
     try {
+      setDeletingExpenseId(expenseId);
+
       await deleteExpenseFromSupabase(expenseId);
 
       setExpenses((prev) => prev.filter((item) => item.id !== expenseId));
 
       if (editingExpenseId === expenseId) {
         setIsEditOpen(false);
-        setEditingExpenseId(null);
+        resetEditForm();
       }
 
       setToastType("success");
@@ -386,98 +432,156 @@ export default function ExpensesPage() {
       console.error("Ошибка удаления expense:", error);
       setToastType("error");
       setToastMessage("Не удалось удалить расход");
+    } finally {
+      setDeletingExpenseId(null);
     }
   }
 
-  return (
-    <div className="min-h-screen bg-[#0B0F1A] text-white">
-      <div className="flex min-h-screen">
-        <AppSidebar />
+  function handleOpenCreateModal() {
+    if (!canManageExpenses) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на создание расходов");
+      return;
+    }
 
-        <main className="flex-1">
+    if (isCreatingExpense) return;
 
-          <div className="space-y-6 px-5 py-6 lg:px-8">
-            <ExpensesPageHeader
-              search={search}
-              setSearch={setSearch}
-              category={category}
-              setCategory={setCategory}
-              onAddExpense={() => setIsCreateOpen(true)}
-            />
+    setIsCreateOpen(true);
+  }
 
-            <ExpensesSummary
-              total={totals.total}
-              marketing={totals.marketing}
-              operations={totals.operations}
-            />
+  function handleCloseCreateModal() {
+    if (isCreatingExpense) return;
+    setIsCreateOpen(false);
+  }
 
-            {loading ? (
-              <EmptyState
-                title="Загрузка расходов..."
-                description="Подгружаем данные из Supabase."
-              />
-            ) : filteredExpenses.length > 0 ? (
-              <ExpensesTable
-                items={filteredExpenses}
-                onEdit={handleStartEdit}
-                onDelete={handleDeleteExpense}
-              />
-            ) : (
-              <EmptyState
-                title={
-                  expenses.length === 0
-                    ? "Расходов пока нет"
-                    : "Расходы не найдены"
-                }
-                description={
-                  expenses.length === 0
-                    ? "Добавь первый расход, чтобы видеть структуру затрат и управлять прибыльностью."
-                    : "Попробуй изменить поиск или выбрать другую категорию."
-                }
-                actionLabel={expenses.length === 0 ? "Добавить расход" : undefined}
-                onAction={
-                  expenses.length === 0 ? () => setIsCreateOpen(true) : undefined
-                }
-              />
-            )}
+  function handleCloseEditModal() {
+    if (isSavingExpense) return;
+    setIsEditOpen(false);
+    resetEditForm();
+  }
+
+  if (isAccessLoading) {
+    return (
+      <main className="flex-1">
+        <div className="space-y-6 px-5 py-6 lg:px-8">
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            Проверяем доступ...
           </div>
+        </div>
+      </main>
+    );
+  }
 
-          <CreateExpenseModal
-            isOpen={isCreateOpen}
-            onClose={() => setIsCreateOpen(false)}
-            onCreate={handleCreateExpense}
-            title={newTitle}
-            setTitle={setNewTitle}
-            category={newCategory}
-            setCategory={setNewCategory}
-            amount={newAmount}
-            setAmount={setNewAmount}
-            date={newDate}
-            setDate={setNewDate}
-            client={newClient}
-            setClient={setNewClient}
-            clients={clients}
+  if (!hasAccess) {
+    return (
+      <main className="flex-1">
+        <div className="space-y-6 px-5 py-6 lg:px-8">
+          <AccessDenied
+            title="Нет доступа к расходам"
+            description="У тебя нет прав для просмотра этого раздела."
+          />
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <>
+      <main className="flex-1">
+        <div className="space-y-6 px-5 py-6 lg:px-8">
+          <ExpensesPageHeader
+            search={search}
+            setSearch={setSearch}
+            category={category}
+            setCategory={setCategory}
+            onAddExpense={handleOpenCreateModal}
+            canAddExpense={canManageExpenses}
           />
 
-          <EditExpenseModal
-            isOpen={isEditOpen}
-            onClose={() => setIsEditOpen(false)}
-            onSave={handleSaveEdit}
-            title={editTitle}
-            setTitle={setEditTitle}
-            category={editCategory}
-            setCategory={setEditCategory}
-            amount={editAmount}
-            setAmount={setEditAmount}
-            date={editDate}
-            setDate={setEditDate}
-            client={editClient}
-            setClient={setEditClient}
+          <ExpensesSummary
+            total={totals.total}
+            marketing={totals.marketing}
+            operations={totals.operations}
           />
-        </main>
-      </div>
+
+          {loading ? (
+            <EmptyState
+              title="Загрузка расходов..."
+              description="Подгружаем данные из Supabase."
+            />
+          ) : filteredExpenses.length > 0 ? (
+            <ExpensesTable
+              items={filteredExpenses}
+              onEdit={handleStartEdit}
+              onDelete={handleDeleteExpense}
+              canManageExpenses={canManageExpenses}
+            />
+          ) : (
+            <EmptyState
+              title={
+                expenses.length === 0
+                  ? "Расходов пока нет"
+                  : "Расходы не найдены"
+              }
+              description={
+                expenses.length === 0
+                  ? "Добавь первый расход, чтобы видеть структуру затрат и управлять прибыльностью."
+                  : "Попробуй изменить поиск или выбрать другую категорию."
+              }
+              actionLabel={
+                expenses.length === 0 && canManageExpenses
+                  ? "Добавить расход"
+                  : undefined
+              }
+              onAction={
+                expenses.length === 0 && canManageExpenses
+                  ? handleOpenCreateModal
+                  : undefined
+              }
+            />
+          )}
+        </div>
+
+        <CreateExpenseModal
+          isOpen={isCreateOpen}
+          onClose={handleCloseCreateModal}
+          onCreate={handleCreateExpense}
+          title={newTitle}
+          setTitle={setNewTitle}
+          category={newCategory}
+          setCategory={setNewCategory}
+          amount={newAmount}
+          setAmount={setNewAmount}
+          date={newDate}
+          setDate={setNewDate}
+          client={newClient}
+          setClient={setNewClient}
+          clients={clients}
+          canManageExpenses={canManageExpenses}
+          isSubmitting={isCreatingExpense}
+        />
+
+        <EditExpenseModal
+          isOpen={isEditOpen}
+          onClose={handleCloseEditModal}
+          onSave={handleSaveEdit}
+          title={editTitle}
+          setTitle={setEditTitle}
+          category={editCategory}
+          setCategory={setEditCategory}
+          amount={editAmount}
+          setAmount={setEditAmount}
+          date={editDate}
+          setDate={setEditDate}
+          client={editClient}
+          setClient={setEditClient}
+          clients={clients}
+          canManageExpenses={canManageExpenses}
+          isSubmitting={isSavingExpense}
+        />
+      </main>
 
       {toastMessage ? <AppToast message={toastMessage} type={toastType} /> : null}
-    </div>
+    </>
   );
 }

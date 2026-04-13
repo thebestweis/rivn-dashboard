@@ -608,47 +608,34 @@ const inactiveClients = clientsWithoutPayments.length;
 </thead>
 
             <tbody>
-  {topClientsByProfit.map((client, index) => (
-    <tr
-      key={client.clientId}
-      className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
-    >
-      <td className="px-4 py-3 text-white/75">{index + 1}</td>
-
-      <td className="px-4 py-3 font-medium text-white">
-        {client.clientName}
-      </td>
-
-      <td className="px-4 py-3 text-violet-300">
-        {formatMoney(client.revenue)}
-      </td>
-
-      <td className="px-4 py-3 text-white/75">
-        {formatMoney(client.directExpenses)}
-      </td>
-
-      <td className="px-4 py-3 text-white/75">
-        {formatMoney(client.fot)}
-      </td>
-
-      <td className="px-4 py-3 text-white/75">
-        {formatMoney(client.tax)}
-      </td>
-
-      <td
-        className={`px-4 py-3 font-medium ${
-          client.profit >= 0 ? "text-emerald-300" : "text-rose-300"
-        }`}
-      >
-        {formatMoney(client.profit)}
-      </td>
-
-      <td className="px-4 py-3 text-white/75">
-        {client.margin !== null ? `${client.margin}%` : "—"}
-      </td>
-    </tr>
-  ))}
-</tbody>
+              {topClientsByProfit.map((client, index) => (
+                <tr
+                  key={client.clientId}
+                  className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
+                >
+                  <td className="px-4 py-3 text-white/75">{index + 1}</td>
+                  <td className="px-4 py-3 font-medium text-white">
+                    {client.clientName}
+                  </td>
+                  <td className="px-4 py-3 text-violet-300">
+                    {formatMoney(client.revenue)}
+                  </td>
+                  <td className="px-4 py-3 text-white/75">
+                    {formatMoney(client.expenses)}
+                  </td>
+                  <td
+                    className={`px-4 py-3 font-medium ${
+                      client.profit >= 0 ? "text-emerald-300" : "text-rose-300"
+                    }`}
+                  >
+                    {formatMoney(client.profit)}
+                  </td>
+                  <td className="px-4 py-3 text-white/75">
+                    {client.margin !== null ? `${client.margin}%` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         </div>
         <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">

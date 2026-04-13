@@ -1,36 +1,73 @@
 import { autoCreatePayrollAccrualFromPayment } from "@/app/lib/payroll-auto";
-import type { Payment, PaymentFormData } from "@/app/lib/types/payment";
-import { getAuthedSupabase } from "./auth-user";
+import type {
+  Payment,
+  PaymentFormData,
+  PaymentStatus,
+} from "@/app/lib/types/payment";
+import { getAppContext } from "./app-context";
+
+type DbPaymentRow = {
+  id: string;
+  user_id: string;
+  workspace_id: string;
+  client_id: string;
+  project_id: string | null;
+  amount: number | string;
+  due_date: string;
+  paid_date: string | null;
+  status: PaymentStatus;
+  period_label: string | null;
+  notes: string | null;
+  document_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function mapPayment(item: DbPaymentRow): Payment {
+  return {
+    id: item.id,
+    user_id: item.user_id,
+    client_id: item.client_id,
+    project_id: item.project_id,
+    amount: Number(item.amount),
+    due_date: item.due_date,
+    paid_date: item.paid_date,
+    status: item.status,
+    period_label: item.period_label,
+    notes: item.notes,
+    document_url: item.document_url,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+  };
+}
 
 export async function getPaymentsFromSupabase(): Promise<Payment[]> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace } = await getAppContext();
 
   const { data, error } = await supabase
     .from("payments")
     .select("*")
-    .eq("user_id", userId)
+    .eq("workspace_id", workspace.id)
     .order("due_date", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(`Не удалось загрузить платежи: ${error.message}`);
   }
 
-  return (data ?? []).map((item) => ({
-    ...item,
-    amount: Number(item.amount),
-  })) as Payment[];
+  return ((data ?? []) as DbPaymentRow[]).map(mapPayment);
 }
 
 export async function createPaymentInSupabase(
   payload: PaymentFormData
 ): Promise<Payment> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace, user } = await getAppContext();
 
   const { data, error } = await supabase
     .from("payments")
     .insert({
-      user_id: userId,
+      user_id: user.id,
+      workspace_id: workspace.id,
       client_id: payload.client_id,
       project_id: payload.project_id || null,
       amount: Number(payload.amount),
@@ -41,17 +78,14 @@ export async function createPaymentInSupabase(
       notes: payload.notes || null,
       document_url: payload.document_url ?? null,
     })
-    .select()
+    .select("*")
     .single();
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(`Не удалось создать платёж: ${error.message}`);
   }
 
-  const createdPayment = {
-    ...data,
-    amount: Number(data.amount),
-  } as Payment;
+  const createdPayment = mapPayment(data as DbPaymentRow);
 
   if (createdPayment.status === "paid") {
     await autoCreatePayrollAccrualFromPayment({
@@ -70,17 +104,17 @@ export async function updatePaymentInSupabase(
   id: string,
   payload: PaymentFormData
 ): Promise<Payment> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace } = await getAppContext();
 
   const { data: oldPayment, error: oldPaymentError } = await supabase
     .from("payments")
     .select("*")
     .eq("id", id)
-    .eq("user_id", userId)
+    .eq("workspace_id", workspace.id)
     .single();
 
   if (oldPaymentError) {
-    throw new Error(oldPaymentError.message);
+    throw new Error(`Не удалось загрузить текущий платёж: ${oldPaymentError.message}`);
   }
 
   const { data, error } = await supabase
@@ -97,21 +131,19 @@ export async function updatePaymentInSupabase(
       document_url: payload.document_url ?? null,
     })
     .eq("id", id)
-    .eq("user_id", userId)
-    .select()
+    .eq("workspace_id", workspace.id)
+    .select("*")
     .single();
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(`Не удалось обновить платёж: ${error.message}`);
   }
 
-  const updatedPayment = {
-    ...data,
-    amount: Number(data.amount),
-  } as Payment;
+  const updatedPayment = mapPayment(data as DbPaymentRow);
 
   const becamePaid =
-    oldPayment?.status !== "paid" && updatedPayment.status === "paid";
+    (oldPayment as DbPaymentRow | null)?.status !== "paid" &&
+    updatedPayment.status === "paid";
 
   if (becamePaid) {
     await autoCreatePayrollAccrualFromPayment({
@@ -127,15 +159,15 @@ export async function updatePaymentInSupabase(
 }
 
 export async function deletePaymentFromSupabase(id: string): Promise<void> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace } = await getAppContext();
 
   const { error } = await supabase
     .from("payments")
     .delete()
     .eq("id", id)
-    .eq("user_id", userId);
+    .eq("workspace_id", workspace.id);
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(`Не удалось удалить платёж: ${error.message}`);
   }
 }

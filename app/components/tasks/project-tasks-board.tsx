@@ -7,6 +7,9 @@ import {
   type Task,
   type TaskStatus,
 } from "../../lib/supabase/tasks";
+import { getBillingErrorMessage } from "../../lib/billing-errors";
+import { canEditTasks, isAppRole, type AppRole } from "../../lib/permissions";
+import { useAppContextState } from "../../providers/app-context-provider";
 
 type ProjectTasksBoardProps = {
   projectId: string;
@@ -82,6 +85,32 @@ function getNextStatusAfterQuickComplete(status: TaskStatus): TaskStatus {
   return "done";
 }
 
+function getAssigneesLabel(task: Task) {
+  const assigneeIds = task.assignees ?? [];
+
+  if (assigneeIds.length === 0) {
+    return "Не назначено";
+  }
+
+  const labels = assigneeIds
+    .map((assignee) => assignee.workspace_member?.email || "Без email")
+    .filter(Boolean);
+
+  if (labels.length === 0) {
+    return `Исполнителей: ${assigneeIds.length}`;
+  }
+
+  if (labels.length === 1) {
+    return labels[0];
+  }
+
+  if (labels.length === 2) {
+    return `${labels[0]}, ${labels[1]}`;
+  }
+
+  return `${labels[0]}, ${labels[1]} + ещё ${labels.length - 2}`;
+}
+
 export function ProjectTasksBoard({
   projectId,
   tasks,
@@ -90,6 +119,13 @@ export function ProjectTasksBoard({
   onTaskOpen,
   onSubtaskToggle,
 }: ProjectTasksBoardProps) {
+  const { role, billingAccess } = useAppContextState();
+
+  const currentRole: AppRole | null = isAppRole(role) ? role : null;
+  const canManageTasks = currentRole ? canEditTasks(currentRole) : false;
+  const isBillingReadOnly = billingAccess?.isReadOnly ?? false;
+  const canManageTasksWithBilling = canManageTasks && !isBillingReadOnly;
+
   const [draftByColumn, setDraftByColumn] = useState<Record<TaskStatus, string>>({
     todo: "",
     in_progress: "",
@@ -149,6 +185,16 @@ export function ProjectTasksBoard({
   }
 
   async function handleCreateTask(status: TaskStatus) {
+    if (!canManageTasks) {
+      window.alert("У тебя нет прав на создание задач");
+      return;
+    }
+
+    if (isBillingReadOnly) {
+      window.alert("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
+
     const title = draftByColumn[status].trim();
 
     if (!title) {
@@ -165,6 +211,7 @@ export function ProjectTasksBoard({
       const createdTask = await createTask({
         project_id: projectId,
         title,
+        assignee_ids: [],
       });
 
       await updateTaskStatus(createdTask.id, status);
@@ -180,13 +227,23 @@ export function ProjectTasksBoard({
       }));
     } catch (error) {
       console.error(error);
-      window.alert("Не удалось создать задачу");
+      window.alert(getBillingErrorMessage(error));
     } finally {
       setCreatingColumn(null);
     }
   }
 
   async function handleQuickToggle(task: Task) {
+    if (!canManageTasks) {
+      window.alert("У тебя нет прав на изменение задач");
+      return;
+    }
+
+    if (isBillingReadOnly) {
+      window.alert("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
+
     const nextStatus = getNextStatusAfterQuickComplete(task.status);
 
     if (isTaskUpdating(task.id)) {
@@ -199,13 +256,23 @@ export function ProjectTasksBoard({
       onTaskStatusChanged(task.id, nextStatus);
     } catch (error) {
       console.error(error);
-      window.alert("Не удалось обновить статус задачи");
+      window.alert(getBillingErrorMessage(error));
     } finally {
       setTaskUpdating(task.id, false);
     }
   }
 
   async function handleDropTaskToColumn(taskId: string, nextStatus: TaskStatus) {
+    if (!canManageTasks) {
+      window.alert("У тебя нет прав на изменение задач");
+      return;
+    }
+
+    if (isBillingReadOnly) {
+      window.alert("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
+
     const task = tasks.find((item) => item.id === taskId);
 
     if (!task) {
@@ -228,7 +295,7 @@ export function ProjectTasksBoard({
       onTaskStatusChanged(taskId, nextStatus);
     } catch (error) {
       console.error(error);
-      window.alert("Не удалось перенести задачу в другую колонку");
+      window.alert(getBillingErrorMessage(error));
     } finally {
       setTaskUpdating(taskId, false);
       setDraggedTaskId(null);
@@ -237,6 +304,16 @@ export function ProjectTasksBoard({
   }
 
   async function handleToggleSubtask(subtask: Task) {
+    if (!canManageTasks) {
+      window.alert("У тебя нет прав на изменение подзадач");
+      return;
+    }
+
+    if (isBillingReadOnly) {
+      window.alert("Подписка неактивна. Доступен только режим просмотра.");
+      return;
+    }
+
     const nextStatus: TaskStatus = subtask.status === "done" ? "todo" : "done";
 
     if (isTaskUpdating(subtask.id)) {
@@ -254,7 +331,7 @@ export function ProjectTasksBoard({
       }
     } catch (error) {
       console.error(error);
-      window.alert("Не удалось обновить подзадачу");
+      window.alert(getBillingErrorMessage(error));
     } finally {
       setTaskUpdating(subtask.id, false);
     }
@@ -269,6 +346,7 @@ export function ProjectTasksBoard({
           <section
             key={column.key}
             onDragOver={(event) => {
+              if (!canManageTasksWithBilling) return;
               event.preventDefault();
               setDragOverColumn(column.key);
             }}
@@ -276,6 +354,8 @@ export function ProjectTasksBoard({
               setDragOverColumn((prev) => (prev === column.key ? null : prev));
             }}
             onDrop={(event) => {
+              if (!canManageTasksWithBilling) return;
+
               event.preventDefault();
 
               const taskId =
@@ -288,7 +368,7 @@ export function ProjectTasksBoard({
               handleDropTaskToColumn(taskId, column.key);
             }}
             className={`rounded-[24px] border p-4 transition ${
-              dragOverColumn === column.key
+              dragOverColumn === column.key && canManageTasksWithBilling
                 ? "border-sky-400/40 bg-sky-400/[0.06]"
                 : "border-white/10 bg-[#0F1724]"
             }`}
@@ -305,7 +385,9 @@ export function ProjectTasksBoard({
                 <input
                   type="text"
                   value={draftByColumn[column.key]}
-                  disabled={creatingColumn === column.key}
+                  disabled={
+                    creatingColumn === column.key || !canManageTasksWithBilling
+                  }
                   onChange={(event) =>
                     setDraftByColumn((prev) => ({
                       ...prev,
@@ -313,7 +395,11 @@ export function ProjectTasksBoard({
                     }))
                   }
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && creatingColumn !== column.key) {
+                    if (
+                      event.key === "Enter" &&
+                      creatingColumn !== column.key &&
+                      canManageTasksWithBilling
+                    ) {
                       event.preventDefault();
                       handleCreateTask(column.key);
                     }
@@ -321,7 +407,9 @@ export function ProjectTasksBoard({
                   placeholder={
                     creatingColumn === column.key
                       ? "Создаём задачу..."
-                      : "Добавить задачу"
+                      : canManageTasksWithBilling
+                        ? "Добавить задачу"
+                        : "Добавление недоступно"
                   }
                   className="h-10 w-full rounded-xl bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
                 />
@@ -345,14 +433,21 @@ export function ProjectTasksBoard({
                   subtasks.length > 0
                     ? Math.round((doneSubtasks / subtasks.length) * 100)
                     : 0;
+                const assigneesLabel = getAssigneesLabel(task);
+const assigneesCount = task.assignees?.length ?? 0;
 
                 return (
                   <article
                     key={task.id}
                     role="button"
                     tabIndex={0}
-                    draggable
+                    draggable={canManageTasksWithBilling}
                     onDragStart={(event) => {
+                      if (!canManageTasksWithBilling) {
+                        event.preventDefault();
+                        return;
+                      }
+
                       setDraggedTaskId(task.id);
                       event.dataTransfer.effectAllowed = "move";
                       event.dataTransfer.setData("text/plain", task.id);
@@ -392,7 +487,9 @@ export function ProjectTasksBoard({
                         onMouseDown={(event) => {
                           event.stopPropagation();
                         }}
-                        disabled={isTaskUpdating(task.id)}
+                        disabled={
+                          isTaskUpdating(task.id) || !canManageTasksWithBilling
+                        }
                         className={`mt-1 h-5 w-5 shrink-0 rounded-full border transition ${
                           task.status === "done"
                             ? "border-emerald-400 bg-emerald-400"
@@ -425,6 +522,37 @@ export function ProjectTasksBoard({
                           </div>
                         </div>
 
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                              task.status === "todo"
+                                ? "border-sky-400/20 bg-sky-400/10 text-sky-300"
+                                : task.status === "in_progress"
+                                  ? "border-amber-400/20 bg-amber-400/10 text-amber-300"
+                                  : "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
+                            }`}
+                          >
+                            {task.status === "todo"
+                              ? "К работе"
+                              : task.status === "in_progress"
+                                ? "В работе"
+                                : "Готово"}
+                          </span>
+
+                          <span
+  className={`inline-flex max-w-full rounded-full border px-2.5 py-1 text-[11px] ${
+    assigneesCount > 0
+      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
+      : "border-white/10 bg-white/5 text-white/55"
+  }`}
+  title={assigneesLabel}
+>
+  <span className="truncate">
+    {assigneesLabel}
+  </span>
+</span>
+                        </div>
+
                         {subtasks.length > 0 ? (
                           <div className="mt-3">
                             <div className="flex items-center justify-between gap-3 text-[11px] text-white/45">
@@ -453,7 +581,10 @@ export function ProjectTasksBoard({
                                       event.stopPropagation();
                                       handleToggleSubtask(subtask);
                                     }}
-                                    disabled={isTaskUpdating(subtask.id)}
+                                    disabled={
+                                      isTaskUpdating(subtask.id) ||
+                                      !canManageTasksWithBilling
+                                    }
                                     className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border transition ${
                                       subtask.status === "done"
                                         ? "border-emerald-400 bg-emerald-400"
@@ -486,25 +617,7 @@ export function ProjectTasksBoard({
                               ) : null}
                             </div>
                           </div>
-                        ) : (
-                          <div className="mt-3 flex items-center justify-between">
-                            <span
-                              className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                                task.status === "todo"
-                                  ? "border-sky-400/20 bg-sky-400/10 text-sky-300"
-                                  : task.status === "in_progress"
-                                    ? "border-amber-400/20 bg-amber-400/10 text-amber-300"
-                                    : "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
-                              }`}
-                            >
-                              {task.status === "todo"
-                                ? "К работе"
-                                : task.status === "in_progress"
-                                  ? "В работе"
-                                  : "Готово"}
-                            </span>
-                          </div>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   </article>

@@ -1,25 +1,38 @@
+type ExpenseCategory =
+  | "marketing"
+  | "contractor"
+  | "service"
+  | "tax"
+  | "other";
+
 interface EditExpenseModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (expense: {
     title: string;
-    category: "marketing" | "contractor" | "service" | "tax" | "other";
+    category: ExpenseCategory;
     amount: string;
     date: string;
     client: string;
-  }) => void;
+  }) => void | Promise<void>;
   title: string;
   setTitle: (value: string) => void;
-  category: "marketing" | "contractor" | "service" | "tax" | "other";
-  setCategory: (
-    value: "marketing" | "contractor" | "service" | "tax" | "other"
-  ) => void;
+  category: ExpenseCategory;
+  setCategory: (value: ExpenseCategory) => void;
   amount: string;
   setAmount: (value: string) => void;
   date: string;
   setDate: (value: string) => void;
   client: string;
   setClient: (value: string) => void;
+  clients: Array<{
+    id: string;
+    name?: string;
+    clientName?: string;
+    title?: string;
+  }>;
+  canManageExpenses?: boolean;
+  isSubmitting?: boolean;
 }
 
 export function EditExpenseModal({
@@ -36,8 +49,28 @@ export function EditExpenseModal({
   setDate,
   client,
   setClient,
+  clients,
+  canManageExpenses = false,
+  isSubmitting = false,
 }: EditExpenseModalProps) {
   if (!isOpen) return null;
+
+  const isDisabled = !canManageExpenses || isSubmitting;
+  const isValid = Boolean(title.trim());
+
+  async function handleSave() {
+    if (!canManageExpenses) return;
+    if (isSubmitting) return;
+    if (!title.trim()) return;
+
+    await onSave({
+      title: title.trim(),
+      category,
+      amount,
+      date,
+      client,
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -51,87 +84,91 @@ export function EditExpenseModal({
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 hover:text-white"
+            disabled={isSubmitting}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Закрыть
           </button>
         </div>
+
+        {!canManageExpenses ? (
+          <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            У вас нет прав на редактирование расходов. Доступен только просмотр.
+          </div>
+        ) : null}
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Название расхода"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+            disabled={isDisabled}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50"
           />
 
           <select
             value={category}
-            onChange={(e) =>
-              setCategory(
-                e.target.value as
-                  | "marketing"
-                  | "contractor"
-                  | "service"
-                  | "tax"
-                  | "other"
-              )
-            }
-            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
+            onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
+            disabled={isDisabled}
+            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <option value="marketing">marketing</option>
-<option value="contractor">contractor</option>
-<option value="service">service</option>
-<option value="tax">tax</option>
-<option value="other">other</option>
+            <option value="marketing">Маркетинг</option>
+            <option value="contractor">Подрядчик</option>
+            <option value="service">Услуги</option>
+            <option value="tax">Налоги</option>
+            <option value="other">Другое</option>
           </select>
 
           <input
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Сумма"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+            disabled={isDisabled}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50"
           />
 
           <input
-  type="date"
-  value={date}
-  onChange={(e) => setDate(e.target.value)}
-  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none"
-/>
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            disabled={isDisabled}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          />
 
-          <input
+          <select
             value={client}
             onChange={(e) => setClient(e.target.value)}
-            placeholder="Клиент / направление"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 md:col-span-2"
-          />
+            disabled={isDisabled}
+            className="md:col-span-2 w-full rounded-2xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">Выбери клиента</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name || c.clientName || c.title || "Без названия"}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80"
+            disabled={isSubmitting}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition disabled:cursor-not-allowed disabled:opacity-50"
           >
             Отмена
           </button>
 
           <button
-            onClick={() => {
-              if (!title.trim()) return;
-
-              onSave({
-                title,
-                category,
-                amount,
-                date,
-                client,
-              });
-            }}
-            className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)]"
+            type="button"
+            onClick={handleSave}
+            disabled={isDisabled || !isValid}
+            className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Сохранить изменения
+            {isSubmitting ? "Сохранение..." : "Сохранить изменения"}
           </button>
         </div>
       </div>

@@ -15,7 +15,11 @@ interface QuickActionsProps {
 export function QuickActions({ actions }: QuickActionsProps) {
   const router = useRouter();
 
-  function getToneClasses(tone: QuickActionItem["tone"]) {
+  function getToneClasses(tone: QuickActionItem["tone"], isDisabled: boolean) {
+    if (isDisabled) {
+      return "cursor-not-allowed bg-white/[0.04] text-white/35";
+    }
+
     if (tone === "emerald") {
       return "bg-emerald-400/15 text-emerald-300 hover:bg-emerald-400/20";
     }
@@ -36,22 +40,34 @@ export function QuickActions({ actions }: QuickActionsProps) {
       <div className="text-sm text-white/50">Быстрые действия</div>
 
       <div className="mt-4 grid gap-3">
-        {actions.map((action) => (
-          <button
-            key={action.label}
-            type="button"
-            onClick={() => {
-              if (action.href) {
-                router.push(action.href);
-              }
-            }}
-            className={`rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${getToneClasses(
-              action.tone
-            )}`}
-          >
-            {action.label}
-          </button>
-        ))}
+        {actions.length > 0 ? (
+          actions.map((action) => {
+            const isDisabled = !action.href;
+
+            return (
+              <button
+                key={action.label}
+                type="button"
+                disabled={isDisabled}
+                onClick={() => {
+                  if (action.href) {
+                    router.push(action.href);
+                  }
+                }}
+                className={`rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${getToneClasses(
+                  action.tone,
+                  isDisabled
+                )}`}
+              >
+                {action.label}
+              </button>
+            );
+          })
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-white/35">
+            Быстрые действия сейчас недоступны.
+          </div>
+        )}
       </div>
     </div>
   );

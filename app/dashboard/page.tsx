@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AppSidebar } from "../components/layout/app-sidebar";
 import { AppTopbar } from "../components/layout/app-topbar";
 import { KpiCard } from "../components/dashboard/kpi-card";
 import { AlertsPanel } from "../components/dashboard/alerts-panel";
@@ -23,6 +22,16 @@ import {
   fetchPayrollExtraPaymentsFromSupabase,
 } from "../lib/supabase/payroll";
 import { createClient } from "../lib/supabase/client";
+
+import {
+  canManageFinance,
+  isAppRole,
+  type AppRole,
+} from "../lib/permissions";
+import { useAppContextState } from "../providers/app-context-provider";
+
+import { AccessDenied } from "../components/access/access-denied";
+import { usePageAccess } from "../lib/use-page-access";
 
 type SupabasePaymentItem = {
   id: string;
@@ -152,6 +161,13 @@ function isWithinSelectedDashboardPeriod(
 }
 
 export default function Home() {
+      const { role, isLoading: isAppContextLoading } = useAppContextState();
+const { isLoading: isAccessLoading, hasAccess } = usePageAccess("dashboard");
+
+const currentRole: AppRole | null = isAppRole(role) ? role : null;
+const canManageDashboardFinance = currentRole
+  ? canManageFinance(currentRole)
+  : false;
   const [clients, setClients] = useState<StoredClient[]>([]);
   const [payments, setPayments] = useState<SupabasePaymentItem[]>([]);
   const [expenses, setExpenses] = useState<SupabaseExpenseItem[]>([]);
@@ -175,56 +191,63 @@ export default function Home() {
  const [planFactStartMonth, setPlanFactStartMonth] = useState(getCurrentMonthValue);
 const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
 
-  useEffect(() => {
-    let isMounted = true;
+    useEffect(() => {
+  if (isAppContextLoading || isAccessLoading) return;
 
-    async function loadDashboard() {
-      try {
-        setIsLoadingDashboard(true);
+  if (!hasAccess) {
+    setIsLoadingDashboard(false);
+    return;
+  }
 
-        const [
-          clientsData,
-          paymentsData,
-          expensesData,
-          payrollPayoutsData,
-          payrollExtraData,
-          monthlyPlansData,
-        ] = await Promise.all([
-          fetchClientsFromSupabase(),
-          getPaymentsFromSupabase(),
-          getExpensesFromSupabase(),
-          fetchPayrollPayoutsFromSupabase(),
-          fetchPayrollExtraPaymentsFromSupabase(),
-          fetchMonthlyPlansFromSupabase(),
-        ]);
+  let isMounted = true;
 
-        if (!isMounted) return;
+  async function loadDashboard() {
+    try {
+      setIsLoadingDashboard(true);
 
-        setClients(clientsData ?? []);
-        setPayments((paymentsData ?? []) as SupabasePaymentItem[]);
-        setExpenses((expensesData ?? []) as SupabaseExpenseItem[]);
-        setPayrollPayouts(
-          (payrollPayoutsData ?? []) as SupabasePayrollPayoutItem[]
-        );
-        setPayrollExtraPayments(
-          (payrollExtraData ?? []) as SupabasePayrollExtraPaymentItem[]
-        );
-        setMonthlyPlans(monthlyPlansData ?? []);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        if (isMounted) {
-          setIsLoadingDashboard(false);
-        }
+      const [
+        clientsData,
+        paymentsData,
+        expensesData,
+        payrollPayoutsData,
+        payrollExtraData,
+        monthlyPlansData,
+      ] = await Promise.all([
+        fetchClientsFromSupabase(),
+        getPaymentsFromSupabase(),
+        getExpensesFromSupabase(),
+        fetchPayrollPayoutsFromSupabase(),
+        fetchPayrollExtraPaymentsFromSupabase(),
+        fetchMonthlyPlansFromSupabase(),
+      ]);
+
+      if (!isMounted) return;
+
+      setClients(clientsData ?? []);
+      setPayments((paymentsData ?? []) as SupabasePaymentItem[]);
+      setExpenses((expensesData ?? []) as SupabaseExpenseItem[]);
+      setPayrollPayouts(
+        (payrollPayoutsData ?? []) as SupabasePayrollPayoutItem[]
+      );
+      setPayrollExtraPayments(
+        (payrollExtraData ?? []) as SupabasePayrollExtraPaymentItem[]
+      );
+      setMonthlyPlans(monthlyPlansData ?? []);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      if (isMounted) {
+        setIsLoadingDashboard(false);
       }
     }
+  }
 
-    loadDashboard();
+  loadDashboard();
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  return () => {
+    isMounted = false;
+  };
+}, [isAppContextLoading, isAccessLoading, hasAccess]);
 
   const periodLabel =
     dashboardPeriod === "30d"
@@ -606,11 +629,27 @@ const periodPlans = useMemo(() => {
     periodLabel,
   ]);
 
-  const quickActions = [
+    const quickActions = [
     { label: "Добавить клиента", tone: "emerald" as const, href: "/clients" },
-    { label: "Добавить оплату", tone: "violet" as const, href: "/payments" },
-    { label: "Добавить расход", tone: "rose" as const, href: "/expenses" },
-    { label: "Внеплановая выплата", tone: "amber" as const, href: "/payroll" },
+    ...(canManageDashboardFinance
+      ? [
+          {
+            label: "Добавить оплату",
+            tone: "violet" as const,
+            href: "/payments",
+          },
+          {
+            label: "Добавить расход",
+            tone: "rose" as const,
+            href: "/expenses",
+          },
+          {
+            label: "Внеплановая выплата",
+            tone: "amber" as const,
+            href: "/payroll",
+          },
+        ]
+      : []),
   ];
 
   const kpis = [
@@ -678,12 +717,34 @@ const periodPlans = useMemo(() => {
   )}`;
 }, [planFactStartMonth, planFactEndMonth]);
 
+if (isAccessLoading) {
   return (
-    <div className="min-h-screen bg-[#0B0F1A] text-white">
-      <div className="flex min-h-screen">
-        <AppSidebar />
+    <main className="flex-1">
+      <div className="space-y-6 px-5 py-6 lg:px-8">
+        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          Проверяем доступ...
+        </div>
+      </div>
+    </main>
+  );
+}
 
-        <main className="flex-1">
+if (!hasAccess) {
+  return (
+    <main className="flex-1">
+      <div className="space-y-6 px-5 py-6 lg:px-8">
+        <AccessDenied
+          title="Нет доступа к дашборду"
+          description="У тебя нет прав для просмотра этого раздела."
+        />
+      </div>
+    </main>
+  );
+}
+
+  return (
+    
+  <main className="flex-1">
           <AppTopbar
   title="Дашборд"
   description="Ключевые показатели, сигналы внимания и общая картина по агентству."
@@ -721,7 +782,12 @@ const periodPlans = useMemo(() => {
   }
 />
 
-          <div className="space-y-6 px-5 py-6 lg:px-8">
+          <div className="space-y-6 px-5 py-5 lg:px-8">
+                        {!isAppContextLoading && !canManageDashboardFinance ? (
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                У тебя ограниченный режим дашборда. Финансовые быстрые действия скрыты.
+              </div>
+            ) : null}
             <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.96),rgba(13,18,30,0.96))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -852,7 +918,7 @@ const periodPlans = useMemo(() => {
             </section>
 
             <section className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
-              {isLoadingDashboard ? (
+                            {isLoadingDashboard || isAppContextLoading ? (
                 <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
                   Загружаем данные дашборда из Supabase...
                 </div>
@@ -865,9 +931,7 @@ const periodPlans = useMemo(() => {
                 <IncomeRatioDonut ratio={profitMarginRatio} />
               </div>
             </section>
-          </div>
+                    </div>
         </main>
-      </div>
-    </div>
   );
 }

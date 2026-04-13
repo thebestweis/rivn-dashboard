@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
+import { CustomSelect } from "../ui/custom-select";
 import type { Project, ProjectStatus } from "../../lib/supabase/projects";
 
 type ClientOption = {
@@ -166,6 +168,25 @@ export function CreateProjectModal({
       ? "Сохранить изменения"
       : "Создать проект";
 
+        const clientOptions = clients.map((client) => ({
+    value: client.id,
+    label: client.name,
+  }));
+
+  const employeeOptions = [
+    { value: "", label: "Не выбран" },
+    ...employees.map((employee) => ({
+      value: employee.id,
+      label: employee.name,
+    })),
+  ];
+
+  const statusOptions = [
+    { value: "active", label: "Активный" },
+    { value: "paused", label: "На паузе" },
+    { value: "completed", label: "Завершён" },
+  ];
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4 py-6">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
@@ -199,58 +220,44 @@ export function CreateProjectModal({
             </label>
 
             <label className="block">
-              <div className="mb-2 text-sm text-white/65">Клиент</div>
-              <select
-                value={form.client_id}
-                onChange={(event) => updateField("client_id", event.target.value)}
-                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
-              >
-                {clients.length === 0 ? (
-                  <option value="">Нет доступных клиентов</option>
-                ) : (
-                  clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
+  <div className="mb-2 text-sm text-white/65">Клиент</div>
+  {clients.length === 0 ? (
+    <div className="flex h-11 w-full items-center rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white/40">
+      Нет доступных клиентов
+    </div>
+  ) : (
+    <CustomSelect
+      value={form.client_id}
+      onChange={(value) => updateField("client_id", value)}
+      options={clientOptions}
+      placeholder="Выбери клиента"
+      className="w-full"
+    />
+  )}
+</label>
 
             <label className="block">
-              <div className="mb-2 text-sm text-white/65">
-                Ответственный сотрудник
-              </div>
-              <select
-                value={form.employee_id}
-                onChange={(event) =>
-                  updateField("employee_id", event.target.value)
-                }
-                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
-              >
-                <option value="">Не выбран</option>
-                {employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+  <div className="mb-2 text-sm text-white/65">
+    Ответственный сотрудник
+  </div>
+  <CustomSelect
+    value={form.employee_id}
+    onChange={(value) => updateField("employee_id", value)}
+    options={employeeOptions}
+    placeholder="Выбери сотрудника"
+    className="w-full"
+  />
+</label>
 
             <label className="block">
-              <div className="mb-2 text-sm text-white/65">Статус</div>
-              <select
-                value={form.status}
-                onChange={(event) =>
-                  updateField("status", event.target.value as ProjectStatus)
-                }
-                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
-              >
-                <option value="active">Active</option>
-                <option value="paused">Paused</option>
-                <option value="completed">Completed</option>
-              </select>
-            </label>
+  <div className="mb-2 text-sm text-white/65">Статус</div>
+  <CustomSelect
+    value={form.status}
+    onChange={(value) => updateField("status", value as ProjectStatus)}
+    options={statusOptions}
+    className="w-full"
+  />
+</label>
 
             <label className="block">
               <div className="mb-2 text-sm text-white/65">Дата начала</div>

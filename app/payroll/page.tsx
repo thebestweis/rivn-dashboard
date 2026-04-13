@@ -1,7 +1,11 @@
 "use client";
 
+import { AccessDenied } from "../components/access/access-denied";
+import { usePageAccess } from "../lib/use-page-access";
+import { canManageFinance, isAppRole, type AppRole } from "../lib/permissions";
+import { useAppContextState } from "../providers/app-context-provider";
+
 import { useEffect, useMemo, useState } from "react";
-import { AppSidebar } from "../components/layout/app-sidebar";
 import { PayrollPageHeader } from "../components/payroll/payroll-page-header";
 import { PayrollAccrualsTable } from "../components/payroll/payroll-accruals-table";
 import { PayrollPayoutsTable } from "../components/payroll/payroll-payouts-table";
@@ -137,6 +141,11 @@ function hasPayoutForMonth(
 }
 
 export default function PayrollPage() {
+  const { role, isLoading: isAppContextLoading } = useAppContextState();
+const { isLoading: isAccessLoading, hasAccess } = usePageAccess("payroll");
+
+const currentRole: AppRole | null = isAppRole(role) ? role : null;
+const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
   const [employees, setEmployees] = useState<StoredEmployee[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
 
@@ -220,7 +229,29 @@ export default function PayrollPage() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  useEffect(() => {
+    useEffect(() => {
+    if (canManagePayroll) return;
+
+    setIsEditAccrualOpen(false);
+    setEditingAccrualId(null);
+
+    setIsEditPayoutOpen(false);
+    setEditingPayoutId(null);
+
+    setIsEditExtraOpen(false);
+    setEditingExtraId(null);
+
+    setIsCreatePayoutOpen(false);
+  }, [canManagePayroll]);
+
+    useEffect(() => {
+    if (isAppContextLoading || isAccessLoading) return;
+
+    if (!hasAccess) {
+      setIsLoadingPayroll(false);
+      return;
+    }
+
     let isMounted = true;
 
     async function loadPayrollData() {
@@ -250,6 +281,7 @@ export default function PayrollPage() {
         setSystemSettings(settingsData);
       } catch (error) {
         console.error(error);
+
         if (isMounted) {
           setToastType("error");
           setToastMessage("Не удалось загрузить payroll из Supabase");
@@ -266,7 +298,7 @@ export default function PayrollPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isAppContextLoading, isAccessLoading, hasAccess]);
 
   const employeeOptions = useMemo(() => {
     return employees
@@ -639,6 +671,11 @@ export default function PayrollPage() {
   }, [extraPayments, search, employeeFilter, monthFilter]);
 
   function handleStartEditAccrual(item: StoredPayrollAccrual) {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на редактирование payroll");
+      return;
+    }
     setEditingAccrualId(item.id);
     setEditEmployee(item.employee);
     setEditEmployeeId(item.employeeId ?? "");
@@ -663,6 +700,11 @@ export default function PayrollPage() {
   }
 
   async function handleSaveAccrual() {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на редактирование payroll");
+      return;
+    }
     if (!editingAccrualId) return;
     if (!editEmployee.trim()) return;
     if (!editClient.trim()) return;
@@ -699,6 +741,11 @@ export default function PayrollPage() {
   }
 
   async function handleDeleteAccrual(id: string) {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на удаление payroll-записей");
+      return;
+    }
     const target = accruals.find((item) => item.id === id);
 
     if (!target) {
@@ -732,6 +779,11 @@ export default function PayrollPage() {
   }
 
   async function handlePaySingleAccrual(id: string) {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на проведение выплат");
+      return;
+    }
     const target = accruals.find((item) => item.id === id);
 
     if (!target) {
@@ -787,6 +839,11 @@ export default function PayrollPage() {
   }
 
   async function handlePayEmployee(employeeKey: string) {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на проведение выплат");
+      return;
+    }
     const targetGroup = pendingEmployeePayouts.find(
       (item) => (item.employeeId || item.employee) === employeeKey
     );
@@ -870,6 +927,11 @@ export default function PayrollPage() {
   }
 
   async function handlePayAllEmployees() {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на проведение выплат");
+      return;
+    }
     if (pendingEmployeePayouts.length === 0) {
       setToastType("info");
       setToastMessage("Сейчас нет начислений для выплаты");
@@ -956,6 +1018,11 @@ export default function PayrollPage() {
   }
 
   function handleStartEditPayout(item: StoredPayrollPayout) {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на редактирование payroll");
+      return;
+    }
     setEditingPayoutId(item.id);
     setEditPayoutEmployee(item.employee);
     setEditPayoutEmployeeId(item.employeeId ?? "");
@@ -978,6 +1045,11 @@ export default function PayrollPage() {
   }
 
   async function handleSavePayout() {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на редактирование payroll");
+      return;
+    }
     if (!editingPayoutId) return;
     if (!editPayoutEmployee.trim()) return;
     if (!editPayoutDate.trim()) return;
@@ -1007,6 +1079,11 @@ export default function PayrollPage() {
   }
 
   async function handleDeletePayout(id: string) {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на удаление payroll-записей");
+      return;
+    }
     const target = payouts.find((item) => item.id === id);
 
     if (!target) {
@@ -1040,6 +1117,11 @@ export default function PayrollPage() {
   }
 
   function handleStartEditExtra(item: StoredPayrollExtraPayment) {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на редактирование payroll");
+      return;
+    }
     setEditingExtraId(item.id);
     setEditExtraEmployee(item.employee);
     setEditExtraEmployeeId(item.employeeId ?? "");
@@ -1060,6 +1142,11 @@ export default function PayrollPage() {
   }
 
   async function handleSaveExtra() {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на редактирование payroll");
+      return;
+    }
     if (!editingExtraId) return;
     if (!editExtraEmployee.trim()) return;
     if (!editExtraReason.trim()) return;
@@ -1088,6 +1175,11 @@ export default function PayrollPage() {
   }
 
   async function handleDeleteExtra(id: string) {
+        if (!canManagePayroll) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на удаление payroll-записей");
+      return;
+    }
     const target = extraPayments.find((item) => item.id === id);
 
     if (!target) {
@@ -1133,6 +1225,11 @@ export default function PayrollPage() {
   }
 
   async function handleCreateManualPayout() {
+      if (!canManagePayroll) {
+    setToastType("error");
+    setToastMessage("У тебя нет прав на создание выплат");
+    return;
+  }
   if (!createEmployee.trim()) {
     setToastType("error");
     setToastMessage("Выбери сотрудника");
@@ -1243,6 +1340,11 @@ export default function PayrollPage() {
 }
 
 async function handleAccrueSalaries() {
+    if (!canManagePayroll) {
+    setToastType("error");
+    setToastMessage("У тебя нет прав на начисление окладов");
+    return;
+  }
   const monthLabel = getCurrentMonthAccrualLabel();
 
   const targetEmployees = employees.filter(
@@ -1330,776 +1432,787 @@ async function handleAccrueSalaries() {
 
 
   return (
-  <div className="min-h-screen bg-[#0B0F1A] text-white">
-    <div className="flex min-h-screen">
-      <AppSidebar />
-
-      <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
-          <PayrollPageHeader
-  activeTab={activeTab}
-  setActiveTab={setActiveTab}
-  onAccrueSalaries={handleAccrueSalaries}
-  onAddPayout={() => {
-    setCreatePayoutDate(getDefaultPayrollDate(systemSettings?.payroll_day));
-    setIsCreatePayoutOpen(true);
-  }}
-/>
-
-
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <div className="text-sm text-white/50">Сводка за период</div>
-                <div className="mt-1 text-sm text-white/70">
-                  {selectedPeriod.label}
-                </div>
-              </div>
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsPeriodPickerOpen((prev) => !prev)}
-                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-                >
-                  Изменить период
-                </button>
-
-                {isPeriodPickerOpen ? (
-                  <div className="absolute right-0 top-[calc(100%+12px)] z-30 w-[360px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-                    <div className="text-sm text-white/50">Быстрый выбор</div>
-
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {[
-                        { key: "last7", label: "7 дней" },
-                        { key: "last30", label: "30 дней" },
-                        { key: "last90", label: "90 дней" },
-                        { key: "thisMonth", label: "Этот месяц" },
-                        { key: "prevMonth", label: "Прошлый месяц" },
-                        { key: "custom", label: "Свой период" },
-                      ].map((item) => (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() =>
-                            setPeriodPreset(
-                              item.key as
-                                | "last7"
-                                | "last30"
-                                | "last90"
-                                | "thisMonth"
-                                | "prevMonth"
-                                | "custom"
-                            )
-                          }
-                          className={`rounded-xl px-3 py-2 text-sm transition ${
-                            periodPreset === item.key
-                              ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                              : "bg-white/[0.04] text-white/70 hover:text-white"
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {periodPreset === "custom" ? (
-                      <div className="mt-4 grid gap-3">
-                        <div>
-                          <label className="mb-2 block text-sm text-white/55">
-                            Дата от
-                          </label>
-                          <input
-                            type="date"
-                            value={
-                              customDateFrom
-                                ? formatDateToInputValue(
-                                    parseDisplayDateToDate(customDateFrom) ??
-                                      new Date()
-                                  )
-                                : ""
-                            }
-                            onChange={(e) =>
-                              setCustomDateFrom(
-                                formatInputDateToDisplay(e.target.value)
-                              )
-                            }
-                            className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="mb-2 block text-sm text-white/55">
-                            Дата до
-                          </label>
-                          <input
-                            type="date"
-                            value={
-                              customDateTo
-                                ? formatDateToInputValue(
-                                    parseDisplayDateToDate(customDateTo) ??
-                                      new Date()
-                                  )
-                                : ""
-                            }
-                            onChange={(e) =>
-                              setCustomDateTo(
-                                formatInputDateToDisplay(e.target.value)
-                              )
-                            }
-                            className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setIsPeriodPickerOpen(false)}
-                        className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                      >
-                        Готово
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
-              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
-                <div className="text-sm text-white/55">Начислено</div>
-                <div className="mt-3 text-2xl font-semibold tracking-tight text-violet-300">
-                  ₽{totalAccrued.toLocaleString("ru-RU")}
-                </div>
-              </div>
-
-              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
-                <div className="text-sm text-white/55">Выплачено</div>
-                <div className="mt-3 text-2xl font-semibold tracking-tight text-emerald-300">
-                  ₽{totalPaid.toLocaleString("ru-RU")}
-                </div>
-              </div>
-
-              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
-                <div className="text-sm text-white/55">Внеплановые</div>
-                <div className="mt-3 text-2xl font-semibold tracking-tight text-amber-300">
-                  ₽{totalExtra.toLocaleString("ru-RU")}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {isLoadingPayroll ? (
-  <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60">
-    Загрузка payroll...
-  </div>
-) : (
   <>
-    {activeTab === "accruals" ? (
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-        <div className="flex items-center justify-between gap-4">
-          <div className="text-sm text-white/50">Готово к выплате</div>
+    <main className="flex-1">
+      <div className="space-y-6 px-5 py-6 lg:px-8">
+                {!isAppContextLoading && !canManagePayroll ? (
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            У тебя доступ только на просмотр зарплат. Начисление, выплаты, редактирование и удаление недоступны.
+          </div>
+        ) : null}
+                <PayrollPageHeader
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          canManagePayroll={canManagePayroll}
+          onAccrueSalaries={handleAccrueSalaries}
+          onAddPayout={() => {
+            if (!canManagePayroll) {
+              setToastType("error");
+              setToastMessage("У тебя нет прав на создание выплат");
+              return;
+            }
 
-          <button
-            type="button"
-            onClick={handlePayAllEmployees}
-            disabled={pendingEmployeePayouts.length === 0}
-            className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
-              pendingEmployeePayouts.length === 0
-                ? "cursor-not-allowed bg-white/[0.04] text-white/35"
-                : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
-            }`}
-          >
-            Оплатить всё
-          </button>
-        </div>
-
-        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {pendingEmployeePayouts.length > 0 ? (
-            pendingEmployeePayouts.map((item) => (
-              <div
-                key={item.employeeId || item.employee}
-                className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
-              >
-                <div className="text-sm text-white/45">Сотрудник</div>
-                <div className="mt-1 text-lg font-semibold">
-                  {item.employee}
-                </div>
-
-                <div className="mt-4 text-sm text-white/45">
-                  К выплате
-                </div>
-                <div className="mt-1 text-2xl font-semibold text-emerald-300">
-                  ₽{item.total.toLocaleString("ru-RU")}
-                </div>
-
-                <div className="mt-2 space-y-1 text-sm text-white/50">
-                  <div>{item.month}</div>
-
-                  {item.salaryPart > 0 ? (
-                    <div>Оклад: {formatRub(item.salaryPart)}</div>
-                  ) : null}
-
-                  {item.projectPart > 0 ? (
-                    <div>Проектная часть: {formatRub(item.projectPart)}</div>
-                  ) : null}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    handlePayEmployee(item.employeeId || item.employee)
-                  }
-                  className="mt-4 rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                >
-                  Выплатить сотруднику
-                </button>
-              </div>
-            ))
-          ) : (
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/45 md:col-span-2 xl:col-span-3">
-              Сейчас нет начислений со статусом «Начислено», готовых к
-              общей выплате.
-            </div>
-          )}
-        </div>
-      </div>
-    ) : null}
-
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-      <div className="flex items-center gap-3 overflow-x-auto">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={
-            activeTab === "accruals"
-              ? "Поиск по сотруднику, клиенту, проекту..."
-              : activeTab === "payouts"
-                ? "Поиск по сотруднику..."
-                : "Поиск по сотруднику, причине..."
-          }
-          className="h-[48px] min-w-[320px] flex-[1.4] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+            setCreatePayoutDate(getDefaultPayrollDate(systemSettings?.payroll_day));
+            setIsCreatePayoutOpen(true);
+          }}
         />
 
-        <select
-          value={employeeFilter}
-          onChange={(e) => setEmployeeFilter(e.target.value)}
-          className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-        >
-          <option value="all">Все сотрудники</option>
-          {employeeFilterOptions.map((employee) => (
-            <option key={employee} value={employee}>
-              {employee}
-            </option>
-          ))}
-        </select>
+        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <div className="text-sm text-white/50">Сводка за период</div>
+              <div className="mt-1 text-sm text-white/70">
+                {selectedPeriod.label}
+              </div>
+            </div>
 
-        <select
-          value={monthFilter}
-          onChange={(e) => setMonthFilter(e.target.value)}
-          className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-        >
-          <option value="all">Все месяцы</option>
-          {monthFilterOptions.map((month) => (
-            <option key={month} value={month}>
-              {month}
-            </option>
-          ))}
-        </select>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsPeriodPickerOpen((prev) => !prev)}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+              >
+                Изменить период
+              </button>
 
-        {activeTab === "accruals" || activeTab === "payouts" ? (
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-[48px] min-w-[190px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-          >
-            <option value="all">Все статусы</option>
+              {isPeriodPickerOpen ? (
+                <div className="absolute right-0 top-[calc(100%+12px)] z-30 w-[360px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+                  <div className="text-sm text-white/50">Быстрый выбор</div>
 
-            {activeTab === "accruals" ? (
-              <>
-                <option value="accrued">Начислено</option>
-                <option value="paid">Выплачено</option>
-              </>
-            ) : (
-              <>
-                <option value="scheduled">Запланировано</option>
-                <option value="paid">Выплачено</option>
-              </>
-            )}
-          </select>
-        ) : null}
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {[
+                      { key: "last7", label: "7 дней" },
+                      { key: "last30", label: "30 дней" },
+                      { key: "last90", label: "90 дней" },
+                      { key: "thisMonth", label: "Этот месяц" },
+                      { key: "prevMonth", label: "Прошлый месяц" },
+                      { key: "custom", label: "Свой период" },
+                    ].map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() =>
+                          setPeriodPreset(
+                            item.key as
+                              | "last7"
+                              | "last30"
+                              | "last90"
+                              | "thisMonth"
+                              | "prevMonth"
+                              | "custom"
+                          )
+                        }
+                        className={`rounded-xl px-3 py-2 text-sm transition ${
+                          periodPreset === item.key
+                            ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+                            : "bg-white/[0.04] text-white/70 hover:text-white"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setSearch("");
-            setEmployeeFilter("all");
-            setMonthFilter("all");
-            setStatusFilter("all");
-          }}
-          className="h-[48px] min-w-[180px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-        >
-          Сбросить
-        </button>
-      </div>
-    </div>
+                  {periodPreset === "custom" ? (
+                    <div className="mt-4 grid gap-3">
+                      <div>
+                        <label className="mb-2 block text-sm text-white/55">
+                          Дата от
+                        </label>
+                        <input
+                          type="date"
+                          value={
+                            customDateFrom
+                              ? formatDateToInputValue(
+                                  parseDisplayDateToDate(customDateFrom) ?? new Date()
+                                )
+                              : ""
+                          }
+                          onChange={(e) =>
+                            setCustomDateFrom(formatInputDateToDisplay(e.target.value))
+                          }
+                          className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
+                        />
+                      </div>
 
-    {activeTab === "accruals" ? (
-      <PayrollAccrualsTable
-        items={filteredAccruals}
-        onEdit={handleStartEditAccrual}
-        onDelete={handleDeleteAccrual}
-        onPay={handlePaySingleAccrual}
-      />
-    ) : activeTab === "payouts" ? (
-      <PayrollPayoutsTable
-        items={filteredPayouts}
-        onEdit={handleStartEditPayout}
-        onDelete={handleDeletePayout}
-      />
-    ) : (
-      <PayrollExtraTable
-        items={filteredExtraPayments}
-        onEdit={handleStartEditExtra}
-        onDelete={handleDeleteExtra}
-      />
-    )}
-  </>
-)}
-        </div>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/55">
+                          Дата до
+                        </label>
+                        <input
+                          type="date"
+                          value={
+                            customDateTo
+                              ? formatDateToInputValue(
+                                  parseDisplayDateToDate(customDateTo) ?? new Date()
+                                )
+                              : ""
+                          }
+                          onChange={(e) =>
+                            setCustomDateTo(formatInputDateToDisplay(e.target.value))
+                          }
+                          className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
 
-        {isEditAccrualOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-            <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-sm text-white/50">Начисление</div>
-                  <h3 className="mt-1 text-xl font-semibold text-white">
-                    Редактирование начисления
-                  </h3>
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setIsPeriodPickerOpen(false)}
+                      className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+                    >
+                      Готово
+                    </button>
+                  </div>
                 </div>
+              ) : null}
+            </div>
+          </div>
 
-                <button
-                  type="button"
-                  onClick={handleCloseEditAccrual}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
-                >
-                  Закрыть
-                </button>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+              <div className="text-sm text-white/55">Начислено</div>
+              <div className="mt-3 text-2xl font-semibold tracking-tight text-violet-300">
+                ₽{totalAccrued.toLocaleString("ru-RU")}
               </div>
+            </div>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <select
-                  value={editEmployeeId}
-                  onChange={(e) => {
-                    const nextEmployeeId = e.target.value;
-                    const selectedEmployee = employees.find(
-                      (employee) => employee.id === nextEmployeeId
-                    );
-
-                    setEditEmployeeId(nextEmployeeId);
-                    setEditEmployee(selectedEmployee?.name ?? "");
-                  }}
-                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                >
-                  <option value="">Выбери сотрудника</option>
-                  {employeeOptions.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.name} — {employee.role}
-                    </option>
-                  ))}
-                </select>
-
-                <input
-                  value={editClient}
-                  onChange={(e) => setEditClient(e.target.value)}
-                  placeholder="Клиент"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                />
-
-                <select
-                  value={editProject}
-                  onChange={(e) => setEditProject(e.target.value)}
-                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                >
-                  <option value="">Выбери проект</option>
-                  {projectOptions.map((project) => (
-                    <option key={project} value={project}>
-                      {project}
-                    </option>
-                  ))}
-                </select>
-
-                <input
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
-                  placeholder="Сумма"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                />
-
-                <input
-                  value={editDate}
-                  onChange={(e) => setEditDate(e.target.value)}
-                  placeholder="Дата"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                />
-
-                <select
-                  value={editStatus}
-                  onChange={(e) =>
-                    setEditStatus(e.target.value as "accrued" | "paid")
-                  }
-                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                >
-                  <option value="accrued">Начислено</option>
-                  <option value="paid">Выплачено</option>
-                </select>
+            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+              <div className="text-sm text-white/55">Выплачено</div>
+              <div className="mt-3 text-2xl font-semibold tracking-tight text-emerald-300">
+                ₽{totalPaid.toLocaleString("ru-RU")}
               </div>
+            </div>
 
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleCloseEditAccrual}
-                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-                >
-                  Отмена
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveAccrual}
-                  className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                >
-                  Сохранить
-                </button>
+            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+              <div className="text-sm text-white/55">Внеплановые</div>
+              <div className="mt-3 text-2xl font-semibold tracking-tight text-amber-300">
+                ₽{totalExtra.toLocaleString("ru-RU")}
               </div>
             </div>
           </div>
-        ) : null}
+        </div>
 
-        {isEditPayoutOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-            <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-sm text-white/50">Выплата</div>
-                  <h3 className="mt-1 text-xl font-semibold text-white">
-                    Редактирование выплаты
-                  </h3>
+        {isLoadingPayroll ? (
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60">
+            Загрузка payroll...
+          </div>
+        ) : (
+          <>
+            {activeTab === "accruals" ? (
+              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="text-sm text-white/50">Готово к выплате</div>
+
+                                    {canManagePayroll ? (
+                    <button
+                      type="button"
+                      onClick={handlePayAllEmployees}
+                      disabled={pendingEmployeePayouts.length === 0}
+                      className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                        pendingEmployeePayouts.length === 0
+                          ? "cursor-not-allowed bg-white/[0.04] text-white/35"
+                          : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
+                      }`}
+                    >
+                      Оплатить всё
+                    </button>
+                  ) : (
+                    <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/50">
+                      Только просмотр
+                    </div>
+                  )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleCloseEditPayout}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
-                >
-                  Закрыть
-                </button>
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {pendingEmployeePayouts.length > 0 ? (
+                    pendingEmployeePayouts.map((item) => (
+                      <div
+                        key={item.employeeId || item.employee}
+                        className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
+                      >
+                        <div className="text-sm text-white/45">Сотрудник</div>
+                        <div className="mt-1 text-lg font-semibold">
+                          {item.employee}
+                        </div>
+
+                        <div className="mt-4 text-sm text-white/45">
+                          К выплате
+                        </div>
+                        <div className="mt-1 text-2xl font-semibold text-emerald-300">
+                          ₽{item.total.toLocaleString("ru-RU")}
+                        </div>
+
+                        <div className="mt-2 space-y-1 text-sm text-white/50">
+                          <div>{item.month}</div>
+
+                          {item.salaryPart > 0 ? (
+                            <div>Оклад: {formatRub(item.salaryPart)}</div>
+                          ) : null}
+
+                          {item.projectPart > 0 ? (
+                            <div>Проектная часть: {formatRub(item.projectPart)}</div>
+                          ) : null}
+                        </div>
+
+                                                {canManagePayroll ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handlePayEmployee(item.employeeId || item.employee)
+                            }
+                            className="mt-4 rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+                          >
+                            Выплатить сотруднику
+                          </button>
+                        ) : null}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/45 md:col-span-2 xl:col-span-3">
+                      Сейчас нет начислений со статусом «Начислено», готовых к
+                      общей выплате.
+                    </div>
+                  )}
+                </div>
               </div>
+            ) : null}
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+              <div className="flex items-center gap-3 overflow-x-auto">
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={
+                    activeTab === "accruals"
+                      ? "Поиск по сотруднику, клиенту, проекту..."
+                      : activeTab === "payouts"
+                      ? "Поиск по сотруднику..."
+                      : "Поиск по сотруднику, причине..."
+                  }
+                  className="h-[48px] min-w-[320px] flex-[1.4] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
                 <select
-                  value={editPayoutEmployeeId}
-                  onChange={(e) => {
-                    const nextEmployeeId = e.target.value;
-                    const selectedEmployee = employees.find(
-                      (employee) => employee.id === nextEmployeeId
-                    );
-
-                    setEditPayoutEmployeeId(nextEmployeeId);
-                    setEditPayoutEmployee(selectedEmployee?.name ?? "");
-                  }}
-                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                  value={employeeFilter}
+                  onChange={(e) => setEmployeeFilter(e.target.value)}
+                  className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
                 >
-                  <option value="">Выбери сотрудника</option>
-                  {employeeOptions.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.name} — {employee.role}
+                  <option value="all">Все сотрудники</option>
+                  {employeeFilterOptions.map((employee) => (
+                    <option key={employee} value={employee}>
+                      {employee}
                     </option>
                   ))}
                 </select>
 
+                <select
+                  value={monthFilter}
+                  onChange={(e) => setMonthFilter(e.target.value)}
+                  className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                >
+                  <option value="all">Все месяцы</option>
+                  {monthFilterOptions.map((month) => (
+                    <option key={month} value={month}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+
+                {activeTab === "accruals" || activeTab === "payouts" ? (
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="h-[48px] min-w-[190px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                  >
+                    <option value="all">Все статусы</option>
+
+                    {activeTab === "accruals" ? (
+                      <>
+                        <option value="accrued">Начислено</option>
+                        <option value="paid">Выплачено</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="scheduled">Запланировано</option>
+                        <option value="paid">Выплачено</option>
+                      </>
+                    )}
+                  </select>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setEmployeeFilter("all");
+                    setMonthFilter("all");
+                    setStatusFilter("all");
+                  }}
+                  className="h-[48px] min-w-[180px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                >
+                  Сбросить
+                </button>
+              </div>
+            </div>
+
+            {activeTab === "accruals" ? (
+                            <PayrollAccrualsTable
+                items={filteredAccruals}
+                onEdit={handleStartEditAccrual}
+                onDelete={handleDeleteAccrual}
+                onPay={handlePaySingleAccrual}
+                canManagePayroll={canManagePayroll}
+              />
+            ) : activeTab === "payouts" ? (
+                            <PayrollPayoutsTable
+                items={filteredPayouts}
+                onEdit={handleStartEditPayout}
+                onDelete={handleDeletePayout}
+                canManagePayroll={canManagePayroll}
+              />
+            ) : (
+                            <PayrollExtraTable
+  items={extraPayments}
+  onEdit={handleStartEditExtra}
+  onDelete={handleDeleteExtra}
+/>
+            )}
+          </>
+        )}
+      </div>
+
+            {canManagePayroll && isEditAccrualOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm text-white/50">Начисление</div>
+                <h3 className="mt-1 text-xl font-semibold text-white">
+                  Редактирование начисления
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseEditAccrual}
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+              >
+                Закрыть
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <select
+                value={editEmployeeId}
+                onChange={(e) => {
+                  const nextEmployeeId = e.target.value;
+                  const selectedEmployee = employees.find(
+                    (employee) => employee.id === nextEmployeeId
+                  );
+
+                  setEditEmployeeId(nextEmployeeId);
+                  setEditEmployee(selectedEmployee?.name ?? "");
+                }}
+                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+              >
+                <option value="">Выбери сотрудника</option>
+                {employeeOptions.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name} — {employee.role}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                value={editClient}
+                onChange={(e) => setEditClient(e.target.value)}
+                placeholder="Клиент"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+              />
+
+              <select
+                value={editProject}
+                onChange={(e) => setEditProject(e.target.value)}
+                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+              >
+                <option value="">Выбери проект</option>
+                {projectOptions.map((project) => (
+                  <option key={project} value={project}>
+                    {project}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                placeholder="Сумма"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+              />
+
+              <input
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+                placeholder="Дата"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+              />
+
+              <select
+                value={editStatus}
+                onChange={(e) =>
+                  setEditStatus(e.target.value as "accrued" | "paid")
+                }
+                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+              >
+                <option value="accrued">Начислено</option>
+                <option value="paid">Выплачено</option>
+              </select>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseEditAccrual}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+              >
+                Отмена
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveAccrual}
+                className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+            {canManagePayroll && isEditPayoutOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm text-white/50">Выплата</div>
+                <h3 className="mt-1 text-xl font-semibold text-white">
+                  Редактирование выплаты
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseEditPayout}
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+              >
+                Закрыть
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <select
+                value={editPayoutEmployeeId}
+                onChange={(e) => {
+                  const nextEmployeeId = e.target.value;
+                  const selectedEmployee = employees.find(
+                    (employee) => employee.id === nextEmployeeId
+                  );
+
+                  setEditPayoutEmployeeId(nextEmployeeId);
+                  setEditPayoutEmployee(selectedEmployee?.name ?? "");
+                }}
+                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+              >
+                <option value="">Выбери сотрудника</option>
+                {employeeOptions.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name} — {employee.role}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                value={editPayoutMonth}
+                onChange={(e) => setEditPayoutMonth(e.target.value)}
+                placeholder="Месяц"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+              />
+
+              <input
+                value={editPayoutDate}
+                onChange={(e) => setEditPayoutDate(e.target.value)}
+                placeholder="Дата выплаты"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+              />
+
+              <input
+                value={editPayoutAmount}
+                onChange={(e) => setEditPayoutAmount(e.target.value)}
+                placeholder="Сумма"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+              />
+
+              <select
+                value={editPayoutStatus}
+                onChange={(e) =>
+                  setEditPayoutStatus(e.target.value as "scheduled" | "paid")
+                }
+                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none md:col-span-2"
+              >
+                <option value="scheduled">Запланировано</option>
+                <option value="paid">Выплачено</option>
+              </select>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseEditPayout}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+              >
+                Отмена
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSavePayout}
+                className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+            {canManagePayroll && isEditExtraOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm text-white/50">Внеплановая выплата</div>
+                <h3 className="mt-1 text-xl font-semibold text-white">
+                  Редактирование внеплановой выплаты
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseEditExtra}
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+              >
+                Закрыть
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <select
+                value={editExtraEmployeeId}
+                onChange={(e) => {
+                  const nextEmployeeId = e.target.value;
+                  const selectedEmployee = employees.find(
+                    (employee) => employee.id === nextEmployeeId
+                  );
+
+                  setEditExtraEmployeeId(nextEmployeeId);
+                  setEditExtraEmployee(selectedEmployee?.name ?? "");
+                }}
+                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+              >
+                <option value="">Выбери сотрудника</option>
+                {employeeOptions.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name} — {employee.role}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                value={editExtraDate}
+                onChange={(e) => setEditExtraDate(e.target.value)}
+                placeholder="Дата"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+              />
+
+              <input
+                value={editExtraReason}
+                onChange={(e) => setEditExtraReason(e.target.value)}
+                placeholder="Причина"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 md:col-span-2"
+              />
+
+              <input
+                value={editExtraAmount}
+                onChange={(e) => setEditExtraAmount(e.target.value)}
+                placeholder="Сумма"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 md:col-span-2"
+              />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseEditExtra}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+              >
+                Отмена
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveExtra}
+                className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+            {canManagePayroll && isCreatePayoutOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm text-white/50">Новая выплата</div>
+                <h3 className="mt-1 text-xl font-semibold text-white">
+                  Добавить выплату
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseCreatePayout}
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+              >
+                Закрыть
+              </button>
+            </div>
+
+            <div className="mt-6 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCreatePayoutType("payout")}
+                className={`rounded-xl px-4 py-2 text-sm transition ${
+                  createPayoutType === "payout"
+                    ? "bg-emerald-500/20 text-emerald-300"
+                    : "bg-white/[0.04] text-white/60 hover:text-white"
+                }`}
+              >
+                Плановая выплата
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCreatePayoutType("extra")}
+                className={`rounded-xl px-4 py-2 text-sm transition ${
+                  createPayoutType === "extra"
+                    ? "bg-amber-500/20 text-amber-300"
+                    : "bg-white/[0.04] text-white/60 hover:text-white"
+                }`}
+              >
+                Внеплановая выплата
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <select
+                value={createEmployeeId}
+                onChange={(e) => {
+                  const nextEmployeeId = e.target.value;
+                  const selectedEmployee = employees.find(
+                    (employee) => employee.id === nextEmployeeId
+                  );
+
+                  setCreateEmployeeId(nextEmployeeId);
+                  setCreateEmployee(selectedEmployee?.name ?? "");
+                }}
+                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+              >
+                <option value="">Выбери сотрудника</option>
+                {employeeOptions.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name} — {employee.role}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                value={createPayoutDate}
+                onChange={(e) => setCreatePayoutDate(e.target.value)}
+                placeholder="Дата"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+              />
+
+              <input
+                value={createPayoutAmount}
+                onChange={(e) => setCreatePayoutAmount(e.target.value)}
+                placeholder="Сумма"
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+              />
+
+              {createPayoutType === "payout" ? (
                 <input
-                  value={editPayoutMonth}
-                  onChange={(e) => setEditPayoutMonth(e.target.value)}
+                  value={createPayoutMonth}
+                  onChange={(e) => setCreatePayoutMonth(e.target.value)}
                   placeholder="Месяц"
                   className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
                 />
-
+              ) : (
                 <input
-                  value={editPayoutDate}
-                  onChange={(e) => setEditPayoutDate(e.target.value)}
-                  placeholder="Дата выплаты"
+                  value={createExtraReason}
+                  onChange={(e) => setCreateExtraReason(e.target.value)}
+                  placeholder="Причина"
                   className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
                 />
+              )}
 
-                <input
-                  value={editPayoutAmount}
-                  onChange={(e) => setEditPayoutAmount(e.target.value)}
-                  placeholder="Сумма"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                />
-
+              {createPayoutType === "payout" ? (
                 <select
-                  value={editPayoutStatus}
+                  value={createPayoutStatus}
                   onChange={(e) =>
-                    setEditPayoutStatus(e.target.value as "scheduled" | "paid")
+                    setCreatePayoutStatus(
+                      e.target.value as "scheduled" | "paid"
+                    )
                   }
                   className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none md:col-span-2"
                 >
-                  <option value="scheduled">Запланировано</option>
                   <option value="paid">Выплачено</option>
+                  <option value="scheduled">Запланировано</option>
                 </select>
-              </div>
+              ) : null}
+            </div>
 
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleCloseEditPayout}
-                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-                >
-                  Отмена
-                </button>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseCreatePayout}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+              >
+                Отмена
+              </button>
 
-                <button
-                  type="button"
-                  onClick={handleSavePayout}
-                  className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                >
-                  Сохранить
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleCreateManualPayout}
+                className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+              >
+                Сохранить
+              </button>
             </div>
           </div>
-        ) : null}
-
-        {isEditExtraOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-            <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-sm text-white/50">Внеплановая выплата</div>
-                  <h3 className="mt-1 text-xl font-semibold text-white">
-                    Редактирование внеплановой выплаты
-                  </h3>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCloseEditExtra}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
-                >
-                  Закрыть
-                </button>
-              </div>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <select
-                  value={editExtraEmployeeId}
-                  onChange={(e) => {
-                    const nextEmployeeId = e.target.value;
-                    const selectedEmployee = employees.find(
-                      (employee) => employee.id === nextEmployeeId
-                    );
-
-                    setEditExtraEmployeeId(nextEmployeeId);
-                    setEditExtraEmployee(selectedEmployee?.name ?? "");
-                  }}
-                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                >
-                  <option value="">Выбери сотрудника</option>
-                  {employeeOptions.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.name} — {employee.role}
-                    </option>
-                  ))}
-                </select>
-
-                <input
-                  value={editExtraDate}
-                  onChange={(e) => setEditExtraDate(e.target.value)}
-                  placeholder="Дата"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                />
-
-                <input
-                  value={editExtraReason}
-                  onChange={(e) => setEditExtraReason(e.target.value)}
-                  placeholder="Причина"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 md:col-span-2"
-                />
-
-                <input
-                  value={editExtraAmount}
-                  onChange={(e) => setEditExtraAmount(e.target.value)}
-                  placeholder="Сумма"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 md:col-span-2"
-                />
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleCloseEditExtra}
-                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-                >
-                  Отмена
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveExtra}
-                  className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                >
-                  Сохранить
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {isCreatePayoutOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-            <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-sm text-white/50">Новая выплата</div>
-                  <h3 className="mt-1 text-xl font-semibold text-white">
-                    Добавить выплату
-                  </h3>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCloseCreatePayout}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
-                >
-                  Закрыть
-                </button>
-              </div>
-
-              <div className="mt-6 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCreatePayoutType("payout")}
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
-                    createPayoutType === "payout"
-                      ? "bg-emerald-500/20 text-emerald-300"
-                      : "bg-white/[0.04] text-white/60 hover:text-white"
-                  }`}
-                >
-                  Плановая выплата
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCreatePayoutType("extra")}
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
-                    createPayoutType === "extra"
-                      ? "bg-amber-500/20 text-amber-300"
-                      : "bg-white/[0.04] text-white/60 hover:text-white"
-                  }`}
-                >
-                  Внеплановая выплата
-                </button>
-              </div>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <select
-                  value={createEmployeeId}
-                  onChange={(e) => {
-                    const nextEmployeeId = e.target.value;
-                    const selectedEmployee = employees.find(
-                      (employee) => employee.id === nextEmployeeId
-                    );
-
-                    setCreateEmployeeId(nextEmployeeId);
-                    setCreateEmployee(selectedEmployee?.name ?? "");
-                  }}
-                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                >
-                  <option value="">Выбери сотрудника</option>
-                  {employeeOptions.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.name} — {employee.role}
-                    </option>
-                  ))}
-                </select>
-
-                <input
-                  value={createPayoutDate}
-                  onChange={(e) => setCreatePayoutDate(e.target.value)}
-                  placeholder="Дата"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                />
-
-                <input
-                  value={createPayoutAmount}
-                  onChange={(e) => setCreatePayoutAmount(e.target.value)}
-                  placeholder="Сумма"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                />
-
-                {createPayoutType === "payout" ? (
-                  <input
-                    value={createPayoutMonth}
-                    onChange={(e) => setCreatePayoutMonth(e.target.value)}
-                    placeholder="Месяц"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                  />
-                ) : (
-                  <input
-                    value={createExtraReason}
-                    onChange={(e) => setCreateExtraReason(e.target.value)}
-                    placeholder="Причина"
-                    className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
-                  />
-                )}
-
-                {createPayoutType === "payout" ? (
-                  <select
-                    value={createPayoutStatus}
-                    onChange={(e) =>
-                      setCreatePayoutStatus(
-                        e.target.value as "scheduled" | "paid"
-                      )
-                    }
-                    className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none md:col-span-2"
-                  >
-                    <option value="paid">Выплачено</option>
-                    <option value="scheduled">Запланировано</option>
-                  </select>
-                ) : null}
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleCloseCreatePayout}
-                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-                >
-                  Отмена
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleCreateManualPayout}
-                  className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                >
-                  Сохранить
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </main>
-    </div>
+        </div>
+      ) : null}
+    </main>
 
     {toastMessage ? (
       <AppToast message={toastMessage} type={toastType} />
     ) : null}
-  </div>
+  </>
 );
 }

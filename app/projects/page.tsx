@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { AppSidebar } from "../components/layout/app-sidebar";
 import {
   CreateProjectModal,
   type CreateProjectFormValues,
@@ -11,7 +10,6 @@ import { ProjectCard } from "../components/projects/project-card";
 import { ProjectsFilters } from "../components/projects/projects-filters";
 import { ProjectsStats } from "../components/projects/projects-stats";
 import { fetchClientsFromSupabase } from "../lib/supabase/clients";
-import { fetchEmployeesFromSupabase } from "../lib/supabase/employees";
 import {
   createProject,
   deleteProject,
@@ -21,6 +19,10 @@ import {
   type ProjectStatus,
 } from "../lib/supabase/projects";
 import { getAllTasks, type Task } from "../lib/supabase/tasks";
+import { canEditProjects, isAppRole, type AppRole } from "../lib/permissions";
+import { useAppContextState } from "../providers/app-context-provider";
+
+import { getWorkspaceMembers } from "../lib/supabase/workspace-members";
 
 type StatusFilter = "all" | ProjectStatus;
 
@@ -35,6 +37,11 @@ type EmployeeOption = {
 };
 
 export default function ProjectsPage() {
+  const { role, isLoading: isAppContextLoading } = useAppContextState();
+
+  const currentRole: AppRole | null = isAppRole(role) ? role : null;
+  const canManageProjects = currentRole ? canEditProjects(currentRole) : false;
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -52,7 +59,16 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  useEffect(() => {
+    useEffect(() => {
+    if (canManageProjects) return;
+
+    setIsCreateModalOpen(false);
+    setEditingProject(null);
+  }, [canManageProjects]);
+
+    useEffect(() => {
+    if (isAppContextLoading) return;
+
     let isMounted = true;
 
     async function loadData() {
@@ -60,13 +76,13 @@ export default function ProjectsPage() {
         setIsLoading(true);
         setErrorMessage("");
 
-        const [projectsData, clientsData, employeesData, tasksData] =
-          await Promise.all([
-            getProjects(),
-            fetchClientsFromSupabase(),
-            fetchEmployeesFromSupabase(),
-            getAllTasks(),
-          ]);
+        const [projectsData, clientsData, workspaceMembersData, tasksData] =
+  await Promise.all([
+    getProjects(),
+    fetchClientsFromSupabase(),
+    getWorkspaceMembers(),
+    getAllTasks(),
+  ]);
 
         if (!isMounted) return;
 
@@ -75,12 +91,12 @@ export default function ProjectsPage() {
           name: client.name,
         }));
 
-        const nextEmployees: EmployeeOption[] = employeesData
-          .filter((employee) => employee.isActive)
-          .map((employee) => ({
-            id: employee.id,
-            name: employee.name,
-          }));
+        const nextEmployees: EmployeeOption[] = workspaceMembersData
+  .filter((member) => member.status === "active")
+  .map((member) => ({
+    id: member.id,
+    name: member.email || "Без email",
+  }));
 
         const nextClientNamesById = clientsData.reduce<Record<string, string>>(
           (acc, client) => {
@@ -116,7 +132,7 @@ export default function ProjectsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+    }, [isAppContextLoading]);
 
   const totalProjects = useMemo(() => projects.length, [projects]);
 
@@ -165,6 +181,11 @@ export default function ProjectsPage() {
     searchQuery.trim().length > 0 || statusFilter !== "all";
 
   function openCreateProjectFlow() {
+    if (!canManageProjects) {
+      setErrorMessage("У тебя нет прав на создание проектов");
+      return;
+    }
+
     if (clients.length === 0) {
       setIsNoClientsModalOpen(true);
       return;
@@ -175,6 +196,11 @@ export default function ProjectsPage() {
   }
 
   async function handleSubmitProject(values: CreateProjectFormValues) {
+    if (!canManageProjects) {
+      setErrorMessage("У тебя нет прав на изменение проектов");
+      return;
+    }
+
     try {
       setIsCreatingProject(true);
       setErrorMessage("");
@@ -225,6 +251,11 @@ export default function ProjectsPage() {
   }
 
   async function handleDeleteProject(projectId: string) {
+    if (!canManageProjects) {
+      setErrorMessage("У тебя нет прав на удаление проектов");
+      return;
+    }
+
     try {
       setDeletingProjectId(projectId);
       setErrorMessage("");
@@ -245,6 +276,11 @@ export default function ProjectsPage() {
   }
 
   function handleStartEdit(projectId: string) {
+    if (!canManageProjects) {
+      setErrorMessage("У тебя нет прав на редактирование проектов");
+      return;
+    }
+
     const project = projects.find((item) => item.id === projectId);
 
     if (!project) {
@@ -256,148 +292,154 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0F1A] text-white">
-      <div className="flex min-h-screen">
-        <AppSidebar />
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <main className="flex-1 px-6 py-6 md:px-8">
-            <div className="flex w-full flex-col gap-6">
-              <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h1 className="text-3xl font-semibold tracking-tight text-white">
-                      Проекты
-                    </h1>
-                    <p className="mt-2 text-sm text-white/60">
-                      Управление проектами и рабочими направлениями по клиентам
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Link
-                      href="/tasks"
-                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                    >
-                      Все задачи
-                    </Link>
-
-                    <button
-                      type="button"
-                      onClick={openCreateProjectFlow}
-                      className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
-                    >
-                      Добавить проект
-                    </button>
-                  </div>
-                </div>
-              </section>
-
-              <ProjectsStats
-                totalProjects={totalProjects}
-                activeProjects={activeProjects}
-                isLoading={isLoading}
-              />
-
-              <ProjectsFilters
-                searchQuery={searchQuery}
-                statusFilter={statusFilter}
-                isLoading={isLoading}
-                resultsCount={filteredProjects.length}
-                hasActiveFilters={hasActiveFilters}
-                onSearchChange={setSearchQuery}
-                onStatusChange={setStatusFilter}
-                onReset={() => {
-                  setSearchQuery("");
-                  setStatusFilter("all");
-                }}
-              />
-
-              <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                {isLoading ? (
-                  <div className="text-sm text-white/60">Загрузка проектов...</div>
-                ) : errorMessage ? (
-                  <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
-                    {errorMessage}
-                  </div>
-                ) : filteredProjects.length === 0 ? (
-                  <div className="flex min-h-[280px] flex-col items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] px-6 text-center">
-                    <div className="text-lg font-medium text-white">
-                      {hasActiveFilters
-                        ? "Ничего не найдено по текущим фильтрам"
-                        : "У вас пока нет проектов"}
-                    </div>
-
-                    <p className="mt-2 max-w-md text-sm text-white/55">
-                      {hasActiveFilters
-                        ? "Попробуй изменить поиск или выбрать другой статус."
-                        : "Создайте первый проект, чтобы начать вести направления, задачи и внутреннюю информацию по клиентам."}
-                    </p>
-
-                    {!hasActiveFilters ? (
-                      <button
-                        type="button"
-                        onClick={openCreateProjectFlow}
-                        className="mt-5 rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
-                      >
-                        Создать проект
-                      </button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-                    {filteredProjects.map((project) => (
-                      <ProjectCard
-                        key={project.id}
-                        id={project.id}
-                        name={project.name}
-                        clientName={
-                          clientNamesById[project.client_id] ?? "Без клиента"
-                        }
-                        status={project.status}
-                        startDate={project.start_date}
-                        activeTasksCount={activeTaskCountByProjectId[project.id] ?? 0}
-                        onDelete={handleDeleteProject}
-                        onEdit={handleStartEdit}
-                        isDeleting={deletingProjectId === project.id}
-                      />
-                    ))}
-
-                    <button
-                      type="button"
-                      onClick={openCreateProjectFlow}
-                      className="flex min-h-[280px] flex-col items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-5 text-center transition hover:border-white/20 hover:bg-white/[0.04]"
-                    >
-                      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80">
-                        Добавить проект
-                      </div>
-                      <div className="mt-4 text-sm text-white/55">
-                        Создай новый проект прямо из сетки
-                      </div>
-                    </button>
-                  </div>
-                )}
-              </section>
+    <>
+            <main className="flex-1 px-6 py-6 md:px-8">
+        <div className="flex w-full flex-col gap-6">
+          {!isAppContextLoading && !canManageProjects ? (
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              У тебя доступ только на просмотр списка проектов. Создание, редактирование и удаление проектов недоступны на этой странице.
             </div>
-          </main>
-        </div>
-      </div>
+          ) : null}
+          <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="text-3xl font-semibold tracking-tight text-white">
+                  Проекты
+                </h1>
+                <p className="mt-2 text-sm text-white/60">
+                  Управление проектами и рабочими направлениями по клиентам
+                </p>
+              </div>
 
-      <CreateProjectModal
-        isOpen={isCreateModalOpen}
-        clients={clients}
-        employees={employees}
-        isSubmitting={isCreatingProject}
-        mode={editingProject ? "edit" : "create"}
-        initialProject={editingProject}
-        onClose={() => {
-          if (!isCreatingProject) {
-            setIsCreateModalOpen(false);
-            setEditingProject(null);
-          }
-        }}
-        onSubmit={handleSubmitProject}
-      />
+              <div className="flex flex-wrap items-center gap-3">
+                <Link
+                  href="/tasks"
+                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                >
+                  Все задачи
+                </Link>
+
+                {canManageProjects ? (
+                  <button
+                    type="button"
+                    onClick={openCreateProjectFlow}
+                    className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+                  >
+                    Добавить проект
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <ProjectsStats
+            totalProjects={totalProjects}
+            activeProjects={activeProjects}
+            isLoading={isLoading}
+          />
+
+          <ProjectsFilters
+            searchQuery={searchQuery}
+            statusFilter={statusFilter}
+            isLoading={isLoading}
+            resultsCount={filteredProjects.length}
+            hasActiveFilters={hasActiveFilters}
+            onSearchChange={setSearchQuery}
+            onStatusChange={setStatusFilter}
+            onReset={() => {
+              setSearchQuery("");
+              setStatusFilter("all");
+            }}
+          />
+
+          <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            {isLoading ? (
+              <div className="text-sm text-white/60">Загрузка проектов...</div>
+            ) : errorMessage ? (
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+                {errorMessage}
+              </div>
+            ) : filteredProjects.length === 0 ? (
+              <div className="flex min-h-[280px] flex-col items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] px-6 text-center">
+                <div className="text-lg font-medium text-white">
+                  {hasActiveFilters
+                    ? "Ничего не найдено по текущим фильтрам"
+                    : "У вас пока нет проектов"}
+                </div>
+
+                <p className="mt-2 max-w-md text-sm text-white/55">
+                  {hasActiveFilters
+                    ? "Попробуй изменить поиск или выбрать другой статус."
+                    : canManageProjects
+                    ? "Создайте первый проект, чтобы начать вести направления, задачи и внутреннюю информацию по клиентам."
+                    : "В этом кабинете пока нет доступных проектов."}
+                </p>
+
+                {!hasActiveFilters && canManageProjects ? (
+                  <button
+                    type="button"
+                    onClick={openCreateProjectFlow}
+                    className="mt-5 rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+                  >
+                    Создать проект
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+                {filteredProjects.map((project) => (
+                  <ProjectCard
+                    key={project.id}
+                    id={project.id}
+                    name={project.name}
+                    clientName={clientNamesById[project.client_id] ?? "Без клиента"}
+                    status={project.status}
+                    startDate={project.start_date}
+                    activeTasksCount={activeTaskCountByProjectId[project.id] ?? 0}
+                    onDelete={handleDeleteProject}
+                    onEdit={handleStartEdit}
+                    isDeleting={deletingProjectId === project.id}
+                    canManageProject={canManageProjects}
+                  />
+                ))}
+
+                {canManageProjects ? (
+                  <button
+                    type="button"
+                    onClick={openCreateProjectFlow}
+                    className="flex min-h-[280px] flex-col items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-5 text-center transition hover:border-white/20 hover:bg-white/[0.04]"
+                  >
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80">
+                      Добавить проект
+                    </div>
+                    <div className="mt-4 text-sm text-white/55">
+                      Создай новый проект прямо из сетки
+                    </div>
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </section>
+        </div>
+      </main>
+
+            {canManageProjects ? (
+        <CreateProjectModal
+          isOpen={isCreateModalOpen}
+          clients={clients}
+          employees={employees}
+          isSubmitting={isCreatingProject}
+          mode={editingProject ? "edit" : "create"}
+          initialProject={editingProject}
+          onClose={() => {
+            if (!isCreatingProject) {
+              setIsCreateModalOpen(false);
+              setEditingProject(null);
+            }
+          }}
+          onSubmit={handleSubmitProject}
+        />
+      ) : null}
 
       {isNoClientsModalOpen ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 px-4 py-6">
@@ -442,6 +484,6 @@ export default function ProjectsPage() {
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

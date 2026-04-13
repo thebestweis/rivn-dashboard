@@ -1,4 +1,5 @@
 import { formatDisplayDate } from "../../lib/storage";
+
 interface FactPaymentRow {
   id: string;
   clientId: string;
@@ -16,6 +17,7 @@ interface FactPaymentsTableProps {
   onEdit?: (payment: FactPaymentRow) => void;
   onDelete?: (paymentId: string) => void;
   deletingPaymentId?: string | null;
+  canManage?: boolean;
 }
 
 export function FactPaymentsTable({
@@ -23,8 +25,8 @@ export function FactPaymentsTable({
   onEdit,
   onDelete,
   deletingPaymentId,
+  canManage = false,
 }: FactPaymentsTableProps) {
-
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
       <div className="text-sm text-white/50">Фактические оплаты</div>
@@ -50,31 +52,37 @@ export function FactPaymentsTable({
               >
                 <td className="px-4 py-3 font-medium">{item.client}</td>
                 <td className="px-4 py-3 text-white/75">{item.project}</td>
-                <td className="px-4 py-3 text-white/75">{formatDisplayDate(item.paidAt)}</td>
+                <td className="px-4 py-3 text-white/75">
+                  {formatDisplayDate(item.paidAt)}
+                </td>
                 <td className="px-4 py-3 font-medium text-emerald-300">
                   {item.amount}
                 </td>
                 <td className="px-4 py-3 text-white/75">{item.source}</td>
                 <td className="px-4 py-3">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onEdit?.(item)}
-                      className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 hover:text-white"
-                    >
-                      Редактировать
-                    </button>
-                    <button
-  disabled={deletingPaymentId === item.id}
-  onClick={() => onDelete?.(item.id)}
-  className={`rounded-xl px-3 py-2 text-xs transition ${
-    deletingPaymentId === item.id
-      ? "cursor-not-allowed bg-white/[0.04] text-white/35"
-      : "border border-rose-500/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/15"
-  }`}
->
-  {deletingPaymentId === item.id ? "Удаление..." : "Удалить"}
-</button>
-                  </div>
+                  {canManage ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => onEdit?.(item)}
+                        className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 hover:text-white"
+                      >
+                        Редактировать
+                      </button>
+                      <button
+                        disabled={deletingPaymentId === item.id}
+                        onClick={() => onDelete?.(item.id)}
+                        className={`rounded-xl px-3 py-2 text-xs transition ${
+                          deletingPaymentId === item.id
+                            ? "cursor-not-allowed bg-white/[0.04] text-white/35"
+                            : "border border-rose-500/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/15"
+                        }`}
+                      >
+                        {deletingPaymentId === item.id ? "Удаление..." : "Удалить"}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-white/30">Только просмотр</span>
+                  )}
                 </td>
               </tr>
             ))}

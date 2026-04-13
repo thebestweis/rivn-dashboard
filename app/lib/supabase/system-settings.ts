@@ -1,8 +1,9 @@
-import { createClient } from "./client";
+import { getAppContext } from "./app-context";
 
 export type SystemSettings = {
   id: string;
   user_id: string;
+  workspace_id: string;
   tax_rate: number;
   currency: string;
   payroll_day: number;
@@ -11,10 +12,23 @@ export type SystemSettings = {
   updated_at: string;
 };
 
-function mapSystemSettings(row: any): SystemSettings {
+type DbSystemSettingsRow = {
+  id: string;
+  user_id: string;
+  workspace_id: string;
+  tax_rate: number | string | null;
+  currency: string | null;
+  payroll_day: number | string | null;
+  default_employee_pay: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function mapSystemSettings(row: DbSystemSettingsRow): SystemSettings {
   return {
     id: row.id,
     user_id: row.user_id,
+    workspace_id: row.workspace_id,
     tax_rate: Number(row.tax_rate ?? 7),
     currency: row.currency ?? "RUB",
     payroll_day: Number(row.payroll_day ?? 1),
@@ -25,11 +39,12 @@ function mapSystemSettings(row: any): SystemSettings {
 }
 
 export async function getSystemSettings(): Promise<SystemSettings | null> {
-  const supabase = createClient();
+  const { supabase, workspace } = await getAppContext();
 
   const { data, error } = await supabase
     .from("system_settings")
     .select("*")
+    .eq("workspace_id", workspace.id)
     .maybeSingle();
 
   if (error) {
@@ -38,7 +53,7 @@ export async function getSystemSettings(): Promise<SystemSettings | null> {
 
   if (!data) return null;
 
-  return mapSystemSettings(data);
+  return mapSystemSettings(data as DbSystemSettingsRow);
 }
 
 export async function ensureSystemSettings(): Promise<SystemSettings> {
@@ -46,21 +61,13 @@ export async function ensureSystemSettings(): Promise<SystemSettings> {
 
   if (existing) return existing;
 
-  const supabase = createClient();
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    throw new Error("Пользователь не найден");
-  }
+  const { supabase, workspace, user } = await getAppContext();
 
   const { data, error } = await supabase
     .from("system_settings")
     .insert({
       user_id: user.id,
+      workspace_id: workspace.id,
       tax_rate: 7,
       currency: "RUB",
       payroll_day: 1,
@@ -73,7 +80,7 @@ export async function ensureSystemSettings(): Promise<SystemSettings> {
     throw new Error(`Не удалось создать системные настройки: ${error.message}`);
   }
 
-  return mapSystemSettings(data);
+  return mapSystemSettings(data as DbSystemSettingsRow);
 }
 
 export async function updateSystemSettings(input: {
@@ -83,7 +90,7 @@ export async function updateSystemSettings(input: {
   default_employee_pay?: string;
 }): Promise<SystemSettings> {
   const current = await ensureSystemSettings();
-  const supabase = createClient();
+  const { supabase, workspace } = await getAppContext();
 
   const payload = {
     tax_rate: input.tax_rate ?? current.tax_rate,
@@ -98,6 +105,7 @@ export async function updateSystemSettings(input: {
     .from("system_settings")
     .update(payload)
     .eq("id", current.id)
+    .eq("workspace_id", workspace.id)
     .select("*")
     .single();
 
@@ -105,5 +113,5 @@ export async function updateSystemSettings(input: {
     throw new Error(`Не удалось обновить системные настройки: ${error.message}`);
   }
 
-  return mapSystemSettings(data);
+  return mapSystemSettings(data as DbSystemSettingsRow);
 }

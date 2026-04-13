@@ -21,7 +21,7 @@ interface CreatePaymentModalProps {
     amount: string;
     source: string;
     documentUrl: string;
-  }) => void;
+  }) => void | Promise<void>;
   clientId: string;
   setClientId: (value: string) => void;
   projectId: string;
@@ -37,7 +37,8 @@ interface CreatePaymentModalProps {
   clients: ClientItem[];
   projects: ProjectItem[];
   mode: "invoice" | "payment";
-    isSubmitting?: boolean;
+  isSubmitting?: boolean;
+  canManage?: boolean;
 }
 
 function getClientDisplayName(client: ClientItem) {
@@ -48,7 +49,8 @@ export function CreatePaymentModal({
   isOpen,
   onClose,
   onCreate,
-    isSubmitting = false,
+  isSubmitting = false,
+  canManage = false,
   clientId,
   setClientId,
   projectId,
@@ -71,6 +73,31 @@ export function CreatePaymentModal({
     (project) => project.client_id === clientId
   );
 
+  const isDisabled = isSubmitting || !canManage;
+  const isSubmitDisabled =
+    isDisabled ||
+    !clientId.trim() ||
+    !projectId.trim() ||
+    !paidAt.trim() ||
+    !amount.trim();
+
+  async function handleCreate() {
+    if (!canManage) return;
+    if (isSubmitting) return;
+    if (!clientId.trim() || !projectId.trim() || !paidAt.trim() || !amount.trim()) {
+      return;
+    }
+
+    await onCreate({
+      clientId,
+      projectId,
+      paidAt,
+      amount,
+      source,
+      documentUrl,
+    });
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
       <div className="w-full max-w-2xl rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_50px_rgba(0,0,0,0.45)]">
@@ -85,26 +112,37 @@ export function CreatePaymentModal({
           </div>
 
           <button
-            onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 hover:text-white"
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => {
+              if (!isSubmitting) onClose();
+            }}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:text-white/35"
           >
             Закрыть
           </button>
         </div>
 
+        {!canManage ? (
+          <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            У тебя нет прав на создание платежей. Доступен только просмотр.
+          </div>
+        ) : null}
+
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <select
             value={clientId}
+            disabled={isDisabled}
             onChange={(e) => {
               setClientId(e.target.value);
               setProjectId("");
             }}
-            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none"
+            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">Выбери клиента</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {getClientDisplayName(c)}
+            {clients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {getClientDisplayName(client)}
               </option>
             ))}
           </select>
@@ -112,8 +150,8 @@ export function CreatePaymentModal({
           <select
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
-            disabled={!clientId}
-            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none disabled:opacity-50"
+            disabled={!clientId || isDisabled}
+            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">
               {clientId ? "Выбери проект" : "Сначала выбери клиента"}
@@ -128,67 +166,65 @@ export function CreatePaymentModal({
           <input
             type="date"
             value={paidAt}
+            disabled={isDisabled}
             onChange={(e) => setPaidAt(e.target.value)}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none"
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
           />
 
           <input
             value={amount}
+            disabled={isDisabled}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Сумма"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50"
           />
 
           <textarea
             value={source}
+            disabled={isDisabled}
             onChange={(e) => setSource(e.target.value)}
             placeholder="Комментарий"
             rows={4}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 md:col-span-2"
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2"
           />
 
           <input
             value={documentUrl}
+            disabled={isDisabled}
             onChange={(e) => setDocumentUrl(e.target.value)}
             placeholder="Ссылка на документ"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 md:col-span-2"
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2"
           />
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-3">
           <button
-            onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80"
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => {
+              if (!isSubmitting) onClose();
+            }}
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 disabled:cursor-not-allowed disabled:text-white/35"
           >
             Отмена
           </button>
 
           <button
-  disabled={isSubmitting}
-  onClick={() => {
-    if (!clientId.trim() || !projectId.trim() || isSubmitting) return;
-
-    onCreate({
-      clientId,
-      projectId,
-      paidAt,
-      amount,
-      source,
-      documentUrl,
-    });
-  }}
-  className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
-    isSubmitting
-      ? "cursor-not-allowed bg-white/[0.04] text-white/35"
-      : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
-  }`}
->
-  {isSubmitting
-    ? "Создание..."
-    : mode === "invoice"
-      ? "Создать счёт"
-      : "Создать оплату"}
-</button>
+            type="button"
+            disabled={isSubmitDisabled}
+            onClick={handleCreate}
+            className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+              isSubmitDisabled
+                ? "cursor-not-allowed bg-white/[0.04] text-white/35"
+                : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
+            }`}
+          >
+            {isSubmitting
+              ? "Создание..."
+              : mode === "invoice"
+                ? "Создать счёт"
+                : "Создать оплату"}
+          </button>
         </div>
       </div>
     </div>

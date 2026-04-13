@@ -13,7 +13,6 @@ import {
   Tooltip,
   Cell,
 } from "recharts";
-import { formatRub } from "../../lib/storage";
 
 export interface PlanFactRow {
   key: "revenue" | "profit" | "expenses" | "fot";
@@ -52,6 +51,7 @@ interface PlanFactTabProps {
     key: "revenue" | "profit" | "expenses" | "fot",
     value: number
   ) => void;
+  canEditPlan: boolean;
 }
 
 function formatMonthLabel(value: string) {
@@ -129,23 +129,24 @@ export function PlanFactTab({
   rangeEndMonth,
   setRangeEndMonth,
   onPlanChange,
+  canEditPlan,
 }: PlanFactTabProps) {
   const [isMonthMenuOpen, setIsMonthMenuOpen] = useState(false);
   const [isRangeStartMenuOpen, setIsRangeStartMenuOpen] = useState(false);
-const [isRangeEndMenuOpen, setIsRangeEndMenuOpen] = useState(false);
+  const [isRangeEndMenuOpen, setIsRangeEndMenuOpen] = useState(false);
 
-const [rangeStartPickerYear, setRangeStartPickerYear] = useState(() => {
-  const [year] = rangeStartMonth.split("-");
-  return Number(year);
-});
+  const [rangeStartPickerYear, setRangeStartPickerYear] = useState(() => {
+    const [year] = rangeStartMonth.split("-");
+    return Number(year);
+  });
 
-const [rangeEndPickerYear, setRangeEndPickerYear] = useState(() => {
-  const [year] = rangeEndMonth.split("-");
-  return Number(year);
-});
+  const [rangeEndPickerYear, setRangeEndPickerYear] = useState(() => {
+    const [year] = rangeEndMonth.split("-");
+    return Number(year);
+  });
 
-const rangeStartMenuRef = useRef<HTMLDivElement | null>(null);
-const rangeEndMenuRef = useRef<HTMLDivElement | null>(null);
+  const rangeStartMenuRef = useRef<HTMLDivElement | null>(null);
+  const rangeEndMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [pickerYear, setPickerYear] = useState(() => {
     const [year] = selectedMonth.split("-");
@@ -165,18 +166,26 @@ const rangeEndMenuRef = useRef<HTMLDivElement | null>(null);
   }, [selectedMonth]);
 
   useEffect(() => {
-  const [year] = rangeStartMonth.split("-");
-  if (year) {
-    setRangeStartPickerYear(Number(year));
-  }
-}, [rangeStartMonth]);
+    const [year] = rangeStartMonth.split("-");
+    if (year) {
+      setRangeStartPickerYear(Number(year));
+    }
+  }, [rangeStartMonth]);
 
-useEffect(() => {
-  const [year] = rangeEndMonth.split("-");
-  if (year) {
-    setRangeEndPickerYear(Number(year));
-  }
-}, [rangeEndMonth]);
+  useEffect(() => {
+    const [year] = rangeEndMonth.split("-");
+    if (year) {
+      setRangeEndPickerYear(Number(year));
+    }
+  }, [rangeEndMonth]);
+
+  useEffect(() => {
+    if (canEditPlan) return;
+
+    setIsMonthMenuOpen(false);
+    setIsRangeStartMenuOpen(false);
+    setIsRangeEndMenuOpen(false);
+  }, [canEditPlan]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -197,43 +206,49 @@ useEffect(() => {
   }, [isMonthMenuOpen]);
 
   useEffect(() => {
-  function handleClickOutside(event: MouseEvent) {
-    if (
-      isRangeStartMenuOpen &&
-      rangeStartMenuRef.current &&
-      !rangeStartMenuRef.current.contains(event.target as Node)
-    ) {
-      setIsRangeStartMenuOpen(false);
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        isRangeStartMenuOpen &&
+        rangeStartMenuRef.current &&
+        !rangeStartMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsRangeStartMenuOpen(false);
+      }
+
+      if (
+        isRangeEndMenuOpen &&
+        rangeEndMenuRef.current &&
+        !rangeEndMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsRangeEndMenuOpen(false);
+      }
     }
 
-    if (
-      isRangeEndMenuOpen &&
-      rangeEndMenuRef.current &&
-      !rangeEndMenuRef.current.contains(event.target as Node)
-    ) {
-      setIsRangeEndMenuOpen(false);
-    }
-  }
+    document.addEventListener("mousedown", handleClickOutside);
 
-  document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isRangeStartMenuOpen, isRangeEndMenuOpen]);
 
-  return () => {
-    document.removeEventListener("mousedown", handleClickOutside);
-  };
-}, [isRangeStartMenuOpen, isRangeEndMenuOpen]);
+  const normalizedRangeStart =
+    rangeStartMonth <= rangeEndMonth ? rangeStartMonth : rangeEndMonth;
 
-const normalizedRangeStart =
-  rangeStartMonth <= rangeEndMonth ? rangeStartMonth : rangeEndMonth;
+  const normalizedRangeEnd =
+    rangeStartMonth <= rangeEndMonth ? rangeEndMonth : rangeStartMonth;
 
-const normalizedRangeEnd =
-  rangeStartMonth <= rangeEndMonth ? rangeEndMonth : rangeStartMonth;
-
-const filteredChartData = chartData.filter(
-  (item) => item.month >= normalizedRangeStart && item.month <= normalizedRangeEnd
-);
+  const filteredChartData = chartData.filter(
+    (item) => item.month >= normalizedRangeStart && item.month <= normalizedRangeEnd
+  );
 
   return (
     <div className="space-y-6">
+      {!canEditPlan ? (
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          Режим только просмотра. Плановые значения нельзя изменять.
+        </div>
+      ) : null}
+
       <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
         <h2 className="text-2xl font-semibold text-white">
           План и факт по {getMetricLabel(selectedMetric)}
@@ -267,170 +282,174 @@ const filteredChartData = chartData.filter(
 
         <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-  <div className="flex flex-wrap items-center gap-4">
-    <div className="flex items-center gap-2">
-      <div className="h-3 w-3 rounded-[4px] bg-violet-400" />
-      <span className="text-sm text-white/60">План</span>
-    </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-[4px] bg-violet-400" />
+                <span className="text-sm text-white/60">План</span>
+              </div>
 
-    <div className="flex items-center gap-2">
-      <div className="h-[2px] w-4 bg-emerald-400" />
-      <span className="text-sm text-white/60">Факт</span>
-    </div>
-  </div>
-
-  <div className="flex flex-wrap items-end gap-3">
-    <div className="relative" ref={rangeStartMenuRef}>
-      <div className="mb-2 text-xs uppercase tracking-[0.12em] text-white/35">
-        С месяца
-      </div>
-
-      <button
-        type="button"
-        onClick={() => {
-          setIsRangeStartMenuOpen((prev) => !prev);
-          setIsRangeEndMenuOpen(false);
-          setIsMonthMenuOpen(false);
-        }}
-        className="inline-flex h-[44px] min-w-[170px] items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/[0.05]"
-      >
-        <span>{formatMonthLongLabel(rangeStartMonth)}</span>
-        <span className="ml-3 text-white/35">
-          {isRangeStartMenuOpen ? "−" : "+"}
-        </span>
-      </button>
-
-      {isRangeStartMenuOpen ? (
-        <div className="absolute right-0 top-[56px] z-30 w-[280px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
-          <div className="mb-4 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setRangeStartPickerYear((prev) => prev - 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
-            >
-              ←
-            </button>
-
-            <div className="text-sm font-semibold text-white">
-              {rangeStartPickerYear}
+              <div className="flex items-center gap-2">
+                <div className="h-[2px] w-4 bg-emerald-400" />
+                <span className="text-sm text-white/60">Факт</span>
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setRangeStartPickerYear((prev) => prev + 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
-            >
-              →
-            </button>
-          </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="relative" ref={rangeStartMenuRef}>
+                <div className="mb-2 text-xs uppercase tracking-[0.12em] text-white/35">
+                  С месяца
+                </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {monthNamesRu.map((monthName, index) => {
-              const value = buildMonthValue(rangeStartPickerYear, index);
-              const isActive = value === rangeStartMonth;
-
-              return (
                 <button
-                  key={value}
                   type="button"
+                  disabled={!canEditPlan}
                   onClick={() => {
-                    setRangeStartMonth(value);
-                    setIsRangeStartMenuOpen(false);
-                  }}
-                  className={`rounded-2xl px-3 py-3 text-left text-sm transition ${
-                    isActive
-                      ? "bg-violet-500 text-white shadow-[0_10px_30px_rgba(139,92,246,0.35)]"
-                      : "bg-black/20 text-white/75 hover:bg-white/[0.05] hover:text-white"
-                  }`}
-                >
-                  <div className="font-medium leading-none">{monthName}</div>
-                  <div className="mt-2 text-xs opacity-80">
-                    {rangeStartPickerYear}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-    </div>
-
-    <div className="relative" ref={rangeEndMenuRef}>
-      <div className="mb-2 text-xs uppercase tracking-[0.12em] text-white/35">
-        По месяц
-      </div>
-
-      <button
-        type="button"
-        onClick={() => {
-          setIsRangeEndMenuOpen((prev) => !prev);
-          setIsRangeStartMenuOpen(false);
-          setIsMonthMenuOpen(false);
-        }}
-        className="inline-flex h-[44px] min-w-[170px] items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/[0.05]"
-      >
-        <span>{formatMonthLongLabel(rangeEndMonth)}</span>
-        <span className="ml-3 text-white/35">
-          {isRangeEndMenuOpen ? "−" : "+"}
-        </span>
-      </button>
-
-      {isRangeEndMenuOpen ? (
-        <div className="absolute right-0 top-[56px] z-30 w-[280px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
-          <div className="mb-4 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setRangeEndPickerYear((prev) => prev - 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
-            >
-              ←
-            </button>
-
-            <div className="text-sm font-semibold text-white">
-              {rangeEndPickerYear}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setRangeEndPickerYear((prev) => prev + 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
-            >
-              →
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {monthNamesRu.map((monthName, index) => {
-              const value = buildMonthValue(rangeEndPickerYear, index);
-              const isActive = value === rangeEndMonth;
-
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => {
-                    setRangeEndMonth(value);
+                    if (!canEditPlan) return;
+                    setIsRangeStartMenuOpen((prev) => !prev);
                     setIsRangeEndMenuOpen(false);
+                    setIsMonthMenuOpen(false);
                   }}
-                  className={`rounded-2xl px-3 py-3 text-left text-sm transition ${
-                    isActive
-                      ? "bg-violet-500 text-white shadow-[0_10px_30px_rgba(139,92,246,0.35)]"
-                      : "bg-black/20 text-white/75 hover:bg-white/[0.05] hover:text-white"
-                  }`}
+                  className="inline-flex h-[44px] min-w-[170px] items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/[0.05] disabled:cursor-default disabled:opacity-70"
                 >
-                  <div className="font-medium leading-none">{monthName}</div>
-                  <div className="mt-2 text-xs opacity-80">
-                    {rangeEndPickerYear}
-                  </div>
+                  <span>{formatMonthLongLabel(rangeStartMonth)}</span>
+                  <span className="ml-3 text-white/35">
+                    {canEditPlan ? (isRangeStartMenuOpen ? "−" : "+") : "•"}
+                  </span>
                 </button>
-              );
-            })}
+
+                {isRangeStartMenuOpen ? (
+                  <div className="absolute right-0 top-[56px] z-30 w-[280px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
+                    <div className="mb-4 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setRangeStartPickerYear((prev) => prev - 1)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
+                      >
+                        ←
+                      </button>
+
+                      <div className="text-sm font-semibold text-white">
+                        {rangeStartPickerYear}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setRangeStartPickerYear((prev) => prev + 1)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
+                      >
+                        →
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {monthNamesRu.map((monthName, index) => {
+                        const value = buildMonthValue(rangeStartPickerYear, index);
+                        const isActive = value === rangeStartMonth;
+
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => {
+                              setRangeStartMonth(value);
+                              setIsRangeStartMenuOpen(false);
+                            }}
+                            className={`rounded-2xl px-3 py-3 text-left text-sm transition ${
+                              isActive
+                                ? "bg-violet-500 text-white shadow-[0_10px_30px_rgba(139,92,246,0.35)]"
+                                : "bg-black/20 text-white/75 hover:bg-white/[0.05] hover:text-white"
+                            }`}
+                          >
+                            <div className="font-medium leading-none">{monthName}</div>
+                            <div className="mt-2 text-xs opacity-80">
+                              {rangeStartPickerYear}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="relative" ref={rangeEndMenuRef}>
+                <div className="mb-2 text-xs uppercase tracking-[0.12em] text-white/35">
+                  По месяц
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!canEditPlan}
+                  onClick={() => {
+                    if (!canEditPlan) return;
+                    setIsRangeEndMenuOpen((prev) => !prev);
+                    setIsRangeStartMenuOpen(false);
+                    setIsMonthMenuOpen(false);
+                  }}
+                  className="inline-flex h-[44px] min-w-[170px] items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/[0.05] disabled:cursor-default disabled:opacity-70"
+                >
+                  <span>{formatMonthLongLabel(rangeEndMonth)}</span>
+                  <span className="ml-3 text-white/35">
+                    {canEditPlan ? (isRangeEndMenuOpen ? "−" : "+") : "•"}
+                  </span>
+                </button>
+
+                {isRangeEndMenuOpen ? (
+                  <div className="absolute right-0 top-[56px] z-30 w-[280px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
+                    <div className="mb-4 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setRangeEndPickerYear((prev) => prev - 1)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
+                      >
+                        ←
+                      </button>
+
+                      <div className="text-sm font-semibold text-white">
+                        {rangeEndPickerYear}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setRangeEndPickerYear((prev) => prev + 1)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
+                      >
+                        →
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {monthNamesRu.map((monthName, index) => {
+                        const value = buildMonthValue(rangeEndPickerYear, index);
+                        const isActive = value === rangeEndMonth;
+
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => {
+                              setRangeEndMonth(value);
+                              setIsRangeEndMenuOpen(false);
+                            }}
+                            className={`rounded-2xl px-3 py-3 text-left text-sm transition ${
+                              isActive
+                                ? "bg-violet-500 text-white shadow-[0_10px_30px_rgba(139,92,246,0.35)]"
+                                : "bg-black/20 text-white/75 hover:bg-white/[0.05] hover:text-white"
+                            }`}
+                          >
+                            <div className="font-medium leading-none">{monthName}</div>
+                            <div className="mt-2 text-xs opacity-80">
+                              {rangeEndPickerYear}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
-        </div>
-      ) : null}
-    </div>
-  </div>
-</div>
 
           <div className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -570,12 +589,16 @@ const filteredChartData = chartData.filter(
 
             <button
               type="button"
-              onClick={() => setIsMonthMenuOpen((prev) => !prev)}
-              className="inline-flex h-[44px] min-w-[190px] items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/[0.05]"
+              disabled={!canEditPlan}
+              onClick={() => {
+                if (!canEditPlan) return;
+                setIsMonthMenuOpen((prev) => !prev);
+              }}
+              className="inline-flex h-[44px] min-w-[190px] items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/[0.05] disabled:cursor-default disabled:opacity-70"
             >
               <span>{formatMonthLongLabel(selectedMonth)}</span>
               <span className="ml-3 text-white/35">
-                {isMonthMenuOpen ? "−" : "+"}
+                {canEditPlan ? (isMonthMenuOpen ? "−" : "+") : "•"}
               </span>
             </button>
 
@@ -659,10 +682,11 @@ const filteredChartData = chartData.filter(
                     <input
                       type="number"
                       value={row.planNumber}
+                      readOnly={!canEditPlan}
                       onChange={(e) =>
                         onPlanChange(row.key, Number(e.target.value) || 0)
                       }
-                      className="h-[42px] w-[160px] rounded-xl border border-white/10 bg-black/20 px-3 text-white outline-none"
+                      className="h-[42px] w-[160px] rounded-xl border border-white/10 bg-black/20 px-3 text-white outline-none read-only:cursor-default read-only:opacity-70"
                     />
                   </td>
 

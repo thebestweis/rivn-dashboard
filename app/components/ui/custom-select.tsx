@@ -56,7 +56,7 @@ export function CustomSelect({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-11 min-w-[180px] items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm text-white transition hover:bg-white/[0.06]"
+        className="flex h-11 w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm text-white transition hover:bg-white/[0.06]"
       >
         <span className={selectedOption ? "text-white" : "text-white/35"}>
           {selectedOption?.label ?? placeholder}

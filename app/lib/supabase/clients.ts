@@ -1,6 +1,7 @@
 import type { StoredClient } from "../storage";
-import { getAuthedSupabase } from "./auth-user";
+import { requireBillingAccess } from "../billing-guards";
 import { getMonthlyPlansFromSupabase } from "./monthly-plans";
+import { getAppContext } from "./app-context";
 
 export type SupabaseMonthlyPlan = {
   id: string;
@@ -15,6 +16,8 @@ export type SupabaseMonthlyPlan = {
 
 type DbClientRow = {
   id: string;
+  user_id: string;
+  workspace_id: string;
   name: string;
   status: "active" | "paused" | "problem" | "completed";
   owner: string;
@@ -42,32 +45,37 @@ function mapDbClient(row: DbClientRow): StoredClient {
 }
 
 export async function fetchClientsFromSupabase(): Promise<StoredClient[]> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace } = await getAppContext();
 
   const { data, error } = await supabase
     .from("clients")
     .select("*")
-    .eq("user_id", userId)
+    .eq("workspace_id", workspace.id)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(`Не удалось загрузить клиентов: ${error.message}`);
+  }
 
-  return (data as DbClientRow[]).map(mapDbClient);
+  return ((data ?? []) as DbClientRow[]).map(mapDbClient);
 }
 
 export async function fetchClientByIdFromSupabase(
   id: string
 ): Promise<StoredClient | null> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace } = await getAppContext();
 
   const { data, error } = await supabase
     .from("clients")
     .select("*")
     .eq("id", id)
-    .eq("user_id", userId)
+    .eq("workspace_id", workspace.id)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(`Не удалось загрузить клиента: ${error.message}`);
+  }
+
   if (!data) return null;
 
   return mapDbClient(data as DbClientRow);
@@ -76,10 +84,13 @@ export async function fetchClientByIdFromSupabase(
 export async function createClientInSupabase(
   client: Omit<StoredClient, "id">
 ): Promise<StoredClient> {
-  const { supabase, userId } = await getAuthedSupabase();
+  await requireBillingAccess();
+
+  const { supabase, workspace, user } = await getAppContext();
 
   const payload = {
-    user_id: userId,
+    user_id: user.id,
+    workspace_id: workspace.id,
     name: client.name,
     status: client.status,
     owner: client.owner,
@@ -94,10 +105,12 @@ export async function createClientInSupabase(
   const { data, error } = await supabase
     .from("clients")
     .insert(payload)
-    .select()
+    .select("*")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(`Не удалось создать клиента: ${error.message}`);
+  }
 
   return mapDbClient(data as DbClientRow);
 }
@@ -106,7 +119,9 @@ export async function updateClientInSupabase(
   id: string,
   client: Omit<StoredClient, "id">
 ): Promise<StoredClient> {
-  const { supabase, userId } = await getAuthedSupabase();
+  await requireBillingAccess();
+
+  const { supabase, workspace } = await getAppContext();
 
   const payload = {
     name: client.name,
@@ -125,25 +140,29 @@ export async function updateClientInSupabase(
     .from("clients")
     .update(payload)
     .eq("id", id)
-    .eq("user_id", userId)
-    .select()
+    .eq("workspace_id", workspace.id)
+    .select("*")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(`Не удалось обновить клиента: ${error.message}`);
+  }
 
   return mapDbClient(data as DbClientRow);
 }
 
 export async function deleteClientInSupabase(id: string): Promise<void> {
-  const { supabase, userId } = await getAuthedSupabase();
+  const { supabase, workspace } = await getAppContext();
 
   const { error } = await supabase
     .from("clients")
     .delete()
     .eq("id", id)
-    .eq("user_id", userId);
+    .eq("workspace_id", workspace.id);
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(`Не удалось удалить клиента: ${error.message}`);
+  }
 }
 
 export async function fetchMonthlyPlansFromSupabase(): Promise<

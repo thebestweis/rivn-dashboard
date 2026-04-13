@@ -1,3 +1,4 @@
+import { requireBillingAccess } from "../billing-guards";
 import { createClient } from "./client";
 
 export type TaskComment = {
@@ -27,6 +28,8 @@ export async function createTaskComment(
   taskId: string,
   text: string
 ): Promise<TaskComment> {
+  await requireBillingAccess();
+
   const supabase = createClient();
 
   const { data, error } = await supabase

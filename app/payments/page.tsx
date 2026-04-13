@@ -1,14 +1,16 @@
 "use client";
 
-import { AppToast } from "../components/ui/app-toast";
 import { useEffect, useMemo, useState } from "react";
-import { AppSidebar } from "../components/layout/app-sidebar";
+import { AppToast } from "../components/ui/app-toast";
 import { PaymentsPageHeader } from "../components/payments/payments-page-header";
 import { PlannedPaymentsTable } from "../components/payments/planned-payments-table";
 import { FactPaymentsTable } from "../components/payments/fact-payments-table";
 import { CreatePaymentModal } from "../components/payments/create-payment-modal";
 import { EditPaymentModal } from "../components/payments/edit-payment-modal";
 import { EmptyState } from "../components/ui/empty-state";
+import { AccessDenied } from "../components/access/access-denied";
+import { usePageAccess } from "../lib/use-page-access";
+import { useSectionPermission } from "../lib/use-section-permission";
 
 import {
   sendInvoiceCreatedNotification,
@@ -53,7 +55,10 @@ interface EmployeeItem {
   id: string;
   name: string;
   role: string;
-  payType: "fixed_per_paid_project" | "fixed_salary" | "fixed_salary_plus_project";
+  payType:
+    | "fixed_per_paid_project"
+    | "fixed_salary"
+    | "fixed_salary_plus_project";
   payValue: string;
   isActive: boolean;
 }
@@ -136,6 +141,14 @@ function getClientDisplayName(client: ClientItem) {
 }
 
 export default function PaymentsPage() {
+  const {
+    isLoading: isAccessLoading,
+    hasAccess,
+  } = usePageAccess("payments");
+
+  const { isLoading: isPermissionLoading, canManage } =
+    useSectionPermission("payments");
+
   const [activeTab, setActiveTab] = useState<"planned" | "fact">("planned");
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
@@ -153,10 +166,14 @@ export default function PaymentsPage() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
-  const [processingPaymentId, setProcessingPaymentId] = useState<string | null>(null);
+  const [processingPaymentId, setProcessingPaymentId] = useState<string | null>(
+    null
+  );
   const [mode, setMode] = useState<"invoice" | "payment">("invoice");
   const [isSavingPayment, setIsSavingPayment] = useState(false);
-  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(
+    null
+  );
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<"planned" | "fact">("fact");
@@ -203,6 +220,11 @@ export default function PaymentsPage() {
     return new Map(projects.map((project) => [project.id, project]));
   }, [projects]);
 
+  function showNoAccessMessage() {
+    setToastType("error");
+    setToastMessage("У тебя нет прав на управление платежами");
+  }
+
   function getClientNameById(id: string) {
     const client = clients.find((c) => c.id === id);
     return client ? getClientDisplayName(client) : "Клиент";
@@ -211,6 +233,26 @@ export default function PaymentsPage() {
   function getProjectNameById(id: string | null | undefined) {
     if (!id) return "";
     return projectsMap.get(id)?.name ?? "";
+  }
+
+  function resetCreateForm() {
+    setNewClientId("");
+    setNewProjectId("");
+    setNewPaidAt("");
+    setNewAmount("");
+    setNewSource("");
+    setNewDocumentUrl("");
+  }
+
+  function resetEditForm() {
+    setEditClientId("");
+    setEditProjectId("");
+    setEditPaidAt("");
+    setEditAmount("");
+    setEditSource("");
+    setEditDocumentUrl("");
+    setEditingPaymentId(null);
+    setEditMode("fact");
   }
 
   async function syncPayrollAccrualForPayment(params: {
@@ -289,6 +331,11 @@ export default function PaymentsPage() {
   }
 
   async function loadPaymentsData() {
+    if (!hasAccess) {
+      setLoadingPayments(false);
+      return;
+    }
+
     try {
       setLoadingPayments(true);
 
@@ -313,10 +360,13 @@ export default function PaymentsPage() {
         return acc;
       }, {});
 
-      const projectMap = safeProjects.reduce<Record<string, string>>((acc, project) => {
-        acc[project.id] = project.name;
-        return acc;
-      }, {});
+      const projectMap = safeProjects.reduce<Record<string, string>>(
+        (acc, project) => {
+          acc[project.id] = project.name;
+          return acc;
+        },
+        {}
+      );
 
       const mappedFactPayments: FactPaymentRow[] = paymentsData
         .filter((payment) => payment.status === "paid")
@@ -366,8 +416,17 @@ export default function PaymentsPage() {
   }
 
   useEffect(() => {
+    if (!hasAccess) return;
     loadPaymentsData();
-  }, []);
+  }, [hasAccess]);
+
+  useEffect(() => {
+    if (canManage) return;
+
+    setIsCreateOpen(false);
+    setIsEditOpen(false);
+    resetEditForm();
+  }, [canManage]);
 
   async function handleCreatePayment(payment: {
     clientId: string;
@@ -377,9 +436,16 @@ export default function PaymentsPage() {
     source: string;
     documentUrl: string;
   }) {
+    if (!canManage) {
+      showNoAccessMessage();
+      return;
+    }
+
     if (isCreatingPayment) return;
+
     try {
-  setIsCreatingPayment(true);
+      setIsCreatingPayment(true);
+
       if (!payment.clientId) {
         setToastType("error");
         setToastMessage("Выбери клиента");
@@ -418,46 +484,41 @@ export default function PaymentsPage() {
       });
 
       if (!isInvoice) {
-  try {
-    await sendPaymentReceivedNotification({
-      paymentId: createdPayment.id,
-      clientName: getClientNameById(payment.clientId),
-      projectName: getProjectNameById(payment.projectId),
-      amount: payment.amount,
-      paidAt: payment.paidAt,
-    });
-  } catch (notificationError) {
-    console.error(
-      "Ошибка отправки Telegram-уведомления о полученной оплате:",
-      notificationError
-    );
-  }
-}
+        try {
+          await sendPaymentReceivedNotification({
+            paymentId: createdPayment.id,
+            clientName: getClientNameById(payment.clientId),
+            projectName: getProjectNameById(payment.projectId),
+            amount: payment.amount,
+            paidAt: payment.paidAt,
+          });
+        } catch (notificationError) {
+          console.error(
+            "Ошибка отправки Telegram-уведомления о полученной оплате:",
+            notificationError
+          );
+        }
+      }
 
-if (isInvoice) {
-  try {
-    await sendInvoiceCreatedNotification({
-      paymentId: createdPayment.id,
-      clientName: getClientNameById(payment.clientId),
-      projectName: getProjectNameById(payment.projectId),
-      amount: payment.amount,
-      dueDate: payment.paidAt,
-    });
-  } catch (notificationError) {
-    console.error(
-      "Ошибка отправки Telegram-уведомления о создании счёта:",
-      notificationError
-    );
-  }
-}
+      if (isInvoice) {
+        try {
+          await sendInvoiceCreatedNotification({
+            paymentId: createdPayment.id,
+            clientName: getClientNameById(payment.clientId),
+            projectName: getProjectNameById(payment.projectId),
+            amount: payment.amount,
+            dueDate: payment.paidAt,
+          });
+        } catch (notificationError) {
+          console.error(
+            "Ошибка отправки Telegram-уведомления о создании счёта:",
+            notificationError
+          );
+        }
+      }
 
       setIsCreateOpen(false);
-      setNewClientId("");
-      setNewProjectId("");
-      setNewPaidAt("");
-      setNewAmount("");
-      setNewSource("");
-      setNewDocumentUrl("");
+      resetCreateForm();
 
       await loadPaymentsData();
 
@@ -465,17 +526,22 @@ if (isInvoice) {
       setToastType("success");
       setToastMessage(isInvoice ? "Счёт создан" : "Оплата создана");
     } catch (error) {
-  console.error("Ошибка создания payment:", error);
-  const message =
-    error instanceof Error ? error.message : "Не удалось создать";
-  setToastType("error");
-  setToastMessage(message);
-} finally {
-  setIsCreatingPayment(false);
-}
+      console.error("Ошибка создания payment:", error);
+      const message =
+        error instanceof Error ? error.message : "Не удалось создать";
+      setToastType("error");
+      setToastMessage(message);
+    } finally {
+      setIsCreatingPayment(false);
+    }
   }
 
   function handleStartEdit(payment: FactPaymentRow) {
+    if (!canManage) {
+      showNoAccessMessage();
+      return;
+    }
+
     if (!payment.clientId) {
       setToastType("error");
       setToastMessage("Не удалось определить клиента");
@@ -487,9 +553,7 @@ if (isInvoice) {
     setEditClientId(payment.clientId);
     setEditProjectId(payment.projectId ?? "");
     setEditPaidAt(
-      payment.paidAt.includes(".")
-        ? toSupabaseDate(payment.paidAt)
-        : payment.paidAt
+      payment.paidAt.includes(".") ? toSupabaseDate(payment.paidAt) : payment.paidAt
     );
     setEditAmount(payment.amount);
     setEditSource(payment.source);
@@ -498,6 +562,11 @@ if (isInvoice) {
   }
 
   function handleStartEditPlanned(paymentId: string) {
+    if (!canManage) {
+      showNoAccessMessage();
+      return;
+    }
+
     const target = plannedPayments.find((item) => item.id === paymentId);
 
     if (!target) {
@@ -529,11 +598,17 @@ if (isInvoice) {
     source: string;
     documentUrl: string;
   }) {
+    if (!canManage) {
+      showNoAccessMessage();
+      return;
+    }
+
     if (isSavingPayment) return;
     if (!editingPaymentId) return;
 
     try {
-  setIsSavingPayment(true);
+      setIsSavingPayment(true);
+
       if (!updatedPayment.clientId) {
         setToastType("error");
         setToastMessage("Выбери клиента");
@@ -572,7 +647,7 @@ if (isInvoice) {
       });
 
       setIsEditOpen(false);
-      setEditingPaymentId(null);
+      resetEditForm();
 
       await loadPaymentsData();
 
@@ -581,20 +656,26 @@ if (isInvoice) {
         editMode === "planned" ? "Счёт сохранён" : "Оплата сохранена"
       );
     } catch (error) {
-  console.error("Ошибка обновления payment:", error);
-  const message =
-    error instanceof Error ? error.message : "Не удалось сохранить";
-  setToastType("error");
-  setToastMessage(message);
-} finally {
-  setIsSavingPayment(false);
-}
+      console.error("Ошибка обновления payment:", error);
+      const message =
+        error instanceof Error ? error.message : "Не удалось сохранить";
+      setToastType("error");
+      setToastMessage(message);
+    } finally {
+      setIsSavingPayment(false);
+    }
   }
 
   async function handleMarkAsPaid(id: string) {
+    if (!canManage) {
+      showNoAccessMessage();
+      return;
+    }
+
     if (processingPaymentId === id) return;
+
     try {
-  setProcessingPaymentId(id);
+      setProcessingPaymentId(id);
       const target = plannedPayments.find((item) => item.id === id);
 
       if (!target) {
@@ -634,37 +715,43 @@ if (isInvoice) {
       });
 
       try {
-  await sendPaymentReceivedNotification({
-    paymentId: id,
-    clientName: target.client,
-    projectName: target.project,
-    amount: target.amount,
-    paidAt: fromSupabaseDate(paymentDate),
-  });
-} catch (notificationError) {
-  console.error(
-    "Ошибка отправки Telegram-уведомления о полученной оплате:",
-    notificationError
-  );
-}
+        await sendPaymentReceivedNotification({
+          paymentId: id,
+          clientName: target.client,
+          projectName: target.project,
+          amount: target.amount,
+          paidAt: fromSupabaseDate(paymentDate),
+        });
+      } catch (notificationError) {
+        console.error(
+          "Ошибка отправки Telegram-уведомления о полученной оплате:",
+          notificationError
+        );
+      }
 
       await loadPaymentsData();
 
       setToastType("success");
       setToastMessage(`Счёт для "${target.client}" отмечен как оплаченный`);
     } catch (error) {
-  console.error("Ошибка отметки оплаты:", error);
-  const message =
-    error instanceof Error ? error.message : "Не удалось отметить оплату";
-  setToastType("error");
-  setToastMessage(message);
-} finally {
-  setProcessingPaymentId(null);
-}
+      console.error("Ошибка отметки оплаты:", error);
+      const message =
+        error instanceof Error ? error.message : "Не удалось отметить оплату";
+      setToastType("error");
+      setToastMessage(message);
+    } finally {
+      setProcessingPaymentId(null);
+    }
   }
 
   async function handleDeletePayment(paymentId: string) {
+    if (!canManage) {
+      showNoAccessMessage();
+      return;
+    }
+
     if (deletingPaymentId === paymentId) return;
+
     const target =
       factPayments.find((item) => item.id === paymentId) ||
       plannedPayments.find((item) => item.id === paymentId);
@@ -682,7 +769,7 @@ if (isInvoice) {
     if (!confirmed) return;
 
     try {
-  setDeletingPaymentId(paymentId);
+      setDeletingPaymentId(paymentId);
       await deletePaymentFromSupabase(paymentId);
 
       await syncPayrollAccrualForPayment({
@@ -695,7 +782,7 @@ if (isInvoice) {
 
       if (editingPaymentId === paymentId) {
         setIsEditOpen(false);
-        setEditingPaymentId(null);
+        resetEditForm();
       }
 
       await loadPaymentsData();
@@ -703,190 +790,241 @@ if (isInvoice) {
       setToastType("success");
       setToastMessage(`Оплата для "${target.client}" удалена`);
     } catch (error) {
-  console.error("Ошибка удаления payment:", error);
-  const message =
-    error instanceof Error ? error.message : "Не удалось удалить оплату";
-  setToastType("error");
-  setToastMessage(message);
-} finally {
-  setDeletingPaymentId(null);
-}
+      console.error("Ошибка удаления payment:", error);
+      const message =
+        error instanceof Error ? error.message : "Не удалось удалить оплату";
+      setToastType("error");
+      setToastMessage(message);
+    } finally {
+      setDeletingPaymentId(null);
+    }
+  }
+
+  function handleOpenCreateInvoice() {
+    if (!canManage) {
+      showNoAccessMessage();
+      return;
+    }
+
+    setMode("invoice");
+    setIsCreateOpen(true);
+  }
+
+  function handleOpenCreatePayment() {
+    if (!canManage) {
+      showNoAccessMessage();
+      return;
+    }
+
+    setMode("payment");
+    setIsCreateOpen(true);
+  }
+
+  function handleCloseCreateModal() {
+    if (isCreatingPayment) return;
+    setIsCreateOpen(false);
+    resetCreateForm();
+  }
+
+  function handleCloseEditModal() {
+    if (isSavingPayment) return;
+    setIsEditOpen(false);
+    resetEditForm();
+  }
+
+  const canShowManageActions = !isPermissionLoading && canManage;
+
+  if (isAccessLoading) {
+    return (
+      <main className="flex-1">
+        <div className="space-y-6 px-5 py-6 lg:px-8">
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            Проверяем доступ...
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <main className="flex-1">
+        <div className="space-y-6 px-5 py-6 lg:px-8">
+          <AccessDenied
+            title="Нет доступа к платежам"
+            description="У тебя нет прав для просмотра этого раздела."
+          />
+        </div>
+      </main>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0F1A] text-white">
-      <div className="flex min-h-screen">
-        <AppSidebar />
+    <>
+      <main className="flex-1">
+        <div className="space-y-6 px-5 py-6 lg:px-8">
+          <PaymentsPageHeader
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            canManage={canShowManageActions}
+            onCreateInvoice={handleOpenCreateInvoice}
+            onCreatePayment={handleOpenCreatePayment}
+          />
 
-        <main className="flex-1">
-          <div className="space-y-6 px-5 py-6 lg:px-8">
-            <PaymentsPageHeader
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              onCreateInvoice={() => {
-                setMode("invoice");
-                setIsCreateOpen(true);
-              }}
-              onCreatePayment={() => {
-                setMode("payment");
-                setIsCreateOpen(true);
-              }}
-            />
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-                <div className="text-xs uppercase tracking-wide text-white/40">
-                  Ожидается
-                </div>
-                <div className="mt-1 text-2xl font-semibold tracking-tight">
-                  ₽{plannedTotal.toLocaleString("ru-RU")}
-                </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
+              <div className="text-xs uppercase tracking-wide text-white/40">
+                Ожидается
               </div>
-
-              <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-                <div className="text-xs uppercase tracking-wide text-white/40">
-                  Просрочено
-                </div>
-                <div className="mt-1 text-2xl font-semibold tracking-tight text-rose-400">
-                  ₽{overdueTotal.toLocaleString("ru-RU")}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-                <div className="text-xs uppercase tracking-wide text-white/40">
-                  Получено
-                </div>
-                <div className="mt-1 text-2xl font-semibold tracking-tight text-emerald-400">
-                  ₽{paidTotal.toLocaleString("ru-RU")}
-                </div>
+              <div className="mt-1 text-2xl font-semibold tracking-tight">
+                ₽{plannedTotal.toLocaleString("ru-RU")}
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              <div className="mb-5 flex items-center justify-between gap-4">
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("planned")}
-                    className={`rounded-full px-4 py-2 text-sm transition ${
-                      activeTab === "planned"
-                        ? "bg-white text-[#0B0F1A]"
-                        : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white"
-                    }`}
-                  >
-                    Плановые счета
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("fact")}
-                    className={`rounded-full px-4 py-2 text-sm transition ${
-                      activeTab === "fact"
-                        ? "bg-white text-[#0B0F1A]"
-                        : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white"
-                    }`}
-                  >
-                    Оплаченные счета
-                  </button>
-                </div>
+            <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
+              <div className="text-xs uppercase tracking-wide text-white/40">
+                Просрочено
               </div>
+              <div className="mt-1 text-2xl font-semibold tracking-tight text-rose-400">
+                ₽{overdueTotal.toLocaleString("ru-RU")}
+              </div>
+            </div>
 
-              {activeTab === "planned" ? (
-                loadingPayments ? (
-                  <EmptyState
-                    title="Загрузка счетов..."
-                    description="Подгружаем данные из Supabase."
-                  />
-                ) : plannedPayments.length > 0 ? (
-                  <PlannedPaymentsTable
-  items={plannedPayments}
-  onMarkPaid={handleMarkAsPaid}
-  onEdit={handleStartEditPlanned}
-  onDelete={handleDeletePayment}
-  processingPaymentId={processingPaymentId}
-  deletingPaymentId={deletingPaymentId}
-/>
-                ) : (
-                  <EmptyState
-                    title="Плановых счетов пока нет"
-                    description="Когда ты добавишь плановые счета, они появятся здесь."
-                  />
-                )
-              ) : loadingPayments ? (
-                <EmptyState
-                  title="Загрузка оплат..."
-                  description="Подгружаем данные из Supabase."
-                />
-              ) : factPayments.length > 0 ? (
-                <FactPaymentsTable
-  items={factPayments}
-  onEdit={handleStartEdit}
-  onDelete={handleDeletePayment}
-  deletingPaymentId={deletingPaymentId}
-/>
-              ) : (
-                <EmptyState
-                  title="Оплаченных счетов пока нет"
-                  description="Добавь первую оплату, чтобы видеть фактически полученные деньги."
-                  actionLabel="Добавить оплату"
-                  onAction={() => {
-                    setMode("payment");
-                    setIsCreateOpen(true);
-                  }}
-                />
-              )}
+            <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
+              <div className="text-xs uppercase tracking-wide text-white/40">
+                Получено
+              </div>
+              <div className="mt-1 text-2xl font-semibold tracking-tight text-emerald-400">
+                ₽{paidTotal.toLocaleString("ru-RU")}
+              </div>
             </div>
           </div>
 
-          <CreatePaymentModal
-            isOpen={isCreateOpen}
-            onClose={() => setIsCreateOpen(false)}
-            onCreate={handleCreatePayment}
-            isSubmitting={isCreatingPayment}
-            clients={clients}
-            projects={projects}
-            clientId={newClientId}
-            setClientId={setNewClientId}
-            projectId={newProjectId}
-            setProjectId={setNewProjectId}
-            paidAt={newPaidAt}
-            setPaidAt={setNewPaidAt}
-            amount={newAmount}
-            setAmount={setNewAmount}
-            source={newSource}
-            setSource={setNewSource}
-            documentUrl={newDocumentUrl}
-            setDocumentUrl={setNewDocumentUrl}
-            mode={mode}
-          />
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("planned")}
+                  className={`rounded-full px-4 py-2 text-sm transition ${
+                    activeTab === "planned"
+                      ? "bg-white text-[#0B0F1A]"
+                      : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white"
+                  }`}
+                >
+                  Плановые счета
+                </button>
 
-          <EditPaymentModal
-            isOpen={isEditOpen}
-            onClose={() => setIsEditOpen(false)}
-            onSave={handleSaveEdit}
-            isSubmitting={isSavingPayment}
-            clientId={editClientId}
-            setClientId={setEditClientId}
-            projectId={editProjectId}
-            setProjectId={setEditProjectId}
-            paidAt={editPaidAt}
-            setPaidAt={setEditPaidAt}
-            amount={editAmount}
-            setAmount={setEditAmount}
-            source={editSource}
-            setSource={setEditSource}
-            clients={clients}
-            projects={projects}
-            mode={editMode}
-            documentUrl={editDocumentUrl}
-            setDocumentUrl={setEditDocumentUrl}
-          />
-        </main>
-      </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("fact")}
+                  className={`rounded-full px-4 py-2 text-sm transition ${
+                    activeTab === "fact"
+                      ? "bg-white text-[#0B0F1A]"
+                      : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white"
+                  }`}
+                >
+                  Оплаченные счета
+                </button>
+              </div>
+            </div>
 
-      {toastMessage ? (
-        <AppToast message={toastMessage} type={toastType} />
-      ) : null}
-    </div>
+            {activeTab === "planned" ? (
+              loadingPayments ? (
+                <EmptyState
+                  title="Загрузка счетов..."
+                  description="Подгружаем данные из Supabase."
+                />
+              ) : plannedPayments.length > 0 ? (
+                <PlannedPaymentsTable
+                  items={plannedPayments}
+                  onMarkPaid={handleMarkAsPaid}
+                  onEdit={handleStartEditPlanned}
+                  onDelete={handleDeletePayment}
+                  processingPaymentId={processingPaymentId}
+                  deletingPaymentId={deletingPaymentId}
+                  canManage={canShowManageActions}
+                />
+              ) : (
+                <EmptyState
+                  title="Плановых счетов пока нет"
+                  description="Когда ты добавишь плановые счета, они появятся здесь."
+                  actionLabel={canShowManageActions ? "Выставить счёт" : undefined}
+                  onAction={canShowManageActions ? handleOpenCreateInvoice : undefined}
+                />
+              )
+            ) : loadingPayments ? (
+              <EmptyState
+                title="Загрузка оплат..."
+                description="Подгружаем данные из Supabase."
+              />
+            ) : factPayments.length > 0 ? (
+              <FactPaymentsTable
+                items={factPayments}
+                onEdit={handleStartEdit}
+                onDelete={handleDeletePayment}
+                deletingPaymentId={deletingPaymentId}
+                canManage={canShowManageActions}
+              />
+            ) : (
+              <EmptyState
+                title="Оплаченных счетов пока нет"
+                description="Добавь первую оплату, чтобы видеть фактически полученные деньги."
+                actionLabel={canShowManageActions ? "Добавить оплату" : undefined}
+                onAction={canShowManageActions ? handleOpenCreatePayment : undefined}
+              />
+            )}
+          </div>
+        </div>
+
+        <CreatePaymentModal
+          isOpen={isCreateOpen}
+          onClose={handleCloseCreateModal}
+          onCreate={handleCreatePayment}
+          isSubmitting={isCreatingPayment}
+          canManage={canShowManageActions}
+          clients={clients}
+          projects={projects}
+          clientId={newClientId}
+          setClientId={setNewClientId}
+          projectId={newProjectId}
+          setProjectId={setNewProjectId}
+          paidAt={newPaidAt}
+          setPaidAt={setNewPaidAt}
+          amount={newAmount}
+          setAmount={setNewAmount}
+          source={newSource}
+          setSource={setNewSource}
+          documentUrl={newDocumentUrl}
+          setDocumentUrl={setNewDocumentUrl}
+          mode={mode}
+        />
+
+        <EditPaymentModal
+          isOpen={isEditOpen}
+          onClose={handleCloseEditModal}
+          onSave={handleSaveEdit}
+          isSubmitting={isSavingPayment}
+          canManage={canShowManageActions}
+          clientId={editClientId}
+          setClientId={setEditClientId}
+          projectId={editProjectId}
+          setProjectId={setEditProjectId}
+          paidAt={editPaidAt}
+          setPaidAt={setEditPaidAt}
+          amount={editAmount}
+          setAmount={setEditAmount}
+          source={editSource}
+          setSource={setEditSource}
+          clients={clients}
+          projects={projects}
+          mode={editMode}
+          documentUrl={editDocumentUrl}
+          setDocumentUrl={setEditDocumentUrl}
+        />
+      </main>
+
+      {toastMessage ? <AppToast message={toastMessage} type={toastType} /> : null}
+    </>
   );
 }

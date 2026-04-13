@@ -47,13 +47,13 @@ export function AppTopbar({
             ) : (
               <div className="flex items-center gap-3">
                 <a
-                  href="https://t.me/weismakeleadgen"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06]"
-                >
-                  TG основателя
-                </a>
+  href="https://t.me/weismakeleadgen"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06]"
+>
+  Telegram основателя
+</a>
 
                 <a
                   href="https://t.me/thebestweis"

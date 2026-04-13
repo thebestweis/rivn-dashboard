@@ -4,6 +4,8 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 
 import { ThemeInit } from "./components/ui/theme-init";
+import { AppContextProvider } from "./providers/app-context-provider";
+import { RootAppShell } from "./components/layout/root-app-shell";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -24,9 +26,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html
       lang="ru"
@@ -41,9 +43,11 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900 dark:bg-[#0B0F1A] dark:text-white">
-  <ThemeInit />
-  {children}
-</body>
+        <ThemeInit />
+        <AppContextProvider>
+          <RootAppShell>{children}</RootAppShell>
+        </AppContextProvider>
+      </body>
     </html>
   );
 }

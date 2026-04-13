@@ -169,6 +169,6 @@ export function buildFinancialTimeSeries(params: {
     revenue: bucket.revenue,
     expenses: bucket.expenses,
     fot: bucket.fot,
-    profit: Math.max(bucket.profit, 0),
+    profit: bucket.profit,
   }));
 }

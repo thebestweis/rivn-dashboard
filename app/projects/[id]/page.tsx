@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { AppSidebar } from "../../components/layout/app-sidebar";
 import {
   CreateProjectModal,
   type CreateProjectFormValues,
@@ -11,7 +10,9 @@ import {
 import { ProjectTasksBoard } from "../../components/tasks/project-tasks-board";
 import { TaskModal } from "../../components/tasks/task-modal";
 import { fetchClientsFromSupabase } from "../../lib/supabase/clients";
-import { fetchEmployeesFromSupabase } from "../../lib/supabase/employees";
+
+import { getWorkspaceMembers } from "../../lib/supabase/workspace-members";
+
 import {
   getProjectById,
   updateProject,
@@ -22,6 +23,12 @@ import {
   type Task,
   type TaskStatus,
 } from "../../lib/supabase/tasks";
+import {
+  canEditProjectDetails,
+  isAppRole,
+  type AppRole,
+} from "../../lib/permissions";
+import { useAppContextState } from "../../providers/app-context-provider";
 
 type ClientOption = {
   id: string;
@@ -126,6 +133,13 @@ function PencilButton({
 }
 
 export default function ProjectPage() {
+  const { role } = useAppContextState();
+
+  const currentRole: AppRole | null = isAppRole(role) ? role : null;
+  const canManageProjectDetails = currentRole
+    ? canEditProjectDetails(currentRole)
+    : false;
+
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -167,22 +181,22 @@ export default function ProjectPage() {
           throw new Error("Проект не найден");
         }
 
-        const [clientsData, employeesData, projectTasks] = await Promise.all([
-          fetchClientsFromSupabase(),
-          fetchEmployeesFromSupabase(),
-          getTasksByProject(projectId),
-        ]);
+        const [clientsData, workspaceMembersData, projectTasks] = await Promise.all([
+  fetchClientsFromSupabase(),
+  getWorkspaceMembers(),
+  getTasksByProject(projectId),
+]);
 
         const client = clientsData.find(
           (item) => item.id === projectData.client_id
         );
 
-        const activeEmployees: EmployeeOption[] = employeesData
-          .filter((employee) => employee.isActive)
-          .map((employee) => ({
-            id: employee.id,
-            name: employee.name,
-          }));
+        const activeEmployees: EmployeeOption[] = workspaceMembersData
+  .filter((member) => member.status === "active")
+  .map((member) => ({
+    id: member.id,
+    name: member.email || "Без email",
+  }));
 
         if (!isMounted) {
           return;
@@ -300,6 +314,11 @@ export default function ProjectPage() {
   async function handleSaveOverview() {
     if (!project) return;
 
+    if (!canManageProjectDetails) {
+      window.alert("У тебя нет прав на редактирование этого проекта");
+      return;
+    }
+
     try {
       setIsSavingOverview(true);
 
@@ -330,6 +349,11 @@ export default function ProjectPage() {
   async function handleSaveLinks() {
     if (!project) return;
 
+    if (!canManageProjectDetails) {
+      window.alert("У тебя нет прав на редактирование этого проекта");
+      return;
+    }
+
     try {
       setIsSavingLinks(true);
 
@@ -359,6 +383,10 @@ export default function ProjectPage() {
 
   async function handleSubmitProject(values: CreateProjectFormValues) {
     if (!project) return;
+
+    if (!canManageProjectDetails) {
+      throw new Error("У тебя нет прав на редактирование этого проекта");
+    }
 
     try {
       setIsSavingProject(true);
@@ -398,272 +426,274 @@ export default function ProjectPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0F1A] text-white">
-      <div className="flex min-h-screen">
-        <AppSidebar />
+    <>
+      <main className="flex-1 px-6 py-6 md:px-8">
+        <div className="flex w-full flex-col gap-6">
+          {isLoading ? (
+            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 text-sm text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+              Загрузка проекта...
+            </div>
+          ) : errorMessage ? (
+            <div className="rounded-[28px] border border-red-500/20 bg-red-500/10 p-6 text-sm text-red-200 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+              {errorMessage}
+            </div>
+          ) : project ? (
+            <>
+              <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_1fr_0.8fr]">
+                  <div>
+                    <div className="text-sm text-white/40">Паспорт проекта</div>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <main className="flex-1 px-6 py-6 md:px-8">
-            <div className="flex w-full flex-col gap-6">
-              {isLoading ? (
-                <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 text-sm text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                  Загрузка проекта...
-                </div>
-              ) : errorMessage ? (
-                <div className="rounded-[28px] border border-red-500/20 bg-red-500/10 p-6 text-sm text-red-200 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                  {errorMessage}
-                </div>
-              ) : project ? (
-                <>
-                  <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_1fr_0.8fr]">
-                      <div>
-                        <div className="text-sm text-white/40">Паспорт проекта</div>
+                    <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
+                      {project.name}
+                    </h1>
 
-                        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
-                          {project.name}
-                        </h1>
+                    <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-white/60">
+                      <span>Клиент: {clientName}</span>
+                      <span className="text-white/25">•</span>
+                      <span>Дата старта: {formatDate(project.start_date)}</span>
+                      <span className="text-white/25">•</span>
+                      <span>Ответственный: {assignedEmployeeName}</span>
+                    </div>
 
-                        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-white/60">
-                          <span>Клиент: {clientName}</span>
-                          <span className="text-white/25">•</span>
-                          <span>Дата старта: {formatDate(project.start_date)}</span>
-                          <span className="text-white/25">•</span>
-                          <span>Ответственный: {assignedEmployeeName}</span>
-                        </div>
+                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                      <span
+                        className={`inline-flex rounded-full border px-4 py-2 text-sm font-medium ${getStatusClasses(
+                          project.status
+                        )}`}
+                      >
+                        {getStatusLabel(project.status)}
+                      </span>
 
-                        <div className="mt-5 flex flex-wrap items-center gap-3">
-                          <span
-                            className={`inline-flex rounded-full border px-4 py-2 text-sm font-medium ${getStatusClasses(
-                              project.status
-                            )}`}
-                          >
-                            {getStatusLabel(project.status)}
-                          </span>
+                      {clientId ? (
+                        <Link
+                          href="/clients"
+                          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                        >
+                          Открыть клиента
+                        </Link>
+                      ) : null}
 
-                          {clientId ? (
-                            <Link
-                              href="/clients"
-                              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                            >
-                              Открыть клиента
-                            </Link>
-                          ) : null}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigator.clipboard.writeText(window.location.href)
+                        }
+                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                      >
+                        Скопировать ссылку
+                      </button>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              navigator.clipboard.writeText(window.location.href)
-                            }
-                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                          >
-                            Скопировать ссылку
-                          </button>
+                      {canManageProjectDetails ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditProjectModalOpen(true)}
+                          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                        >
+                          Редактировать паспорт
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
 
-                          <button
-                            type="button"
-                            onClick={() => setIsEditProjectModalOpen(true)}
-                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                          >
-                            Редактировать паспорт
-                          </button>
-                        </div>
+                  <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-sm text-white/45">
+                        Основная информация по проекту
                       </div>
 
-                      <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="text-sm text-white/45">
-                            Основная информация по проекту
-                          </div>
+                      {canManageProjectDetails ? (
+                        <PencilButton
+                          onClick={() => {
+                            setOverviewDraft(
+                              project.project_overview?.trim() ||
+                                project.description?.trim() ||
+                                ""
+                            );
+                            setIsEditingOverview(true);
+                          }}
+                          title="Редактировать информацию"
+                        />
+                      ) : null}
+                    </div>
 
-                          <PencilButton
+                    {isEditingOverview ? (
+                      <div className="mt-4">
+                        <textarea
+                          value={overviewDraft}
+                          onChange={(event) =>
+                            setOverviewDraft(event.target.value)
+                          }
+                          rows={10}
+                          placeholder="Добавь основную информацию по проекту"
+                          className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30"
+                        />
+
+                        <div className="mt-4 flex justify-end gap-3">
+                          <button
+                            type="button"
                             onClick={() => {
                               setOverviewDraft(
                                 project.project_overview?.trim() ||
                                   project.description?.trim() ||
                                   ""
                               );
-                              setIsEditingOverview(true);
+                              setIsEditingOverview(false);
                             }}
-                            title="Редактировать информацию"
-                          />
+                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+                          >
+                            Отмена
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleSaveOverview}
+                            disabled={isSavingOverview}
+                            className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
+                          >
+                            {isSavingOverview ? "Сохраняем..." : "Сохранить"}
+                          </button>
                         </div>
-
-                        {isEditingOverview ? (
-                          <div className="mt-4">
-                            <textarea
-                              value={overviewDraft}
-                              onChange={(event) => setOverviewDraft(event.target.value)}
-                              rows={10}
-                              placeholder="Добавь основную информацию по проекту"
-                              className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30"
-                            />
-
-                            <div className="mt-4 flex justify-end gap-3">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOverviewDraft(
-                                    project.project_overview?.trim() ||
-                                      project.description?.trim() ||
-                                      ""
-                                  );
-                                  setIsEditingOverview(false);
-                                }}
-                                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
-                              >
-                                Отмена
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={handleSaveOverview}
-                                disabled={isSavingOverview}
-                                className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
-                              >
-                                {isSavingOverview ? "Сохраняем..." : "Сохранить"}
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
-                            <div className="max-h-[192px] overflow-y-auto whitespace-pre-line pr-2 text-sm leading-6 text-white/90 scrollbar-thin">
-                              {project.project_overview?.trim() ||
-                                project.description?.trim() ||
-                                "Основная информация по проекту пока не заполнена."}
-                            </div>
-                          </div>
-                        )}
                       </div>
+                    ) : (
+                      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
+                        <div className="max-h-[192px] overflow-y-auto whitespace-pre-line pr-2 text-sm leading-6 text-white/90 scrollbar-thin">
+                          {project.project_overview?.trim() ||
+                            project.description?.trim() ||
+                            "Основная информация по проекту пока не заполнена."}
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
-                      <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="text-sm text-white/45">Важные ссылки</div>
+                  <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-sm text-white/45">Важные ссылки</div>
 
-                          <PencilButton
+                      {canManageProjectDetails ? (
+                        <PencilButton
+                          onClick={() => {
+                            setLinksDraft(project.important_links ?? "");
+                            setIsEditingLinks(true);
+                          }}
+                          title="Редактировать ссылки"
+                        />
+                      ) : null}
+                    </div>
+
+                    {isEditingLinks ? (
+                      <div className="mt-4">
+                        <textarea
+                          value={linksDraft}
+                          onChange={(event) => setLinksDraft(event.target.value)}
+                          rows={10}
+                          placeholder="Вставь ссылки через новую строку"
+                          className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30"
+                        />
+
+                        <div className="mt-4 flex justify-end gap-3">
+                          <button
+                            type="button"
                             onClick={() => {
                               setLinksDraft(project.important_links ?? "");
-                              setIsEditingLinks(true);
+                              setIsEditingLinks(false);
                             }}
-                            title="Редактировать ссылки"
-                          />
+                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+                          >
+                            Отмена
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleSaveLinks}
+                            disabled={isSavingLinks}
+                            className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
+                          >
+                            {isSavingLinks ? "Сохраняем..." : "Сохранить"}
+                          </button>
                         </div>
-
-                        {isEditingLinks ? (
-                          <div className="mt-4">
-                            <textarea
-                              value={linksDraft}
-                              onChange={(event) => setLinksDraft(event.target.value)}
-                              rows={10}
-                              placeholder="Вставь ссылки через новую строку"
-                              className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30"
-                            />
-
-                            <div className="mt-4 flex justify-end gap-3">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setLinksDraft(project.important_links ?? "");
-                                  setIsEditingLinks(false);
-                                }}
-                                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+                      </div>
+                    ) : (
+                      <div className="mt-4">
+                        {links.length > 0 ? (
+                          <div className="max-h-[204px] space-y-3 overflow-y-auto pr-2 scrollbar-thin">
+                            {links.map((link) => (
+                              <a
+                                key={link.id}
+                                href={link.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/85 transition hover:bg-white/[0.06] hover:text-white"
                               >
-                                Отмена
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={handleSaveLinks}
-                                disabled={isSavingLinks}
-                                className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
-                              >
-                                {isSavingLinks ? "Сохраняем..." : "Сохранить"}
-                              </button>
-                            </div>
+                                {link.label}
+                              </a>
+                            ))}
                           </div>
                         ) : (
-                          <div className="mt-4">
-                            {links.length > 0 ? (
-                              <div className="max-h-[204px] space-y-3 overflow-y-auto pr-2 scrollbar-thin">
-                                {links.map((link) => (
-                                  <a
-                                    key={link.id}
-                                    href={link.href}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="block rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/85 transition hover:bg-white/[0.06] hover:text-white"
-                                  >
-                                    {link.label}
-                                  </a>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-4 text-sm text-white/35">
-                                Ссылки пока не добавлены
-                              </div>
-                            )}
+                          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-4 text-sm text-white/35">
+                            Ссылки пока не добавлены
                           </div>
                         )}
                       </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+                <div className="mb-6">
+                  <div className="text-sm text-white/45">Задачи проекта</div>
+                  <div className="mt-2 text-sm text-white/65">
+                    Управляй задачами по проекту в формате kanban-доски.
+                  </div>
+                </div>
+
+                <ProjectTasksBoard
+                  projectId={project.id}
+                  tasks={tasks}
+                  onTaskCreated={handleTaskCreated}
+                  onTaskStatusChanged={handleTaskStatusChanged}
+                  onTaskOpen={handleTaskOpen}
+                  onSubtaskToggle={handleTaskStatusChanged}
+                />
+              </section>
+
+              <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm text-white/45">Чат проекта</div>
+                    <div className="mt-2 text-sm text-white/65">
+                      Здесь позже будет общий чат проекта для обсуждения между участниками.
                     </div>
-                  </section>
+                  </div>
 
-                  <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                    <div className="mb-6">
-                      <div className="text-sm text-white/45">Задачи проекта</div>
-                      <div className="mt-2 text-sm text-white/65">
-                        Управляй задачами по проекту в формате kanban-доски.
-                      </div>
+                  <button
+                    type="button"
+                    disabled
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/40"
+                  >
+                    Скоро
+                  </button>
+                </div>
+
+                <div className="mt-6 flex min-h-[180px] items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] px-6 text-center">
+                  <div>
+                    <div className="text-base font-medium text-white">
+                      Чат проекта появится на следующем этапе
                     </div>
-
-                    <ProjectTasksBoard
-                      projectId={project.id}
-                      tasks={tasks}
-                      onTaskCreated={handleTaskCreated}
-                      onTaskStatusChanged={handleTaskStatusChanged}
-                      onTaskOpen={handleTaskOpen}
-                      onSubtaskToggle={handleTaskStatusChanged}
-                    />
-                  </section>
-
-                  <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm text-white/45">Чат проекта</div>
-                        <div className="mt-2 text-sm text-white/65">
-                          Здесь позже будет общий чат проекта для обсуждения между участниками.
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled
-                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/40"
-                      >
-                        Скоро
-                      </button>
-                    </div>
-
-                    <div className="mt-6 flex min-h-[180px] items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] px-6 text-center">
-                      <div>
-                        <div className="text-base font-medium text-white">
-                          Чат проекта появится на следующем этапе
-                        </div>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
-                          Здесь пользователи смогут обсуждать проект, договариваться по этапам,
-                          согласовывать изменения и вести общее общение вне задач.
-                        </p>
-                      </div>
-                    </div>
-                  </section>
-                </>
-              ) : null}
-            </div>
-          </main>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
+                      Здесь пользователи смогут обсуждать проект, договариваться по этапам,
+                      согласовывать изменения и вести общее общение вне задач.
+                    </p>
+                  </div>
+                </div>
+              </section>
+            </>
+          ) : null}
         </div>
-      </div>
+      </main>
 
-      {project ? (
+      {project && canManageProjectDetails ? (
         <CreateProjectModal
           isOpen={isEditProjectModalOpen}
           clients={clients}
@@ -692,6 +722,6 @@ export default function ProjectPage() {
           onTaskOpen={handleTaskOpen}
         />
       ) : null}
-    </div>
+    </>
   );
 }
