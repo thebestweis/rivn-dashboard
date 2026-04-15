@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SettingsPageHeader } from "../components/settings/settings-page-header";
 import { EmployeesSettingsTab } from "../components/settings/employees-settings-tab";
@@ -36,7 +36,7 @@ function isSettingsTab(value: string | null): value is SettingsTab {
   );
 }
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -49,7 +49,6 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const nextTab = isSettingsTab(queryTab) ? queryTab : DEFAULT_TAB;
-
     setActiveTab((prev) => (prev === nextTab ? prev : nextTab));
   }, [queryTab]);
 
@@ -87,11 +86,30 @@ export default function SettingsPage() {
               activeTab={activeTab}
               setActiveTab={handleSetActiveTab}
             />
-
             {tabContent}
           </>
         )}
       </div>
     </main>
+  );
+}
+
+function SettingsPageFallback() {
+  return (
+    <main className="flex-1">
+      <div className="space-y-6 px-5 py-6 lg:px-8">
+        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          Загружаем настройки...
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<SettingsPageFallback />}>
+      <SettingsPageContent />
+    </Suspense>
   );
 }
