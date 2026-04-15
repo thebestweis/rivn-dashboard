@@ -972,33 +972,6 @@ export default function PaymentsPage() {
 )}
 
           <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("planned")}
-                  className={`rounded-full px-4 py-2 text-sm transition ${
-                    activeTab === "planned"
-                      ? "bg-white text-[#0B0F1A]"
-                      : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white"
-                  }`}
-                >
-                  Плановые счета
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("fact")}
-                  className={`rounded-full px-4 py-2 text-sm transition ${
-                    activeTab === "fact"
-                      ? "bg-white text-[#0B0F1A]"
-                      : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white"
-                  }`}
-                >
-                  Оплаченные счета
-                </button>
-              </div>
-            </div>
 
             {activeTab === "planned" ? (
               loadingPayments ? (

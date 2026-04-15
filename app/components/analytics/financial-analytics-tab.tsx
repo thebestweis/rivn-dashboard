@@ -240,18 +240,27 @@ export function FinancialAnalyticsTab({
   return getMonthsForPeriod(period);
 }, [period]);
 
+const normalizedExpenses = useMemo(() => {
+  return expenses
+    .map((expense) => {
+      const rawDate = getExpenseDate(expense);
+      const monthKey = rawDate ? normalizeDateToMonthKey(rawDate) : "";
+      const amount = parseRubAmount(String(expense.amount ?? ""));
+
+      return {
+        ...expense,
+        rawDate,
+        monthKey,
+        amountNumber: amount,
+      };
+    })
+    .filter((expense) => Boolean(expense.monthKey));
+}, [expenses]);
+
   const expenseMonths = Array.from(
   new Set(
-    expenses
-      .map((expense) => {
-        const rawDate = getExpenseDate(expense);
-        if (!rawDate) return null;
-
-        const parsed = new Date(rawDate);
-        if (Number.isNaN(parsed.getTime())) return null;
-
-        return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
-      })
+    normalizedExpenses
+      .map((expense) => expense.monthKey)
       .filter((value): value is string => Boolean(value))
   )
 ).sort((a, b) => a.localeCompare(b));
@@ -392,17 +401,12 @@ const filteredFinancialData = financialData.filter((item: any) => {
   })
   .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
 
-  const totalExpenses = expenses
+  const totalExpenses = normalizedExpenses
   .filter((item) => {
     if (period === "all_time") return true;
-
-    const rawDate = getExpenseDate(item);
-    if (!rawDate) return false;
-
-    const monthKey = normalizeDateToMonthKey(rawDate);
-    return activePeriodMonths?.includes(monthKey);
+    return activePeriodMonths?.includes(item.monthKey);
   })
-  .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
+  .reduce((sum, item) => sum + item.amountNumber, 0);
 
   const totalFot = payrollPayouts
   .filter((item) => {
@@ -435,15 +439,12 @@ const totalTax = Math.round(
 
   const [selectedExpenseYear, selectedExpenseMonth] = expenseSelectedMonth.split("-");
 
-const filteredExpenses = expenses.filter((expense) => {
-  const rawDate = getExpenseDate(expense);
-  if (!rawDate) return false;
+const filteredExpenses = normalizedExpenses.filter((expense) => {
+  const [expenseYear, expenseMonth] = expense.monthKey.split("-");
 
-  const expenseDate = new Date(rawDate);
-  if (Number.isNaN(expenseDate.getTime())) return false;
-
-  const expenseYear = String(expenseDate.getFullYear());
-  const expenseMonth = String(expenseDate.getMonth() + 1).padStart(2, "0");
+  if (!expenseYear || !expenseMonth) {
+    return false;
+  }
 
   if (expensePeriod === "month") {
     return (
@@ -457,7 +458,7 @@ const filteredExpenses = expenses.filter((expense) => {
 
 const grouped = filteredExpenses.reduce<Record<string, number>>((acc, expense) => {
   const key = expense.category ?? "Без категории";
-  acc[key] = (acc[key] ?? 0) + parseRubAmount(expense.amount);
+  acc[key] = (acc[key] ?? 0) + expense.amountNumber;
   return acc;
 }, {});
 

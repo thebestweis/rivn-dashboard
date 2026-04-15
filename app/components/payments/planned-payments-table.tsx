@@ -31,7 +31,7 @@ export function PlannedPaymentsTable({
 }: PlannedPaymentsTableProps) {
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-      <div className="text-sm text-white/50">Плановые счета</div>
+      
 
       <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
         <table className="w-full text-left text-sm">

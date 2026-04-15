@@ -28,6 +28,19 @@ export type CreateProjectFormValues = {
   important_links: string;
 };
 
+type CreateProjectModalFormState = {
+  name: string;
+  client_id: string;
+  employee_id: string;
+  status: ProjectStatus;
+  start_date: string | null;
+  revenue: string;
+  profit: string;
+  description: string;
+  project_overview: string;
+  important_links: string;
+};
+
 type CreateProjectModalProps = {
   isOpen: boolean;
   clients: ClientOption[];
@@ -39,32 +52,44 @@ type CreateProjectModalProps = {
   onSubmit: (values: CreateProjectFormValues) => Promise<void>;
 };
 
-const initialFormState: CreateProjectFormValues = {
+const initialFormState: CreateProjectModalFormState = {
   name: "",
   client_id: "",
   employee_id: "",
   status: "active",
   start_date: null,
-  revenue: 0,
-  profit: 0,
+  revenue: "",
+  profit: "",
   description: "",
   project_overview: "",
   important_links: "",
 };
 
-function getFormStateFromProject(project: Project): CreateProjectFormValues {
+function getFormStateFromProject(project: Project): CreateProjectModalFormState {
   return {
     name: project.name,
     client_id: project.client_id,
     employee_id: project.employee_id ?? "",
     status: project.status,
     start_date: project.start_date,
-    revenue: project.revenue,
-    profit: project.profit,
+    revenue: project.revenue ? String(project.revenue) : "",
+    profit: project.profit ? String(project.profit) : "",
     description: project.description ?? "",
     project_overview: project.project_overview ?? "",
     important_links: project.important_links ?? "",
   };
+}
+
+function normalizeNumericInput(value: string) {
+  return value.replace(/[^\d]/g, "");
+}
+
+function toNumberOrZero(value: string) {
+  if (!value.trim()) {
+    return 0;
+  }
+
+  return Number(value);
 }
 
 export function CreateProjectModal({
@@ -77,7 +102,7 @@ export function CreateProjectModal({
   onClose,
   onSubmit,
 }: CreateProjectModalProps) {
-  const [form, setForm] = useState<CreateProjectFormValues>(initialFormState);
+  const [form, setForm] = useState<CreateProjectModalFormState>(initialFormState);
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -111,9 +136,9 @@ export function CreateProjectModal({
     return null;
   }
 
-  function updateField<K extends keyof CreateProjectFormValues>(
+  function updateField<K extends keyof CreateProjectModalFormState>(
     key: K,
-    value: CreateProjectFormValues[K]
+    value: CreateProjectModalFormState[K]
   ) {
     setForm((prev) => ({
       ...prev,
@@ -137,8 +162,13 @@ export function CreateProjectModal({
 
     try {
       await onSubmit({
-        ...form,
         name: form.name.trim(),
+        client_id: form.client_id,
+        employee_id: form.employee_id,
+        status: form.status,
+        start_date: form.start_date,
+        revenue: toNumberOrZero(form.revenue),
+        profit: toNumberOrZero(form.profit),
         description: form.description.trim(),
         project_overview: form.project_overview.trim(),
         important_links: form.important_links.trim(),
@@ -168,7 +198,7 @@ export function CreateProjectModal({
       ? "Сохранить изменения"
       : "Создать проект";
 
-        const clientOptions = clients.map((client) => ({
+  const clientOptions = clients.map((client) => ({
     value: client.id,
     label: client.name,
   }));
@@ -220,44 +250,44 @@ export function CreateProjectModal({
             </label>
 
             <label className="block">
-  <div className="mb-2 text-sm text-white/65">Клиент</div>
-  {clients.length === 0 ? (
-    <div className="flex h-11 w-full items-center rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white/40">
-      Нет доступных клиентов
-    </div>
-  ) : (
-    <CustomSelect
-      value={form.client_id}
-      onChange={(value) => updateField("client_id", value)}
-      options={clientOptions}
-      placeholder="Выбери клиента"
-      className="w-full"
-    />
-  )}
-</label>
+              <div className="mb-2 text-sm text-white/65">Клиент</div>
+              {clients.length === 0 ? (
+                <div className="flex h-11 w-full items-center rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white/40">
+                  Нет доступных клиентов
+                </div>
+              ) : (
+                <CustomSelect
+                  value={form.client_id}
+                  onChange={(value) => updateField("client_id", value)}
+                  options={clientOptions}
+                  placeholder="Выбери клиента"
+                  className="w-full"
+                />
+              )}
+            </label>
 
             <label className="block">
-  <div className="mb-2 text-sm text-white/65">
-    Ответственный сотрудник
-  </div>
-  <CustomSelect
-    value={form.employee_id}
-    onChange={(value) => updateField("employee_id", value)}
-    options={employeeOptions}
-    placeholder="Выбери сотрудника"
-    className="w-full"
-  />
-</label>
+              <div className="mb-2 text-sm text-white/65">
+                Ответственный сотрудник
+              </div>
+              <CustomSelect
+                value={form.employee_id}
+                onChange={(value) => updateField("employee_id", value)}
+                options={employeeOptions}
+                placeholder="Выбери сотрудника"
+                className="w-full"
+              />
+            </label>
 
             <label className="block">
-  <div className="mb-2 text-sm text-white/65">Статус</div>
-  <CustomSelect
-    value={form.status}
-    onChange={(value) => updateField("status", value as ProjectStatus)}
-    options={statusOptions}
-    className="w-full"
-  />
-</label>
+              <div className="mb-2 text-sm text-white/65">Статус</div>
+              <CustomSelect
+                value={form.status}
+                onChange={(value) => updateField("status", value as ProjectStatus)}
+                options={statusOptions}
+                className="w-full"
+              />
+            </label>
 
             <label className="block">
               <div className="mb-2 text-sm text-white/65">Дата начала</div>
@@ -274,26 +304,28 @@ export function CreateProjectModal({
             <label className="block">
               <div className="mb-2 text-sm text-white/65">Доход</div>
               <input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
                 value={form.revenue}
                 onChange={(event) =>
-                  updateField("revenue", Number(event.target.value || 0))
+                  updateField("revenue", normalizeNumericInput(event.target.value))
                 }
-                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
+                placeholder="Введите сумму"
+                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30"
               />
             </label>
 
             <label className="block">
               <div className="mb-2 text-sm text-white/65">Прибыль</div>
               <input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
                 value={form.profit}
                 onChange={(event) =>
-                  updateField("profit", Number(event.target.value || 0))
+                  updateField("profit", normalizeNumericInput(event.target.value))
                 }
-                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
+                placeholder="Введите сумму"
+                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30"
               />
             </label>
           </div>
