@@ -5,7 +5,7 @@ import {
   type BillingPlanCode,
   type WorkspaceBilling,
 } from "./supabase/billing";
-import { createAdminClient } from "./supabase/admin-service";
+import { createAdminClient } from "./supabase/admin-server";
 import { createClient as createServerClient } from "./supabase/server";
 
 type ActivatePlanParams = {
