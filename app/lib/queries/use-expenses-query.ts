@@ -9,12 +9,16 @@ import {
   updateExpenseInSupabase,
 } from "../supabase/expenses";
 import type { Expense, ExpenseFormData } from "../types/expense";
+import { useAppContextState } from "../../providers/app-context-provider";
 
 export function useExpensesQuery(enabled = true) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
   return useQuery({
-    queryKey: queryKeys.expenses,
+    queryKey: queryKeys.expensesByWorkspace(workspaceId),
     queryFn: getExpensesFromSupabase,
-    enabled,
+    enabled: enabled && Boolean(workspaceId),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
@@ -26,20 +30,24 @@ export function useExpensesQuery(enabled = true) {
 
 export function useCreateExpenseMutation() {
   const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
 
   return useMutation({
     mutationFn: createExpenseInSupabase,
     onSuccess: (createdExpense) => {
-      queryClient.setQueryData<Expense[]>(queryKeys.expenses, (prev = []) => [
-        createdExpense,
-        ...prev,
-      ]);
+      queryClient.setQueryData<Expense[]>(
+        queryKeys.expensesByWorkspace(workspaceId),
+        (prev = []) => [createdExpense, ...prev]
+      );
     },
   });
 }
 
 export function useUpdateExpenseMutation() {
   const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
 
   return useMutation({
     mutationFn: ({
@@ -50,10 +58,12 @@ export function useUpdateExpenseMutation() {
       values: ExpenseFormData;
     }) => updateExpenseInSupabase(expenseId, values),
     onSuccess: (updatedExpense) => {
-      queryClient.setQueryData<Expense[]>(queryKeys.expenses, (prev = []) =>
-        prev.map((expense) =>
-          expense.id === updatedExpense.id ? updatedExpense : expense
-        )
+      queryClient.setQueryData<Expense[]>(
+        queryKeys.expensesByWorkspace(workspaceId),
+        (prev = []) =>
+          prev.map((expense) =>
+            expense.id === updatedExpense.id ? updatedExpense : expense
+          )
       );
     },
   });
@@ -61,12 +71,16 @@ export function useUpdateExpenseMutation() {
 
 export function useDeleteExpenseMutation() {
   const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
 
   return useMutation({
     mutationFn: deleteExpenseFromSupabase,
     onSuccess: (_, deletedExpenseId) => {
-      queryClient.setQueryData<Expense[]>(queryKeys.expenses, (prev = []) =>
-        prev.filter((expense) => expense.id !== deletedExpenseId)
+      queryClient.setQueryData<Expense[]>(
+        queryKeys.expensesByWorkspace(workspaceId),
+        (prev = []) =>
+          prev.filter((expense) => expense.id !== deletedExpenseId)
       );
     },
   });

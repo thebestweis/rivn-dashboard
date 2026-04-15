@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { queryKeys } from "../lib/query-keys";
+import { useAppContextState } from "../providers/app-context-provider";
+
 import { AppToast } from "../components/ui/app-toast";
 import { PaymentsPageHeader } from "../components/payments/payments-page-header";
 import { PlannedPaymentsTable } from "../components/payments/planned-payments-table";
@@ -197,7 +200,10 @@ function PaymentsTableSkeleton() {
 }
 
 export default function PaymentsPage() {
-    const queryClient = useQueryClient();
+  const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
   const {
     isLoading: isAccessLoading,
     hasAccess,
@@ -585,7 +591,9 @@ export default function PaymentsPage() {
       setIsCreateOpen(false);
       resetCreateForm();
 
-      await queryClient.invalidateQueries({ queryKey: ["payments"] });
+      await queryClient.invalidateQueries({
+  queryKey: queryKeys.paymentsByWorkspace(workspaceId),
+});
 
       setActiveTab(isInvoice ? "planned" : "fact");
       setToastType("success");
@@ -714,7 +722,9 @@ export default function PaymentsPage() {
       setIsEditOpen(false);
       resetEditForm();
 
-     await queryClient.invalidateQueries({ queryKey: ["payments"] });
+     await queryClient.invalidateQueries({
+  queryKey: queryKeys.paymentsByWorkspace(workspaceId),
+});
 
       setToastType("success");
       setToastMessage(
@@ -794,7 +804,9 @@ export default function PaymentsPage() {
         );
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["payments"] });
+      await queryClient.invalidateQueries({
+  queryKey: queryKeys.paymentsByWorkspace(workspaceId),
+});
 
       setToastType("success");
       setToastMessage(`Счёт для "${target.client}" отмечен как оплаченный`);
@@ -850,7 +862,9 @@ export default function PaymentsPage() {
         resetEditForm();
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["payments"] });
+      await queryClient.invalidateQueries({
+  queryKey: queryKeys.paymentsByWorkspace(workspaceId),
+});
 
       setToastType("success");
       setToastMessage(`Оплата для "${target.client}" удалена`);

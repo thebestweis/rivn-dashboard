@@ -24,7 +24,7 @@ export function useClientsQuery(enabled = true) {
   const { workspace } = useAppContextState();
   const workspaceId = workspace?.id ?? "";
 
-  return useQuery({
+  return useQuery<StoredClient[]>({
     queryKey: workspaceId
       ? queryKeys.clientsByWorkspace(workspaceId)
       : queryKeys.clients,
@@ -35,6 +35,7 @@ export function useClientsQuery(enabled = true) {
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 }
 
@@ -53,17 +54,22 @@ export function useClientEmployeesQuery(enabled = true) {
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 }
 
 export function useCreateClientMutation() {
   const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
 
   return useMutation({
     mutationFn: createClientInSupabase,
     onSuccess: (createdClient) => {
-      queryClient.setQueriesData<StoredClient[]>(
-        { queryKey: ["clients"] },
+      if (!workspaceId) return;
+
+      queryClient.setQueryData<StoredClient[]>(
+        queryKeys.clientsByWorkspace(workspaceId),
         (prev = []) => [createdClient, ...prev]
       );
     },
@@ -72,6 +78,8 @@ export function useCreateClientMutation() {
 
 export function useUpdateClientMutation() {
   const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
 
   return useMutation({
     mutationFn: ({
@@ -82,8 +90,10 @@ export function useUpdateClientMutation() {
       values: Omit<StoredClient, "id">;
     }) => updateClientInSupabase(clientId, values),
     onSuccess: (updatedClient) => {
-      queryClient.setQueriesData<StoredClient[]>(
-        { queryKey: ["clients"] },
+      if (!workspaceId) return;
+
+      queryClient.setQueryData<StoredClient[]>(
+        queryKeys.clientsByWorkspace(workspaceId),
         (prev = []) =>
           prev.map((client) =>
             client.id === updatedClient.id ? updatedClient : client
@@ -95,12 +105,16 @@ export function useUpdateClientMutation() {
 
 export function useDeleteClientMutation() {
   const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
 
   return useMutation({
     mutationFn: deleteClientInSupabase,
     onSuccess: (_, deletedClientId) => {
-      queryClient.setQueriesData<StoredClient[]>(
-        { queryKey: ["clients"] },
+      if (!workspaceId) return;
+
+      queryClient.setQueryData<StoredClient[]>(
+        queryKeys.clientsByWorkspace(workspaceId),
         (prev = []) => prev.filter((client) => client.id !== deletedClientId)
       );
     },

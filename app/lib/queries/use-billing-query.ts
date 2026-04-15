@@ -9,6 +9,10 @@ import {
   type BillingPlan,
   type BillingTransaction,
 } from "../supabase/billing";
+import { useAppContextState } from "../../providers/app-context-provider";
+
+const STALE_TIME = 1000 * 60 * 5;
+const GC_TIME = 1000 * 60 * 30;
 
 export function useBillingPlansQuery(enabled = true) {
   return useQuery<BillingPlan[]>({
@@ -16,7 +20,7 @@ export function useBillingPlansQuery(enabled = true) {
     queryFn: getBillingPlans,
     enabled,
     staleTime: 1000 * 60 * 10,
-    gcTime: 1000 * 60 * 30,
+    gcTime: GC_TIME,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
@@ -25,12 +29,17 @@ export function useBillingPlansQuery(enabled = true) {
 }
 
 export function useBillingTransactionsQuery(enabled = true, limit = 100) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
   return useQuery<BillingTransaction[]>({
-    queryKey: [...queryKeys.billingTransactions, limit],
+    queryKey: workspaceId
+      ? queryKeys.billingTransactionsByWorkspace(workspaceId, limit)
+      : [...queryKeys.billingTransactions, limit],
     queryFn: () => getBillingTransactions(limit),
-    enabled,
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 30,
+    enabled: enabled && Boolean(workspaceId),
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
@@ -39,12 +48,17 @@ export function useBillingTransactionsQuery(enabled = true, limit = 100) {
 }
 
 export function useWorkspaceBalanceQuery(enabled = true) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
   return useQuery<number>({
-    queryKey: queryKeys.workspaceBalance,
+    queryKey: workspaceId
+      ? queryKeys.workspaceBalanceByWorkspace(workspaceId)
+      : queryKeys.workspaceBalance,
     queryFn: getWorkspaceBalance,
-    enabled,
+    enabled: enabled && Boolean(workspaceId),
     staleTime: 1000 * 60 * 3,
-    gcTime: 1000 * 60 * 30,
+    gcTime: GC_TIME,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,

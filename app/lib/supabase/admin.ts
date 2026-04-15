@@ -1,4 +1,5 @@
-import { createClient } from "./client";
+import { createAdminClient } from "./admin-service";
+import { createClient as createServerClient } from "./server";
 
 export type AdminWorkspaceRow = {
   id: string;
@@ -58,18 +59,20 @@ type DbAdminActionLogRow = {
 };
 
 async function requireSuperAdmin() {
-  const supabase = createClient();
+  const serverClient = await createServerClient();
 
   const {
     data: { user },
     error: userError,
-  } = await supabase.auth.getUser();
+  } = await serverClient.auth.getUser();
 
   if (userError || !user) {
     throw new Error("Пользователь не авторизован");
   }
 
-  const { data, error: profileError } = await (supabase as any)
+  const admin = createAdminClient();
+
+  const { data, error: profileError } = await (admin as any)
     .from("profiles")
     .select("platform_role")
     .eq("id", user.id)
@@ -85,22 +88,22 @@ async function requireSuperAdmin() {
     throw new Error("Нет доступа");
   }
 
-  return { supabase, user };
+  return { admin, user };
 }
 
 export async function getAllWorkspaces(): Promise<AdminWorkspaceRow[]> {
-  const { supabase } = await requireSuperAdmin();
+  const { admin } = await requireSuperAdmin();
 
   const [
     { data: workspaces, error: workspacesError },
     { data: billing, error: billingError },
     { data: transactions, error: transactionsError },
   ] = await Promise.all([
-    (supabase as any).from("workspaces").select("id, name, slug, created_at"),
-    (supabase as any)
+    (admin as any).from("workspaces").select("id, name, slug, created_at"),
+    (admin as any)
       .from("workspace_billing")
       .select("workspace_id, plan_code, subscription_status, billing_period"),
-    (supabase as any)
+    (admin as any)
       .from("billing_transactions")
       .select("workspace_id, amount, status"),
   ]);
@@ -156,9 +159,9 @@ export async function getAllWorkspaces(): Promise<AdminWorkspaceRow[]> {
 export async function getAdminActionLogs(
   limit = 50
 ): Promise<AdminActionLogRow[]> {
-  const { supabase } = await requireSuperAdmin();
+  const { admin } = await requireSuperAdmin();
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await (admin as any)
     .from("admin_action_logs")
     .select(
       "id, admin_user_id, workspace_id, action_type, action_payload, created_at"
