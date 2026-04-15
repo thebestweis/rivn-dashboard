@@ -86,18 +86,23 @@ function getNextStatusAfterQuickComplete(status: TaskStatus): TaskStatus {
 }
 
 function getAssigneesLabel(task: Task) {
-  const assigneeIds = task.assignees ?? [];
+  const assignees = task.assignees ?? [];
 
-  if (assigneeIds.length === 0) {
+  if (assignees.length === 0) {
     return "Не назначено";
   }
 
-  const labels = assigneeIds
-    .map((assignee) => assignee.workspace_member?.email || "Без email")
+  const labels = assignees
+    .map(
+      (assignee) =>
+        assignee.workspace_member?.name ||
+        assignee.workspace_member?.email ||
+        "Без имени"
+    )
     .filter(Boolean);
 
   if (labels.length === 0) {
-    return `Исполнителей: ${assigneeIds.length}`;
+    return `Исполнителей: ${assignees.length}`;
   }
 
   if (labels.length === 1) {

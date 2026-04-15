@@ -145,7 +145,7 @@ function combineDateAndTime(date: Date | undefined, time: string) {
 }
 
 function getMemberLabel(member: WorkspaceMemberItem) {
-  return member.email || "Без email";
+  return member.name || member.email || "Без имени";
 }
 
 export function TaskModal({

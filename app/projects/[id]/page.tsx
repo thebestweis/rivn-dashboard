@@ -33,7 +33,7 @@ type ClientOption = {
   name: string;
 };
 
-type EmployeeOption = {
+type MemberOption = {
   id: string;
   name: string;
 };
@@ -145,11 +145,12 @@ export default function ProjectPage() {
   const projectId = params?.id as string;
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [isEditingOverview, setIsEditingOverview] = useState(false);
-  const [isEditingLinks, setIsEditingLinks] = useState(false);
-  const [overviewDraft, setOverviewDraft] = useState("");
-  const [linksDraft, setLinksDraft] = useState("");
-  const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
+const [isEditingOverview, setIsEditingOverview] = useState(false);
+const [isEditingLinks, setIsEditingLinks] = useState(false);
+const [overviewDraft, setOverviewDraft] = useState("");
+const [linksDraft, setLinksDraft] = useState("");
+const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
+const [mounted, setMounted] = useState(false);
 
   const {
     data: project,
@@ -178,11 +179,12 @@ export default function ProjectPage() {
   const updateProjectMutation = useUpdateProjectMutation();
 
   const isLoading =
-    isProjectLoading ||
-    isTasksLoading ||
-    isClientsLoading ||
-    isWorkspaceMembersLoading;
-
+  !mounted ||
+  isAppContextLoading ||
+  isProjectLoading ||
+  isTasksLoading ||
+  isClientsLoading ||
+  isWorkspaceMembersLoading;
   const combinedError =
     projectError || tasksError || clientsError || workspaceMembersError;
 
@@ -195,11 +197,11 @@ export default function ProjectPage() {
     [clientsData]
   );
 
-  const employees: EmployeeOption[] = useMemo(
+  const employees: MemberOption[] = useMemo(
     () =>
       workspaceMembersData.map((member) => ({
         id: member.id,
-        name: member.email || "Без email",
+        name: member.name || member.email || "Без имени",
       })),
     [workspaceMembersData]
   );
@@ -247,11 +249,15 @@ export default function ProjectPage() {
     }
   }, [searchParams, tasks]);
 
+  useEffect(() => {
+  setMounted(true);
+}, []);
+
   const assignedEmployeeName = useMemo(() => {
     if (!project?.employee_id) return "Не назначен";
 
-    const employee = employees.find((item) => item.id === project.employee_id);
-    return employee?.name ?? "Не назначен";
+    const member = employees.find((item) => item.id === project.employee_id);
+    return member?.name ?? "Не назначен";
   }, [employees, project?.employee_id]);
 
   const selectedTask = selectedTaskId
@@ -425,45 +431,45 @@ export default function ProjectPage() {
       <main className="flex-1 px-6 py-6 md:px-8">
         <div className="flex w-full flex-col gap-6">
           {isLoading ? (
-  <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-    <div className="overflow-x-auto">
-      <div className="grid min-w-[1680px] grid-cols-7 gap-4">
-        {Array.from({ length: 7 }).map((_, dayIndex) => (
-          <div key={dayIndex} className="flex min-h-[720px] flex-col">
-            <div className="mb-3 px-1">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="mt-2 h-5 w-28" />
-            </div>
+            <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+              <div className="overflow-x-auto">
+                <div className="grid min-w-[1680px] grid-cols-7 gap-4">
+                  {Array.from({ length: 7 }).map((_, dayIndex) => (
+                    <div key={dayIndex} className="flex min-h-[720px] flex-col">
+                      <div className="mb-3 px-1">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="mt-2 h-5 w-28" />
+                      </div>
 
-            <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-3">
-              <Skeleton className="h-11 w-full" />
+                      <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-3">
+                        <Skeleton className="h-11 w-full" />
 
-              <div className="mt-3 space-y-3">
-                {Array.from({ length: 3 }).map((_, cardIndex) => (
-                  <div
-                    key={cardIndex}
-                    className="rounded-[20px] border border-white/10 bg-[#121826] p-4"
-                  >
-                    <Skeleton className="h-3 w-12" />
-                    <Skeleton className="mt-3 h-5 w-5/6" />
-                    <Skeleton className="mt-3 h-4 w-1/2" />
+                        <div className="mt-3 space-y-3">
+                          {Array.from({ length: 3 }).map((_, cardIndex) => (
+                            <div
+                              key={cardIndex}
+                              className="rounded-[20px] border border-white/10 bg-[#121826] p-4"
+                            >
+                              <Skeleton className="h-3 w-12" />
+                              <Skeleton className="mt-3 h-5 w-5/6" />
+                              <Skeleton className="mt-3 h-4 w-1/2" />
 
-                    <div className="mt-4 flex gap-2">
-                      <Skeleton className="h-6 w-20 rounded-full" />
-                      <Skeleton className="h-6 w-24 rounded-full" />
+                              <div className="mt-4 flex gap-2">
+                                <Skeleton className="h-6 w-20 rounded-full" />
+                                <Skeleton className="h-6 w-24 rounded-full" />
+                              </div>
+
+                              <Skeleton className="mt-4 h-2 w-full rounded-full" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-
-                    <Skeleton className="mt-4 h-2 w-full rounded-full" />
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </section>
-) : pageErrorMessage ? (
+            </section>
+          ) : pageErrorMessage ? (
             <div className="rounded-[28px] border border-red-500/20 bg-red-500/10 p-6 text-sm text-red-200 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
               {pageErrorMessage}
             </div>

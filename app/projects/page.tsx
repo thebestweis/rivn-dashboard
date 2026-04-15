@@ -32,7 +32,7 @@ type ClientOption = {
   name: string;
 };
 
-type EmployeeOption = {
+type MemberOption = {
   id: string;
   name: string;
 };
@@ -42,6 +42,9 @@ export default function ProjectsPage() {
 
   const currentRole: AppRole | null = isAppRole(role) ? role : null;
   const canManageProjects = currentRole ? canEditProjects(currentRole) : false;
+
+  const isProjectsAccessResolved = !isAppContextLoading;
+const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
 
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -104,14 +107,14 @@ export default function ProjectsPage() {
     [clientsData]
   );
 
-  const employees: EmployeeOption[] = useMemo(
-  () =>
-    workspaceMembersData.map((member) => ({
-      id: member.id,
-      name: member.name || member.email || "Без имени",
-    })),
-  [workspaceMembersData]
-);
+  const employees: MemberOption[] = useMemo(
+    () =>
+      workspaceMembersData.map((member) => ({
+        id: member.id,
+        name: member.name || member.email || "Без имени",
+      })),
+    [workspaceMembersData]
+  );
 
   const clientNamesById = useMemo(
     () =>
@@ -297,12 +300,12 @@ export default function ProjectsPage() {
     <>
       <main className="flex-1 px-6 py-6 md:px-8">
         <div className="flex w-full flex-col gap-6">
-          {!isAppContextLoading && !canManageProjects ? (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              У тебя доступ только на просмотр списка проектов. Создание,
-              редактирование и удаление проектов недоступны на этой странице.
-            </div>
-          ) : null}
+          {isProjectsAccessResolved && !canManageProjects ? (
+  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+    У тебя доступ только на просмотр списка проектов. Создание,
+    редактирование и удаление проектов недоступны на этой странице.
+  </div>
+) : null}
 
           <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -323,15 +326,15 @@ export default function ProjectsPage() {
                   Все задачи
                 </Link>
 
-                {canManageProjects ? (
-                  <button
-                    type="button"
-                    onClick={openCreateProjectFlow}
-                    className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
-                  >
-                    Добавить проект
-                  </button>
-                ) : null}
+                {showManageProjectsActions ? (
+  <button
+    type="button"
+    onClick={openCreateProjectFlow}
+    className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+  >
+    Добавить проект
+  </button>
+) : null}
               </div>
             </div>
           </section>
@@ -358,25 +361,25 @@ export default function ProjectsPage() {
 
           <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
             {isLoading ? (
-  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-    {Array.from({ length: 10 }).map((_, index) => (
-      <div
-        key={index}
-        className="min-h-[280px] rounded-[24px] border border-white/10 bg-[#0F1724] p-5"
-      >
-        <Skeleton className="h-5 w-24" />
-        <Skeleton className="mt-4 h-7 w-3/4" />
-        <Skeleton className="mt-3 h-4 w-2/3" />
-        <Skeleton className="mt-6 h-10 w-full" />
-        <div className="mt-6 space-y-3">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
-          <Skeleton className="h-4 w-2/3" />
-        </div>
-      </div>
-    ))}
-  </div>
-) : pageErrorMessage ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+                {Array.from({ length: 10 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="min-h-[280px] rounded-[24px] border border-white/10 bg-[#0F1724] p-5"
+                  >
+                    <Skeleton className="h-5 w-24" />
+                    <Skeleton className="mt-4 h-7 w-3/4" />
+                    <Skeleton className="mt-3 h-4 w-2/3" />
+                    <Skeleton className="mt-6 h-10 w-full" />
+                    <div className="mt-6 space-y-3">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-5/6" />
+                      <Skeleton className="h-4 w-2/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : pageErrorMessage ? (
               <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
                 {pageErrorMessage}
               </div>
@@ -396,15 +399,15 @@ export default function ProjectsPage() {
                       : "В этом кабинете пока нет доступных проектов."}
                 </p>
 
-                {!hasActiveFilters && canManageProjects ? (
-                  <button
-                    type="button"
-                    onClick={openCreateProjectFlow}
-                    className="mt-5 rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
-                  >
-                    Создать проект
-                  </button>
-                ) : null}
+                {!hasActiveFilters && showManageProjectsActions ? (
+  <button
+    type="button"
+    onClick={openCreateProjectFlow}
+    className="mt-5 rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+  >
+    Создать проект
+  </button>
+) : null}
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
@@ -424,43 +427,43 @@ export default function ProjectsPage() {
                   />
                 ))}
 
-                {canManageProjects ? (
-                  <button
-                    type="button"
-                    onClick={openCreateProjectFlow}
-                    className="flex min-h-[280px] flex-col items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-5 text-center transition hover:border-white/20 hover:bg-white/[0.04]"
-                  >
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80">
-                      Добавить проект
-                    </div>
-                    <div className="mt-4 text-sm text-white/55">
-                      Создай новый проект прямо из сетки
-                    </div>
-                  </button>
-                ) : null}
+                {showManageProjectsActions ? (
+  <button
+    type="button"
+    onClick={openCreateProjectFlow}
+    className="flex min-h-[280px] flex-col items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-5 text-center transition hover:border-white/20 hover:bg-white/[0.04]"
+  >
+    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80">
+      Добавить проект
+    </div>
+    <div className="mt-4 text-sm text-white/55">
+      Создай новый проект прямо из сетки
+    </div>
+  </button>
+) : null}
               </div>
             )}
           </section>
         </div>
       </main>
 
-      {canManageProjects ? (
-        <CreateProjectModal
-          isOpen={isCreateModalOpen}
-          clients={clients}
-          employees={employees}
-          isSubmitting={isSubmittingProject}
-          mode={editingProject ? "edit" : "create"}
-          initialProject={editingProject}
-          onClose={() => {
-            if (!isSubmittingProject) {
-              setIsCreateModalOpen(false);
-              setEditingProject(null);
-            }
-          }}
-          onSubmit={handleSubmitProject}
-        />
-      ) : null}
+      {showManageProjectsActions ? (
+  <CreateProjectModal
+    isOpen={isCreateModalOpen}
+    clients={clients}
+    employees={employees}
+    isSubmitting={isSubmittingProject}
+    mode={editingProject ? "edit" : "create"}
+    initialProject={editingProject}
+    onClose={() => {
+      if (!isSubmittingProject) {
+        setIsCreateModalOpen(false);
+        setEditingProject(null);
+      }
+    }}
+    onSubmit={handleSubmitProject}
+  />
+) : null}
 
       {isNoClientsModalOpen ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 px-4 py-6">
