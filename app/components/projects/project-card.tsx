@@ -1,4 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../lib/query-keys";
+import { getProjectById } from "../../lib/supabase/projects";
+import { getTasksByProject } from "../../lib/supabase/tasks";
 
 export type ProjectCardStatus = "active" | "paused" | "completed";
 
@@ -69,9 +76,34 @@ export function ProjectCard({
   isDeleting = false,
   canManageProject = false,
 }: ProjectCardProps) {
+  const queryClient = useQueryClient();
+  const hasPrefetchedRef = useRef(false);
+
+  function handlePrefetch() {
+    if (hasPrefetchedRef.current) {
+      return;
+    }
+
+    hasPrefetchedRef.current = true;
+
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.project(id),
+      queryFn: () => getProjectById(id),
+      staleTime: 1000 * 60,
+    });
+
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.projectTasks(id),
+      queryFn: () => getTasksByProject(id),
+      staleTime: 1000 * 60,
+    });
+  }
+
   return (
     <Link
       href={`/projects/${id}`}
+      onMouseEnter={handlePrefetch}
+      onFocus={handlePrefetch}
       className="group rounded-[24px] border border-white/10 bg-[#0F1724] p-4 transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-[#111C2B]"
     >
       <div className="flex items-start justify-between gap-3">

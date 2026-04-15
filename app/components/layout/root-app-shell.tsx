@@ -39,10 +39,30 @@ export function RootAppShell({
   } = usePathAccess(pathname);
 
   const isInternalRoute = isInternalAppRoute(pathname);
-  const isBillingRoute = pathname === "/billing" || pathname.startsWith("/billing/");
+  const isBillingRoute =
+    pathname === "/billing" || pathname.startsWith("/billing/");
 
   if (!isInternalRoute) {
     return <>{children}</>;
+  }
+
+  if (!isLoading && !hasAccess) {
+    return (
+      <div className="min-h-screen bg-[#0B0F1A] text-white">
+        <div className="flex min-h-screen">
+          <AppSidebar />
+
+          <div className="min-w-0 flex-1">
+            <main className="flex-1 px-5 py-6 lg:px-8">
+              <AccessDenied
+                title="Нет доступа к разделу"
+                description="У тебя нет прав для просмотра этой страницы в текущем кабинете."
+              />
+            </main>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -51,37 +71,21 @@ export function RootAppShell({
         <AppSidebar />
 
         <div className="min-w-0 flex-1">
-          {isLoading ? (
-            <main className="flex-1 px-5 py-6 lg:px-8">
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                Проверяем доступ...
+          <div className="relative min-h-screen">
+            {isBillingReadOnly && !isBillingRoute ? (
+              <div className="sticky top-0 z-20 border-b border-amber-500/20 bg-amber-500/10 px-5 py-3 text-sm text-amber-200 backdrop-blur-sm lg:px-8">
+                Активирована пробная подписка в режиме TEAM. Приятного использования!
               </div>
-            </main>
-          ) : !hasAccess ? (
-            <main className="flex-1 px-5 py-6 lg:px-8">
-              <AccessDenied
-                title="Нет доступа к разделу"
-                description="У тебя нет прав для просмотра этой страницы в текущем кабинете."
-              />
-            </main>
-          ) : (
-            <div className="relative min-h-screen">
-              {isBillingReadOnly && !isBillingRoute ? (
-                <div className="sticky top-0 z-20 border-b border-amber-500/20 bg-amber-500/10 px-5 py-3 text-sm text-amber-200 backdrop-blur-sm lg:px-8">
-                  Подписка неактивна. Кабинет работает в режиме только просмотра.
-                  Чтобы вернуть редактирование и управление, перейди в раздел Billing и продли тариф.
-                </div>
+            ) : null}
+
+            <div className="relative">
+              {children}
+
+              {!isLoading && !canInteract && !isBillingRoute ? (
+                <div className="absolute inset-0 z-10 bg-[#0B0F1A]/35 backdrop-blur-[1px]" />
               ) : null}
-
-              <div className="relative">
-                {children}
-
-                {!canInteract && !isBillingRoute ? (
-                  <div className="absolute inset-0 z-10 bg-[#0B0F1A]/35 backdrop-blur-[1px]" />
-                ) : null}
-              </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

@@ -578,10 +578,41 @@ export async function forceSetWorkspaceBillingStatus(params: {
 }) {
   const { user } = await requireSuperAdmin();
 
-  const currentBilling = await getWorkspaceBillingByWorkspaceId(params.workspaceId);
+  let currentBilling = await getWorkspaceBillingByWorkspaceId(
+    params.workspaceId
+  );
 
   if (!currentBilling) {
-    throw new Error("Billing для workspace не найден");
+    const { supabase } = await requireSuperAdmin();
+
+    const { data: createdBilling, error: createBillingError } = await supabase
+      .from("workspace_billing")
+      .insert({
+        workspace_id: params.workspaceId,
+        plan_code: "trial",
+        billing_period: "monthly",
+        subscription_status: "trial",
+        trial_started_at: new Date().toISOString(),
+        trial_ends_at: addMonths(new Date(), 1).toISOString(),
+        auto_renew: false,
+        included_members: 1,
+        extra_members: 0,
+        max_members: 1,
+        team_enabled: false,
+        ai_enabled: false,
+      })
+      .select("*")
+      .single();
+
+    if (createBillingError || !createdBilling) {
+      throw new Error(
+        `Не удалось создать billing для workspace: ${
+          createBillingError?.message ?? "unknown error"
+        }`
+      );
+    }
+
+    currentBilling = createdBilling as WorkspaceBilling;
   }
 
   const nowIso = new Date().toISOString();

@@ -7,37 +7,46 @@ import { CreateClientModal } from "../components/clients/create-client-modal";
 import { EditClientModal } from "../components/clients/edit-client-modal";
 import { EmptyState } from "../components/ui/empty-state";
 import { AppToast } from "../components/ui/app-toast";
-import {
-  fetchClientsFromSupabase,
-  createClientInSupabase,
-  updateClientInSupabase,
-  deleteClientInSupabase,
-} from "../lib/supabase/clients";
-import { fetchEmployeesFromSupabase } from "../lib/supabase/employees";
 import { canEditClients, isAppRole, type AppRole } from "../lib/permissions";
 import { useAppContextState } from "../providers/app-context-provider";
 import { getBillingErrorMessage } from "../lib/billing-errors";
-
 import { BillingAccessBanner } from "../components/ui/billing-access-banner";
+import {
+  useClientEmployeesQuery,
+  useClientsQuery,
+  useCreateClientMutation,
+  useDeleteClientMutation,
+  useUpdateClientMutation,
+} from "../lib/queries/use-clients-query";
+import { Skeleton } from "../components/ui/skeleton";
+
+type ClientStatus = "active" | "paused" | "problem" | "completed";
+
+type ClientFormValues = {
+  name: string;
+  status: ClientStatus;
+  owner: string;
+  ownerId?: string | null;
+  model: string;
+  nextInvoice: string;
+  amount: string;
+  profit: string;
+};
 
 export default function ClientsPage() {
   const {
-  role,
-  billingAccess,
-  isLoading: isAppContextLoading,
-} = useAppContextState();
+    role,
+    billingAccess,
+    isLoading: isAppContextLoading,
+  } = useAppContextState();
 
   const currentRole: AppRole | null = isAppRole(role) ? role : null;
   const canManageClients = currentRole ? canEditClients(currentRole) : false;
   const isBillingReadOnly = billingAccess?.isReadOnly ?? false;
-const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
+  const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
-
-  const [clients, setClients] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [isLoadingClients, setIsLoadingClients] = useState(true);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -47,9 +56,7 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
   const [editOwner, setEditOwner] = useState("");
   const [editOwnerId, setEditOwnerId] = useState("");
   const [editModel, setEditModel] = useState("");
-  const [editStatus, setEditStatus] = useState<
-    "active" | "paused" | "problem" | "completed"
-  >("active");
+  const [editStatus, setEditStatus] = useState<ClientStatus>("active");
   const [editNextInvoice, setEditNextInvoice] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editProfit, setEditProfit] = useState("");
@@ -58,9 +65,7 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
   const [newOwner, setNewOwner] = useState("");
   const [newOwnerId, setNewOwnerId] = useState("");
   const [newModel, setNewModel] = useState("");
-  const [newStatus, setNewStatus] = useState<
-    "active" | "paused" | "problem" | "completed"
-  >("active");
+  const [newStatus, setNewStatus] = useState<ClientStatus>("active");
   const [newNextInvoice, setNewNextInvoice] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newProfit, setNewProfit] = useState("");
@@ -70,50 +75,29 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
     "success"
   );
 
-    useEffect(() => {
+  useEffect(() => {
     if (canManageClientsWithBilling) return;
 
     setIsCreateOpen(false);
     setIsEditOpen(false);
     setEditingClientId("");
   }, [canManageClientsWithBilling]);
-  useEffect(() => {
-    if (isAppContextLoading) return;
 
-    let isMounted = true;
+  const {
+    data: clients = [],
+    isLoading: isLoadingClientsQuery,
+    error: clientsError,
+  } = useClientsQuery(!isAppContextLoading);
 
-    async function loadClients() {
-      try {
-        setIsLoadingClients(true);
+  const {
+    data: employees = [],
+    isLoading: isLoadingEmployeesQuery,
+    error: employeesError,
+  } = useClientEmployeesQuery(!isAppContextLoading);
 
-        const [clientsData, employeesData] = await Promise.all([
-          fetchClientsFromSupabase(),
-          fetchEmployeesFromSupabase(),
-        ]);
-
-        if (isMounted) {
-          setClients(clientsData);
-          setEmployees(employeesData);
-        }
-      } catch (error) {
-        console.error(error);
-        if (isMounted) {
-          setToastType("error");
-          setToastMessage("Не удалось загрузить клиентов из Supabase");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingClients(false);
-        }
-      }
-    }
-
-    loadClients();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isAppContextLoading]);
+  const createClientMutation = useCreateClientMutation();
+  const updateClientMutation = useUpdateClientMutation();
+  const deleteClientMutation = useDeleteClientMutation();
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -125,11 +109,37 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
+  useEffect(() => {
+    if (!clientsError) return;
+
+    console.error(clientsError);
+    setToastType("error");
+    setToastMessage(
+      clientsError instanceof Error
+        ? clientsError.message
+        : "Не удалось загрузить клиентов"
+    );
+  }, [clientsError]);
+
+  useEffect(() => {
+    if (!employeesError) return;
+
+    console.error(employeesError);
+    setToastType("error");
+    setToastMessage(
+      employeesError instanceof Error
+        ? employeesError.message
+        : "Не удалось загрузить сотрудников"
+    );
+  }, [employeesError]);
+
   const filteredClients = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
     return clients.filter((client) => {
-      const matchesSearch = client.name
-        .toLowerCase()
-        .includes(search.toLowerCase());
+      const matchesSearch = normalizedSearch
+        ? client.name.toLowerCase().includes(normalizedSearch)
+        : true;
 
       const matchesStatus = status === "all" ? true : client.status === status;
 
@@ -137,17 +147,37 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
     });
   }, [clients, search, status]);
 
-  async function handleCreateClient(client: {
-    name: string;
-    status: "active" | "paused" | "problem" | "completed";
-    owner: string;
-    ownerId?: string | null;
-    model: string;
-    nextInvoice: string;
-    amount: string;
-    profit: string;
-  }) {
-        if (!canManageClients) {
+  const isLoadingClients =
+    isAppContextLoading ||
+    ((isLoadingClientsQuery || isLoadingEmployeesQuery) &&
+      clients.length === 0 &&
+      employees.length === 0);
+
+  function resetCreateForm() {
+    setNewName("");
+    setNewOwner("");
+    setNewOwnerId("");
+    setNewModel("");
+    setNewStatus("active");
+    setNewNextInvoice("");
+    setNewAmount("");
+    setNewProfit("");
+  }
+
+  function resetEditForm() {
+    setEditingClientId("");
+    setEditName("");
+    setEditOwner("");
+    setEditOwnerId("");
+    setEditModel("");
+    setEditStatus("active");
+    setEditNextInvoice("");
+    setEditAmount("");
+    setEditProfit("");
+  }
+
+  async function handleCreateClient(client: ClientFormValues) {
+    if (!canManageClients) {
       setToastType("error");
       setToastMessage("У тебя нет прав на создание клиентов");
       return;
@@ -160,23 +190,14 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
     }
 
     try {
-      const createdClient = await createClientInSupabase(client);
-
-      setClients((prev) => [createdClient, ...prev]);
+      await createClientMutation.mutateAsync(client);
 
       setIsCreateOpen(false);
-      setNewName("");
-      setNewOwner("");
-      setNewOwnerId("");
-      setNewModel("");
-      setNewStatus("active");
-      setNewNextInvoice("");
-      setNewAmount("");
-      setNewProfit("");
+      resetCreateForm();
 
       setToastType("success");
       setToastMessage(`Клиент "${client.name}" создан`);
-        } catch (error) {
+    } catch (error) {
       console.error(error);
       setToastType("error");
       setToastMessage(getBillingErrorMessage(error));
@@ -211,7 +232,7 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
   }
 
   async function handleDeleteClient(clientId: string) {
-        if (!canManageClients) {
+    if (!canManageClients) {
       setToastType("error");
       setToastMessage("У тебя нет прав на удаление клиентов");
       return;
@@ -222,6 +243,7 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
       setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
       return;
     }
+
     const target = clients.find((item) => item.id === clientId);
 
     if (!target) {
@@ -237,33 +259,22 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
     if (!confirmed) return;
 
     try {
-      await deleteClientInSupabase(clientId);
-      setClients((prev) => prev.filter((item) => item.id !== clientId));
+      await deleteClientMutation.mutateAsync(clientId);
       setToastType("success");
       setToastMessage(`Клиент "${target.name}" удалён`);
-        } catch (error) {
+    } catch (error) {
       console.error(error);
       setToastType("error");
       setToastMessage(getBillingErrorMessage(error));
     }
   }
 
-  async function handleSaveClient(client: {
-    name: string;
-    status: "active" | "paused" | "problem" | "completed";
-    owner: string;
-    ownerId?: string | null;
-    model: string;
-    nextInvoice: string;
-    amount: string;
-    profit: string;
-  }) {
-        if (!canManageClients) {
+  async function handleSaveClient(client: ClientFormValues) {
+    if (!canManageClients) {
       setToastType("error");
       setToastMessage("У тебя нет прав на редактирование клиентов");
       return;
     }
-
 
     if (isBillingReadOnly) {
       setToastType("error");
@@ -274,29 +285,33 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
     if (!editingClientId) return;
 
     try {
-      const updatedClient = await updateClientInSupabase(editingClientId, client);
-
-      setClients((prev) =>
-        prev.map((item) => (item.id === editingClientId ? updatedClient : item))
-      );
+      await updateClientMutation.mutateAsync({
+        clientId: editingClientId,
+        values: client,
+      });
 
       setIsEditOpen(false);
-      setEditingClientId("");
+      resetEditForm();
 
       setToastType("success");
       setToastMessage(`Клиент "${client.name}" сохранён`);
-        } catch (error) {
+    } catch (error) {
       console.error(error);
       setToastType("error");
       setToastMessage(getBillingErrorMessage(error));
     }
   }
 
+  const isMutating =
+    createClientMutation.isPending ||
+    updateClientMutation.isPending ||
+    deleteClientMutation.isPending;
+
   return (
     <>
       <main className="flex-1">
         <div className="space-y-6 px-5 py-6 lg:px-8">
-                              <BillingAccessBanner
+          <BillingAccessBanner
             isLoading={isAppContextLoading}
             isBillingReadOnly={isBillingReadOnly}
             canManage={canManageClients}
@@ -310,7 +325,7 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
             status={status}
             setStatus={setStatus}
             onAddClient={() => {
-                            if (!canManageClients) {
+              if (!canManageClients) {
                 setToastType("error");
                 setToastMessage("У тебя нет прав на создание клиентов");
                 return;
@@ -318,41 +333,81 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
 
               if (isBillingReadOnly) {
                 setToastType("error");
-                setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+                setToastMessage(
+                  "Подписка неактивна. Доступен только режим просмотра."
+                );
                 return;
               }
 
               setIsCreateOpen(true);
             }}
-                        canAddClient={canManageClientsWithBilling}
+            canAddClient={canManageClientsWithBilling}
           />
 
-          {isLoadingClients || isAppContextLoading ? (
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60">
-              Загрузка клиентов...
+          {isLoadingClients ? (
+            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="mt-2 h-7 w-32" />
+                </div>
+
+                <Skeleton className="h-10 w-32" />
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
+                <div className="bg-white/[0.04] px-4 py-3">
+                  <div className="grid grid-cols-8 gap-4">
+                    {Array.from({ length: 8 }).map((_, index) => (
+                      <Skeleton key={index} className="h-4 w-full" />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-0">
+                  {Array.from({ length: 6 }).map((_, rowIndex) => (
+                    <div
+                      key={rowIndex}
+                      className="grid grid-cols-8 gap-4 border-t border-white/6 px-4 py-4"
+                    >
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-6 w-24 rounded-full" />
+                      <Skeleton className="h-5 w-28" />
+                      <Skeleton className="h-5 w-24" />
+                      <Skeleton className="h-5 w-20" />
+                      <Skeleton className="h-5 w-20" />
+                      <Skeleton className="h-5 w-20" />
+                      <Skeleton className="h-8 w-28" />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : filteredClients.length > 0 ? (
             <ClientsTable
               clients={filteredClients}
+              employees={employees}
               onDelete={handleDeleteClient}
               onEdit={handleOpenEditClient}
-                            canManageClients={canManageClientsWithBilling}
+              canManageClients={canManageClientsWithBilling}
             />
           ) : (
             <EmptyState
               title={clients.length === 0 ? "Клиентов пока нет" : "Ничего не найдено"}
               description={
                 clients.length === 0
-                  ? canManageClients
+                  ? canManageClientsWithBilling
                     ? "Добавь первого клиента, чтобы начать управлять проектами, статусами и оплатами."
                     : "В этом кабинете пока нет клиентов."
                   : "Попробуй изменить поиск или фильтр статуса."
               }
               actionLabel={
-                clients.length === 0 && canManageClients ? "Добавить клиента" : undefined
+                clients.length === 0 && canManageClientsWithBilling
+                  ? "Добавить клиента"
+                  : undefined
               }
               onAction={
-                clients.length === 0 && canManageClients
+                clients.length === 0 && canManageClientsWithBilling
                   ? () => setIsCreateOpen(true)
                   : undefined
               }
@@ -360,10 +415,14 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
           )}
         </div>
 
-                {canManageClientsWithBilling ? (
+        {canManageClientsWithBilling ? (
           <CreateClientModal
             isOpen={isCreateOpen}
-            onClose={() => setIsCreateOpen(false)}
+            onClose={() => {
+              if (!isMutating) {
+                setIsCreateOpen(false);
+              }
+            }}
             onCreate={handleCreateClient}
             name={newName}
             setName={setNewName}
@@ -385,10 +444,14 @@ const canManageClientsWithBilling = canManageClients && !isBillingReadOnly;
           />
         ) : null}
 
-                {canManageClientsWithBilling ? (
+        {canManageClientsWithBilling ? (
           <EditClientModal
             isOpen={isEditOpen}
-            onClose={() => setIsEditOpen(false)}
+            onClose={() => {
+              if (!isMutating) {
+                setIsEditOpen(false);
+              }
+            }}
             onSave={handleSaveClient}
             name={editName}
             setName={setEditName}

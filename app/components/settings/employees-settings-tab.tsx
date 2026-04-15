@@ -13,6 +13,8 @@ import { useAppContextState } from "../../providers/app-context-provider";
 import { AppToast } from "../ui/app-toast";
 import { BillingAccessBanner } from "../ui/billing-access-banner";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../lib/query-keys";
 
 type EmployeeFormState = {
   id: string | null;
@@ -40,15 +42,12 @@ const initialFormState: EmployeeFormState = {
 };
 
 export function EmployeesSettingsTab() {
+  const queryClient = useQueryClient();
+
   const {
     billingAccess,
     isLoading: isAppContextLoading,
   } = useAppContextState();
-
-  const [employees, setEmployees] = useState<StoredEmployee[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const [defaultEmployeePay, setDefaultEmployeePay] = useState("₽5,000");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form, setForm] = useState<EmployeeFormState>(initialFormState);
@@ -64,31 +63,26 @@ export function EmployeesSettingsTab() {
   const teamEnabled = billingAccess?.teamEnabled ?? false;
   const canManageEmployees = !isBillingReadOnly && teamEnabled;
 
-  async function loadEmployees() {
-    try {
-      setIsLoading(true);
+  const {
+    data: employees = [],
+    isLoading: isEmployeesLoading,
+  } = useQuery<StoredEmployee[]>({
+    queryKey: queryKeys.employees,
+    queryFn: fetchEmployeesFromSupabase,
+    staleTime: 1000 * 60 * 5,
+  });
 
-      const [employeesData, systemSettings] = await Promise.all([
-        fetchEmployeesFromSupabase(),
-        ensureSystemSettings(),
-      ]);
+  const {
+    data: systemSettings,
+    isLoading: isSystemSettingsLoading,
+  } = useQuery({
+    queryKey: queryKeys.systemSettings,
+    queryFn: ensureSystemSettings,
+    staleTime: 1000 * 60 * 10,
+  });
 
-      setEmployees(employeesData);
-      setDefaultEmployeePay(
-        systemSettings?.default_employee_pay?.trim() || "₽5,000"
-      );
-    } catch (error) {
-      console.error("Ошибка загрузки сотрудников:", error);
-      setToastType("error");
-      setToastMessage("Не удалось загрузить сотрудников");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadEmployees();
-  }, []);
+  const defaultEmployeePay =
+    systemSettings?.default_employee_pay?.trim() || "₽5,000";
 
   useEffect(() => {
     if (canManageEmployees) return;
@@ -111,6 +105,20 @@ export function EmployeesSettingsTab() {
     );
   }, [employees]);
 
+  function resetForm() {
+    setErrors({});
+    setForm({
+      id: null,
+      name: "",
+      role: "",
+      payType: "fixed_per_paid_project",
+      payValue: defaultEmployeePay,
+      fixedSalary: "",
+      payoutDay: "1",
+      isActive: true,
+    });
+  }
+
   function openCreateModal() {
     if (isBillingReadOnly) {
       setToastType("error");
@@ -124,17 +132,7 @@ export function EmployeesSettingsTab() {
       return;
     }
 
-    setErrors({});
-    setForm({
-      id: null,
-      name: "",
-      role: "",
-      payType: "fixed_per_paid_project",
-      payValue: defaultEmployeePay,
-      fixedSalary: "",
-      payoutDay: "1",
-      isActive: true,
-    });
+    resetForm();
     setIsModalOpen(true);
   }
 
@@ -167,19 +165,12 @@ export function EmployeesSettingsTab() {
 
   function closeModal() {
     if (isSaving) return;
-
-    setErrors({});
-    setForm({
-      id: null,
-      name: "",
-      role: "",
-      payType: "fixed_per_paid_project",
-      payValue: defaultEmployeePay,
-      fixedSalary: "",
-      payoutDay: "1",
-      isActive: true,
-    });
+    resetForm();
     setIsModalOpen(false);
+  }
+
+  async function refreshEmployees() {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.employees });
   }
 
   async function handleSaveEmployee() {
@@ -242,10 +233,12 @@ export function EmployeesSettingsTab() {
           isActive: form.isActive,
         });
 
-        setEmployees((prev) =>
-          prev.map((employee) =>
-            employee.id === updated.id ? updated : employee
-          )
+        queryClient.setQueryData<StoredEmployee[]>(
+          queryKeys.employees,
+          (prev = []) =>
+            prev.map((employee) =>
+              employee.id === updated.id ? updated : employee
+            )
         );
 
         setToastType("success");
@@ -261,7 +254,10 @@ export function EmployeesSettingsTab() {
           isActive: form.isActive,
         });
 
-        setEmployees((prev) => [created, ...prev]);
+        queryClient.setQueryData<StoredEmployee[]>(
+          queryKeys.employees,
+          (prev = []) => [created, ...prev]
+        );
 
         setToastType("success");
         setToastMessage(`Сотрудник "${created.name}" создан`);
@@ -306,9 +302,12 @@ export function EmployeesSettingsTab() {
 
     try {
       await deleteEmployeeFromSupabase(employeeId);
-      setEmployees((prev) =>
-        prev.filter((employee) => employee.id !== employeeId)
+
+      queryClient.setQueryData<StoredEmployee[]>(
+        queryKeys.employees,
+        (prev = []) => prev.filter((employee) => employee.id !== employeeId)
       );
+
       setToastType("success");
       setToastMessage(`Сотрудник "${target.name}" удалён`);
     } catch (error) {
@@ -317,6 +316,8 @@ export function EmployeesSettingsTab() {
       setToastMessage(getBillingErrorMessage(error));
     }
   }
+
+  const isLoading = isEmployeesLoading || isSystemSettingsLoading;
 
   return (
     <>

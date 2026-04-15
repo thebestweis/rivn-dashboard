@@ -16,6 +16,8 @@ import {
 import { AppToast } from "../ui/app-toast";
 import { BillingAccessBanner } from "../ui/billing-access-banner";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../lib/query-keys";
 
 const roleOptions: Array<{
   value: WorkspaceMemberRole;
@@ -58,13 +60,12 @@ function getPlanLabel(planCode: string | null | undefined) {
 }
 
 export function UsersSettingsTab() {
+  const queryClient = useQueryClient();
+
   const {
     billingAccess,
     isLoading: isAppContextLoading,
   } = useAppContextState();
-
-  const [users, setUsers] = useState<WorkspaceMemberItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
   const [currentUserId, setCurrentUserId] = useState<string>("");
 
@@ -75,10 +76,6 @@ export function UsersSettingsTab() {
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
 
-  const [limitState, setLimitState] = useState<WorkspaceMemberLimitState | null>(
-    null
-  );
-
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
     "success"
@@ -88,32 +85,39 @@ export function UsersSettingsTab() {
   const teamEnabled = billingAccess?.teamEnabled ?? false;
   const canManageMembers = !isBillingReadOnly && teamEnabled;
 
-  async function loadMembers() {
-    try {
-      setIsLoading(true);
+  const {
+    data: users = [],
+    isLoading: isUsersLoading,
+    isFetching: isUsersFetching,
+  } = useQuery({
+    queryKey: queryKeys.workspaceMembers,
+    queryFn: getWorkspaceMembers,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  });
 
-      const [membersData, memberLimitData] = await Promise.all([
-        getWorkspaceMembers(),
-        getWorkspaceMemberLimitState(),
-      ]);
+  const {
+    data: limitState = null,
+    isLoading: isLimitLoading,
+    isFetching: isLimitFetching,
+  } = useQuery<WorkspaceMemberLimitState | null>({
+    queryKey: queryKeys.workspaceMemberLimitState,
+    queryFn: getWorkspaceMemberLimitState,
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
+  });
 
-      setUsers(membersData);
-      setLimitState(memberLimitData);
-    } catch (error) {
-      console.error("Ошибка загрузки участников:", error);
-      setUsers([]);
-      setLimitState(null);
-      setToastType("error");
-      setToastMessage("Не удалось загрузить участников кабинета");
-    } finally {
-      setIsLoading(false);
-    }
+  async function refreshMembersData() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaceMembers }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workspaceMemberLimitState,
+      }),
+    ]);
   }
 
   useEffect(() => {
-    async function bootstrap() {
-      await loadMembers();
-
+    async function bootstrapCurrentUser() {
       try {
         const supabase = createClient();
         const {
@@ -126,7 +130,7 @@ export function UsersSettingsTab() {
       }
     }
 
-    bootstrap();
+    bootstrapCurrentUser();
   }, []);
 
   useEffect(() => {
@@ -193,7 +197,7 @@ export function UsersSettingsTab() {
       setToastType("success");
       setToastMessage("Пользователь успешно добавлен в кабинет");
 
-      await loadMembers();
+      await refreshMembersData();
     } catch (error) {
       console.error(error);
       setToastType("error");
@@ -230,7 +234,7 @@ export function UsersSettingsTab() {
       setToastType("success");
       setToastMessage("Роль пользователя обновлена");
 
-      await loadMembers();
+      await refreshMembersData();
     } catch (error) {
       console.error(error);
       setToastType("error");
@@ -266,7 +270,7 @@ export function UsersSettingsTab() {
       setToastType("success");
       setToastMessage("Пользователь удалён из кабинета");
 
-      await loadMembers();
+      await refreshMembersData();
     } catch (error) {
       console.error(error);
       setToastType("error");
@@ -277,6 +281,9 @@ export function UsersSettingsTab() {
       setRemovingMemberId(null);
     }
   }
+
+  const isLoading = isUsersLoading || isLimitLoading;
+  const isRefreshing = isUsersFetching || isLimitFetching;
 
   return (
     <>
@@ -299,6 +306,10 @@ export function UsersSettingsTab() {
               доступом.
             </div>
           </div>
+
+          {isRefreshing && !isLoading ? (
+            <div className="text-xs text-white/35">Обновляем данные...</div>
+          ) : null}
         </div>
 
         <div className="mt-5 space-y-4">

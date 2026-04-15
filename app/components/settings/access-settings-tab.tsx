@@ -15,6 +15,8 @@ import { useAppContextState } from "../../providers/app-context-provider";
 import { BillingAccessBanner } from "../ui/billing-access-banner";
 import { AppToast } from "../ui/app-toast";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../lib/query-keys";
 
 const sectionPermissions: Array<{
   key: WorkspacePermissionSection;
@@ -89,19 +91,14 @@ function getDefaultPermissionByRole(
 }
 
 export function AccessSettingsTab() {
+  const queryClient = useQueryClient();
+
   const {
     billingAccess,
     isLoading: isAppContextLoading,
   } = useAppContextState();
 
-  const [members, setMembers] = useState<WorkspaceMemberItem[]>([]);
-  const [isLoadingMembers, setIsLoadingMembers] = useState(true);
-
   const [selectedMemberId, setSelectedMemberId] = useState("");
-  const [memberPermissions, setMemberPermissions] = useState<
-    WorkspaceMemberPermissionItem[]
-  >([]);
-  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   const [toastMessage, setToastMessage] = useState("");
@@ -113,53 +110,47 @@ export function AccessSettingsTab() {
   const teamEnabled = billingAccess?.teamEnabled ?? false;
   const canManageAccess = !isBillingReadOnly && teamEnabled;
 
-  useEffect(() => {
-    async function loadMembers() {
-      try {
-        setIsLoadingMembers(true);
-        const data = await getWorkspaceMembers();
-        const activeMembers = data.filter((item) => item.status === "active");
-        setMembers(activeMembers);
+  const {
+    data: members = [],
+    isLoading: isLoadingMembers,
+    isFetching: isFetchingMembers,
+  } = useQuery({
+    queryKey: queryKeys.workspaceMembers,
+    queryFn: getWorkspaceMembers,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  });
 
-        if (activeMembers.length > 0) {
-          setSelectedMemberId((prev) => prev || activeMembers[0].id);
-        }
-      } catch (error) {
-        console.error("Ошибка загрузки участников для доступов:", error);
-        setMembers([]);
-        setToastType("error");
-        setToastMessage("Не удалось загрузить участников для настройки доступов");
-      } finally {
-        setIsLoadingMembers(false);
-      }
-    }
-
-    loadMembers();
-  }, []);
+  const activeMembers = useMemo<WorkspaceMemberItem[]>(() => {
+    return members.filter((item) => item.status === "active");
+  }, [members]);
 
   useEffect(() => {
-    async function loadPermissions() {
-      if (!selectedMemberId) {
-        setMemberPermissions([]);
-        return;
-      }
-
-      try {
-        setIsLoadingPermissions(true);
-        const data = await getWorkspaceMemberPermissions(selectedMemberId);
-        setMemberPermissions(data);
-      } catch (error) {
-        console.error("Ошибка загрузки прав:", error);
-        setMemberPermissions([]);
-        setToastType("error");
-        setToastMessage("Не удалось загрузить права участника");
-      } finally {
-        setIsLoadingPermissions(false);
-      }
+    if (activeMembers.length === 0) {
+      setSelectedMemberId("");
+      return;
     }
 
-    loadPermissions();
-  }, [selectedMemberId]);
+    setSelectedMemberId((prev) => {
+      if (prev && activeMembers.some((member) => member.id === prev)) {
+        return prev;
+      }
+
+      return activeMembers[0].id;
+    });
+  }, [activeMembers]);
+
+  const {
+    data: memberPermissions = [],
+    isLoading: isLoadingPermissions,
+    isFetching: isFetchingPermissions,
+  } = useQuery<WorkspaceMemberPermissionItem[]>({
+    queryKey: queryKeys.workspaceMemberPermissions(selectedMemberId),
+    queryFn: () => getWorkspaceMemberPermissions(selectedMemberId),
+    enabled: Boolean(selectedMemberId),
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  });
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -172,8 +163,8 @@ export function AccessSettingsTab() {
   }, [toastMessage]);
 
   const selectedMember = useMemo(() => {
-    return members.find((item) => item.id === selectedMemberId) ?? null;
-  }, [members, selectedMemberId]);
+    return activeMembers.find((item) => item.id === selectedMemberId) ?? null;
+  }, [activeMembers, selectedMemberId]);
 
   function getPermissionState(section: WorkspacePermissionSection) {
     const saved = memberPermissions.find((item) => item.section === section);
@@ -240,17 +231,20 @@ export function AccessSettingsTab() {
         canManage: nextManage,
       });
 
-      setMemberPermissions((prev) => {
-        const exists = prev.some((item) => item.section === saved.section);
+      queryClient.setQueryData<WorkspaceMemberPermissionItem[]>(
+        queryKeys.workspaceMemberPermissions(selectedMember.id),
+        (prev = []) => {
+          const exists = prev.some((item) => item.section === saved.section);
 
-        if (exists) {
-          return prev.map((item) =>
-            item.section === saved.section ? saved : item
-          );
+          if (exists) {
+            return prev.map((item) =>
+              item.section === saved.section ? saved : item
+            );
+          }
+
+          return [...prev, saved];
         }
-
-        return [...prev, saved];
-      });
+      );
 
       setToastType("success");
       setToastMessage("Права сохранены");
@@ -262,6 +256,8 @@ export function AccessSettingsTab() {
       setSavingKey(null);
     }
   }
+
+  const isRefreshing = isFetchingMembers || isFetchingPermissions;
 
   return (
     <>
@@ -284,13 +280,17 @@ export function AccessSettingsTab() {
               каждого участника кабинета.
             </div>
           </div>
+
+          {isRefreshing && !isLoadingMembers ? (
+            <div className="text-xs text-white/35">Обновляем данные...</div>
+          ) : null}
         </div>
 
         {isLoadingMembers ? (
           <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/45">
             Загружаем участников...
           </div>
-        ) : members.length === 0 ? (
+        ) : activeMembers.length === 0 ? (
           <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/45">
             Нет участников кабинета для настройки доступов.
           </div>
@@ -306,7 +306,7 @@ export function AccessSettingsTab() {
                   onChange={(e) => setSelectedMemberId(e.target.value)}
                   className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
                 >
-                  {members.map((member) => (
+                  {activeMembers.map((member) => (
                     <option key={member.id} value={member.id}>
                       {member.email}
                     </option>

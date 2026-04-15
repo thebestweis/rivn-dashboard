@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { SettingsPageHeader } from "../components/settings/settings-page-header";
 import { EmployeesSettingsTab } from "../components/settings/employees-settings-tab";
 import { UsersSettingsTab } from "../components/settings/users-settings-tab";
@@ -21,18 +22,61 @@ export type SettingsTab =
   | "system"
   | "workspace";
 
+const DEFAULT_TAB: SettingsTab = "employees";
+
+function isSettingsTab(value: string | null): value is SettingsTab {
+  return (
+    value === "employees" ||
+    value === "users" ||
+    value === "access" ||
+    value === "referrals" ||
+    value === "telegram" ||
+    value === "system" ||
+    value === "workspace"
+  );
+}
+
 export default function SettingsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const { isLoading, hasAccess } = usePageAccess("settings");
-  const [activeTab, setActiveTab] = useState<SettingsTab>("employees");
+
+  const queryTab = searchParams.get("tab");
+  const resolvedInitialTab = isSettingsTab(queryTab) ? queryTab : DEFAULT_TAB;
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>(resolvedInitialTab);
+
+  useEffect(() => {
+    const nextTab = isSettingsTab(queryTab) ? queryTab : DEFAULT_TAB;
+
+    setActiveTab((prev) => (prev === nextTab ? prev : nextTab));
+  }, [queryTab]);
+
+  function handleSetActiveTab(nextTab: SettingsTab) {
+    setActiveTab(nextTab);
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", nextTab);
+
+    router.replace(`/settings?${params.toString()}`, { scroll: false });
+  }
+
+  const tabContent = useMemo(() => {
+    if (activeTab === "employees") return <EmployeesSettingsTab />;
+    if (activeTab === "users") return <UsersSettingsTab />;
+    if (activeTab === "access") return <AccessSettingsTab />;
+    if (activeTab === "referrals") return <ReferralSettingsTab />;
+    if (activeTab === "telegram") return <TelegramSettingsTab />;
+    if (activeTab === "system") return <SystemSettingsTab />;
+    if (activeTab === "workspace") return <WorkspaceSettingsTab />;
+    return null;
+  }, [activeTab]);
 
   return (
     <main className="flex-1">
       <div className="space-y-6 px-5 py-6 lg:px-8">
-        {isLoading ? (
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            Проверяем доступ...
-          </div>
-        ) : !hasAccess ? (
+        {!hasAccess && !isLoading ? (
           <AccessDenied
             title="Нет доступа к настройкам"
             description="Этот раздел доступен только владельцу кабинета и администраторам с соответствующими правами."
@@ -41,24 +85,10 @@ export default function SettingsPage() {
           <>
             <SettingsPageHeader
               activeTab={activeTab}
-              setActiveTab={setActiveTab}
+              setActiveTab={handleSetActiveTab}
             />
 
-                        {activeTab === "employees" ? (
-              <EmployeesSettingsTab />
-            ) : activeTab === "users" ? (
-              <UsersSettingsTab />
-            ) : activeTab === "access" ? (
-              <AccessSettingsTab />
-            ) : activeTab === "referrals" ? (
-              <ReferralSettingsTab />
-            ) : activeTab === "telegram" ? (
-              <TelegramSettingsTab />
-            ) : activeTab === "system" ? (
-              <SystemSettingsTab />
-            ) : activeTab === "workspace" ? (
-              <WorkspaceSettingsTab />
-            ) : null}
+            {tabContent}
           </>
         )}
       </div>

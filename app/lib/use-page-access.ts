@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   getSectionByPathname,
   isAppRole,
@@ -8,8 +9,12 @@ import {
   type AppRole,
 } from "./permissions";
 import { useAppContextState } from "../providers/app-context-provider";
-import { getWorkspaceMemberPermissions } from "./supabase/workspace-member-permissions";
+import {
+  getWorkspaceMemberPermissions,
+  type WorkspaceMemberPermissionItem,
+} from "./supabase/workspace-member-permissions";
 import { canAccessSectionWithCustomPermissions } from "./custom-access";
+import { queryKeys } from "./query-keys";
 
 type UsePageAccessResult = {
   isLoading: boolean;
@@ -24,63 +29,34 @@ function useResolvedPageAccess(
   section: AppSection | null
 ): UsePageAccessResult {
   const {
-    isLoading,
+    isLoading: isAppContextLoading,
+    isReady,
     role,
     errorMessage,
     membership,
     isBillingReadOnly,
   } = useAppContextState();
 
-  const [permissionsLoading, setPermissionsLoading] = useState(true);
-  const [permissionsError, setPermissionsError] = useState("");
-  const [memberPermissions, setMemberPermissions] = useState<any[]>([]);
+  const memberId = membership?.id ?? "";
+  const currentRole: AppRole | null = isAppRole(role) ? role : null;
 
-  useEffect(() => {
-    let isMounted = true;
+  const {
+    data: memberPermissions = [],
+    isLoading: isPermissionsLoading,
+    error: permissionsError,
+  } = useQuery<WorkspaceMemberPermissionItem[]>({
+    queryKey: queryKeys.workspaceMemberPermissions(memberId || "me"),
+    queryFn: () => getWorkspaceMemberPermissions(memberId),
+    enabled: Boolean(memberId),
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+    placeholderData: (previousData) => previousData,
+  });
 
-    async function loadPermissions() {
-      if (!membership?.id) {
-        if (isMounted) {
-          setMemberPermissions([]);
-          setPermissionsError("");
-          setPermissionsLoading(false);
-        }
-        return;
-      }
-
-      try {
-        setPermissionsLoading(true);
-        setPermissionsError("");
-
-        const data = await getWorkspaceMemberPermissions(membership.id);
-
-        if (isMounted) {
-          setMemberPermissions(data);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setPermissionsError(
-            error instanceof Error
-              ? error.message
-              : "Не удалось загрузить права доступа"
-          );
-          setMemberPermissions([]);
-        }
-      } finally {
-        if (isMounted) {
-          setPermissionsLoading(false);
-        }
-      }
-    }
-
-    loadPermissions();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [membership?.id]);
-
-  if (isLoading || permissionsLoading) {
+  if (!isReady && isAppContextLoading) {
     return {
       isLoading: true,
       hasAccess: false,
@@ -91,13 +67,13 @@ function useResolvedPageAccess(
     };
   }
 
-  const currentRole: AppRole | null = isAppRole(role) ? role : null;
-
   if (!section) {
     return {
       isLoading: false,
       hasAccess: true,
-      errorMessage: errorMessage || permissionsError,
+      errorMessage:
+        errorMessage ||
+        (permissionsError instanceof Error ? permissionsError.message : ""),
       resolvedSection: null,
       isBillingReadOnly,
       canInteract: !isBillingReadOnly,
@@ -109,7 +85,10 @@ function useResolvedPageAccess(
       isLoading: false,
       hasAccess: false,
       errorMessage:
-        errorMessage || permissionsError || "Роль пользователя не определена",
+        errorMessage ||
+        (permissionsError instanceof Error
+          ? permissionsError.message
+          : "Роль пользователя не определена"),
       resolvedSection: section,
       isBillingReadOnly,
       canInteract: false,
@@ -124,10 +103,18 @@ function useResolvedPageAccess(
 
   const canInteract = hasAccess && (!isBillingReadOnly || section === "billing");
 
+  const shouldBlockOnPermissions =
+    !isReady &&
+    Boolean(memberId) &&
+    isPermissionsLoading &&
+    memberPermissions.length === 0;
+
   return {
-    isLoading: false,
+    isLoading: shouldBlockOnPermissions,
     hasAccess,
-    errorMessage: errorMessage || permissionsError,
+    errorMessage:
+      errorMessage ||
+      (permissionsError instanceof Error ? permissionsError.message : ""),
     resolvedSection: section,
     isBillingReadOnly,
     canInteract,

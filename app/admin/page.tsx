@@ -4,15 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppContextState } from "../providers/app-context-provider";
 import {
-  addManualBalanceAdjustment,
-  activatePlanFromBalance,
-  forceSetWorkspaceBillingStatus,
-} from "../lib/billing-core";
-import {
-  getAllWorkspaces,
-  getAdminActionLogs,
-  type AdminWorkspaceRow,
-  type AdminActionLogRow,
+  addManualBalanceAdjustmentAction,
+  activatePlanFromBalanceAction,
+  forceSetWorkspaceBillingStatusAction,
+  getAdminOverviewAction,
+} from "./actions";
+import type {
+  AdminWorkspaceRow,
+  AdminActionLogRow,
 } from "../lib/supabase/admin";
 
 type AdminPlanCode = "base" | "team" | "strategy";
@@ -165,6 +164,8 @@ export default function AdminPage() {
   const { profile, isLoading } = useAppContextState();
   const router = useRouter();
 
+  const [mounted, setMounted] = useState(false);
+
   const [workspaces, setWorkspaces] = useState<AdminWorkspaceRow[]>([]);
   const [adminLogs, setAdminLogs] = useState<AdminActionLogRow[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] =
@@ -188,27 +189,27 @@ export default function AdminPage() {
   const [isLoadingStatusAction, setIsLoadingStatusAction] = useState(false);
 
   const [logSearch, setLogSearch] = useState("");
-  const [logTypeFilter, setLogTypeFilter] =
-    useState<LogTypeFilter>("all");
+  const [logTypeFilter, setLogTypeFilter] = useState<LogTypeFilter>("all");
 
   useEffect(() => {
-    if (isLoading) return;
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || isLoading) return;
 
     if (profile?.platform_role !== "super_admin") {
       router.replace("/dashboard");
     }
-  }, [profile, isLoading, router]);
+  }, [mounted, profile, isLoading, router]);
 
   useEffect(() => {
     async function loadAdminData() {
       try {
-        const [workspaceData, logsData] = await Promise.all([
-          getAllWorkspaces(),
-          getAdminActionLogs(30),
-        ]);
+        const overview = await getAdminOverviewAction();
 
-        setWorkspaces(workspaceData ?? []);
-        setAdminLogs(logsData ?? []);
+        setWorkspaces(overview.workspaces ?? []);
+        setAdminLogs((overview.logs ?? []).slice(0, 30));
       } catch (error) {
         console.error("Ошибка загрузки admin данных:", error);
         setWorkspaces([]);
@@ -216,10 +217,10 @@ export default function AdminPage() {
       }
     }
 
-    if (profile?.platform_role === "super_admin") {
-      loadAdminData();
+    if (mounted && profile?.platform_role === "super_admin") {
+      void loadAdminData();
     }
-  }, [profile]);
+  }, [mounted, profile]);
 
   useEffect(() => {
     if (!selectedWorkspace) return;
@@ -305,16 +306,15 @@ export default function AdminPage() {
   }, [selectedWorkspace]);
 
   async function reloadWorkspaces(keepSelectedWorkspaceId?: string) {
-    const [updated, logsData] = await Promise.all([
-      getAllWorkspaces(),
-      getAdminActionLogs(30),
-    ]);
+    const overview = await getAdminOverviewAction();
 
-    setWorkspaces(updated);
-    setAdminLogs(logsData);
+    setWorkspaces(overview.workspaces ?? []);
+    setAdminLogs((overview.logs ?? []).slice(0, 30));
 
     if (keepSelectedWorkspaceId) {
-      const fresh = updated.find((w) => w.id === keepSelectedWorkspaceId);
+      const fresh = (overview.workspaces ?? []).find(
+        (w) => w.id === keepSelectedWorkspaceId
+      );
       setSelectedWorkspace(fresh ?? null);
     }
   }
@@ -332,7 +332,7 @@ export default function AdminPage() {
     try {
       setIsLoadingBalanceAction(true);
 
-      await addManualBalanceAdjustment({
+      await addManualBalanceAdjustmentAction({
         workspaceId: selectedWorkspace.id,
         amount: parsedAmount,
         description: description || "Admin adjustment",
@@ -346,7 +346,11 @@ export default function AdminPage() {
       alert("Баланс обновлён");
     } catch (error) {
       console.error(error);
-      alert("Ошибка при изменении баланса");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Ошибка при изменении баланса"
+      );
     } finally {
       setIsLoadingBalanceAction(false);
     }
@@ -358,7 +362,7 @@ export default function AdminPage() {
     try {
       setIsLoadingPlanAction(true);
 
-      await activatePlanFromBalance({
+      await activatePlanFromBalanceAction({
         workspaceId: selectedWorkspace.id,
         planCode: selectedPlanCode,
         billingPeriod: selectedBillingPeriod,
@@ -379,19 +383,25 @@ export default function AdminPage() {
       );
     } catch (error) {
       console.error(error);
-      alert("Ошибка при активации / продлении тарифа");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Ошибка при активации / продлении тарифа"
+      );
     } finally {
       setIsLoadingPlanAction(false);
     }
   }
 
-  async function handleForceStatus(nextStatus: "active" | "past_due" | "expired") {
+  async function handleForceStatus(
+    nextStatus: "active" | "past_due" | "expired"
+  ) {
     if (!selectedWorkspace) return;
 
     try {
       setIsLoadingStatusAction(true);
 
-      await forceSetWorkspaceBillingStatus({
+      await forceSetWorkspaceBillingStatusAction({
         workspaceId: selectedWorkspace.id,
         nextStatus,
         description: "Изменение статуса через admin panel",
@@ -402,13 +412,21 @@ export default function AdminPage() {
       alert("Статус подписки обновлён");
     } catch (error) {
       console.error(error);
-      alert("Ошибка при изменении статуса подписки");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Ошибка при изменении статуса подписки"
+      );
     } finally {
       setIsLoadingStatusAction(false);
     }
   }
 
-  if (isLoading || profile?.platform_role !== "super_admin") {
+  if (!mounted || isLoading) {
+    return <div className="p-6 text-white/60">Проверка доступа...</div>;
+  }
+
+  if (profile?.platform_role !== "super_admin") {
     return <div className="p-6 text-white/60">Проверка доступа...</div>;
   }
 
@@ -574,7 +592,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {selectedWorkspace && (
+      {selectedWorkspace ? (
         <div className="grid gap-6 xl:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-[#121826] p-5">
             <div className="text-lg font-semibold text-white">
@@ -677,7 +695,8 @@ export default function AdminPage() {
               ) : null}
 
               <div className="rounded-xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white/65">
-                Из баланса будет произведено списание и активирован либо продлён выбранный тариф.
+                Из баланса будет произведено списание и активирован либо продлён
+                выбранный тариф.
               </div>
             </div>
 
@@ -736,11 +755,12 @@ export default function AdminPage() {
             </div>
 
             <div className="mt-4 rounded-xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white/60">
-              Используй эти действия аккуратно. Они меняют статус подписки напрямую и логируются в admin logs.
+              Используй эти действия аккуратно. Они меняют статус подписки напрямую
+              и логируются в admin logs.
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
         <div className="mb-3 text-sm text-white/50">Admin action logs</div>
@@ -777,9 +797,7 @@ export default function AdminPage() {
 
           <div className="text-sm text-white/45">
             Найдено логов:{" "}
-            <span className="font-medium text-white">
-              {filteredLogs.length}
-            </span>
+            <span className="font-medium text-white">{filteredLogs.length}</span>
           </div>
         </div>
 

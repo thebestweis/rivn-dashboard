@@ -4,15 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { AccessDenied } from "../components/access/access-denied";
 import { AppToast } from "../components/ui/app-toast";
 import { EmptyState } from "../components/ui/empty-state";
+import { Skeleton } from "../components/ui/skeleton";
 import { useAppContextState } from "../providers/app-context-provider";
-import {
-  getBillingPlans,
-  getBillingTransactions,
-  getWorkspaceBalance,
-  type BillingPlan,
-  type BillingTransaction,
-} from "../lib/supabase/billing";
 import { calculatePlanPrice } from "../lib/supabase/billing";
+import {
+  useBillingPlansQuery,
+  useBillingTransactionsQuery,
+  useWorkspaceBalanceQuery,
+} from "../lib/queries/use-billing-query";
 
 const TELEGRAM_CONTACT = "@thebestweis";
 const TELEGRAM_URL = "https://t.me/thebestweis";
@@ -106,11 +105,6 @@ export default function BillingPage() {
   const { role, billing, billingAccess, isLoading: isAppContextLoading } =
     useAppContextState();
 
-  const [plans, setPlans] = useState<BillingPlan[]>([]);
-  const [transactions, setTransactions] = useState<BillingTransaction[]>([]);
-  const [balance, setBalance] = useState(0);
-  const [isLoadingBillingPage, setIsLoadingBillingPage] = useState(true);
-
   const [selectedExtraMembers, setSelectedExtraMembers] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState<"monthly" | "yearly">(
     "monthly"
@@ -122,6 +116,25 @@ export default function BillingPage() {
   );
 
   const canViewBilling = role === "owner" || role === "admin";
+  const canLoadBilling = !isAppContextLoading && canViewBilling;
+
+  const {
+    data: plans = [],
+    isLoading: isPlansLoading,
+    error: plansError,
+  } = useBillingPlansQuery(canLoadBilling);
+
+  const {
+    data: transactions = [],
+    isLoading: isTransactionsLoading,
+    error: transactionsError,
+  } = useBillingTransactionsQuery(canLoadBilling, 100);
+
+  const {
+    data: balance = 0,
+    isLoading: isBalanceLoading,
+    error: balanceError,
+  } = useWorkspaceBalanceQuery(canLoadBilling);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -134,50 +147,15 @@ export default function BillingPage() {
   }, [toastMessage]);
 
   useEffect(() => {
-    if (isAppContextLoading) return;
+    const error = plansError || transactionsError || balanceError;
+    if (!error) return;
 
-    if (!canViewBilling) {
-      setIsLoadingBillingPage(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    async function loadBillingPage() {
-      try {
-        setIsLoadingBillingPage(true);
-
-        const [plansData, transactionsData, balanceValue] = await Promise.all([
-          getBillingPlans(),
-          getBillingTransactions(100),
-          getWorkspaceBalance(),
-        ]);
-
-        if (!isMounted) return;
-
-        setPlans(plansData);
-        setTransactions(transactionsData);
-        setBalance(balanceValue);
-      } catch (error) {
-        console.error("Ошибка загрузки billing page:", error);
-
-        if (!isMounted) return;
-
-        setToastType("error");
-        setToastMessage("Не удалось загрузить данные биллинга");
-      } finally {
-        if (isMounted) {
-          setIsLoadingBillingPage(false);
-        }
-      }
-    }
-
-    loadBillingPage();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isAppContextLoading, canViewBilling]);
+    console.error(error);
+    setToastType("error");
+    setToastMessage(
+      error instanceof Error ? error.message : "Не удалось загрузить данные биллинга"
+    );
+  }, [plansError, transactionsError, balanceError]);
 
   const currentPlanName = useMemo(() => {
     if (!billing?.plan_code) return "—";
@@ -206,12 +184,46 @@ export default function BillingPage() {
     });
   }, [plans, selectedPeriod, selectedExtraMembers]);
 
-  if (isAppContextLoading || isLoadingBillingPage) {
+  const showInitialLoading =
+    (isAppContextLoading && !canViewBilling) ||
+    ((isPlansLoading || isTransactionsLoading || isBalanceLoading) &&
+      plans.length === 0 &&
+      transactions.length === 0 &&
+      balance === 0);
+
+  if (showInitialLoading) {
     return (
       <main className="flex-1">
         <div className="space-y-6 px-5 py-6 lg:px-8">
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            Загружаем раздел тарифов...
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="mt-2 h-8 w-40" />
+            <Skeleton className="mt-3 h-4 w-80" />
+            <Skeleton className="mt-5 h-12 w-48 rounded-2xl" />
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-3">
+            <Skeleton className="h-52 rounded-[28px]" />
+            <Skeleton className="h-52 rounded-[28px]" />
+            <Skeleton className="h-52 rounded-[28px]" />
+          </div>
+
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            <Skeleton className="h-6 w-56" />
+            <div className="mt-5 grid gap-4 xl:grid-cols-3">
+              <Skeleton className="h-80 rounded-[24px]" />
+              <Skeleton className="h-80 rounded-[24px]" />
+              <Skeleton className="h-80 rounded-[24px]" />
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            <Skeleton className="h-6 w-40" />
+            <div className="mt-5 space-y-3">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Skeleton key={index} className="h-14 w-full rounded-2xl" />
+              ))}
+            </div>
           </div>
         </div>
       </main>
@@ -240,8 +252,8 @@ export default function BillingPage() {
               <div>
                 <div className="text-sm text-white/50">Раздел</div>
                 <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-  Тарифы
-</h1>
+                  Тарифы
+                </h1>
                 <p className="mt-2 text-sm text-white/55">
                   Просмотр тарифа, статуса подписки, баланса кабинета и истории
                   операций.
@@ -249,13 +261,13 @@ export default function BillingPage() {
               </div>
 
               <a
-  href={TELEGRAM_URL}
-  target="_blank"
-  rel="noreferrer"
-  className="inline-flex items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-200 transition hover:bg-sky-500/15"
->
-  Пополнить баланс
-</a>
+                href={TELEGRAM_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-200 transition hover:bg-sky-500/15"
+              >
+                Пополнить баланс
+              </a>
             </div>
           </div>
 
@@ -301,33 +313,33 @@ export default function BillingPage() {
                 {formatMoney(balance)}
               </div>
               <div className="mt-4 text-sm text-white/60">
-  Баланс временно пополняется вручную со стороны администрации
-  сервиса после подтверждения оплаты.
-</div>
+                Баланс временно пополняется вручную со стороны администрации
+                сервиса после подтверждения оплаты.
+              </div>
             </div>
 
             <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
               <div className="text-sm text-white/50">Возможности кабинета</div>
               <div className="mt-4 space-y-2 text-sm text-white/70">
-  <div>
-    Команда:{" "}
-    <span className="text-white">
-      {billingAccess?.teamEnabled ? "включена" : "отключена"}
-    </span>
-  </div>
-  <div>
-    Доступно мест:{" "}
-    <span className="text-white">
-      {billingAccess?.totalAllowedMembers ?? 0}
-    </span>
-  </div>
-  <div>
-    AI:{" "}
-    <span className="text-white">
-      {billingAccess?.aiEnabled ? "включён" : "отключён"}
-    </span>
-  </div>
-</div>
+                <div>
+                  Команда:{" "}
+                  <span className="text-white">
+                    {billingAccess?.teamEnabled ? "включена" : "отключена"}
+                  </span>
+                </div>
+                <div>
+                  Доступно мест:{" "}
+                  <span className="text-white">
+                    {billingAccess?.totalAllowedMembers ?? 0}
+                  </span>
+                </div>
+                <div>
+                  AI:{" "}
+                  <span className="text-white">
+                    {billingAccess?.aiEnabled ? "включён" : "отключён"}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -388,32 +400,33 @@ export default function BillingPage() {
 
                   return (
                     <div
-  key={plan.code}
-  className={`group relative flex h-full flex-col rounded-[24px] border bg-[#0F1524] p-5 transition-all duration-300 ease-out ${
-    isCurrentPlan
-      ? "border-emerald-500/20 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]"
-      : "border-white/10 hover:border-violet-400/35 hover:bg-[#131C2E] hover:shadow-[0_0_0_1px_rgba(123,97,255,0.18),0_20px_60px_rgba(0,0,0,0.35)]"
-  }`}
->  <div className="pointer-events-none absolute inset-0 rounded-[24px] bg-white/[0.02] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />  <div className="relative flex items-center justify-between gap-3">
+                      key={plan.code}
+                      className={`group relative flex h-full flex-col rounded-[24px] border bg-[#0F1524] p-5 transition-all duration-300 ease-out ${
+                        isCurrentPlan
+                          ? "border-emerald-500/20 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]"
+                          : "border-white/10 hover:border-violet-400/35 hover:bg-[#131C2E] hover:shadow-[0_0_0_1px_rgba(123,97,255,0.18),0_20px_60px_rgba(0,0,0,0.35)]"
+                      }`}
+                    >
+                      <div className="pointer-events-none absolute inset-0 rounded-[24px] bg-white/[0.02] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
                       <div className="relative flex items-center justify-between gap-3">
                         <div className="text-lg font-semibold text-white transition-colors duration-200 group-hover:text-white">
-  {plan.name}
-</div>
+                          {plan.name}
+                        </div>
+
                         {isCurrentPlan ? (
                           <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs text-emerald-300">
                             Текущий
                           </span>
                         ) : null}
                       </div>
-  </div>
+
                       <div className="mt-4 text-3xl font-semibold text-white transition-transform duration-200 group-hover:scale-[1.01]">
-  {formatMoney(preview.totalPrice)}
-</div>
+                        {formatMoney(preview.totalPrice)}
+                      </div>
 
                       <div className="mt-2 text-sm text-white/55">
-                        {selectedPeriod === "yearly"
-                          ? "за год"
-                          : "за месяц"}
+                        {selectedPeriod === "yearly" ? "за год" : "за месяц"}
                       </div>
 
                       <div className="relative mt-4 space-y-2 text-sm text-white/70">
@@ -444,51 +457,51 @@ export default function BillingPage() {
                       </div>
 
                       <div className="mt-4 h-[92px]">
-  {plan.code === "team" || plan.code === "strategy" ? (
-    <>
-      <div className="mb-2 text-xs text-white/45">
-        Дополнительные места
-      </div>
-      <input
-        type="number"
-        min={0}
-        max={
-          plan.max_members
-            ? Math.max(0, plan.max_members - plan.included_members)
-            : 200
-        }
-        value={selectedExtraMembers}
-        onChange={(e) =>
-          setSelectedExtraMembers(
-            Math.max(0, Number(e.target.value) || 0)
-          )
-        }
-        className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none"
-      />
-    </>
-  ) : (
-    <div>
-  <div className="mb-2 text-xs text-white/45">
-    Дополнительные места
-  </div>
-  <input
-    type="text"
-    value="Отсутствуют"
-    readOnly
-    className="w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/40 outline-none cursor-not-allowed"
-  />
-</div>
-  )}
-</div>
+                        {plan.code === "team" || plan.code === "strategy" ? (
+                          <>
+                            <div className="mb-2 text-xs text-white/45">
+                              Дополнительные места
+                            </div>
+                            <input
+                              type="number"
+                              min={0}
+                              max={
+                                plan.max_members
+                                  ? Math.max(0, plan.max_members - plan.included_members)
+                                  : 200
+                              }
+                              value={selectedExtraMembers}
+                              onChange={(e) =>
+                                setSelectedExtraMembers(
+                                  Math.max(0, Number(e.target.value) || 0)
+                                )
+                              }
+                              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none"
+                            />
+                          </>
+                        ) : (
+                          <div>
+                            <div className="mb-2 text-xs text-white/45">
+                              Дополнительные места
+                            </div>
+                            <input
+                              type="text"
+                              value="Отсутствуют"
+                              readOnly
+                              className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/40 outline-none"
+                            />
+                          </div>
+                        )}
+                      </div>
 
-                      <div className="mt-auto pt-6 flex flex-col gap-4">
+                      <div className="mt-auto flex flex-col gap-4 pt-6">
                         <button
                           type="button"
                           onClick={() => {
                             setToastType("info");
                             setToastMessage(
-  `Чтобы подключить тариф ${plan.name}, перейди в Telegram: ${TELEGRAM_CONTACT}`
-);
+                              `Чтобы подключить тариф ${plan.name}, перейди в Telegram: ${TELEGRAM_CONTACT}`
+                            );
                           }}
                           className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition-all duration-300 group-hover:bg-emerald-400/20 group-hover:shadow-[0_0_30px_rgba(16,185,129,0.24)]"
                         >
@@ -568,9 +581,7 @@ export default function BillingPage() {
                           </td>
                           <td
                             className={`px-4 py-3 font-medium ${
-                              isPositive
-                                ? "text-emerald-300"
-                                : "text-rose-300"
+                              isPositive ? "text-emerald-300" : "text-rose-300"
                             }`}
                           >
                             {isPositive ? "+" : ""}

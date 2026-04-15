@@ -5,7 +5,7 @@ import { useAppContextState } from "../../providers/app-context-provider";
 import { AppToast } from "../ui/app-toast";
 import { BillingAccessBanner } from "../ui/billing-access-banner";
 import {
-    createPersonalReferralLink,
+  createPersonalReferralLink,
   ensureMyStandardReferralLink,
   getMyReferralLinks,
   getMyReferralRewards,
@@ -17,6 +17,8 @@ import {
   type ReferralStats,
 } from "../../lib/supabase/referrals";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../lib/query-keys";
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("ru-RU", {
@@ -77,18 +79,15 @@ function buildReferralUrl(code: string) {
 }
 
 export function ReferralSettingsTab() {
+  const queryClient = useQueryClient();
+
   const {
     billingAccess,
     isLoading: isAppContextLoading,
     isSuperAdmin,
   } = useAppContextState();
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [links, setLinks] = useState<ReferralLinkItem[]>([]);
-  const [rewards, setRewards] = useState<ReferralRewardItem[]>([]);
-  const [stats, setStats] = useState<ReferralStats | null>(null);
-
-    const [creatingPersonalLink, setCreatingPersonalLink] = useState(false);
+  const [creatingPersonalLink, setCreatingPersonalLink] = useState(false);
   const [togglingLinkId, setTogglingLinkId] = useState<string | null>(null);
   const [payingRewardId, setPayingRewardId] = useState<string | null>(null);
   const [personalLinkLabel, setPersonalLinkLabel] = useState("");
@@ -100,33 +99,43 @@ export function ReferralSettingsTab() {
 
   const isBillingReadOnly = billingAccess?.isReadOnly ?? false;
 
-  async function loadReferralData() {
-    try {
-      setIsLoading(true);
-
+  const {
+    data: links = [],
+    isLoading: isLinksLoading,
+  } = useQuery({
+    queryKey: queryKeys.referralLinks,
+    queryFn: async () => {
       await ensureMyStandardReferralLink();
+      return getMyReferralLinks();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 
-      const [linksData, rewardsData, statsData] = await Promise.all([
-        getMyReferralLinks(),
-        getMyReferralRewards(),
-        getMyReferralStats(),
-      ]);
+  const {
+    data: rewards = [],
+    isLoading: isRewardsLoading,
+  } = useQuery({
+    queryKey: queryKeys.referralRewards,
+    queryFn: getMyReferralRewards,
+    staleTime: 1000 * 60 * 2,
+  });
 
-      setLinks(linksData);
-      setRewards(rewardsData);
-      setStats(statsData);
-    } catch (error) {
-      console.error("Ошибка загрузки реферальных данных:", error);
-      setToastType("error");
-      setToastMessage("Не удалось загрузить данные реферальной системы");
-    } finally {
-      setIsLoading(false);
-    }
+  const {
+    data: stats = null,
+    isLoading: isStatsLoading,
+  } = useQuery<ReferralStats | null>({
+    queryKey: queryKeys.referralStats,
+    queryFn: getMyReferralStats,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  async function refreshReferralData() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.referralLinks }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.referralRewards }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.referralStats }),
+    ]);
   }
-
-  useEffect(() => {
-    loadReferralData();
-  }, []);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -137,6 +146,8 @@ export function ReferralSettingsTab() {
 
     return () => clearTimeout(timer);
   }, [toastMessage]);
+
+  const isLoading = isLinksLoading || isRewardsLoading || isStatsLoading;
 
   const standardLink = useMemo(() => {
     return links.find((item) => item.link_type === "standard_25") ?? null;
@@ -180,7 +191,7 @@ export function ReferralSettingsTab() {
         label: personalLinkLabel,
       });
 
-      await loadReferralData();
+      await refreshReferralData();
       setPersonalLinkLabel("");
       setToastType("success");
       setToastMessage("Персональная ссылка 50% создана");
@@ -208,7 +219,7 @@ export function ReferralSettingsTab() {
         isActive: !link.is_active,
       });
 
-      await loadReferralData();
+      await refreshReferralData();
       setToastType("success");
       setToastMessage(
         link.is_active ? "Ссылка деактивирована" : "Ссылка активирована"
@@ -222,7 +233,7 @@ export function ReferralSettingsTab() {
     }
   }
 
-    async function handleMarkRewardAsPaid(reward: ReferralRewardItem) {
+  async function handleMarkRewardAsPaid(reward: ReferralRewardItem) {
     if (!isSuperAdmin) {
       setToastType("error");
       setToastMessage("Только super admin может отмечать выплаты");
@@ -239,7 +250,7 @@ export function ReferralSettingsTab() {
       setPayingRewardId(reward.id);
 
       await markReferralRewardAsPaid(reward.id);
-      await loadReferralData();
+      await refreshReferralData();
 
       setToastType("success");
       setToastMessage("Начисление отмечено как выплаченное");
@@ -298,7 +309,7 @@ export function ReferralSettingsTab() {
           </div>
         ) : (
           <>
-            <div className="mt-6 grid grid-cols-5 gap-3">
+            <div className="mt-6 grid gap-3 md:grid-cols-5">
               <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-3">
                 <div className="text-xs text-white/45">Приглашено</div>
                 <div className="mt-1 text-lg font-semibold text-white">
@@ -481,7 +492,7 @@ export function ReferralSettingsTab() {
             <div className="mt-6 overflow-hidden rounded-[24px] border border-white/8">
               <table className="w-full text-left text-sm">
                 <thead className="bg-white/[0.04] text-white/45">
-                                    <tr>
+                  <tr>
                     <th className="px-4 py-3 font-medium">Пользователь</th>
                     <th className="px-4 py-3 font-medium">Дата</th>
                     <th className="px-4 py-3 font-medium">Сумма оплаты</th>
@@ -495,7 +506,7 @@ export function ReferralSettingsTab() {
                 <tbody>
                   {rewards.length > 0 ? (
                     rewards.map((reward) => (
-                                            <tr
+                      <tr
                         key={reward.id}
                         className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
                       >
@@ -544,7 +555,7 @@ export function ReferralSettingsTab() {
                     ))
                   ) : (
                     <tr>
-                                            <td
+                      <td
                         colSpan={7}
                         className="px-4 py-10 text-center text-sm text-white/45"
                       >

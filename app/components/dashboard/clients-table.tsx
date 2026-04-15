@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { useMemo } from "react";
-import { getEmployees, CLIENT_STATUS_LABELS } from "../../lib/storage";
 
 interface ClientRow {
   id: string;
@@ -14,23 +13,47 @@ interface ClientRow {
   profit: string;
 }
 
+interface EmployeeRow {
+  id: string;
+  name: string;
+}
+
 interface ClientsTableProps {
   clients: ClientRow[];
+  employees?: EmployeeRow[];
   onDelete?: (clientId: string) => void;
   onEdit?: (clientId: string) => void;
   canManageClients?: boolean;
 }
 
+const CLIENT_STATUS_LABELS = {
+  active: "Активный",
+  paused: "На паузе",
+  problem: "Проблемный",
+  completed: "Завершён",
+};
+
+function getOwnerName(
+  client: ClientRow,
+  employeesMap: Map<string, EmployeeRow>
+) {
+  if (!client.ownerId) {
+    return client.owner || "Не назначен";
+  }
+
+  return employeesMap.get(client.ownerId)?.name ?? client.owner ?? "Не назначен";
+}
+
 export function ClientsTable({
   clients,
+  employees = [],
   onDelete,
   onEdit,
   canManageClients = false,
 }: ClientsTableProps) {
   const employeesMap = useMemo(() => {
-    const employees = getEmployees();
     return new Map(employees.map((employee) => [employee.id, employee]));
-  }, []);
+  }, [employees]);
 
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -89,10 +112,10 @@ export function ClientsTable({
                         client.status === "active"
                           ? "bg-emerald-500/15 text-emerald-300"
                           : client.status === "paused"
-                          ? "bg-amber-500/15 text-amber-300"
-                          : client.status === "problem"
-                          ? "bg-rose-500/15 text-rose-300"
-                          : "bg-white/10 text-white/60"
+                            ? "bg-amber-500/15 text-amber-300"
+                            : client.status === "problem"
+                              ? "bg-rose-500/15 text-rose-300"
+                              : "bg-white/10 text-white/60"
                       }`}
                     >
                       {CLIENT_STATUS_LABELS[client.status]}
@@ -100,9 +123,7 @@ export function ClientsTable({
                   </td>
 
                   <td className="px-4 py-3 text-white/75">
-                    {client.ownerId
-                      ? employeesMap.get(client.ownerId)?.name ?? client.owner
-                      : client.owner || "Не назначен"}
+                    {getOwnerName(client, employeesMap)}
                   </td>
                   <td className="px-4 py-3 text-white/75">{client.model}</td>
                   <td className="px-4 py-3 text-white/75">{client.nextInvoice}</td>

@@ -9,20 +9,21 @@ import {
 import { ProjectCard } from "../components/projects/project-card";
 import { ProjectsFilters } from "../components/projects/projects-filters";
 import { ProjectsStats } from "../components/projects/projects-stats";
-import { fetchClientsFromSupabase } from "../lib/supabase/clients";
-import {
-  createProject,
-  deleteProject,
-  getProjects,
-  updateProject,
-  type Project,
-  type ProjectStatus,
-} from "../lib/supabase/projects";
-import { getAllTasks, type Task } from "../lib/supabase/tasks";
 import { canEditProjects, isAppRole, type AppRole } from "../lib/permissions";
 import { useAppContextState } from "../providers/app-context-provider";
 
-import { getWorkspaceMembers } from "../lib/supabase/workspace-members";
+import { Skeleton } from "../components/ui/skeleton";
+
+import { type Project, type ProjectStatus } from "../lib/supabase/projects";
+import {
+  useCreateProjectMutation,
+  useDeleteProjectMutation,
+  useProjectsQuery,
+  useUpdateProjectMutation,
+} from "../lib/queries/use-projects-query";
+import { useTasksQuery } from "../lib/queries/use-tasks-query";
+import { useClientsQuery } from "../lib/queries/use-clients-query";
+import { useActiveWorkspaceMembers } from "../lib/queries/use-workspace-members-query";
 
 type StatusFilter = "all" | ProjectStatus;
 
@@ -42,15 +43,6 @@ export default function ProjectsPage() {
   const currentRole: AppRole | null = isAppRole(role) ? role : null;
   const canManageProjects = currentRole ? canEditProjects(currentRole) : false;
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [clients, setClients] = useState<ClientOption[]>([]);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [clientNamesById, setClientNamesById] = useState<Record<string, string>>(
-    {}
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -59,80 +51,76 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-    useEffect(() => {
+  useEffect(() => {
     if (canManageProjects) return;
 
     setIsCreateModalOpen(false);
     setEditingProject(null);
   }, [canManageProjects]);
 
-    useEffect(() => {
-    if (isAppContextLoading) return;
+  const {
+    data: projects = [],
+    isLoading: isProjectsLoading,
+    error: projectsError,
+  } = useProjectsQuery(!isAppContextLoading);
 
-    let isMounted = true;
+  const {
+    data: tasks = [],
+    isLoading: isTasksLoading,
+    error: tasksError,
+  } = useTasksQuery(!isAppContextLoading);
 
-    async function loadData() {
-      try {
-        setIsLoading(true);
-        setErrorMessage("");
+  const {
+    data: clientsData = [],
+    isLoading: isClientsLoading,
+    error: clientsError,
+  } = useClientsQuery(!isAppContextLoading);
 
-        const [projectsData, clientsData, workspaceMembersData, tasksData] =
-  await Promise.all([
-    getProjects(),
-    fetchClientsFromSupabase(),
-    getWorkspaceMembers(),
-    getAllTasks(),
-  ]);
+  const {
+    activeMembers: workspaceMembersData,
+    isLoading: isWorkspaceMembersLoading,
+    error: workspaceMembersError,
+  } = useActiveWorkspaceMembers(!isAppContextLoading);
 
-        if (!isMounted) return;
+  const createProjectMutation = useCreateProjectMutation();
+  const updateProjectMutation = useUpdateProjectMutation();
+  const deleteProjectMutation = useDeleteProjectMutation();
 
-        const nextClients: ClientOption[] = clientsData.map((client) => ({
-          id: client.id,
-          name: client.name,
-        }));
+  const isLoading =
+    isProjectsLoading ||
+    isTasksLoading ||
+    isClientsLoading ||
+    isWorkspaceMembersLoading;
 
-        const nextEmployees: EmployeeOption[] = workspaceMembersData
-  .filter((member) => member.status === "active")
-  .map((member) => ({
-    id: member.id,
-    name: member.email || "Без email",
-  }));
+  const combinedError =
+    projectsError || tasksError || clientsError || workspaceMembersError;
 
-        const nextClientNamesById = clientsData.reduce<Record<string, string>>(
-          (acc, client) => {
-            acc[client.id] = client.name;
-            return acc;
-          },
-          {}
-        );
+  const clients: ClientOption[] = useMemo(
+    () =>
+      clientsData.map((client) => ({
+        id: client.id,
+        name: client.name,
+      })),
+    [clientsData]
+  );
 
-        setProjects(projectsData);
-        setTasks(tasksData);
-        setClients(nextClients);
-        setEmployees(nextEmployees);
-        setClientNamesById(nextClientNamesById);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Не удалось загрузить проекты";
+  const employees: EmployeeOption[] = useMemo(
+    () =>
+      workspaceMembersData.map((member) => ({
+        id: member.id,
+        name: member.email || "Без email",
+      })),
+    [workspaceMembersData]
+  );
 
-        if (isMounted) {
-          setErrorMessage(message);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadData();
-
-    return () => {
-      isMounted = false;
-    };
-    }, [isAppContextLoading]);
+  const clientNamesById = useMemo(
+    () =>
+      clientsData.reduce<Record<string, string>>((acc, client) => {
+        acc[client.id] = client.name;
+        return acc;
+      }, {}),
+    [clientsData]
+  );
 
   const totalProjects = useMemo(() => projects.length, [projects]);
 
@@ -180,6 +168,25 @@ export default function ProjectsPage() {
   const hasActiveFilters =
     searchQuery.trim().length > 0 || statusFilter !== "all";
 
+  const isSubmittingProject =
+    createProjectMutation.isPending || updateProjectMutation.isPending;
+
+  const pageErrorMessage = useMemo(() => {
+    if (errorMessage) {
+      return errorMessage;
+    }
+
+    if (combinedError instanceof Error) {
+      return combinedError.message;
+    }
+
+    if (combinedError) {
+      return "Не удалось загрузить проекты";
+    }
+
+    return "";
+  }, [combinedError, errorMessage]);
+
   function openCreateProjectFlow() {
     if (!canManageProjects) {
       setErrorMessage("У тебя нет прав на создание проектов");
@@ -191,6 +198,7 @@ export default function ProjectsPage() {
       return;
     }
 
+    setErrorMessage("");
     setEditingProject(null);
     setIsCreateModalOpen(true);
   }
@@ -202,35 +210,31 @@ export default function ProjectsPage() {
     }
 
     try {
-      setIsCreatingProject(true);
       setErrorMessage("");
 
       if (editingProject) {
-        const updatedProject = await updateProject(editingProject.id, {
-          name: values.name,
-          client_id: values.client_id,
-          employee_id: values.employee_id || null,
-          status: values.status,
-          start_date: values.start_date,
-          revenue: values.revenue,
-          profit: values.profit,
-          description: values.description,
-          project_overview: values.project_overview,
-          important_links: values.important_links,
+        await updateProjectMutation.mutateAsync({
+          projectId: editingProject.id,
+          values: {
+            name: values.name,
+            client_id: values.client_id,
+            employee_id: values.employee_id || null,
+            status: values.status,
+            start_date: values.start_date,
+            revenue: values.revenue,
+            profit: values.profit,
+            description: values.description,
+            project_overview: values.project_overview,
+            important_links: values.important_links,
+          },
         });
-
-        setProjects((prev) =>
-          prev.map((project) =>
-            project.id === updatedProject.id ? updatedProject : project
-          )
-        );
 
         setEditingProject(null);
         setIsCreateModalOpen(false);
         return;
       }
 
-      const createdProject = await createProject({
+      await createProjectMutation.mutateAsync({
         name: values.name,
         client_id: values.client_id,
         employee_id: values.employee_id || null,
@@ -243,10 +247,11 @@ export default function ProjectsPage() {
         important_links: values.important_links,
       });
 
-      setProjects((prev) => [createdProject, ...prev]);
       setIsCreateModalOpen(false);
-    } finally {
-      setIsCreatingProject(false);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Не удалось сохранить проект";
+      setErrorMessage(message);
     }
   }
 
@@ -260,14 +265,10 @@ export default function ProjectsPage() {
       setDeletingProjectId(projectId);
       setErrorMessage("");
 
-      await deleteProject(projectId);
-
-      setProjects((prev) => prev.filter((project) => project.id !== projectId));
+      await deleteProjectMutation.mutateAsync(projectId);
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "Не удалось удалить проект";
+        error instanceof Error ? error.message : "Не удалось удалить проект";
 
       setErrorMessage(message);
     } finally {
@@ -287,19 +288,22 @@ export default function ProjectsPage() {
       return;
     }
 
+    setErrorMessage("");
     setEditingProject(project);
     setIsCreateModalOpen(true);
   }
 
   return (
     <>
-            <main className="flex-1 px-6 py-6 md:px-8">
+      <main className="flex-1 px-6 py-6 md:px-8">
         <div className="flex w-full flex-col gap-6">
           {!isAppContextLoading && !canManageProjects ? (
             <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              У тебя доступ только на просмотр списка проектов. Создание, редактирование и удаление проектов недоступны на этой странице.
+              У тебя доступ только на просмотр списка проектов. Создание,
+              редактирование и удаление проектов недоступны на этой странице.
             </div>
           ) : null}
+
           <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
@@ -354,10 +358,27 @@ export default function ProjectsPage() {
 
           <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
             {isLoading ? (
-              <div className="text-sm text-white/60">Загрузка проектов...</div>
-            ) : errorMessage ? (
+  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+    {Array.from({ length: 10 }).map((_, index) => (
+      <div
+        key={index}
+        className="min-h-[280px] rounded-[24px] border border-white/10 bg-[#0F1724] p-5"
+      >
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="mt-4 h-7 w-3/4" />
+        <Skeleton className="mt-3 h-4 w-2/3" />
+        <Skeleton className="mt-6 h-10 w-full" />
+        <div className="mt-6 space-y-3">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+      </div>
+    ))}
+  </div>
+) : pageErrorMessage ? (
               <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
-                {errorMessage}
+                {pageErrorMessage}
               </div>
             ) : filteredProjects.length === 0 ? (
               <div className="flex min-h-[280px] flex-col items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] px-6 text-center">
@@ -371,8 +392,8 @@ export default function ProjectsPage() {
                   {hasActiveFilters
                     ? "Попробуй изменить поиск или выбрать другой статус."
                     : canManageProjects
-                    ? "Создайте первый проект, чтобы начать вести направления, задачи и внутреннюю информацию по клиентам."
-                    : "В этом кабинете пока нет доступных проектов."}
+                      ? "Создайте первый проект, чтобы начать вести направления, задачи и внутреннюю информацию по клиентам."
+                      : "В этом кабинете пока нет доступных проектов."}
                 </p>
 
                 {!hasActiveFilters && canManageProjects ? (
@@ -423,16 +444,16 @@ export default function ProjectsPage() {
         </div>
       </main>
 
-            {canManageProjects ? (
+      {canManageProjects ? (
         <CreateProjectModal
           isOpen={isCreateModalOpen}
           clients={clients}
           employees={employees}
-          isSubmitting={isCreatingProject}
+          isSubmitting={isSubmittingProject}
           mode={editingProject ? "edit" : "create"}
           initialProject={editingProject}
           onClose={() => {
-            if (!isCreatingProject) {
+            if (!isSubmittingProject) {
               setIsCreateModalOpen(false);
               setEditingProject(null);
             }

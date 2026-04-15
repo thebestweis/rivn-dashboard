@@ -9,6 +9,26 @@ import {
   storeReferralCodeInBrowser,
 } from "../lib/supabase/referrals";
 
+import { bootstrapAccountForCurrentUser } from "../lib/supabase/bootstrap-account";
+
+async function waitForSessionReady() {
+  const supabase = createClient();
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session) {
+      return session;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+
+  throw new Error("Не удалось дождаться auth session после регистрации");
+}
+
 export function RegisterPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -68,10 +88,12 @@ export function RegisterPageContent() {
       }
 
       if (data.session) {
-        router.replace("/dashboard");
-        router.refresh();
-        return;
-      }
+  await waitForSessionReady();
+  await bootstrapAccountForCurrentUser();
+
+  router.replace("/dashboard");
+  return;
+}
 
       setSuccessMessage(
         "Аккаунт создан. Проверь почту и подтверди email, если подтверждение включено в Supabase."

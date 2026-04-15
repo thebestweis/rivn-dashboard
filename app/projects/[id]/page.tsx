@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   CreateProjectModal,
@@ -9,26 +10,23 @@ import {
 } from "../../components/projects/create-project-modal";
 import { ProjectTasksBoard } from "../../components/tasks/project-tasks-board";
 import { TaskModal } from "../../components/tasks/task-modal";
-import { fetchClientsFromSupabase } from "../../lib/supabase/clients";
-
-import { getWorkspaceMembers } from "../../lib/supabase/workspace-members";
-
-import {
-  getProjectById,
-  updateProject,
-  type Project,
-} from "../../lib/supabase/projects";
-import {
-  getTasksByProject,
-  type Task,
-  type TaskStatus,
-} from "../../lib/supabase/tasks";
 import {
   canEditProjectDetails,
   isAppRole,
   type AppRole,
 } from "../../lib/permissions";
 import { useAppContextState } from "../../providers/app-context-provider";
+import { queryKeys } from "../../lib/query-keys";
+import { type Project } from "../../lib/supabase/projects";
+import { type Task, type TaskStatus } from "../../lib/supabase/tasks";
+import { useProjectQuery } from "../../lib/queries/use-project-query";
+import { useProjectTasksQuery } from "../../lib/queries/use-project-tasks-query";
+import { useClientsQuery } from "../../lib/queries/use-clients-query";
+import { useActiveWorkspaceMembers } from "../../lib/queries/use-workspace-members-query";
+import { useUpdateProjectMutation } from "../../lib/queries/use-projects-query";
+import { syncTaskAcrossCaches } from "../../lib/queries/use-tasks-query";
+
+import { Skeleton } from "../../components/ui/skeleton";
 
 type ClientOption = {
   id: string;
@@ -133,7 +131,8 @@ function PencilButton({
 }
 
 export default function ProjectPage() {
-  const { role } = useAppContextState();
+  const { role, isLoading: isAppContextLoading } = useAppContextState();
+  const queryClient = useQueryClient();
 
   const currentRole: AppRole | null = isAppRole(role) ? role : null;
   const canManageProjectDetails = currentRole
@@ -145,104 +144,91 @@ export default function ProjectPage() {
   const searchParams = useSearchParams();
   const projectId = params?.id as string;
 
-  const [project, setProject] = useState<Project | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-
-  const [clients, setClients] = useState<ClientOption[]>([]);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [clientName, setClientName] = useState<string>("—");
-  const [clientId, setClientId] = useState<string | null>(null);
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
-
   const [isEditingOverview, setIsEditingOverview] = useState(false);
   const [isEditingLinks, setIsEditingLinks] = useState(false);
   const [overviewDraft, setOverviewDraft] = useState("");
   const [linksDraft, setLinksDraft] = useState("");
-  const [isSavingOverview, setIsSavingOverview] = useState(false);
-  const [isSavingLinks, setIsSavingLinks] = useState(false);
-
   const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
-  const [isSavingProject, setIsSavingProject] = useState(false);
+
+  const {
+    data: project,
+    isLoading: isProjectLoading,
+    error: projectError,
+  } = useProjectQuery(projectId, !isAppContextLoading);
+
+  const {
+    data: tasks = [],
+    isLoading: isTasksLoading,
+    error: tasksError,
+  } = useProjectTasksQuery(projectId, !isAppContextLoading);
+
+  const {
+    data: clientsData = [],
+    isLoading: isClientsLoading,
+    error: clientsError,
+  } = useClientsQuery(!isAppContextLoading);
+
+  const {
+    activeMembers: workspaceMembersData,
+    isLoading: isWorkspaceMembersLoading,
+    error: workspaceMembersError,
+  } = useActiveWorkspaceMembers(!isAppContextLoading);
+
+  const updateProjectMutation = useUpdateProjectMutation();
+
+  const isLoading =
+    isProjectLoading ||
+    isTasksLoading ||
+    isClientsLoading ||
+    isWorkspaceMembersLoading;
+
+  const combinedError =
+    projectError || tasksError || clientsError || workspaceMembersError;
+
+  const clients: ClientOption[] = useMemo(
+    () =>
+      clientsData.map((item) => ({
+        id: item.id,
+        name: item.name,
+      })),
+    [clientsData]
+  );
+
+  const employees: EmployeeOption[] = useMemo(
+    () =>
+      workspaceMembersData.map((member) => ({
+        id: member.id,
+        name: member.email || "Без email",
+      })),
+    [workspaceMembersData]
+  );
+
+  const client = useMemo(() => {
+    if (!project) return null;
+    return clientsData.find((item) => item.id === project.client_id) ?? null;
+  }, [clientsData, project]);
+
+  const clientName = client?.name ?? "Без клиента";
+  const clientId = client?.id ?? null;
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadData() {
-      try {
-        setIsLoading(true);
-        setErrorMessage("");
-
-        const projectData = await getProjectById(projectId);
-
-        if (!projectData) {
-          throw new Error("Проект не найден");
-        }
-
-        const [clientsData, workspaceMembersData, projectTasks] = await Promise.all([
-  fetchClientsFromSupabase(),
-  getWorkspaceMembers(),
-  getTasksByProject(projectId),
-]);
-
-        const client = clientsData.find(
-          (item) => item.id === projectData.client_id
-        );
-
-        const activeEmployees: EmployeeOption[] = workspaceMembersData
-  .filter((member) => member.status === "active")
-  .map((member) => ({
-    id: member.id,
-    name: member.email || "Без email",
-  }));
-
-        if (!isMounted) {
-          return;
-        }
-
-        setProject(projectData);
-        setTasks(projectTasks);
-        setClients(
-          clientsData.map((item) => ({
-            id: item.id,
-            name: item.name,
-          }))
-        );
-        setEmployees(activeEmployees);
-        setClientName(client?.name ?? "Без клиента");
-        setClientId(client?.id ?? null);
-        setOverviewDraft(
-          projectData.project_overview?.trim() ||
-            projectData.description?.trim() ||
-            ""
-        );
-        setLinksDraft(projectData.important_links ?? "");
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Не удалось загрузить проект";
-
-        if (isMounted) {
-          setErrorMessage(message);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
+    if (!project || isEditingOverview) {
+      return;
     }
 
-    if (projectId) {
-      loadData();
+    setOverviewDraft(
+      project.project_overview?.trim() || project.description?.trim() || ""
+    );
+  }, [project, isEditingOverview]);
+
+  useEffect(() => {
+    if (!project || isEditingLinks) {
+      return;
     }
 
-    return () => {
-      isMounted = false;
-    };
-  }, [projectId]);
+    setLinksDraft(project.important_links ?? "");
+  }, [project, isEditingLinks]);
 
   useEffect(() => {
     const taskIdFromUrl = searchParams.get("taskId");
@@ -278,11 +264,25 @@ export default function ProjectPage() {
   );
 
   function handleTaskCreated(task: Task) {
-    setTasks((prev) => [task, ...prev]);
+    syncTaskAcrossCaches(queryClient, task);
   }
 
   function handleTaskStatusChanged(taskId: string, status: TaskStatus) {
-    setTasks((prev) =>
+    queryClient.setQueryData<Task[]>(
+      queryKeys.projectTasks(projectId),
+      (prev = []) =>
+        prev.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                status,
+                updated_at: new Date().toISOString(),
+              }
+            : task
+        )
+    );
+
+    queryClient.setQueryData<Task[]>(queryKeys.tasks, (prev = []) =>
       prev.map((task) =>
         task.id === taskId
           ? {
@@ -296,9 +296,7 @@ export default function ProjectPage() {
   }
 
   function handleTaskUpdated(updatedTask: Task) {
-    setTasks((prev) =>
-      prev.map((task) => (task.id === updatedTask.id ? updatedTask : task))
-    );
+    syncTaskAcrossCaches(queryClient, updatedTask);
   }
 
   function handleTaskOpen(taskId: string) {
@@ -320,29 +318,26 @@ export default function ProjectPage() {
     }
 
     try {
-      setIsSavingOverview(true);
-
-      const updatedProject = await updateProject(project.id, {
-        name: project.name,
-        client_id: project.client_id,
-        employee_id: project.employee_id ?? null,
-        status: project.status,
-        start_date: project.start_date,
-        revenue: project.revenue,
-        profit: project.profit,
-        description: project.description ?? "",
-        project_overview: overviewDraft,
-        important_links: project.important_links ?? "",
+      await updateProjectMutation.mutateAsync({
+        projectId: project.id,
+        values: {
+          name: project.name,
+          client_id: project.client_id,
+          employee_id: project.employee_id ?? null,
+          status: project.status,
+          start_date: project.start_date,
+          revenue: project.revenue,
+          profit: project.profit,
+          description: project.description ?? "",
+          project_overview: overviewDraft,
+          important_links: project.important_links ?? "",
+        },
       });
 
-      setProject(updatedProject);
-      setOverviewDraft(updatedProject.project_overview ?? "");
       setIsEditingOverview(false);
     } catch (error) {
       console.error(error);
       window.alert("Не удалось сохранить основную информацию");
-    } finally {
-      setIsSavingOverview(false);
     }
   }
 
@@ -355,29 +350,26 @@ export default function ProjectPage() {
     }
 
     try {
-      setIsSavingLinks(true);
-
-      const updatedProject = await updateProject(project.id, {
-        name: project.name,
-        client_id: project.client_id,
-        employee_id: project.employee_id ?? null,
-        status: project.status,
-        start_date: project.start_date,
-        revenue: project.revenue,
-        profit: project.profit,
-        description: project.description ?? "",
-        project_overview: project.project_overview ?? "",
-        important_links: linksDraft,
+      await updateProjectMutation.mutateAsync({
+        projectId: project.id,
+        values: {
+          name: project.name,
+          client_id: project.client_id,
+          employee_id: project.employee_id ?? null,
+          status: project.status,
+          start_date: project.start_date,
+          revenue: project.revenue,
+          profit: project.profit,
+          description: project.description ?? "",
+          project_overview: project.project_overview ?? "",
+          important_links: linksDraft,
+        },
       });
 
-      setProject(updatedProject);
-      setLinksDraft(updatedProject.important_links ?? "");
       setIsEditingLinks(false);
     } catch (error) {
       console.error(error);
       window.alert("Не удалось сохранить ссылки");
-    } finally {
-      setIsSavingLinks(false);
     }
   }
 
@@ -389,53 +381,91 @@ export default function ProjectPage() {
     }
 
     try {
-      setIsSavingProject(true);
-
-      const updatedProject = await updateProject(project.id, {
-        name: values.name,
-        client_id: values.client_id,
-        employee_id: values.employee_id || null,
-        status: values.status,
-        start_date: values.start_date,
-        revenue: values.revenue,
-        profit: values.profit,
-        description: values.description,
-        project_overview: values.project_overview,
-        important_links: values.important_links,
+      await updateProjectMutation.mutateAsync({
+        projectId: project.id,
+        values: {
+          name: values.name,
+          client_id: values.client_id,
+          employee_id: values.employee_id || null,
+          status: values.status,
+          start_date: values.start_date,
+          revenue: values.revenue,
+          profit: values.profit,
+          description: values.description,
+          project_overview: values.project_overview,
+          important_links: values.important_links,
+        },
       });
 
-      const nextClient =
-        clients.find((item) => item.id === updatedProject.client_id) ?? null;
-
-      setProject(updatedProject);
-      setClientName(nextClient?.name ?? "Без клиента");
-      setClientId(nextClient?.id ?? null);
-      setOverviewDraft(
-        updatedProject.project_overview?.trim() ||
-          updatedProject.description?.trim() ||
-          ""
-      );
-      setLinksDraft(updatedProject.important_links ?? "");
       setIsEditProjectModalOpen(false);
     } catch (error) {
       console.error(error);
       throw error;
-    } finally {
-      setIsSavingProject(false);
     }
   }
+
+  const pageErrorMessage = useMemo(() => {
+    if (project === null && !isLoading && !combinedError) {
+      return "Проект не найден";
+    }
+
+    if (combinedError instanceof Error) {
+      return combinedError.message;
+    }
+
+    if (combinedError) {
+      return "Не удалось загрузить проект";
+    }
+
+    return "";
+  }, [combinedError, isLoading, project]);
 
   return (
     <>
       <main className="flex-1 px-6 py-6 md:px-8">
         <div className="flex w-full flex-col gap-6">
           {isLoading ? (
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 text-sm text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              Загрузка проекта...
+  <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    <div className="overflow-x-auto">
+      <div className="grid min-w-[1680px] grid-cols-7 gap-4">
+        {Array.from({ length: 7 }).map((_, dayIndex) => (
+          <div key={dayIndex} className="flex min-h-[720px] flex-col">
+            <div className="mb-3 px-1">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="mt-2 h-5 w-28" />
             </div>
-          ) : errorMessage ? (
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-3">
+              <Skeleton className="h-11 w-full" />
+
+              <div className="mt-3 space-y-3">
+                {Array.from({ length: 3 }).map((_, cardIndex) => (
+                  <div
+                    key={cardIndex}
+                    className="rounded-[20px] border border-white/10 bg-[#121826] p-4"
+                  >
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="mt-3 h-5 w-5/6" />
+                    <Skeleton className="mt-3 h-4 w-1/2" />
+
+                    <div className="mt-4 flex gap-2">
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                      <Skeleton className="h-6 w-24 rounded-full" />
+                    </div>
+
+                    <Skeleton className="mt-4 h-2 w-full rounded-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+) : pageErrorMessage ? (
             <div className="rounded-[28px] border border-red-500/20 bg-red-500/10 p-6 text-sm text-red-200 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              {errorMessage}
+              {pageErrorMessage}
             </div>
           ) : project ? (
             <>
@@ -548,10 +578,12 @@ export default function ProjectPage() {
                           <button
                             type="button"
                             onClick={handleSaveOverview}
-                            disabled={isSavingOverview}
+                            disabled={updateProjectMutation.isPending}
                             className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
                           >
-                            {isSavingOverview ? "Сохраняем..." : "Сохранить"}
+                            {updateProjectMutation.isPending
+                              ? "Сохраняем..."
+                              : "Сохранить"}
                           </button>
                         </div>
                       </div>
@@ -606,10 +638,12 @@ export default function ProjectPage() {
                           <button
                             type="button"
                             onClick={handleSaveLinks}
-                            disabled={isSavingLinks}
+                            disabled={updateProjectMutation.isPending}
                             className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
                           >
-                            {isSavingLinks ? "Сохраняем..." : "Сохранить"}
+                            {updateProjectMutation.isPending
+                              ? "Сохраняем..."
+                              : "Сохранить"}
                           </button>
                         </div>
                       </div>
@@ -698,11 +732,11 @@ export default function ProjectPage() {
           isOpen={isEditProjectModalOpen}
           clients={clients}
           employees={employees}
-          isSubmitting={isSavingProject}
+          isSubmitting={updateProjectMutation.isPending}
           mode="edit"
           initialProject={project}
           onClose={() => {
-            if (!isSavingProject) {
+            if (!updateProjectMutation.isPending) {
               setIsEditProjectModalOpen(false);
             }
           }}

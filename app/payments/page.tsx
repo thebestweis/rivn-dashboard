@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+
 import { AppToast } from "../components/ui/app-toast";
 import { PaymentsPageHeader } from "../components/payments/payments-page-header";
 import { PlannedPaymentsTable } from "../components/payments/planned-payments-table";
@@ -8,32 +10,34 @@ import { FactPaymentsTable } from "../components/payments/fact-payments-table";
 import { CreatePaymentModal } from "../components/payments/create-payment-modal";
 import { EditPaymentModal } from "../components/payments/edit-payment-modal";
 import { EmptyState } from "../components/ui/empty-state";
+import { Skeleton } from "../components/ui/skeleton";
+
 import { AccessDenied } from "../components/access/access-denied";
 import { usePageAccess } from "../lib/use-page-access";
 import { useSectionPermission } from "../lib/use-section-permission";
-
 import {
   sendInvoiceCreatedNotification,
   sendPaymentReceivedNotification,
 } from "../lib/notifications-client";
-
 import { generateEntityId, parseRubAmount } from "../lib/storage";
-import { fetchClientsFromSupabase } from "../lib/supabase/clients";
-import { fetchEmployeesFromSupabase } from "../lib/supabase/employees";
-import {
-  createPaymentInSupabase,
-  deletePaymentFromSupabase,
-  getPaymentsFromSupabase,
-  updatePaymentInSupabase,
-} from "../lib/supabase/payments";
 import {
   createPayrollAccrualInSupabase,
   fetchPayrollAccrualsFromSupabase,
   updatePayrollAccrualInSupabase,
   deletePayrollAccrualFromSupabase,
 } from "../lib/supabase/payroll";
-import { getProjects } from "../lib/supabase/projects";
 import type { PaymentFormData } from "../lib/types/payment";
+import {
+  createPaymentInSupabase,
+  deletePaymentFromSupabase,
+  updatePaymentInSupabase,
+} from "../lib/supabase/payments";
+import {
+  usePaymentClientsQuery,
+  usePaymentEmployeesQuery,
+  usePaymentProjectsQuery,
+  usePaymentsQuery,
+} from "../lib/queries/use-payments-query";
 
 interface ClientItem {
   id: string;
@@ -138,9 +142,62 @@ function getPlannedStatus(payment: {
 
 function getClientDisplayName(client: ClientItem) {
   return client.name || client.clientName || client.title || "Без названия";
+  
+}
+
+function PaymentsStatsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={index}
+          className="rounded-2xl border border-white/10 bg-[#121826] p-4"
+        >
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="mt-3 h-8 w-36" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PaymentsTableSkeleton() {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <div className="flex gap-2">
+          <Skeleton className="h-10 w-36 rounded-full" />
+          <Skeleton className="h-10 w-40 rounded-full" />
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-[24px] border border-white/8">
+        <div className="grid grid-cols-6 gap-4 bg-white/[0.04] px-4 py-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-4 w-full" />
+          ))}
+        </div>
+
+        {Array.from({ length: 6 }).map((_, rowIndex) => (
+          <div
+            key={rowIndex}
+            className="grid grid-cols-6 gap-4 border-t border-white/6 px-4 py-4"
+          >
+            <Skeleton className="h-5 w-28" />
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-8 w-24" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function PaymentsPage() {
+    const queryClient = useQueryClient();
   const {
     isLoading: isAccessLoading,
     hasAccess,
@@ -155,14 +212,8 @@ export default function PaymentsPage() {
     "success"
   );
 
-  const [clients, setClients] = useState<ClientItem[]>([]);
-  const [projects, setProjects] = useState<ProjectItem[]>([]);
-  const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [factPayments, setFactPayments] = useState<FactPaymentRow[]>([]);
-  const [plannedPayments, setPlannedPayments] = useState<PlannedPaymentRow[]>(
-    []
-  );
-  const [loadingPayments, setLoadingPayments] = useState(true);
+  const [plannedPayments, setPlannedPayments] = useState<PlannedPaymentRow[]>([]);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
@@ -192,6 +243,30 @@ export default function PaymentsPage() {
   const [editSource, setEditSource] = useState("");
   const [editDocumentUrl, setEditDocumentUrl] = useState("");
 
+  const {
+    data: clients = [],
+    isLoading: isClientsLoading,
+    error: clientsError,
+  } = usePaymentClientsQuery(hasAccess);
+
+  const {
+    data: projects = [],
+    isLoading: isProjectsLoading,
+    error: projectsError,
+  } = usePaymentProjectsQuery(hasAccess);
+
+  const {
+    data: employees = [],
+    isLoading: isEmployeesLoading,
+    error: employeesError,
+  } = usePaymentEmployeesQuery(hasAccess);
+
+  const {
+    data: paymentsData = [],
+    isLoading: isPaymentsLoading,
+    error: paymentsError,
+  } = usePaymentsQuery(hasAccess);
+
   useEffect(() => {
     if (!toastMessage) return;
 
@@ -201,6 +276,86 @@ export default function PaymentsPage() {
 
     return () => clearTimeout(timer);
   }, [toastMessage]);
+
+  const loadingPayments =
+    isClientsLoading ||
+    isProjectsLoading ||
+    isEmployeesLoading ||
+    isPaymentsLoading;
+
+  useEffect(() => {
+    const firstError =
+      clientsError || projectsError || employeesError || paymentsError;
+
+    if (!firstError) return;
+
+    console.error("Ошибка загрузки payments:", firstError);
+    setToastType("error");
+    setToastMessage(
+      firstError instanceof Error
+        ? firstError.message
+        : "Не удалось загрузить оплаты"
+    );
+  }, [clientsError, projectsError, employeesError, paymentsError]);
+
+  useEffect(() => {
+    if (!hasAccess) return;
+
+    const safeClients = (clients ?? []) as ClientItem[];
+    const safeProjects = (projects ?? []) as ProjectItem[];
+
+    const clientMap = safeClients.reduce<PaymentClientMap>((acc, client) => {
+      acc[client.id] = getClientDisplayName(client);
+      return acc;
+    }, {});
+
+    const projectMap = safeProjects.reduce<Record<string, string>>(
+      (acc, project) => {
+        acc[project.id] = project.name;
+        return acc;
+      },
+      {}
+    );
+
+    const mappedFactPayments: FactPaymentRow[] = paymentsData
+      .filter((payment) => payment.status === "paid")
+      .map((payment) => ({
+        id: payment.id,
+        clientId: payment.client_id,
+        client: clientMap[payment.client_id] ?? "Неизвестный клиент",
+        projectId: payment.project_id ?? null,
+        project: payment.project_id ? projectMap[payment.project_id] ?? "" : "",
+        paidAt: fromSupabaseDate(payment.paid_date),
+        amount: String(payment.amount),
+        source: payment.notes ?? "",
+        documentUrl: payment.document_url ?? "",
+      }));
+
+    const mappedPlannedPayments: PlannedPaymentRow[] = paymentsData
+      .filter((payment) => payment.status !== "paid")
+      .map((payment) => ({
+        id: payment.id,
+        clientId: payment.client_id,
+        client: clientMap[payment.client_id] ?? "Неизвестный клиент",
+        projectId: payment.project_id ?? null,
+        project: payment.project_id ? projectMap[payment.project_id] ?? "" : "",
+        invoiceDate: fromSupabaseDate(payment.created_at?.slice(0, 10) ?? null),
+        paymentDate: fromSupabaseDate(payment.due_date),
+        amount: `₽${Number(payment.amount).toLocaleString("ru-RU")}`,
+        status: getPlannedStatus(payment),
+        notes: payment.notes ?? "",
+        documentUrl: payment.document_url ?? "",
+      }));
+
+    const sortedPlanned = mappedPlannedPayments.sort((a, b) => {
+      if (a.status === "overdue" && b.status !== "overdue") return -1;
+      if (a.status !== "overdue" && b.status === "overdue") return 1;
+      return 0;
+    });
+
+    setFactPayments(mappedFactPayments);
+    setPlannedPayments(sortedPlanned);
+  }, [hasAccess, clients, projects, paymentsData]);
 
   const plannedTotal = plannedPayments.reduce(
     (sum, item) => sum + parseRubAmount(item.amount),
@@ -330,96 +485,6 @@ export default function PaymentsPage() {
     });
   }
 
-  async function loadPaymentsData() {
-    if (!hasAccess) {
-      setLoadingPayments(false);
-      return;
-    }
-
-    try {
-      setLoadingPayments(true);
-
-      const [clientsData, projectsData, employeesData, paymentsData] =
-        await Promise.all([
-          fetchClientsFromSupabase(),
-          getProjects(),
-          fetchEmployeesFromSupabase(),
-          getPaymentsFromSupabase(),
-        ]);
-
-      const safeClients = (clientsData ?? []) as ClientItem[];
-      const safeProjects = (projectsData ?? []) as ProjectItem[];
-      const safeEmployees = (employeesData ?? []) as EmployeeItem[];
-
-      setClients(safeClients);
-      setProjects(safeProjects);
-      setEmployees(safeEmployees);
-
-      const clientMap = safeClients.reduce<PaymentClientMap>((acc, client) => {
-        acc[client.id] = getClientDisplayName(client);
-        return acc;
-      }, {});
-
-      const projectMap = safeProjects.reduce<Record<string, string>>(
-        (acc, project) => {
-          acc[project.id] = project.name;
-          return acc;
-        },
-        {}
-      );
-
-      const mappedFactPayments: FactPaymentRow[] = paymentsData
-        .filter((payment) => payment.status === "paid")
-        .map((payment) => ({
-          id: payment.id,
-          clientId: payment.client_id,
-          client: clientMap[payment.client_id] ?? "Неизвестный клиент",
-          projectId: payment.project_id ?? null,
-          project: payment.project_id ? projectMap[payment.project_id] ?? "" : "",
-          paidAt: fromSupabaseDate(payment.paid_date),
-          amount: String(payment.amount),
-          source: payment.notes ?? "",
-          documentUrl: payment.document_url ?? "",
-        }));
-
-      const mappedPlannedPayments: PlannedPaymentRow[] = paymentsData
-        .filter((payment) => payment.status !== "paid")
-        .map((payment) => ({
-          id: payment.id,
-          clientId: payment.client_id,
-          client: clientMap[payment.client_id] ?? "Неизвестный клиент",
-          projectId: payment.project_id ?? null,
-          project: payment.project_id ? projectMap[payment.project_id] ?? "" : "",
-          invoiceDate: fromSupabaseDate(payment.created_at?.slice(0, 10) ?? null),
-          paymentDate: fromSupabaseDate(payment.due_date),
-          amount: `₽${Number(payment.amount).toLocaleString("ru-RU")}`,
-          status: getPlannedStatus(payment),
-          notes: payment.notes ?? "",
-          documentUrl: payment.document_url ?? "",
-        }));
-
-      const sortedPlanned = mappedPlannedPayments.sort((a, b) => {
-        if (a.status === "overdue" && b.status !== "overdue") return -1;
-        if (a.status !== "overdue" && b.status === "overdue") return 1;
-        return 0;
-      });
-
-      setFactPayments(mappedFactPayments);
-      setPlannedPayments(sortedPlanned);
-    } catch (error) {
-      console.error("Ошибка загрузки payments:", error);
-      setToastType("error");
-      setToastMessage("Не удалось загрузить оплаты");
-    } finally {
-      setLoadingPayments(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!hasAccess) return;
-    loadPaymentsData();
-  }, [hasAccess]);
-
   useEffect(() => {
     if (canManage) return;
 
@@ -520,7 +585,7 @@ export default function PaymentsPage() {
       setIsCreateOpen(false);
       resetCreateForm();
 
-      await loadPaymentsData();
+      await queryClient.invalidateQueries({ queryKey: ["payments"] });
 
       setActiveTab(isInvoice ? "planned" : "fact");
       setToastType("success");
@@ -649,7 +714,7 @@ export default function PaymentsPage() {
       setIsEditOpen(false);
       resetEditForm();
 
-      await loadPaymentsData();
+     await queryClient.invalidateQueries({ queryKey: ["payments"] });
 
       setToastType("success");
       setToastMessage(
@@ -729,7 +794,7 @@ export default function PaymentsPage() {
         );
       }
 
-      await loadPaymentsData();
+      await queryClient.invalidateQueries({ queryKey: ["payments"] });
 
       setToastType("success");
       setToastMessage(`Счёт для "${target.client}" отмечен как оплаченный`);
@@ -785,7 +850,7 @@ export default function PaymentsPage() {
         resetEditForm();
       }
 
-      await loadPaymentsData();
+      await queryClient.invalidateQueries({ queryKey: ["payments"] });
 
       setToastType("success");
       setToastMessage(`Оплата для "${target.client}" удалена`);
@@ -834,19 +899,7 @@ export default function PaymentsPage() {
 
   const canShowManageActions = !isPermissionLoading && canManage;
 
-  if (isAccessLoading) {
-    return (
-      <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            Проверяем доступ...
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  if (!hasAccess) {
+  if (!isAccessLoading && !hasAccess) {
     return (
       <main className="flex-1">
         <div className="space-y-6 px-5 py-6 lg:px-8">
@@ -871,34 +924,38 @@ export default function PaymentsPage() {
             onCreatePayment={handleOpenCreatePayment}
           />
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-              <div className="text-xs uppercase tracking-wide text-white/40">
-                Ожидается
-              </div>
-              <div className="mt-1 text-2xl font-semibold tracking-tight">
-                ₽{plannedTotal.toLocaleString("ru-RU")}
-              </div>
-            </div>
+          {loadingPayments ? (
+  <PaymentsStatsSkeleton />
+) : (
+  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
+      <div className="text-xs uppercase tracking-wide text-white/40">
+        Ожидается
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight">
+        ₽{plannedTotal.toLocaleString("ru-RU")}
+      </div>
+    </div>
 
-            <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-              <div className="text-xs uppercase tracking-wide text-white/40">
-                Просрочено
-              </div>
-              <div className="mt-1 text-2xl font-semibold tracking-tight text-rose-400">
-                ₽{overdueTotal.toLocaleString("ru-RU")}
-              </div>
-            </div>
+    <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
+      <div className="text-xs uppercase tracking-wide text-white/40">
+        Просрочено
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight text-rose-400">
+        ₽{overdueTotal.toLocaleString("ru-RU")}
+      </div>
+    </div>
 
-            <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-              <div className="text-xs uppercase tracking-wide text-white/40">
-                Получено
-              </div>
-              <div className="mt-1 text-2xl font-semibold tracking-tight text-emerald-400">
-                ₽{paidTotal.toLocaleString("ru-RU")}
-              </div>
-            </div>
-          </div>
+    <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
+      <div className="text-xs uppercase tracking-wide text-white/40">
+        Получено
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight text-emerald-400">
+        ₽{paidTotal.toLocaleString("ru-RU")}
+      </div>
+    </div>
+  </div>
+)}
 
           <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
             <div className="mb-5 flex items-center justify-between gap-4">
@@ -931,10 +988,7 @@ export default function PaymentsPage() {
 
             {activeTab === "planned" ? (
               loadingPayments ? (
-                <EmptyState
-                  title="Загрузка счетов..."
-                  description="Подгружаем данные из Supabase."
-                />
+                <PaymentsTableSkeleton />
               ) : plannedPayments.length > 0 ? (
                 <PlannedPaymentsTable
                   items={plannedPayments}
@@ -954,10 +1008,7 @@ export default function PaymentsPage() {
                 />
               )
             ) : loadingPayments ? (
-              <EmptyState
-                title="Загрузка оплат..."
-                description="Подгружаем данные из Supabase."
-              />
+              <PaymentsTableSkeleton />
             ) : factPayments.length > 0 ? (
               <FactPaymentsTable
                 items={factPayments}

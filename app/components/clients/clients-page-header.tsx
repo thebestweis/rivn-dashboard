@@ -1,3 +1,5 @@
+import { CustomSelect } from "../ui/custom-select";
+
 interface ClientsPageHeaderProps {
   search: string;
   setSearch: (value: string) => void;
@@ -6,6 +8,14 @@ interface ClientsPageHeaderProps {
   onAddClient: () => void;
   canAddClient?: boolean;
 }
+
+const statusOptions = [
+  { value: "all", label: "Все статусы" },
+  { value: "active", label: "Активный" },
+  { value: "paused", label: "На паузе" },
+  { value: "problem", label: "Проблемный" },
+  { value: "completed", label: "Завершён" },
+];
 
 export function ClientsPageHeader({
   search,
@@ -45,17 +55,11 @@ export function ClientsPageHeader({
           className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
         />
 
-        <select
+        <CustomSelect
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
-        >
-          <option value="all">Все статусы</option>
-          <option value="active">Активный</option>
-          <option value="paused">На паузе</option>
-          <option value="problem">Проблемный</option>
-          <option value="completed">Завершён</option>
-        </select>
+          onChange={setStatus}
+          options={statusOptions}
+        />
       </div>
     </div>
   );

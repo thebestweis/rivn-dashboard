@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createWorkspace,
@@ -9,6 +9,8 @@ import {
   updateWorkspace,
   type AccessibleWorkspace,
 } from "../../lib/supabase/workspaces";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../lib/query-keys";
 
 type WorkspaceFormState = {
   id: string | null;
@@ -74,9 +76,7 @@ function getRoleLabel(role: AccessibleWorkspace["membership_role"]) {
 
 export function WorkspaceSettingsTab() {
   const router = useRouter();
-
-  const [workspaces, setWorkspaces] = useState<AccessibleWorkspace[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -84,25 +84,24 @@ export function WorkspaceSettingsTab() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [statusMessage, setStatusMessage] = useState("");
 
-  async function loadWorkspaces() {
-    try {
-      setIsLoading(true);
-      const data = await getAccessibleWorkspaces();
-      setWorkspaces(data);
-    } catch (error) {
-      console.error("Ошибка загрузки кабинетов:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadWorkspaces();
-  }, []);
+  const {
+    data: workspaces = [],
+    isLoading,
+  } = useQuery({
+    queryKey: queryKeys.accessibleWorkspaces,
+    queryFn: getAccessibleWorkspaces,
+    staleTime: 1000 * 60 * 5,
+  });
 
   const sortedWorkspaces = useMemo(() => {
     return [...workspaces].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   }, [workspaces]);
+
+  async function refreshWorkspaces() {
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.accessibleWorkspaces,
+    });
+  }
 
   function openCreateModal() {
     setForm(initialForm);
@@ -170,7 +169,7 @@ export function WorkspaceSettingsTab() {
             : null,
         });
 
-        await loadWorkspaces();
+        await refreshWorkspaces();
         closeModal();
         router.refresh();
         return;
@@ -187,7 +186,7 @@ export function WorkspaceSettingsTab() {
       });
 
       await setActiveWorkspace(created.id);
-      await loadWorkspaces();
+      await refreshWorkspaces();
 
       closeModal();
       router.refresh();

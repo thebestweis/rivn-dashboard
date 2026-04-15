@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 
 import { ThemeInit } from "./components/ui/theme-init";
 import { AppContextProvider } from "./providers/app-context-provider";
+import { QueryProvider } from "./providers/query-provider";
 import { RootAppShell } from "./components/layout/root-app-shell";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -44,9 +45,11 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900 dark:bg-[#0B0F1A] dark:text-white">
         <ThemeInit />
-        <AppContextProvider>
-          <RootAppShell>{children}</RootAppShell>
-        </AppContextProvider>
+        <QueryProvider>
+          <AppContextProvider>
+            <RootAppShell>{children}</RootAppShell>
+          </AppContextProvider>
+        </QueryProvider>
       </body>
     </html>
   );

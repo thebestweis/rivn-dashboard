@@ -5,6 +5,7 @@ import "react-day-picker/dist/style.css";
 import { ru } from "date-fns/locale";
 import { format } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DayPicker } from "react-day-picker";
 import { AppToast } from "../ui/app-toast";
 import {
@@ -20,13 +21,17 @@ import {
   type TaskComment,
 } from "../../lib/supabase/task-comments";
 import {
-  getWorkspaceMembers,
   type WorkspaceMemberItem,
 } from "../../lib/supabase/workspace-members";
 import { canEditTasks, isAppRole, type AppRole } from "../../lib/permissions";
 import { useAppContextState } from "../../providers/app-context-provider";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
 import { BillingAccessBanner } from "../ui/billing-access-banner";
+import { useActiveWorkspaceMembers } from "../../lib/queries/use-workspace-members-query";
+import {
+  patchTaskStatusInCaches,
+  syncTaskAcrossCaches,
+} from "../../lib/queries/use-tasks-query";
 
 type TaskModalProps = {
   isOpen: boolean;
@@ -153,6 +158,8 @@ export function TaskModal({
   onTaskCreated,
   onTaskOpen,
 }: TaskModalProps) {
+  const queryClient = useQueryClient();
+
   const {
     role,
     billingAccess,
@@ -172,28 +179,52 @@ export function TaskModal({
   const [isDeadlinePickerOpen, setIsDeadlinePickerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberItem[]>(
-    []
-  );
-  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
 
   const [isAssigneesDropdownOpen, setIsAssigneesDropdownOpen] = useState(false);
-const assigneesDropdownRef = useRef<HTMLDivElement | null>(null);
+  const assigneesDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const [subtaskDraft, setSubtaskDraft] = useState("");
   const [isCreatingSubtask, setIsCreatingSubtask] = useState(false);
   const [updatingSubtaskId, setUpdatingSubtaskId] = useState<string | null>(null);
 
-  const [comments, setComments] = useState<TaskComment[]>([]);
   const [commentDraft, setCommentDraft] = useState("");
-  const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [isCreatingComment, setIsCreatingComment] = useState(false);
 
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
     "success"
   );
+
+  const commentsQueryKey = useMemo(
+    () => ["task-comments", task?.id ?? "unknown"],
+    [task?.id]
+  );
+
+  const {
+    activeMembers: activeWorkspaceMembers,
+    isLoading: isLoadingMembers,
+  } = useActiveWorkspaceMembers(isOpen && !isAppContextLoading);
+
+  const {
+    data: comments = [],
+    isLoading: isLoadingComments,
+  } = useQuery({
+    queryKey: commentsQueryKey,
+    queryFn: () => getTaskComments(task!.id),
+    enabled: isOpen && Boolean(task?.id),
+    staleTime: 1000 * 30,
+  });
+
+  const createCommentMutation = useMutation({
+    mutationFn: (text: string) => createTaskComment(task!.id, text),
+    onSuccess: (createdComment) => {
+      queryClient.setQueryData<TaskComment[]>(commentsQueryKey, (prev = []) => [
+        ...prev,
+        createdComment,
+      ]);
+    },
+  });
 
   const subtasks = useMemo(() => {
     if (!task) return [];
@@ -206,10 +237,6 @@ const assigneesDropdownRef = useRef<HTMLDivElement | null>(null);
     () => subtasks.filter((subtask) => subtask.status === "done").length,
     [subtasks]
   );
-
-  const activeWorkspaceMembers = useMemo(() => {
-    return workspaceMembers.filter((member) => member.status === "active");
-  }, [workspaceMembers]);
 
   const selectedAssigneeLabels = useMemo(() => {
     if (selectedAssigneeIds.length === 0) {
@@ -227,26 +254,26 @@ const assigneesDropdownRef = useRef<HTMLDivElement | null>(null);
   }, [activeWorkspaceMembers, selectedAssigneeIds]);
 
   const assigneesFieldLabel = useMemo(() => {
-  if (isLoadingMembers) {
-    return "Загружаем участников...";
-  }
+    if (isLoadingMembers) {
+      return "Загружаем участников...";
+    }
 
-  if (selectedAssigneeLabels.length === 0) {
-    return "Выбрать исполнителей";
-  }
+    if (selectedAssigneeLabels.length === 0) {
+      return "Выбрать исполнителей";
+    }
 
-  if (selectedAssigneeLabels.length === 1) {
-    return selectedAssigneeLabels[0];
-  }
+    if (selectedAssigneeLabels.length === 1) {
+      return selectedAssigneeLabels[0];
+    }
 
-  if (selectedAssigneeLabels.length === 2) {
-    return `${selectedAssigneeLabels[0]}, ${selectedAssigneeLabels[1]}`;
-  }
+    if (selectedAssigneeLabels.length === 2) {
+      return `${selectedAssigneeLabels[0]}, ${selectedAssigneeLabels[1]}`;
+    }
 
-  return `${selectedAssigneeLabels[0]}, ${selectedAssigneeLabels[1]} + ещё ${
-    selectedAssigneeLabels.length - 2
-  }`;
-}, [isLoadingMembers, selectedAssigneeLabels]);
+    return `${selectedAssigneeLabels[0]}, ${selectedAssigneeLabels[1]} + ещё ${
+      selectedAssigneeLabels.length - 2
+    }`;
+  }, [isLoadingMembers, selectedAssigneeLabels]);
 
   const deadlineLabel = useMemo(() => {
     if (!deadlineDate) {
@@ -261,39 +288,6 @@ const assigneesDropdownRef = useRef<HTMLDivElement | null>(null);
 
     return `${dateLabel}, ${deadlineTime}`;
   }, [deadlineDate, deadlineTime]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    let isMounted = true;
-
-    async function loadMembers() {
-      try {
-        setIsLoadingMembers(true);
-        const members = await getWorkspaceMembers();
-
-        if (isMounted) {
-          setWorkspaceMembers(members);
-        }
-      } catch (error) {
-        console.error("Ошибка загрузки участников кабинета:", error);
-
-        if (isMounted) {
-          setWorkspaceMembers([]);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingMembers(false);
-        }
-      }
-    }
-
-    loadMembers();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen || !task) {
@@ -311,70 +305,35 @@ const assigneesDropdownRef = useRef<HTMLDivElement | null>(null);
       (task.assignees ?? []).map((assignee) => assignee.workspace_member_id)
     );
     setSubtaskDraft("");
-setCommentDraft("");
-setIsDeadlinePickerOpen(false);
-setIsAssigneesDropdownOpen(false);
+    setCommentDraft("");
+    setIsDeadlinePickerOpen(false);
+    setIsAssigneesDropdownOpen(false);
   }, [isOpen, task]);
 
   useEffect(() => {
-  if (canManageTasksWithBilling) return;
+    if (canManageTasksWithBilling) return;
 
-  setIsDeadlinePickerOpen(false);
-  setIsAssigneesDropdownOpen(false);
-}, [canManageTasksWithBilling]);
-
-  useEffect(() => {
-  function handleClickOutside(event: MouseEvent) {
-    if (!assigneesDropdownRef.current) return;
-
-    if (
-      !assigneesDropdownRef.current.contains(event.target as Node)
-    ) {
-      setIsAssigneesDropdownOpen(false);
-    }
-  }
-
-  if (isAssigneesDropdownOpen) {
-    document.addEventListener("mousedown", handleClickOutside);
-  }
-
-  return () => {
-    document.removeEventListener("mousedown", handleClickOutside);
-  };
-}, [isAssigneesDropdownOpen]);
+    setIsDeadlinePickerOpen(false);
+    setIsAssigneesDropdownOpen(false);
+  }, [canManageTasksWithBilling]);
 
   useEffect(() => {
-    if (!isOpen || !task) {
-      setComments([]);
-      return;
-    }
+    function handleClickOutside(event: MouseEvent) {
+      if (!assigneesDropdownRef.current) return;
 
-    let isMounted = true;
-    const currentTaskId = task.id;
-
-    async function loadComments() {
-      try {
-        setIsLoadingComments(true);
-        const data = await getTaskComments(currentTaskId);
-
-        if (isMounted) {
-          setComments(data);
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        if (isMounted) {
-          setIsLoadingComments(false);
-        }
+      if (!assigneesDropdownRef.current.contains(event.target as Node)) {
+        setIsAssigneesDropdownOpen(false);
       }
     }
 
-    loadComments();
+    if (isAssigneesDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
 
     return () => {
-      isMounted = false;
+      document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isOpen, task]);
+  }, [isAssigneesDropdownOpen]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -506,11 +465,14 @@ setIsAssigneesDropdownOpen(false);
 
       await updateTaskStatus(subtask.id, nextStatus);
 
-      onTaskUpdated({
+      const updatedSubtask = {
         ...subtask,
         status: nextStatus,
         updated_at: new Date().toISOString(),
-      });
+      };
+
+      patchTaskStatusInCaches(queryClient, subtask, nextStatus);
+      onTaskUpdated(updatedSubtask);
     } catch (error) {
       console.error(error);
       setToastType("error");
@@ -546,8 +508,7 @@ setIsAssigneesDropdownOpen(false);
     try {
       setIsCreatingComment(true);
 
-      const createdComment = await createTaskComment(task.id, nextText);
-      setComments((prev) => [...prev, createdComment]);
+      await createCommentMutation.mutateAsync(nextText);
       setCommentDraft("");
       setToastType("success");
       setToastMessage("Комментарий добавлен");
@@ -558,6 +519,10 @@ setIsAssigneesDropdownOpen(false);
     } finally {
       setIsCreatingComment(false);
     }
+  }
+
+  if (!isOpen || !task) {
+    return null;
   }
 
   return (
@@ -623,100 +588,100 @@ setIsAssigneesDropdownOpen(false);
             />
 
             <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
-  <div className="text-sm text-white/45">Исполнители</div>
+              <div className="text-sm text-white/45">Исполнители</div>
 
-  <div className="mt-4 relative" ref={assigneesDropdownRef}>
-    <button
-      type="button"
-      onClick={() => {
-        if (!canManageTasksWithBilling || activeWorkspaceMembers.length === 0) {
-          return;
-        }
+              <div className="mt-4 relative" ref={assigneesDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!canManageTasksWithBilling || activeWorkspaceMembers.length === 0) {
+                      return;
+                    }
 
-        setIsAssigneesDropdownOpen((prev) => !prev);
-      }}
-      disabled={
-        !canManageTasksWithBilling ||
-        isLoadingMembers ||
-        activeWorkspaceMembers.length === 0
-      }
-      className="flex h-12 w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-left text-sm text-white transition hover:bg-white/[0.06] disabled:cursor-default disabled:opacity-70"
-    >
-      <span
-        className={
-          selectedAssigneeIds.length > 0 ? "text-white" : "text-white/35"
-        }
-      >
-        {activeWorkspaceMembers.length === 0 && !isLoadingMembers
-          ? "Нет доступных исполнителей"
-          : assigneesFieldLabel}
-      </span>
+                    setIsAssigneesDropdownOpen((prev) => !prev);
+                  }}
+                  disabled={
+                    !canManageTasksWithBilling ||
+                    isLoadingMembers ||
+                    activeWorkspaceMembers.length === 0
+                  }
+                  className="flex h-12 w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-left text-sm text-white transition hover:bg-white/[0.06] disabled:cursor-default disabled:opacity-70"
+                >
+                  <span
+                    className={
+                      selectedAssigneeIds.length > 0 ? "text-white" : "text-white/35"
+                    }
+                  >
+                    {activeWorkspaceMembers.length === 0 && !isLoadingMembers
+                      ? "Нет доступных исполнителей"
+                      : assigneesFieldLabel}
+                  </span>
 
-      <span className="ml-3 text-white/35">
-        {isAssigneesDropdownOpen ? "−" : "+"}
-      </span>
-    </button>
+                  <span className="ml-3 text-white/35">
+                    {isAssigneesDropdownOpen ? "−" : "+"}
+                  </span>
+                </button>
 
-    {isAssigneesDropdownOpen ? (
-      <div className="absolute left-0 right-0 top-[56px] z-30 max-h-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-[#121826] p-2 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
-        {activeWorkspaceMembers.map((member) => {
-          const isSelected = selectedAssigneeIds.includes(member.id);
+                {isAssigneesDropdownOpen ? (
+                  <div className="absolute left-0 right-0 top-[56px] z-30 max-h-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-[#121826] p-2 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+                    {activeWorkspaceMembers.map((member) => {
+                      const isSelected = selectedAssigneeIds.includes(member.id);
 
-          return (
-            <button
-              key={member.id}
-              type="button"
-              onClick={() => handleToggleAssignee(member.id)}
-              className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
-                isSelected
-                  ? "bg-emerald-400/10 text-emerald-300"
-                  : "text-white/75 hover:bg-white/[0.05] hover:text-white"
-              }`}
-            >
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">
-                  {getMemberLabel(member)}
-                </div>
-                <div className="mt-1 text-xs text-white/40">
-                  {member.role}
-                </div>
+                      return (
+                        <button
+                          key={member.id}
+                          type="button"
+                          onClick={() => handleToggleAssignee(member.id)}
+                          className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
+                            isSelected
+                              ? "bg-emerald-400/10 text-emerald-300"
+                              : "text-white/75 hover:bg-white/[0.05] hover:text-white"
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">
+                              {getMemberLabel(member)}
+                            </div>
+                            <div className="mt-1 text-xs text-white/40">
+                              {member.role}
+                            </div>
+                          </div>
+
+                          <div
+                            className={`ml-3 h-4 w-4 shrink-0 rounded-full border ${
+                              isSelected
+                                ? "border-emerald-400 bg-emerald-400"
+                                : "border-white/25"
+                            }`}
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
 
-              <div
-                className={`ml-3 h-4 w-4 shrink-0 rounded-full border ${
-                  isSelected
-                    ? "border-emerald-400 bg-emerald-400"
-                    : "border-white/25"
-                }`}
-              />
-            </button>
-          );
-        })}
-      </div>
-    ) : null}
-  </div>
+              <div className="mt-4 text-xs leading-5 text-white/35">
+                Можно выбрать одного или нескольких исполнителей.
+              </div>
 
-  <div className="mt-4 text-xs leading-5 text-white/35">
-    Можно выбрать одного или нескольких исполнителей.
-  </div>
-
-  {selectedAssigneeLabels.length > 0 ? (
-    <div className="mt-3 flex flex-wrap gap-2">
-      {selectedAssigneeLabels.map((label) => (
-        <div
-          key={label}
-          className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70"
-        >
-          {label}
-        </div>
-      ))}
-    </div>
-  ) : (
-    <div className="mt-3 text-xs text-white/30">
-      Исполнители пока не назначены
-    </div>
-  )}
-</section>
+              {selectedAssigneeLabels.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedAssigneeLabels.map((label) => (
+                    <div
+                      key={label}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70"
+                    >
+                      {label}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 text-xs text-white/30">
+                  Исполнители пока не назначены
+                </div>
+              )}
+            </section>
 
             <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
               <div className="text-sm text-white/45">Дедлайн</div>

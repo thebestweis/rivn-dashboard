@@ -31,51 +31,107 @@ type DbWorkspaceBillingRow = {
 
 type DbTransactionRow = {
   workspace_id: string;
-  amount: number;
+  amount: number | string | null;
+  status?: string | null;
 };
 
-export async function getAllWorkspaces(): Promise<AdminWorkspaceRow[]> {
+type DbProfileRoleRow = {
+  platform_role: string | null;
+};
+
+export type AdminActionLogRow = {
+  id: string;
+  admin_user_id: string;
+  workspace_id: string | null;
+  action_type: string;
+  action_payload: Record<string, unknown>;
+  created_at: string;
+};
+
+type DbAdminActionLogRow = {
+  id: string;
+  admin_user_id: string;
+  workspace_id: string | null;
+  action_type: string;
+  action_payload: Record<string, unknown> | null;
+  created_at: string;
+};
+
+async function requireSuperAdmin() {
   const supabase = createClient();
 
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Нет пользователя");
+  if (userError || !user) {
+    throw new Error("Пользователь не авторизован");
+  }
 
-  const { data: profile } = await supabase
+  const { data, error: profileError } = await (supabase as any)
     .from("profiles")
     .select("platform_role")
     .eq("id", user.id)
     .single();
 
-  if (profile?.platform_role !== "super_admin") {
+  if (profileError || !data) {
+    throw new Error("Профиль не найден");
+  }
+
+  const profile = data as DbProfileRoleRow;
+
+  if (profile.platform_role !== "super_admin") {
     throw new Error("Нет доступа");
   }
 
+  return { supabase, user };
+}
+
+export async function getAllWorkspaces(): Promise<AdminWorkspaceRow[]> {
+  const { supabase } = await requireSuperAdmin();
+
   const [
-    { data: workspaces },
-    { data: billing },
-    { data: transactions },
+    { data: workspaces, error: workspacesError },
+    { data: billing, error: billingError },
+    { data: transactions, error: transactionsError },
   ] = await Promise.all([
-    supabase.from("workspaces").select("*"),
-    supabase.from("workspace_billing").select("*"),
-    supabase.from("billing_transactions").select("workspace_id, amount"),
+    (supabase as any).from("workspaces").select("id, name, slug, created_at"),
+    (supabase as any)
+      .from("workspace_billing")
+      .select("workspace_id, plan_code, subscription_status, billing_period"),
+    (supabase as any)
+      .from("billing_transactions")
+      .select("workspace_id, amount, status"),
   ]);
+
+  if (workspacesError) {
+    throw new Error(workspacesError.message);
+  }
+
+  if (billingError) {
+    throw new Error(billingError.message);
+  }
+
+  if (transactionsError) {
+    throw new Error(transactionsError.message);
+  }
 
   const billingMap = new Map<string, DbWorkspaceBillingRow>();
   const balanceMap = new Map<string, number>();
 
-  (billing ?? []).forEach((b: DbWorkspaceBillingRow) => {
+  ((billing ?? []) as DbWorkspaceBillingRow[]).forEach((b) => {
     billingMap.set(b.workspace_id, b);
   });
 
-  (transactions ?? []).forEach((t: DbTransactionRow) => {
-    const current = balanceMap.get(t.workspace_id) || 0;
-    balanceMap.set(t.workspace_id, current + t.amount);
+  ((transactions ?? []) as DbTransactionRow[]).forEach((t) => {
+    if (t.status && t.status !== "completed") return;
+
+    const current = balanceMap.get(t.workspace_id) ?? 0;
+    balanceMap.set(t.workspace_id, current + Number(t.amount ?? 0));
   });
 
-  return (workspaces ?? []).map((ws: DbWorkspaceRow) => {
+  return ((workspaces ?? []) as DbWorkspaceRow[]).map((ws) => {
     const b = billingMap.get(ws.id);
 
     return {
@@ -91,50 +147,22 @@ export async function getAllWorkspaces(): Promise<AdminWorkspaceRow[]> {
           }
         : null,
       balance: {
-        balance: balanceMap.get(ws.id) || 0,
+        balance: balanceMap.get(ws.id) ?? 0,
       },
     };
   });
 }
 
-export type AdminActionLogRow = {
-  id: string;
-  admin_user_id: string;
-  workspace_id: string | null;
-  action_type: string;
-  action_payload: Record<string, unknown>;
-  created_at: string;
-};
+export async function getAdminActionLogs(
+  limit = 50
+): Promise<AdminActionLogRow[]> {
+  const { supabase } = await requireSuperAdmin();
 
-export async function getAdminActionLogs(limit = 50): Promise<AdminActionLogRow[]> {
-  const supabase = createClient();
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    throw new Error("Пользователь не авторизован");
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("platform_role")
-    .eq("id", user.id)
-    .single();
-
-  if (profileError || !profile) {
-    throw new Error("Профиль не найден");
-  }
-
-  if (profile.platform_role !== "super_admin") {
-    throw new Error("Нет доступа");
-  }
-
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("admin_action_logs")
-    .select("*")
+    .select(
+      "id, admin_user_id, workspace_id, action_type, action_payload, created_at"
+    )
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -142,14 +170,32 @@ export async function getAdminActionLogs(limit = 50): Promise<AdminActionLogRow[
     throw new Error(error.message);
   }
 
-  return (data ?? []) as AdminActionLogRow[];
+  return ((data ?? []) as DbAdminActionLogRow[]).map((item) => ({
+    id: item.id,
+    admin_user_id: item.admin_user_id,
+    workspace_id: item.workspace_id,
+    action_type: item.action_type,
+    action_payload:
+      item.action_payload &&
+      typeof item.action_payload === "object" &&
+      !Array.isArray(item.action_payload)
+        ? item.action_payload
+        : {},
+    created_at: item.created_at,
+  }));
 }
 
-type DbAdminActionLogRow = {
-  id: string;
-  admin_user_id: string;
-  workspace_id: string | null;
-  action_type: string;
-  action_payload: Record<string, unknown> | null;
-  created_at: string;
-};
+export async function getAdminOverview(): Promise<{
+  workspaces: AdminWorkspaceRow[];
+  logs: AdminActionLogRow[];
+}> {
+  const [workspaces, logs] = await Promise.all([
+    getAllWorkspaces(),
+    getAdminActionLogs(30),
+  ]);
+
+  return {
+    workspaces,
+    logs,
+  };
+}

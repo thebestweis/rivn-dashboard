@@ -19,10 +19,13 @@ export function BillingAccessBanner({
     return null;
   }
 
+  const baseClassName =
+    "rounded-2xl px-4 py-3 text-sm";
+
   if (isBillingReadOnly) {
     return (
       <div
-        className={`rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200 ${className}`}
+        className={`${baseClassName} border border-red-500/20 bg-red-500/10 text-red-200 ${className}`}
       >
         {readOnlyMessage}
       </div>
@@ -32,7 +35,7 @@ export function BillingAccessBanner({
   if (!canManage) {
     return (
       <div
-        className={`rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 ${className}`}
+        className={`${baseClassName} border border-amber-500/20 bg-amber-500/10 text-amber-200 ${className}`}
       >
         {roleRestrictedMessage}
       </div>

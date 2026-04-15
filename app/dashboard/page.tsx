@@ -9,29 +9,28 @@ import { QuickActions } from "../components/dashboard/quick-actions";
 import { FinancialOverviewChart } from "../components/dashboard/financial-overview-chart";
 import { IncomeRatioDonut } from "../components/dashboard/income-ratio-donut";
 import { PlanFactPanel } from "../components/dashboard/plan-fact-panel";
+import { AccessDenied } from "../components/access/access-denied";
+import { Skeleton } from "../components/ui/skeleton";
 import { formatRub, type StoredClient } from "../lib/storage";
 import {
-  fetchClientsFromSupabase,
-  fetchMonthlyPlansFromSupabase,
   type SupabaseMonthlyPlan,
 } from "../lib/supabase/clients";
-import { getPaymentsFromSupabase } from "../lib/supabase/payments";
-import { getExpensesFromSupabase } from "../lib/supabase/expenses";
-import {
-  fetchPayrollPayoutsFromSupabase,
-  fetchPayrollExtraPaymentsFromSupabase,
-} from "../lib/supabase/payroll";
 import { createClient } from "../lib/supabase/client";
-
 import {
   canManageFinance,
   isAppRole,
   type AppRole,
 } from "../lib/permissions";
 import { useAppContextState } from "../providers/app-context-provider";
-
-import { AccessDenied } from "../components/access/access-denied";
 import { usePageAccess } from "../lib/use-page-access";
+import { useClientsQuery } from "../lib/queries/use-clients-query";
+import { usePaymentsQuery } from "../lib/queries/use-payments-query";
+import { useExpensesQuery } from "../lib/queries/use-expenses-query";
+import {
+  usePayrollExtraPaymentsQuery,
+  usePayrollPayoutsQuery,
+} from "../lib/queries/use-payroll-query";
+import { useMonthlyPlansQuery } from "../lib/queries/use-monthly-plans-query";
 
 type SupabasePaymentItem = {
   id: string;
@@ -160,108 +159,150 @@ function isWithinSelectedDashboardPeriod(
   return isWithinLastDays(value, days);
 }
 
+function DashboardHeroSkeleton() {
+  return (
+    <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.96),rgba(13,18,30,0.96))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-6 w-80" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <div className="flex gap-2 rounded-2xl border border-white/10 bg-black/20 p-1.5">
+          <Skeleton className="h-10 w-24 rounded-xl" />
+          <Skeleton className="h-10 w-24 rounded-xl" />
+          <Skeleton className="h-10 w-28 rounded-xl" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function KpiGridSkeleton() {
+  return (
+    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+      {Array.from({ length: 8 }).map((_, index) => (
+        <div
+          key={index}
+          className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]"
+        >
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="mt-4 h-8 w-32" />
+          <Skeleton className="mt-3 h-3 w-24" />
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function DashboardBottomSkeleton() {
+  return (
+    <section className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <Skeleton className="h-5 w-40" />
+        <div className="mt-5 space-y-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="grid grid-cols-6 gap-4">
+              {Array.from({ length: 6 }).map((__, cellIndex) => (
+                <Skeleton key={cellIndex} className="h-5 w-full" />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-1">
+        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <Skeleton className="h-5 w-40" />
+          <div className="mt-5 space-y-3">
+            <Skeleton className="h-12 w-full rounded-2xl" />
+            <Skeleton className="h-12 w-full rounded-2xl" />
+            <Skeleton className="h-12 w-full rounded-2xl" />
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="mx-auto mt-6 h-36 w-36 rounded-full" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
-      const { role, isLoading: isAppContextLoading } = useAppContextState();
-const { isLoading: isAccessLoading, hasAccess } = usePageAccess("dashboard");
+  const { role, isLoading: isAppContextLoading } = useAppContextState();
+  const { isLoading: isAccessLoading, hasAccess } = usePageAccess("dashboard");
 
-const currentRole: AppRole | null = isAppRole(role) ? role : null;
-const canManageDashboardFinance = currentRole
-  ? canManageFinance(currentRole)
-  : false;
-  const [clients, setClients] = useState<StoredClient[]>([]);
-  const [payments, setPayments] = useState<SupabasePaymentItem[]>([]);
-  const [expenses, setExpenses] = useState<SupabaseExpenseItem[]>([]);
-  const [payrollPayouts, setPayrollPayouts] = useState<SupabasePayrollPayoutItem[]>([]);
-  const [payrollExtraPayments, setPayrollExtraPayments] = useState<
-    SupabasePayrollExtraPaymentItem[]
-  >([]);
-  const [monthlyPlans, setMonthlyPlans] = useState<SupabaseMonthlyPlan[]>([]);
+  const currentRole: AppRole | null = isAppRole(role) ? role : null;
+  const canManageDashboardFinance = currentRole
+    ? canManageFinance(currentRole)
+    : false;
 
-  const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [dashboardPeriod, setDashboardPeriod] = useState<"30d" | "90d" | "all">(
     "30d"
   );
 
+  const [planFactStartMonth, setPlanFactStartMonth] = useState(getCurrentMonthValue);
+  const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
+
+  const {
+    data: clients = [],
+    isLoading: isClientsLoading,
+  } = useClientsQuery(hasAccess);
+
+  const {
+    data: payments = [],
+    isLoading: isPaymentsLoading,
+  } = usePaymentsQuery(hasAccess);
+
+  const {
+    data: expenses = [],
+    isLoading: isExpensesLoading,
+  } = useExpensesQuery(hasAccess);
+
+  const {
+    data: payrollPayouts = [],
+    isLoading: isPayrollPayoutsLoading,
+  } = usePayrollPayoutsQuery(hasAccess);
+
+  const {
+    data: payrollExtraPayments = [],
+    isLoading: isPayrollExtraPaymentsLoading,
+  } = usePayrollExtraPaymentsQuery(hasAccess);
+
+  const {
+    data: monthlyPlans = [],
+    isLoading: isMonthlyPlansLoading,
+  } = useMonthlyPlansQuery(hasAccess);
+
+  const isLoadingDashboard =
+    isClientsLoading ||
+    isPaymentsLoading ||
+    isExpensesLoading ||
+    isPayrollPayoutsLoading ||
+    isPayrollExtraPaymentsLoading ||
+    isMonthlyPlansLoading;
+
   async function handleLogout() {
-  const supabase = createClient();
-  await supabase.auth.signOut();
-  window.location.href = "/login";
-}
-
- const [planFactStartMonth, setPlanFactStartMonth] = useState(getCurrentMonthValue);
-const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
-
-    useEffect(() => {
-  if (isAppContextLoading || isAccessLoading) return;
-
-  if (!hasAccess) {
-    setIsLoadingDashboard(false);
-    return;
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = "/login";
   }
-
-  let isMounted = true;
-
-  async function loadDashboard() {
-    try {
-      setIsLoadingDashboard(true);
-
-      const [
-        clientsData,
-        paymentsData,
-        expensesData,
-        payrollPayoutsData,
-        payrollExtraData,
-        monthlyPlansData,
-      ] = await Promise.all([
-        fetchClientsFromSupabase(),
-        getPaymentsFromSupabase(),
-        getExpensesFromSupabase(),
-        fetchPayrollPayoutsFromSupabase(),
-        fetchPayrollExtraPaymentsFromSupabase(),
-        fetchMonthlyPlansFromSupabase(),
-      ]);
-
-      if (!isMounted) return;
-
-      setClients(clientsData ?? []);
-      setPayments((paymentsData ?? []) as SupabasePaymentItem[]);
-      setExpenses((expensesData ?? []) as SupabaseExpenseItem[]);
-      setPayrollPayouts(
-        (payrollPayoutsData ?? []) as SupabasePayrollPayoutItem[]
-      );
-      setPayrollExtraPayments(
-        (payrollExtraData ?? []) as SupabasePayrollExtraPaymentItem[]
-      );
-      setMonthlyPlans(monthlyPlansData ?? []);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      if (isMounted) {
-        setIsLoadingDashboard(false);
-      }
-    }
-  }
-
-  loadDashboard();
-
-  return () => {
-    isMounted = false;
-  };
-}, [isAppContextLoading, isAccessLoading, hasAccess]);
 
   const periodLabel =
     dashboardPeriod === "30d"
       ? "за 30 дней"
       : dashboardPeriod === "90d"
-        ? "за 90 дней"
-        : "за всё время";
+      ? "за 90 дней"
+      : "за всё время";
 
   const paidPayments = useMemo(() => {
-    return payments.filter((item) => item.status === "paid");
+    return (payments as SupabasePaymentItem[]).filter((item) => item.status === "paid");
   }, [payments]);
 
   const pendingPayments = useMemo(() => {
-    return payments.filter((item) => item.status !== "paid");
+    return (payments as SupabasePaymentItem[]).filter((item) => item.status !== "paid");
   }, [payments]);
 
   const periodPaidPayments = useMemo(() => {
@@ -274,7 +315,7 @@ const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
   }, [paidPayments, dashboardPeriod]);
 
   const periodExpenses = useMemo(() => {
-    return expenses.filter((item) =>
+    return (expenses as SupabaseExpenseItem[]).filter((item) =>
       isWithinSelectedDashboardPeriod(
         formatSupabaseDateToDisplay(item.expense_date),
         dashboardPeriod
@@ -283,7 +324,7 @@ const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
   }, [expenses, dashboardPeriod]);
 
   const periodPayrollPayouts = useMemo(() => {
-    return payrollPayouts
+    return (payrollPayouts as SupabasePayrollPayoutItem[])
       .filter((item) => item.status === "paid")
       .filter((item) =>
         isWithinSelectedDashboardPeriod(item.payoutDate, dashboardPeriod)
@@ -291,21 +332,21 @@ const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
   }, [payrollPayouts, dashboardPeriod]);
 
   const periodPayrollExtraPayments = useMemo(() => {
-    return payrollExtraPayments.filter((item) =>
+    return (payrollExtraPayments as SupabasePayrollExtraPaymentItem[]).filter((item) =>
       isWithinSelectedDashboardPeriod(item.date, dashboardPeriod)
     );
   }, [payrollExtraPayments, dashboardPeriod]);
 
   const activeClientsCount = useMemo(() => {
-    return clients.filter((client) => client.status === "active").length;
+    return (clients as StoredClient[]).filter((client) => client.status === "active").length;
   }, [clients]);
 
   const problemClients = useMemo(() => {
-    return clients.filter((client) => client.status === "problem");
+    return (clients as StoredClient[]).filter((client) => client.status === "problem");
   }, [clients]);
 
   const dashboardClients = useMemo(() => {
-    return clients.slice(0, 4);
+    return (clients as StoredClient[]).slice(0, 4);
   }, [clients]);
 
   const totalRevenueNumber = useMemo(() => {
@@ -478,14 +519,16 @@ const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
   ]);
 
   const availablePlanMonths = useMemo(() => {
-  const months = Array.from(new Set(monthlyPlans.map((item) => item.month))).sort();
+    const months = Array.from(
+      new Set((monthlyPlans as SupabaseMonthlyPlan[]).map((item) => item.month))
+    ).sort();
 
-  if (months.length === 0) {
-    return [getCurrentMonthValue()];
-  }
+    if (months.length === 0) {
+      return [getCurrentMonthValue()];
+    }
 
-  return months;
-}, [monthlyPlans]);
+    return months;
+  }, [monthlyPlans]);
 
   useEffect(() => {
     if (!availablePlanMonths.includes(planFactStartMonth)) {
@@ -497,40 +540,42 @@ const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
     }
   }, [availablePlanMonths, planFactStartMonth, planFactEndMonth]);
 
-const selectedPlanMonthKeys = useMemo(() => {
-  if (!planFactStartMonth || !planFactEndMonth) {
-    return new Set<string>();
-  }
+  const selectedPlanMonthKeys = useMemo(() => {
+    if (!planFactStartMonth || !planFactEndMonth) {
+      return new Set<string>();
+    }
 
-  const start = new Date(
-    Number(planFactStartMonth.split("-")[0]),
-    Number(planFactStartMonth.split("-")[1]) - 1,
-    1
-  );
+    const start = new Date(
+      Number(planFactStartMonth.split("-")[0]),
+      Number(planFactStartMonth.split("-")[1]) - 1,
+      1
+    );
 
-  const end = new Date(
-    Number(planFactEndMonth.split("-")[0]),
-    Number(planFactEndMonth.split("-")[1]) - 1,
-    1
-  );
+    const end = new Date(
+      Number(planFactEndMonth.split("-")[0]),
+      Number(planFactEndMonth.split("-")[1]) - 1,
+      1
+    );
 
-  const startDate = start <= end ? start : end;
-  const endDate = start <= end ? end : start;
+    const startDate = start <= end ? start : end;
+    const endDate = start <= end ? end : start;
 
-  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-  const keys: string[] = [];
+    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const keys: string[] = [];
 
-  while (cursor <= endDate) {
-    keys.push(getMonthKey(cursor));
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
+    while (cursor <= endDate) {
+      keys.push(getMonthKey(cursor));
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
 
-  return new Set(keys);
-}, [planFactStartMonth, planFactEndMonth]);
+    return new Set(keys);
+  }, [planFactStartMonth, planFactEndMonth]);
 
-const periodPlans = useMemo(() => {
-  return monthlyPlans.filter((item) => selectedPlanMonthKeys.has(item.month));
-}, [monthlyPlans, selectedPlanMonthKeys]);
+  const periodPlans = useMemo(() => {
+    return (monthlyPlans as SupabaseMonthlyPlan[]).filter((item) =>
+      selectedPlanMonthKeys.has(item.month)
+    );
+  }, [monthlyPlans, selectedPlanMonthKeys]);
 
   const revenuePlanNumber = useMemo(() => {
     return periodPlans.reduce((sum, item) => sum + Number(item.revenue_plan || 0), 0);
@@ -629,7 +674,7 @@ const periodPlans = useMemo(() => {
     periodLabel,
   ]);
 
-    const quickActions = [
+  const quickActions = [
     { label: "Добавить клиента", tone: "emerald" as const, href: "/clients" },
     ...(canManageDashboardFinance
       ? [
@@ -704,234 +749,228 @@ const periodPlans = useMemo(() => {
   ];
 
   const planFactPeriodLabel = useMemo(() => {
-  if (!planFactStartMonth || !planFactEndMonth) {
-    return "Период не выбран";
-  }
+    if (!planFactStartMonth || !planFactEndMonth) {
+      return "Период не выбран";
+    }
 
-  if (planFactStartMonth === planFactEndMonth) {
-    return formatMonthLabel(planFactStartMonth);
-  }
+    if (planFactStartMonth === planFactEndMonth) {
+      return formatMonthLabel(planFactStartMonth);
+    }
 
-  return `${formatMonthLabel(planFactStartMonth)} — ${formatMonthLabel(
-    planFactEndMonth
-  )}`;
-}, [planFactStartMonth, planFactEndMonth]);
+    return `${formatMonthLabel(planFactStartMonth)} — ${formatMonthLabel(
+      planFactEndMonth
+    )}`;
+  }, [planFactStartMonth, planFactEndMonth]);
 
-if (isAccessLoading) {
-  return (
-    <main className="flex-1">
-      <div className="space-y-6 px-5 py-6 lg:px-8">
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-          Проверяем доступ...
+  if (!isAccessLoading && !hasAccess) {
+    return (
+      <main className="flex-1">
+        <div className="space-y-6 px-5 py-6 lg:px-8">
+          <AccessDenied
+            title="Нет доступа к дашборду"
+            description="У тебя нет прав для просмотра этого раздела."
+          />
         </div>
-      </div>
-    </main>
-  );
-}
+      </main>
+    );
+  }
 
-if (!hasAccess) {
   return (
     <main className="flex-1">
-      <div className="space-y-6 px-5 py-6 lg:px-8">
-        <AccessDenied
-          title="Нет доступа к дашборду"
-          description="У тебя нет прав для просмотра этого раздела."
-        />
-      </div>
-    </main>
-  );
-}
+      <AppTopbar
+        title="Дашборд"
+        description="Ключевые показатели, сигналы внимания и общая картина по агентству."
+        showSearch={false}
+        showPeriodTabs={false}
+        showThemeToggle={false}
+        customActions={
+          <>
+            <a
+              href="https://t.me/weismakeleadgen"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+            >
+              TG основателя
+            </a>
 
-  return (
-    
-  <main className="flex-1">
-          <AppTopbar
-  title="Дашборд"
-  description="Ключевые показатели, сигналы внимания и общая картина по агентству."
-  showSearch={false}
-  showPeriodTabs={false}
-  showThemeToggle={false}
-  customActions={
-    <>
-      <a
-  href="https://t.me/weismakeleadgen"
-  target="_blank"
-  rel="noreferrer"
-  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
->
-  TG основателя
-</a>
+            <a
+              href="https://t.me/thebestweis"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-2xl border border-emerald-400/15 bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition hover:bg-emerald-400/18 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)]"
+            >
+              Техническая поддержка
+            </a>
 
-<a
-  href="https://t.me/thebestweis"
-  target="_blank"
-  rel="noreferrer"
-  className="rounded-2xl border border-emerald-400/15 bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition hover:bg-emerald-400/18 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)]"
->
-  Техническая поддержка
-</a>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+            >
+              Выйти
+            </button>
+          </>
+        }
+      />
 
-<button
-  type="button"
-  onClick={handleLogout}
-  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
->
-  Выйти
-</button>
-    </>
-  }
-/>
-
-          <div className="space-y-6 px-5 py-5 lg:px-8">
-                        {!isAppContextLoading && !canManageDashboardFinance ? (
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-                У тебя ограниченный режим дашборда. Финансовые быстрые действия скрыты.
-              </div>
-            ) : null}
-            <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.96),rgba(13,18,30,0.96))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-  <div className="text-sm text-white/45">Период дашборда</div>
-  <div className="mt-1 text-base font-medium text-white">
-    Все ключевые показатели и графики считаются {periodLabel}
-  </div>
-  <div className="mt-1 text-sm text-white/45">
-    Можно быстро переключаться между коротким, длинным и полным периодом.
-  </div>
-</div>
-
-                <div className="flex w-fit items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <button
-                    type="button"
-                    onClick={() => setDashboardPeriod("30d")}
-                    className={`rounded-xl px-4 py-2 text-sm transition ${
-                      dashboardPeriod === "30d"
-                        ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
-                        : "text-white/60 hover:text-white"
-                    }`}
-                  >
-                    30 дней
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDashboardPeriod("90d")}
-                    className={`rounded-xl px-4 py-2 text-sm transition ${
-                      dashboardPeriod === "90d"
-                        ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
-                        : "text-white/60 hover:text-white"
-                    }`}
-                  >
-                    90 дней
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDashboardPeriod("all")}
-                    className={`rounded-xl px-4 py-2 text-sm transition ${
-                      dashboardPeriod === "all"
-                        ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
-                        : "text-white/60 hover:text-white"
-                    }`}
-                  >
-                    Всё время
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-              {kpis.map((item) => (
-                <KpiCard
-                  key={item.label}
-                  label={item.label}
-                  value={item.value}
-                  delta={item.delta}
-                  tone={item.tone}
-                />
-              ))}
-            </section>
-
-            <section className="space-y-6">
-              <FinancialOverviewChart data={financialChartData} />
-
-              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-  <AlertsPanel alerts={alerts} />
-
-  <div className="space-y-4">
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end">
-        <div className="flex-1">
-          <div className="text-sm text-white/50">Период план / факт</div>
-          <div className="mt-1 text-sm text-white/70">
-            Можно выбрать один месяц или диапазон месяцев
+      <div className="space-y-6 px-5 py-5 lg:px-8">
+        {!isAppContextLoading && !canManageDashboardFinance ? (
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            У тебя ограниченный режим дашборда. Финансовые быстрые действия скрыты.
           </div>
-        </div>
+        ) : null}
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-2">
-            <div className="text-xs text-white/45">С месяца</div>
-            <select
-              value={planFactStartMonth}
-              onChange={(e) => setPlanFactStartMonth(e.target.value)}
-              className="h-[44px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-            >
-              {availablePlanMonths.map((month) => (
-                <option key={month} value={month}>
-                  {formatMonthLabel(month)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="space-y-2">
-            <div className="text-xs text-white/45">По месяц</div>
-            <select
-              value={planFactEndMonth}
-              onChange={(e) => setPlanFactEndMonth(e.target.value)}
-              className="h-[44px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-            >
-              {availablePlanMonths.map((month) => (
-                <option key={month} value={month}>
-                  {formatMonthLabel(month)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
-    </div>
-
-    <PlanFactPanel
-      periodLabel={planFactPeriodLabel}
-      revenuePlan={revenuePlanNumber}
-      revenueFact={totalRevenueNumber}
-      profitPlan={profitPlanNumber}
-      profitFact={totalProfitNumber}
-      expensesPlan={expensesPlanNumber}
-      expensesFact={totalExpensesNumber}
-      fotPlan={fotPlanNumber}
-      fotFact={totalFotNumber}
-    />
-  </div>
-</div>
-            </section>
-
-            <section className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
-                            {isLoadingDashboard || isAppContextLoading ? (
-                <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                  Загружаем данные дашборда из Supabase...
+        {isLoadingDashboard ? (
+          <DashboardHeroSkeleton />
+        ) : (
+          <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.96),rgba(13,18,30,0.96))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-sm text-white/45">Период дашборда</div>
+                <div className="mt-1 text-base font-medium text-white">
+                  Все ключевые показатели и графики считаются {periodLabel}
                 </div>
-              ) : (
-                <ClientsTable clients={dashboardClients} />
-              )}
-
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-1">
-                <QuickActions actions={quickActions} />
-                <IncomeRatioDonut ratio={profitMarginRatio} />
+                <div className="mt-1 text-sm text-white/45">
+                  Можно быстро переключаться между коротким, длинным и полным периодом.
+                </div>
               </div>
-            </section>
+
+              <div className="flex w-fit items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <button
+                  type="button"
+                  onClick={() => setDashboardPeriod("30d")}
+                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                    dashboardPeriod === "30d"
+                      ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  30 дней
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDashboardPeriod("90d")}
+                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                    dashboardPeriod === "90d"
+                      ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  90 дней
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDashboardPeriod("all")}
+                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                    dashboardPeriod === "all"
+                      ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  Всё время
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {isLoadingDashboard ? (
+          <KpiGridSkeleton />
+        ) : (
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+            {kpis.map((item) => (
+              <KpiCard
+                key={item.label}
+                label={item.label}
+                value={item.value}
+                delta={item.delta}
+                tone={item.tone}
+              />
+            ))}
+          </section>
+        )}
+
+        <section className="space-y-6">
+          <FinancialOverviewChart data={financialChartData} />
+
+          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+            <AlertsPanel alerts={alerts} />
+
+            <div className="space-y-4">
+              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+                <div className="flex flex-col gap-4 md:flex-row md:items-end">
+                  <div className="flex-1">
+                    <div className="text-sm text-white/50">Период план / факт</div>
+                    <div className="mt-1 text-sm text-white/70">
+                      Можно выбрать один месяц или диапазон месяцев
                     </div>
-        </main>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="space-y-2">
+                      <div className="text-xs text-white/45">С месяца</div>
+                      <select
+                        value={planFactStartMonth}
+                        onChange={(e) => setPlanFactStartMonth(e.target.value)}
+                        className="h-[44px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                      >
+                        {availablePlanMonths.map((month) => (
+                          <option key={month} value={month}>
+                            {formatMonthLabel(month)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="space-y-2">
+                      <div className="text-xs text-white/45">По месяц</div>
+                      <select
+                        value={planFactEndMonth}
+                        onChange={(e) => setPlanFactEndMonth(e.target.value)}
+                        className="h-[44px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                      >
+                        {availablePlanMonths.map((month) => (
+                          <option key={month} value={month}>
+                            {formatMonthLabel(month)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <PlanFactPanel
+                periodLabel={planFactPeriodLabel}
+                revenuePlan={revenuePlanNumber}
+                revenueFact={totalRevenueNumber}
+                profitPlan={profitPlanNumber}
+                profitFact={totalProfitNumber}
+                expensesPlan={expensesPlanNumber}
+                expensesFact={totalExpensesNumber}
+                fotPlan={fotPlanNumber}
+                fotFact={totalFotNumber}
+              />
+            </div>
+          </div>
+        </section>
+
+        {isLoadingDashboard ? (
+          <DashboardBottomSkeleton />
+        ) : (
+          <section className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+            <ClientsTable clients={dashboardClients} />
+
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-1">
+              <QuickActions actions={quickActions} />
+              <IncomeRatioDonut ratio={profitMarginRatio} />
+            </div>
+          </section>
+        )}
+      </div>
+    </main>
   );
 }

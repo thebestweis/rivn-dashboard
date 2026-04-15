@@ -27,6 +27,8 @@ const navItems: Array<{ label: string; href: string; section: AppSection }> = [
   { label: "Настройки", href: "/settings", section: "settings" },
 ];
 
+const PERMISSIONS_CACHE_TTL_MS = 5 * 60 * 1000;
+
 function isItemActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -50,6 +52,60 @@ function getRoleLabel(role: string) {
 
 function getWorkspaceInitial(name: string) {
   return (name?.trim()?.charAt(0) || "W").toUpperCase();
+}
+
+function getPermissionsCacheKey(membershipId: string) {
+  return `permissions_${membershipId}`;
+}
+
+function readPermissionsCache(membershipId: string) {
+  try {
+    const raw = localStorage.getItem(getPermissionsCacheKey(membershipId));
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as {
+      permissions: any[];
+      timestamp: number;
+    };
+
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !Array.isArray(parsed.permissions) ||
+      typeof parsed.timestamp !== "number"
+    ) {
+      return null;
+    }
+
+    const isFresh = Date.now() - parsed.timestamp < PERMISSIONS_CACHE_TTL_MS;
+
+    if (!isFresh) {
+      localStorage.removeItem(getPermissionsCacheKey(membershipId));
+      return null;
+    }
+
+    return parsed.permissions;
+  } catch (error) {
+    console.error("Ошибка чтения кеша permissions:", error);
+    return null;
+  }
+}
+
+function writePermissionsCache(membershipId: string, permissions: any[]) {
+  try {
+    localStorage.setItem(
+      getPermissionsCacheKey(membershipId),
+      JSON.stringify({
+        permissions,
+        timestamp: Date.now(),
+      })
+    );
+  } catch (error) {
+    console.error("Ошибка сохранения кеша permissions:", error);
+  }
 }
 
 type MenuPosition = {
@@ -96,43 +152,58 @@ export function AppSidebar() {
   }, [errorMessage]);
 
   useEffect(() => {
-    let isMounted = true;
+    let isCurrent = true;
 
     async function loadPermissions() {
-      if (!membership?.id) {
-        if (isMounted) {
+      const membershipId = membership?.id ?? null;
+
+      if (!membershipId) {
+        if (isCurrent) {
           setMemberPermissions([]);
           setPermissionsLoading(false);
         }
         return;
       }
 
-      try {
-        setPermissionsLoading(true);
-        const data = await getWorkspaceMemberPermissions(membership.id);
+      const cachedPermissions = readPermissionsCache(membershipId);
 
-        if (isMounted) {
+      if (cachedPermissions && isCurrent) {
+        setMemberPermissions(cachedPermissions);
+        setPermissionsLoading(false);
+      } else if (isCurrent) {
+        setPermissionsLoading(true);
+      }
+
+      try {
+        const data = await getWorkspaceMemberPermissions(membershipId);
+
+        if (isCurrent) {
           setMemberPermissions(data);
+          setPermissionsLoading(false);
+          writePermissionsCache(membershipId, data);
         }
       } catch (error) {
         console.error("Ошибка загрузки кастомных прав sidebar:", error);
 
-        if (isMounted) {
-          setMemberPermissions([]);
-        }
-      } finally {
-        if (isMounted) {
+        if (isCurrent) {
+          if (!cachedPermissions) {
+            setMemberPermissions([]);
+          }
           setPermissionsLoading(false);
         }
       }
     }
 
+    if (!isMounted) {
+      return;
+    }
+
     loadPermissions();
 
     return () => {
-      isMounted = false;
+      isCurrent = false;
     };
-  }, [membership?.id]);
+  }, [membership?.id, isMounted]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -172,11 +243,16 @@ export function AppSidebar() {
     };
   }, [isWorkspaceMenuOpen]);
 
-  const activeWorkspaceId = workspace?.id ?? "";
-  const activeRole: AppRole | null = isAppRole(role) ? role : null;
+  const activeWorkspaceId = isMounted ? workspace?.id ?? "" : "";
+  const activeRole: AppRole | null =
+    isMounted && isAppRole(role) ? role : null;
+
+  function prefetchRoute(href: string) {
+    router.prefetch(href);
+  }
 
   const filteredNavItems = useMemo(() => {
-    if (!activeRole) return [];
+    if (!isMounted || !activeRole) return [];
 
     return navItems.filter((item) =>
       canAccessSectionWithCustomPermissions({
@@ -185,7 +261,19 @@ export function AppSidebar() {
         permissions: memberPermissions,
       })
     );
-  }, [activeRole, memberPermissions]);
+  }, [isMounted, activeRole, memberPermissions]);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    if (permissionsLoading) return;
+    if (filteredNavItems.length === 0) return;
+
+    const firstItems = filteredNavItems.slice(0, 4);
+
+    for (const item of firstItems) {
+      prefetchRoute(item.href);
+    }
+  }, [isMounted, permissionsLoading, filteredNavItems]);
 
   function openWorkspaceMenu() {
     if (!workspaceButtonRef.current) return;
@@ -234,6 +322,9 @@ export function AppSidebar() {
     }
   }
 
+  const showResolvedContext = isMounted && !isLoading;
+  const showResolvedMenu = isMounted && !permissionsLoading;
+
   return (
     <>
       <aside className="sticky top-0 hidden h-screen w-72 border-r border-slate-200 bg-white lg:flex lg:flex-col dark:border-white/10 dark:bg-[#0F1524]">
@@ -258,12 +349,14 @@ export function AppSidebar() {
               Текущая роль
             </div>
             <div className="mt-2 text-sm font-medium text-white">
-              {isLoading || !activeRole ? "Загрузка..." : getRoleLabel(activeRole)}
+              {showResolvedContext && activeRole
+                ? getRoleLabel(activeRole)
+                : "Загрузка..."}
             </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-            {permissionsLoading ? (
+            {!showResolvedMenu ? (
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/45">
                 Загружаем меню...
               </div>
@@ -279,7 +372,12 @@ export function AppSidebar() {
                   }`;
 
                   return (
-                    <Link key={item.label} href={item.href} className={className}>
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      className={className}
+                      onMouseEnter={() => prefetchRoute(item.href)}
+                    >
                       <span>{item.label}</span>
                       {isActive ? (
                         <span className="h-2 w-2 rounded-full bg-emerald-400" />
@@ -296,25 +394,33 @@ export function AppSidebar() {
               ref={workspaceButtonRef}
               type="button"
               onClick={() => {
+                if (!showResolvedContext) return;
+
                 if (isWorkspaceMenuOpen) {
                   setIsWorkspaceMenuOpen(false);
                 } else {
                   openWorkspaceMenu();
                 }
               }}
-              disabled={isLoading || isSwitchingWorkspace}
+              disabled={!showResolvedContext || isSwitchingWorkspace}
               className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-500/15 text-sm font-semibold text-violet-300">
-                {workspace ? getWorkspaceInitial(workspace.name) : "W"}
+                {showResolvedContext && workspace
+                  ? getWorkspaceInitial(workspace.name)
+                  : "W"}
               </div>
 
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-slate-900 dark:text-white">
-                  {isLoading ? "Загрузка..." : workspace?.name || "Выбери кабинет"}
+                  {showResolvedContext && workspace?.name
+                    ? workspace.name
+                    : "Выбери кабинет"}
                 </div>
                 <div className="mt-0.5 truncate text-xs text-slate-500 dark:text-white/45">
-                  {isSwitchingWorkspace
+                  {!showResolvedContext
+                    ? "Загрузка..."
+                    : isSwitchingWorkspace
                     ? "Переключаем кабинет..."
                     : workspace && activeRole
                     ? `${getRoleLabel(activeRole)} • ${workspace.slug}`

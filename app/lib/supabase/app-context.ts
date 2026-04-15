@@ -22,10 +22,6 @@ export async function getAppContext(): Promise<AppContext> {
   }
 
   if (!user) {
-    throw new Error("User not authenticated");
-  }
-
- if (!user) {
   throw new Error("Пользователь не авторизован");
 }
 
