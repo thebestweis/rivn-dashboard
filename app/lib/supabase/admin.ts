@@ -1,4 +1,4 @@
-import { createAdminClient } from "./admin-service";
+import { createAdminClient } from "./admin-server";
 import { createClient as createServerClient } from "./server";
 
 export type AdminWorkspaceRow = {
