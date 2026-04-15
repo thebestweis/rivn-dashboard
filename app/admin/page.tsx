@@ -211,10 +211,15 @@ export default function AdminPage() {
         setWorkspaces(overview.workspaces ?? []);
         setAdminLogs((overview.logs ?? []).slice(0, 30));
       } catch (error) {
-        console.error("Ошибка загрузки admin данных:", error);
-        setWorkspaces([]);
-        setAdminLogs([]);
-      }
+  console.error("Ошибка загрузки admin данных:", error);
+  alert(
+    error instanceof Error
+      ? error.message
+      : "Не удалось загрузить admin данные"
+  );
+  setWorkspaces([]);
+  setAdminLogs([]);
+}
     }
 
     if (mounted && profile?.platform_role === "super_admin") {
