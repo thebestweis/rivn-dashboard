@@ -145,7 +145,6 @@ function getPlannedStatus(payment: {
 
 function getClientDisplayName(client: ClientItem) {
   return client.name || client.clientName || client.title || "Без названия";
-  
 }
 
 function PaymentsStatsSkeleton() {
@@ -217,9 +216,6 @@ export default function PaymentsPage() {
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
     "success"
   );
-
-  const [factPayments, setFactPayments] = useState<FactPaymentRow[]>([]);
-  const [plannedPayments, setPlannedPayments] = useState<PlannedPaymentRow[]>([]);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
@@ -304,47 +300,53 @@ export default function PaymentsPage() {
     );
   }, [clientsError, projectsError, employeesError, paymentsError]);
 
-  useEffect(() => {
-    if (!hasAccess) return;
-
+  const clientMap = useMemo<PaymentClientMap>(() => {
     const safeClients = (clients ?? []) as ClientItem[];
-    const safeProjects = (projects ?? []) as ProjectItem[];
 
-    const clientMap = safeClients.reduce<PaymentClientMap>((acc, client) => {
+    return safeClients.reduce<PaymentClientMap>((acc, client) => {
       acc[client.id] = getClientDisplayName(client);
       return acc;
     }, {});
+  }, [clients]);
 
-    const projectMap = safeProjects.reduce<Record<string, string>>(
-      (acc, project) => {
-        acc[project.id] = project.name;
-        return acc;
-      },
-      {}
-    );
+  const projectNameMap = useMemo(() => {
+    const safeProjects = (projects ?? []) as ProjectItem[];
 
-    const mappedFactPayments: FactPaymentRow[] = paymentsData
+    return safeProjects.reduce<Record<string, string>>((acc, project) => {
+      acc[project.id] = project.name;
+      return acc;
+    }, {});
+  }, [projects]);
+
+  const factPayments = useMemo<FactPaymentRow[]>(() => {
+    if (!hasAccess) return [];
+
+    return paymentsData
       .filter((payment) => payment.status === "paid")
       .map((payment) => ({
         id: payment.id,
         clientId: payment.client_id,
         client: clientMap[payment.client_id] ?? "Неизвестный клиент",
         projectId: payment.project_id ?? null,
-        project: payment.project_id ? projectMap[payment.project_id] ?? "" : "",
+        project: payment.project_id ? projectNameMap[payment.project_id] ?? "" : "",
         paidAt: fromSupabaseDate(payment.paid_date),
         amount: String(payment.amount),
         source: payment.notes ?? "",
         documentUrl: payment.document_url ?? "",
       }));
+  }, [hasAccess, paymentsData, clientMap, projectNameMap]);
 
-    const mappedPlannedPayments: PlannedPaymentRow[] = paymentsData
+  const plannedPayments = useMemo<PlannedPaymentRow[]>(() => {
+    if (!hasAccess) return [];
+
+    const mapped = paymentsData
       .filter((payment) => payment.status !== "paid")
       .map((payment) => ({
         id: payment.id,
         clientId: payment.client_id,
         client: clientMap[payment.client_id] ?? "Неизвестный клиент",
         projectId: payment.project_id ?? null,
-        project: payment.project_id ? projectMap[payment.project_id] ?? "" : "",
+        project: payment.project_id ? projectNameMap[payment.project_id] ?? "" : "",
         invoiceDate: fromSupabaseDate(payment.created_at?.slice(0, 10) ?? null),
         paymentDate: fromSupabaseDate(payment.due_date),
         amount: `₽${Number(payment.amount).toLocaleString("ru-RU")}`,
@@ -353,15 +355,12 @@ export default function PaymentsPage() {
         documentUrl: payment.document_url ?? "",
       }));
 
-    const sortedPlanned = mappedPlannedPayments.sort((a, b) => {
+    return [...mapped].sort((a, b) => {
       if (a.status === "overdue" && b.status !== "overdue") return -1;
       if (a.status !== "overdue" && b.status === "overdue") return 1;
       return 0;
     });
-
-    setFactPayments(mappedFactPayments);
-    setPlannedPayments(sortedPlanned);
-  }, [hasAccess, clients, projects, paymentsData]);
+  }, [hasAccess, paymentsData, clientMap, projectNameMap]);
 
   const plannedTotal = plannedPayments.reduce(
     (sum, item) => sum + parseRubAmount(item.amount),
@@ -452,7 +451,7 @@ export default function PaymentsPage() {
       return;
     }
 
-    const employee = employees.find(
+    const employee = (employees as EmployeeItem[]).find(
       (item) =>
         item.id === project.employee_id &&
         item.isActive &&
@@ -592,8 +591,8 @@ export default function PaymentsPage() {
       resetCreateForm();
 
       await queryClient.invalidateQueries({
-  queryKey: queryKeys.paymentsByWorkspace(workspaceId),
-});
+        queryKey: queryKeys.paymentsByWorkspace(workspaceId),
+      });
 
       setActiveTab(isInvoice ? "planned" : "fact");
       setToastType("success");
@@ -722,9 +721,9 @@ export default function PaymentsPage() {
       setIsEditOpen(false);
       resetEditForm();
 
-     await queryClient.invalidateQueries({
-  queryKey: queryKeys.paymentsByWorkspace(workspaceId),
-});
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.paymentsByWorkspace(workspaceId),
+      });
 
       setToastType("success");
       setToastMessage(
@@ -805,8 +804,8 @@ export default function PaymentsPage() {
       }
 
       await queryClient.invalidateQueries({
-  queryKey: queryKeys.paymentsByWorkspace(workspaceId),
-});
+        queryKey: queryKeys.paymentsByWorkspace(workspaceId),
+      });
 
       setToastType("success");
       setToastMessage(`Счёт для "${target.client}" отмечен как оплаченный`);
@@ -863,8 +862,8 @@ export default function PaymentsPage() {
       }
 
       await queryClient.invalidateQueries({
-  queryKey: queryKeys.paymentsByWorkspace(workspaceId),
-});
+        queryKey: queryKeys.paymentsByWorkspace(workspaceId),
+      });
 
       setToastType("success");
       setToastMessage(`Оплата для "${target.client}" удалена`);
@@ -939,40 +938,39 @@ export default function PaymentsPage() {
           />
 
           {loadingPayments ? (
-  <PaymentsStatsSkeleton />
-) : (
-  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-    <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-      <div className="text-xs uppercase tracking-wide text-white/40">
-        Ожидается
-      </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight">
-        ₽{plannedTotal.toLocaleString("ru-RU")}
-      </div>
-    </div>
+            <PaymentsStatsSkeleton />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
+                <div className="text-xs uppercase tracking-wide text-white/40">
+                  Ожидается
+                </div>
+                <div className="mt-1 text-2xl font-semibold tracking-tight">
+                  ₽{plannedTotal.toLocaleString("ru-RU")}
+                </div>
+              </div>
 
-    <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-      <div className="text-xs uppercase tracking-wide text-white/40">
-        Просрочено
-      </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight text-rose-400">
-        ₽{overdueTotal.toLocaleString("ru-RU")}
-      </div>
-    </div>
+              <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
+                <div className="text-xs uppercase tracking-wide text-white/40">
+                  Просрочено
+                </div>
+                <div className="mt-1 text-2xl font-semibold tracking-tight text-rose-400">
+                  ₽{overdueTotal.toLocaleString("ru-RU")}
+                </div>
+              </div>
 
-    <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-      <div className="text-xs uppercase tracking-wide text-white/40">
-        Получено
-      </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight text-emerald-400">
-        ₽{paidTotal.toLocaleString("ru-RU")}
-      </div>
-    </div>
-  </div>
-)}
+              <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
+                <div className="text-xs uppercase tracking-wide text-white/40">
+                  Получено
+                </div>
+                <div className="mt-1 text-2xl font-semibold tracking-tight text-emerald-400">
+                  ₽{paidTotal.toLocaleString("ru-RU")}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-
             {activeTab === "planned" ? (
               loadingPayments ? (
                 <PaymentsTableSkeleton />
@@ -984,7 +982,7 @@ export default function PaymentsPage() {
                   onDelete={handleDeletePayment}
                   processingPaymentId={processingPaymentId}
                   deletingPaymentId={deletingPaymentId}
-                  canManage={canShowManageActions}
+                  canManagePayments={canShowManageActions}
                 />
               ) : (
                 <EmptyState

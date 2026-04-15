@@ -45,6 +45,7 @@ type AppContextState = {
 };
 
 const APP_CONTEXT_CACHE_KEY = "app_context_cache";
+const QUERY_CACHE_KEY = "RIVN_OS_QUERY_CACHE";
 const APP_CONTEXT_CACHE_TTL_MS = 5 * 60 * 1000;
 
 type AppContextCache = {
@@ -121,6 +122,7 @@ function clearCachedAppContext() {
 
   try {
     localStorage.removeItem(APP_CONTEXT_CACHE_KEY);
+    localStorage.removeItem(QUERY_CACHE_KEY);
   } catch {}
 }
 
@@ -161,6 +163,21 @@ export function AppContextProvider({
   const [billingAccess, setBillingAccess] = useState<BillingAccessState | null>(
     cachedRef.current?.billingAccess ?? null
   );
+
+  const resetStateToEmpty = useCallback(() => {
+    setUser(null);
+    setProfile(null);
+    setWorkspace(null);
+    setMembership(null);
+    setRole(null);
+    setIsSuperAdmin(false);
+    setWorkspaces([]);
+    setBilling(null);
+    setBillingAccess(null);
+    setIsReady(false);
+    setErrorMessage("");
+    setIsLoading(false);
+  }, []);
 
   const refreshAppContext = useCallback(async () => {
     try {
@@ -276,16 +293,16 @@ export function AppContextProvider({
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (
-        event === "SIGNED_IN" ||
-        event === "TOKEN_REFRESHED" ||
-        event === "INITIAL_SESSION"
-      ) {
-        void refreshAppContext();
-      }
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      const nextUserId = session?.user?.id ?? null;
+      const currentCachedUserId = cachedRef.current?.user?.id ?? null;
 
-      if (event === "SIGNED_OUT") {
+      const didUserChange =
+        Boolean(nextUserId) &&
+        Boolean(currentCachedUserId) &&
+        nextUserId !== currentCachedUserId;
+
+      if (didUserChange) {
         cachedRef.current = null;
         clearCachedAppContext();
 
@@ -300,14 +317,27 @@ export function AppContextProvider({
         setBillingAccess(null);
         setIsReady(false);
         setErrorMessage("");
-        setIsLoading(false);
+      }
+
+      if (
+        event === "SIGNED_IN" ||
+        event === "TOKEN_REFRESHED" ||
+        event === "INITIAL_SESSION"
+      ) {
+        void refreshAppContext();
+      }
+
+      if (event === "SIGNED_OUT") {
+        cachedRef.current = null;
+        clearCachedAppContext();
+        resetStateToEmpty();
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [refreshAppContext]);
+  }, [refreshAppContext, resetStateToEmpty]);
 
   const value = useMemo<AppContextState>(
     () => ({

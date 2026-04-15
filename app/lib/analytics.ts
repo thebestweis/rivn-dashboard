@@ -18,19 +18,45 @@ interface MonthlyBucket {
 function parseStoredDate(value: string) {
   if (!value) return null;
 
-  const isoDate = new Date(value);
+  const normalizedValue = value.trim();
+  if (!normalizedValue) return null;
+
+  const isoDate = new Date(normalizedValue);
   if (!Number.isNaN(isoDate.getTime())) return isoDate;
 
-  const legacyMatch = value.trim().match(/^(\d{1,2})\.(\d{1,2})$/);
-  if (!legacyMatch) return null;
+  const fullRuMatch = normalizedValue.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (fullRuMatch) {
+    const [, dayRaw, monthRaw, yearRaw] = fullRuMatch;
 
-  const day = Number(legacyMatch[1]);
-  const month = Number(legacyMatch[2]);
+    const day = Number(dayRaw);
+    const month = Number(monthRaw);
+    const year = Number(yearRaw);
 
-  if (!day || !month || month < 1 || month > 12) return null;
+    if (!day || !month || !year || month < 1 || month > 12) {
+      return null;
+    }
 
-  const year = new Date().getFullYear();
-  return new Date(year, month - 1, day);
+    const parsed = new Date(year, month - 1, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const legacyMatch = normalizedValue.match(/^(\d{1,2})\.(\d{1,2})$/);
+  if (legacyMatch) {
+    const [, dayRaw, monthRaw] = legacyMatch;
+
+    const day = Number(dayRaw);
+    const month = Number(monthRaw);
+
+    if (!day || !month || month < 1 || month > 12) {
+      return null;
+    }
+
+    const year = new Date().getFullYear();
+    const parsed = new Date(year, month - 1, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  return null;
 }
 
 function monthKey(date: Date) {

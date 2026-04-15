@@ -18,6 +18,7 @@ import { BillingAccessBanner } from "../ui/billing-access-banner";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../lib/query-keys";
+import { useAppContextState as useWorkspaceContext } from "../../providers/app-context-provider";
 
 const roleOptions: Array<{
   value: WorkspaceMemberRole;
@@ -59,6 +60,20 @@ function getPlanLabel(planCode: string | null | undefined) {
   return planCode.toUpperCase();
 }
 
+function getDisplayName(item: WorkspaceMemberItem) {
+  const normalizedName = item.name?.trim();
+  if (normalizedName && normalizedName !== "Без имени") {
+    return normalizedName;
+  }
+
+  const emailLocalPart = item.email?.split("@")[0]?.trim();
+  if (emailLocalPart) {
+    return emailLocalPart;
+  }
+
+  return "Без имени";
+}
+
 export function UsersSettingsTab() {
   const queryClient = useQueryClient();
 
@@ -66,6 +81,9 @@ export function UsersSettingsTab() {
     billingAccess,
     isLoading: isAppContextLoading,
   } = useAppContextState();
+
+  const { workspace } = useWorkspaceContext();
+  const workspaceId = workspace?.id ?? "";
 
   const [currentUserId, setCurrentUserId] = useState<string>("");
 
@@ -90,8 +108,11 @@ export function UsersSettingsTab() {
     isLoading: isUsersLoading,
     isFetching: isUsersFetching,
   } = useQuery({
-    queryKey: queryKeys.workspaceMembers,
+    queryKey: workspaceId
+      ? ["workspace-members-settings", "workspace", workspaceId]
+      : ["workspace-members-settings"],
     queryFn: getWorkspaceMembers,
+    enabled: Boolean(workspaceId),
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   });
@@ -101,15 +122,30 @@ export function UsersSettingsTab() {
     isLoading: isLimitLoading,
     isFetching: isLimitFetching,
   } = useQuery<WorkspaceMemberLimitState | null>({
-    queryKey: queryKeys.workspaceMemberLimitState,
+    queryKey: workspaceId
+      ? ["workspace-member-limit-state-settings", "workspace", workspaceId]
+      : ["workspace-member-limit-state-settings"],
     queryFn: getWorkspaceMemberLimitState,
+    enabled: Boolean(workspaceId),
     staleTime: 1000 * 60 * 2,
     refetchOnWindowFocus: false,
   });
 
   async function refreshMembersData() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaceMembers }),
+      queryClient.invalidateQueries({
+        queryKey: workspaceId
+          ? ["workspace-members-settings", "workspace", workspaceId]
+          : ["workspace-members-settings"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: workspaceId
+          ? ["workspace-member-limit-state-settings", "workspace", workspaceId]
+          : ["workspace-member-limit-state-settings"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workspaceMembers,
+      }),
       queryClient.invalidateQueries({
         queryKey: queryKeys.workspaceMemberLimitState,
       }),
@@ -147,7 +183,11 @@ export function UsersSettingsTab() {
     return [...users].sort((a, b) => {
       if (a.role === "owner" && b.role !== "owner") return -1;
       if (a.role !== "owner" && b.role === "owner") return 1;
-      return a.email.localeCompare(b.email, "ru");
+
+      const aName = getDisplayName(a);
+      const bName = getDisplayName(b);
+
+      return aName.localeCompare(bName, "ru");
     });
   }, [users]);
 
@@ -402,7 +442,7 @@ export function UsersSettingsTab() {
           <table className="w-full text-left text-sm">
             <thead className="bg-white/[0.04] text-white/45">
               <tr>
-                <th className="px-4 py-3 font-medium">Email</th>
+                <th className="px-4 py-3 font-medium">Пользователь</th>
                 <th className="px-4 py-3 font-medium">Роль</th>
                 <th className="px-4 py-3 font-medium">Статус</th>
                 <th className="px-4 py-3 font-medium">Действия</th>
@@ -430,8 +470,13 @@ export function UsersSettingsTab() {
                       key={item.id}
                       className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
                     >
-                      <td className="px-4 py-3 font-medium text-white/85">
-                        {item.email}
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-white/90">
+                          {getDisplayName(item)}
+                        </div>
+                        <div className="mt-1 text-xs text-white/45">
+                          {item.email}
+                        </div>
                       </td>
 
                       <td className="px-4 py-3">

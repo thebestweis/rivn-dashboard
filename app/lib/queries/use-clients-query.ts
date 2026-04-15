@@ -13,12 +13,30 @@ import {
   fetchClientsFromSupabase,
   updateClientInSupabase,
 } from "../supabase/clients";
-import { fetchEmployeesFromSupabase } from "../supabase/employees";
+import {
+  getWorkspaceMembers,
+  type WorkspaceMemberItem,
+} from "../supabase/workspace-members";
 import type { StoredClient, StoredEmployee } from "../storage";
 import { useAppContextState } from "../../providers/app-context-provider";
 
 const STALE_TIME = 1000 * 60 * 5;
 const GC_TIME = 1000 * 60 * 30;
+
+function mapWorkspaceMemberToStoredEmployee(
+  member: WorkspaceMemberItem
+): StoredEmployee {
+  return {
+    id: member.id,
+    name: member.name?.trim() || member.email || "Без имени",
+    role: member.role,
+    payType: "fixed_per_paid_project",
+    payValue: "₽0",
+    fixedSalary: "",
+    payoutDay: undefined,
+    isActive: member.status === "active",
+  };
+}
 
 export function useClientsQuery(enabled = true) {
   const { workspace } = useAppContextState();
@@ -45,9 +63,15 @@ export function useClientEmployeesQuery(enabled = true) {
 
   return useQuery<StoredEmployee[]>({
     queryKey: workspaceId
-      ? queryKeys.employeesByWorkspace(workspaceId)
-      : queryKeys.employees,
-    queryFn: fetchEmployeesFromSupabase,
+      ? ["client-owner-options", "workspace", workspaceId]
+      : ["client-owner-options"],
+    queryFn: async () => {
+      const members = await getWorkspaceMembers();
+
+      return members
+        .filter((member) => member.status === "active")
+        .map(mapWorkspaceMemberToStoredEmployee);
+    },
     enabled: enabled && Boolean(workspaceId),
     staleTime: STALE_TIME,
     gcTime: GC_TIME,

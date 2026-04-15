@@ -90,6 +90,15 @@ function getDefaultPermissionByRole(
   return { view: false, manage: false };
 }
 
+function getMemberLabel(member: WorkspaceMemberItem) {
+  const displayName = member.name?.trim();
+  if (displayName && displayName !== "Без имени") {
+    return `${displayName} — ${member.email}`;
+  }
+
+  return member.email;
+}
+
 export function AccessSettingsTab() {
   const queryClient = useQueryClient();
 
@@ -308,7 +317,7 @@ export function AccessSettingsTab() {
                 >
                   {activeMembers.map((member) => (
                     <option key={member.id} value={member.id}>
-                      {member.email}
+                      {getMemberLabel(member)}
                     </option>
                   ))}
                 </select>

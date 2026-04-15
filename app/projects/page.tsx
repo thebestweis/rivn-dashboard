@@ -105,13 +105,13 @@ export default function ProjectsPage() {
   );
 
   const employees: EmployeeOption[] = useMemo(
-    () =>
-      workspaceMembersData.map((member) => ({
-        id: member.id,
-        name: member.email || "Без email",
-      })),
-    [workspaceMembersData]
-  );
+  () =>
+    workspaceMembersData.map((member) => ({
+      id: member.id,
+      name: member.name || member.email || "Без имени",
+    })),
+  [workspaceMembersData]
+);
 
   const clientNamesById = useMemo(
     () =>

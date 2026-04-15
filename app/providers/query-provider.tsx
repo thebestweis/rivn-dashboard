@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { QueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import {
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+
+const QUERY_CACHE_KEY = "RIVN_OS_QUERY_CACHE";
 
 function createQueryClient() {
   return new QueryClient({
@@ -30,15 +35,28 @@ export function QueryProvider({
   children: React.ReactNode;
 }) {
   const [queryClient] = useState(createQueryClient);
+  const [isMounted, setIsMounted] = useState(false);
 
   const [persister] = useState(() =>
     createSyncStoragePersister({
       storage:
         typeof window !== "undefined" ? window.localStorage : undefined,
-      key: "RIVN_OS_QUERY_CACHE",
+      key: QUERY_CACHE_KEY,
       throttleTime: 1000,
     })
   );
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    );
+  }
 
   return (
     <PersistQueryClientProvider
@@ -46,7 +64,7 @@ export function QueryProvider({
       persistOptions={{
         persister,
         maxAge: 1000 * 60 * 60 * 12,
-        buster: "rivn-os-v2",
+        buster: "rivn-os-v3",
       }}
       onSuccess={() => {
         queryClient.resumePausedMutations().catch(() => {});

@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SettingsPageHeader } from "../components/settings/settings-page-header";
-import { EmployeesSettingsTab } from "../components/settings/employees-settings-tab";
 import { UsersSettingsTab } from "../components/settings/users-settings-tab";
 import { AccessSettingsTab } from "../components/settings/access-settings-tab";
 import { TelegramSettingsTab } from "../components/settings/telegram-settings-tab";
@@ -14,7 +13,6 @@ import { AccessDenied } from "../components/access/access-denied";
 import { usePageAccess } from "../lib/use-page-access";
 
 export type SettingsTab =
-  | "employees"
   | "users"
   | "access"
   | "referrals"
@@ -22,11 +20,10 @@ export type SettingsTab =
   | "system"
   | "workspace";
 
-const DEFAULT_TAB: SettingsTab = "employees";
+const DEFAULT_TAB: SettingsTab = "users";
 
 function isSettingsTab(value: string | null): value is SettingsTab {
   return (
-    value === "employees" ||
     value === "users" ||
     value === "access" ||
     value === "referrals" ||
@@ -49,8 +46,15 @@ function SettingsPageContent() {
 
   useEffect(() => {
     const nextTab = isSettingsTab(queryTab) ? queryTab : DEFAULT_TAB;
+
     setActiveTab((prev) => (prev === nextTab ? prev : nextTab));
-  }, [queryTab]);
+
+    if (!isSettingsTab(queryTab)) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", DEFAULT_TAB);
+      router.replace(`/settings?${params.toString()}`, { scroll: false });
+    }
+  }, [queryTab, router, searchParams]);
 
   function handleSetActiveTab(nextTab: SettingsTab) {
     setActiveTab(nextTab);
@@ -62,7 +66,6 @@ function SettingsPageContent() {
   }
 
   const tabContent = useMemo(() => {
-    if (activeTab === "employees") return <EmployeesSettingsTab />;
     if (activeTab === "users") return <UsersSettingsTab />;
     if (activeTab === "access") return <AccessSettingsTab />;
     if (activeTab === "referrals") return <ReferralSettingsTab />;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAppContextState } from "../../providers/app-context-provider";
 import { queryKeys } from "../query-keys";
 import {
   createProject,
@@ -11,29 +12,45 @@ import {
 } from "../supabase/projects";
 
 export function useProjectsQuery(enabled = true) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
   return useQuery({
-    queryKey: queryKeys.projects,
+    queryKey: workspaceId
+      ? queryKeys.projectsByWorkspace(workspaceId)
+      : queryKeys.projects,
     queryFn: getProjects,
-    enabled,
+    enabled: enabled && Boolean(workspaceId),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 }
 
 export function useCreateProjectMutation() {
   const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
 
   return useMutation({
     mutationFn: createProject,
     onSuccess: (createdProject) => {
-      queryClient.setQueryData<Project[]>(queryKeys.projects, (prev = []) => [
-        createdProject,
-        ...prev,
-      ]);
+      if (!workspaceId) return;
+
+      queryClient.setQueryData<Project[]>(
+        queryKeys.projectsByWorkspace(workspaceId),
+        (prev = []) => [createdProject, ...prev]
+      );
     },
   });
 }
 
 export function useUpdateProjectMutation() {
   const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
 
   return useMutation({
     mutationFn: ({
@@ -44,11 +61,15 @@ export function useUpdateProjectMutation() {
       values: Parameters<typeof updateProject>[1];
     }) => updateProject(projectId, values),
     onSuccess: (updatedProject) => {
-      queryClient.setQueryData<Project[]>(queryKeys.projects, (prev = []) =>
-        prev.map((project) =>
-          project.id === updatedProject.id ? updatedProject : project
-        )
-      );
+      if (workspaceId) {
+        queryClient.setQueryData<Project[]>(
+          queryKeys.projectsByWorkspace(workspaceId),
+          (prev = []) =>
+            prev.map((project) =>
+              project.id === updatedProject.id ? updatedProject : project
+            )
+        );
+      }
 
       queryClient.setQueryData(
         queryKeys.project(updatedProject.id),
@@ -60,13 +81,18 @@ export function useUpdateProjectMutation() {
 
 export function useDeleteProjectMutation() {
   const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
 
   return useMutation({
     mutationFn: deleteProject,
     onSuccess: (_, deletedProjectId) => {
-      queryClient.setQueryData<Project[]>(queryKeys.projects, (prev = []) =>
-        prev.filter((project) => project.id !== deletedProjectId)
-      );
+      if (workspaceId) {
+        queryClient.setQueryData<Project[]>(
+          queryKeys.projectsByWorkspace(workspaceId),
+          (prev = []) => prev.filter((project) => project.id !== deletedProjectId)
+        );
+      }
 
       queryClient.removeQueries({
         queryKey: queryKeys.project(deletedProjectId),

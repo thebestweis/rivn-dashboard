@@ -6,26 +6,11 @@ import {
   canManageSystem,
 } from "../../lib/permissions";
 import { useAppContextState } from "../../providers/app-context-provider";
+import type { SettingsTab } from "../../settings/page";
 
 interface SettingsPageHeaderProps {
-  activeTab:
-    | "workspace"
-    | "employees"
-    | "users"
-    | "access"
-    | "referrals"
-    | "telegram"
-    | "system";
-  setActiveTab: (
-    value:
-      | "workspace"
-      | "employees"
-      | "users"
-      | "access"
-      | "referrals"
-      | "telegram"
-      | "system"
-  ) => void;
+  activeTab: SettingsTab;
+  setActiveTab: (value: SettingsTab) => void;
 }
 
 export function SettingsPageHeader({
@@ -33,6 +18,14 @@ export function SettingsPageHeader({
   setActiveTab,
 }: SettingsPageHeaderProps) {
   const { role, isLoading } = useAppContextState();
+
+  function getTabClass(tab: SettingsTab) {
+    return `rounded-xl px-4 py-2 text-sm transition ${
+      activeTab === tab
+        ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+        : "text-white/60 hover:text-white"
+    }`;
+  }
 
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -43,8 +36,9 @@ export function SettingsPageHeader({
             Настройки
           </h1>
           <p className="mt-2 text-sm text-white/55">
-  Сотрудники, пользователи, доступы, реферальная система, Telegram, системные параметры и кабинеты.
-</p>
+            Пользователи, доступы, реферальная система, Telegram, системные
+            параметры и кабинеты.
+          </p>
         </div>
 
         <div className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)]">
@@ -56,48 +50,20 @@ export function SettingsPageHeader({
         <div className="mt-5 h-[46px] rounded-2xl border border-white/10 bg-white/[0.04]" />
       ) : (
         <div className="mt-5 flex w-fit flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-          <button
-            onClick={() => setActiveTab("employees")}
-            className={`rounded-xl px-4 py-2 text-sm transition ${
-              activeTab === "employees"
-                ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                : "text-white/60 hover:text-white"
-            }`}
-          >
-            Сотрудники
-          </button>
-
-          <button
-            onClick={() => setActiveTab("referrals")}
-            className={`rounded-xl px-4 py-2 text-sm transition ${
-              activeTab === "referrals"
-                ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                : "text-white/60 hover:text-white"
-            }`}
-          >
-            Рефералка
-          </button>
-
           {role && canManageUsers(role) ? (
             <>
               <button
+                type="button"
                 onClick={() => setActiveTab("users")}
-                className={`rounded-xl px-4 py-2 text-sm transition ${
-                  activeTab === "users"
-                    ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                    : "text-white/60 hover:text-white"
-                }`}
+                className={getTabClass("users")}
               >
                 Пользователи
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab("access")}
-                className={`rounded-xl px-4 py-2 text-sm transition ${
-                  activeTab === "access"
-                    ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                    : "text-white/60 hover:text-white"
-                }`}
+                className={getTabClass("access")}
               >
                 Доступы
               </button>
@@ -105,24 +71,26 @@ export function SettingsPageHeader({
           ) : null}
 
           <button
+            type="button"
+            onClick={() => setActiveTab("referrals")}
+            className={getTabClass("referrals")}
+          >
+            Рефералка
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("telegram")}
-            className={`rounded-xl px-4 py-2 text-sm transition ${
-              activeTab === "telegram"
-                ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                : "text-white/60 hover:text-white"
-            }`}
+            className={getTabClass("telegram")}
           >
             Telegram
           </button>
 
           {role && canManageSystem(role) ? (
             <button
+              type="button"
               onClick={() => setActiveTab("system")}
-              className={`rounded-xl px-4 py-2 text-sm transition ${
-                activeTab === "system"
-                  ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                  : "text-white/60 hover:text-white"
-              }`}
+              className={getTabClass("system")}
             >
               Система
             </button>
@@ -130,12 +98,9 @@ export function SettingsPageHeader({
 
           {role && canManageWorkspace(role) ? (
             <button
+              type="button"
               onClick={() => setActiveTab("workspace")}
-              className={`rounded-xl px-4 py-2 text-sm transition ${
-                activeTab === "workspace"
-                  ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                  : "text-white/60 hover:text-white"
-              }`}
+              className={getTabClass("workspace")}
             >
               Кабинеты
             </button>

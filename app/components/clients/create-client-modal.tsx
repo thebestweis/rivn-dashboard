@@ -110,7 +110,7 @@ export function CreateClientModal({
             }}
             className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
           >
-            <option value="">Ответственный сотрудник</option>
+            <option value="">Ответственный пользователь</option>
             {activeEmployees.map((employee) => (
               <option key={employee.id} value={employee.id}>
                 {employee.name} — {employee.role}

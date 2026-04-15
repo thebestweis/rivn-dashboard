@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { CustomSelect } from "../ui/custom-select";
 
 interface ClientsPageHeaderProps {
@@ -25,6 +28,12 @@ export function ClientsPageHeader({
   onAddClient,
   canAddClient = false,
 }: ClientsPageHeaderProps) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
@@ -36,7 +45,7 @@ export function ClientsPageHeader({
           </p>
         </div>
 
-        {canAddClient ? (
+        {isMounted && canAddClient ? (
           <button
             type="button"
             onClick={onAddClient}

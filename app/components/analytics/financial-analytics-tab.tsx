@@ -10,7 +10,6 @@ import {
 import { FinancialAnalyticsChart } from "./financial-analytics-chart";
 import { ExpenseBreakdownDonut } from "./expense-breakdown-donut";
 import { parseRubAmount, formatRub } from "../../lib/storage";
-import { buildFinancialTimeSeries } from "../../lib/analytics";
 
 import { ensureSystemSettings } from "../../lib/supabase/system-settings";
 
@@ -19,6 +18,7 @@ interface FinancialAnalyticsTabProps {
   payments: any[];
     stableRevenue: number;
   payrollPayouts: any[];
+    extraPayments: any[];
     growthBasePeriod: 1 | 3;
   setGrowthBasePeriod: Dispatch<SetStateAction<1 | 3>>;
   revenueDynamics: {
@@ -108,6 +108,15 @@ type SectionCardProps = {
   children: ReactNode;
 };
 
+type ExtraPaymentRow = {
+  id: string;
+  employee: string;
+  employeeId?: string | null;
+  reason: string;
+  date: string;
+  amount: string;
+};
+
 function formatMonthLabel(value: string) {
   const [year, month] = value.split("-");
   if (!year || !month) return value;
@@ -151,6 +160,41 @@ function normalizeDateToMonthKey(value: string) {
       const currentYear = new Date().getFullYear();
       return `${currentYear}-${month.padStart(2, "0")}`;
     }
+  }
+
+  return "";
+}
+
+function toSupabaseLikeDate(value: string) {
+  if (!value) return "";
+
+  if (value.includes(".")) {
+    const [day, month, year] = value.split(".");
+    if (!day || !month || !year) return value;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  return value;
+}
+
+function normalizePayrollPayoutMonth(value: string) {
+  if (!value) return "";
+
+  if (value.includes("-")) {
+    return value.slice(0, 7);
+  }
+
+  const match = value.match(/^(\d{2})\.(\d{2})$/);
+  if (match) {
+    const [, , month] = match;
+    const currentYear = new Date().getFullYear();
+    return `${currentYear}-${month}`;
+  }
+
+  const fullMatch = value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (fullMatch) {
+    const [, , month, year] = fullMatch;
+    return `${year}-${month}`;
   }
 
   return "";
@@ -209,6 +253,7 @@ export function FinancialAnalyticsTab({
   expenses,
   payments,
   payrollPayouts,
+  extraPayments = [],
   stableRevenue,
   revenueDynamics,
   forecastMetrics,
@@ -224,12 +269,6 @@ export function FinancialAnalyticsTab({
   growthPlan,
   ceoSummary,
 }: FinancialAnalyticsTabProps) {
-  const financialData = buildFinancialTimeSeries({
-    expenses,
-    payments,
-    payrollPayouts,
-  
-  });
   const [period, setPeriod] = useState<
     "current_month" | "last_3_months" | "last_6_months" | "all_time"
   >("current_month");
@@ -382,14 +421,69 @@ const filteredRevenueDynamics = revenueDynamics.filter(
     item.month <= normalizedChartRangeEnd
 );
 
-const filteredFinancialData = financialData.filter((item: any) => {
-  if (!item?.period) return false;
+const filteredFinancialData = useMemo(() => {
+  const months: string[] = [];
 
-  return (
-    item.period >= normalizedChartRangeStart &&
-    item.period <= normalizedChartRangeEnd
+  const cursor = new Date(
+    Number(normalizedChartRangeStart.split("-")[0]),
+    Number(normalizedChartRangeStart.split("-")[1]) - 1,
+    1
   );
-});
+
+  const end = new Date(
+    Number(normalizedChartRangeEnd.split("-")[0]),
+    Number(normalizedChartRangeEnd.split("-")[1]) - 1,
+    1
+  );
+
+  while (cursor <= end) {
+    months.push(
+      `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`
+    );
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return months.map((month) => {
+    const expensesSum = normalizedExpenses
+      .filter((item) => item.monthKey === month)
+      .reduce((sum, item) => sum + item.amountNumber, 0);
+
+    const safePayrollPayouts = Array.isArray(payrollPayouts) ? payrollPayouts : [];
+
+const payoutsFot = safePayrollPayouts
+  .filter((item) => normalizePayrollPayoutMonth(item.payoutDate) === month)
+  .reduce(
+    (sum, item) => sum + parseRubAmount(String(item.amount ?? "")),
+    0
+  );
+
+    const safeExtraPayments = Array.isArray(extraPayments) ? extraPayments : [];
+
+const extraFot = safeExtraPayments
+  .filter((item) => toSupabaseLikeDate(item.date).slice(0, 7) === month)
+  .reduce(
+    (sum, item) => sum + parseRubAmount(String(item.amount ?? "")),
+    0
+  );
+
+    const revenueMonth = revenueDynamics.find((item) => item.month === month);
+
+    return {
+      period: month,
+      revenue: revenueMonth?.revenue ?? 0,
+      profit: revenueMonth?.profit ?? 0,
+      expenses: expensesSum,
+      fot: payoutsFot + extraFot,
+    };
+  });
+}, [
+  normalizedChartRangeStart,
+  normalizedChartRangeEnd,
+  normalizedExpenses,
+  payrollPayouts,
+  extraPayments,
+  revenueDynamics,
+]);
 
   const totalRevenue = payments
   .filter((item) => {
