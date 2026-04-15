@@ -9,7 +9,28 @@ import {
 } from "../lib/billing-admin";
 
 export async function getAdminOverviewAction() {
-  return getAdminOverview();
+  try {
+    const result = await getAdminOverview();
+
+    return {
+      ok: true as const,
+      workspaces: result.workspaces,
+      logs: result.logs,
+      error: "",
+    };
+  } catch (error) {
+    console.error("getAdminOverviewAction error:", error);
+
+    return {
+      ok: false as const,
+      workspaces: [],
+      logs: [],
+      error:
+        error instanceof Error
+          ? error.message
+          : "Неизвестная ошибка getAdminOverviewAction",
+    };
+  }
 }
 
 export async function addManualBalanceAdjustmentAction(params: {
@@ -17,9 +38,27 @@ export async function addManualBalanceAdjustmentAction(params: {
   amount: number;
   description?: string;
 }) {
-  const result = await addManualBalanceAdjustment(params);
-  revalidatePath("/admin");
-  return result;
+  try {
+    const result = await addManualBalanceAdjustment(params);
+    revalidatePath("/admin");
+
+    return {
+      ok: true as const,
+      data: result,
+      error: "",
+    };
+  } catch (error) {
+    console.error("addManualBalanceAdjustmentAction error:", error);
+
+    return {
+      ok: false as const,
+      data: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Ошибка при изменении баланса",
+    };
+  }
 }
 
 export async function activatePlanFromBalanceAction(params: {
@@ -29,9 +68,27 @@ export async function activatePlanFromBalanceAction(params: {
   extraMembers?: number;
   description?: string;
 }) {
-  const result = await activatePlanFromBalance(params);
-  revalidatePath("/admin");
-  return result;
+  try {
+    const result = await activatePlanFromBalance(params);
+    revalidatePath("/admin");
+
+    return {
+      ok: true as const,
+      data: result,
+      error: "",
+    };
+  } catch (error) {
+    console.error("activatePlanFromBalanceAction error:", error);
+
+    return {
+      ok: false as const,
+      data: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Ошибка при активации / продлении тарифа",
+    };
+  }
 }
 
 export async function forceSetWorkspaceBillingStatusAction(params: {
@@ -39,7 +96,25 @@ export async function forceSetWorkspaceBillingStatusAction(params: {
   nextStatus: "active" | "past_due" | "expired";
   description?: string;
 }) {
-  const result = await forceSetWorkspaceBillingStatus(params);
-  revalidatePath("/admin");
-  return result;
+  try {
+    const result = await forceSetWorkspaceBillingStatus(params);
+    revalidatePath("/admin");
+
+    return {
+      ok: true as const,
+      data: result,
+      error: "",
+    };
+  } catch (error) {
+    console.error("forceSetWorkspaceBillingStatusAction error:", error);
+
+    return {
+      ok: false as const,
+      data: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Ошибка при изменении статуса подписки",
+    };
+  }
 }

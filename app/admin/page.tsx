@@ -208,8 +208,16 @@ export default function AdminPage() {
       try {
         const overview = await getAdminOverviewAction();
 
-        setWorkspaces(overview.workspaces ?? []);
-        setAdminLogs((overview.logs ?? []).slice(0, 30));
+if (!overview.ok) {
+  console.error("Admin overview error:", overview.error);
+  setWorkspaces([]);
+  setAdminLogs([]);
+  alert(`ADMIN LOAD ERROR: ${overview.error}`);
+  return;
+}
+
+setWorkspaces(overview.workspaces ?? []);
+setAdminLogs((overview.logs ?? []).slice(0, 30));
       } catch (error) {
   console.error("Ошибка загрузки admin данных:", error);
   alert(
@@ -313,15 +321,21 @@ export default function AdminPage() {
   async function reloadWorkspaces(keepSelectedWorkspaceId?: string) {
     const overview = await getAdminOverviewAction();
 
-    setWorkspaces(overview.workspaces ?? []);
-    setAdminLogs((overview.logs ?? []).slice(0, 30));
+if (!overview.ok) {
+  console.error("Admin reload error:", overview.error);
+  alert(`ADMIN RELOAD ERROR: ${overview.error}`);
+  return;
+}
 
-    if (keepSelectedWorkspaceId) {
-      const fresh = (overview.workspaces ?? []).find(
-        (w) => w.id === keepSelectedWorkspaceId
-      );
-      setSelectedWorkspace(fresh ?? null);
-    }
+setWorkspaces(overview.workspaces ?? []);
+setAdminLogs((overview.logs ?? []).slice(0, 30));
+
+if (keepSelectedWorkspaceId) {
+  const fresh = (overview.workspaces ?? []).find(
+    (w) => w.id === keepSelectedWorkspaceId
+  );
+  setSelectedWorkspace(fresh ?? null);
+}
   }
 
   async function handleBalanceChange() {
@@ -337,11 +351,15 @@ export default function AdminPage() {
     try {
       setIsLoadingBalanceAction(true);
 
-      await addManualBalanceAdjustmentAction({
-        workspaceId: selectedWorkspace.id,
-        amount: parsedAmount,
-        description: description || "Admin adjustment",
-      });
+      const result = await addManualBalanceAdjustmentAction({
+  workspaceId: selectedWorkspace.id,
+  amount: parsedAmount,
+  description: description || "Admin adjustment",
+});
+
+if (!result.ok) {
+  throw new Error(result.error);
+}
 
       await reloadWorkspaces(selectedWorkspace.id);
 
@@ -367,17 +385,21 @@ export default function AdminPage() {
     try {
       setIsLoadingPlanAction(true);
 
-      await activatePlanFromBalanceAction({
-        workspaceId: selectedWorkspace.id,
-        planCode: selectedPlanCode,
-        billingPeriod: selectedBillingPeriod,
-        extraMembers: isPlanWithExtraMembers(selectedPlanCode)
-          ? selectedExtraMembers
-          : 0,
-        description: params.isRenewal
-          ? "Продление тарифа через admin panel"
-          : "Активация тарифа через admin panel",
-      });
+      const result = await activatePlanFromBalanceAction({
+  workspaceId: selectedWorkspace.id,
+  planCode: selectedPlanCode,
+  billingPeriod: selectedBillingPeriod,
+  extraMembers: isPlanWithExtraMembers(selectedPlanCode)
+    ? selectedExtraMembers
+    : 0,
+  description: params.isRenewal
+    ? "Продление тарифа через admin panel"
+    : "Активация тарифа через admin panel",
+});
+
+if (!result.ok) {
+  throw new Error(result.error);
+}
 
       await reloadWorkspaces(selectedWorkspace.id);
 
@@ -406,11 +428,15 @@ export default function AdminPage() {
     try {
       setIsLoadingStatusAction(true);
 
-      await forceSetWorkspaceBillingStatusAction({
-        workspaceId: selectedWorkspace.id,
-        nextStatus,
-        description: "Изменение статуса через admin panel",
-      });
+      const result = await forceSetWorkspaceBillingStatusAction({
+  workspaceId: selectedWorkspace.id,
+  nextStatus,
+  description: "Изменение статуса через admin panel",
+});
+
+if (!result.ok) {
+  throw new Error(result.error);
+}
 
       await reloadWorkspaces(selectedWorkspace.id);
 
