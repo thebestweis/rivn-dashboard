@@ -7,7 +7,6 @@ import {
   addManualBalanceAdjustmentAction,
   activatePlanFromBalanceAction,
   forceSetWorkspaceBillingStatusAction,
-  getAdminOverviewAction,
 } from "./actions";
 import type {
   AdminWorkspaceRow,
@@ -160,6 +159,27 @@ function getLogSummary(log: AdminActionLogRow) {
   };
 }
 
+async function fetchAdminOverview() {
+  const response = await fetch("/api/admin/overview", {
+    method: "GET",
+    cache: "no-store",
+    credentials: "include",
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || !data?.ok) {
+    throw new Error(data?.error || "Не удалось загрузить admin overview");
+  }
+
+  return data as {
+    ok: true;
+    workspaces: AdminWorkspaceRow[];
+    logs: AdminActionLogRow[];
+    error: string;
+  };
+}
+
 export default function AdminPage() {
   const { profile, isLoading } = useAppContextState();
   const router = useRouter();
@@ -204,36 +224,29 @@ export default function AdminPage() {
   }, [mounted, profile, isLoading, router]);
 
   useEffect(() => {
-    async function loadAdminData() {
-      try {
-        const overview = await getAdminOverviewAction();
+  async function loadAdminData() {
+    try {
+      const overview = await fetchAdminOverview();
 
-if (!overview.ok) {
-  console.error("Admin overview error:", overview.error);
-  setWorkspaces([]);
-  setAdminLogs([]);
-  alert(`ADMIN LOAD ERROR: ${overview.error}`);
-  return;
-}
+      setWorkspaces(overview.workspaces ?? []);
+      setAdminLogs((overview.logs ?? []).slice(0, 30));
+    } catch (error) {
+      console.error("Ошибка загрузки admin данных:", error);
+      setWorkspaces([]);
+      setAdminLogs([]);
 
-setWorkspaces(overview.workspaces ?? []);
-setAdminLogs((overview.logs ?? []).slice(0, 30));
-      } catch (error) {
-  console.error("Ошибка загрузки admin данных:", error);
-  alert(
-    error instanceof Error
-      ? error.message
-      : "Не удалось загрузить admin данные"
-  );
-  setWorkspaces([]);
-  setAdminLogs([]);
-}
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось загрузить admin данные"
+      );
     }
+  }
 
-    if (mounted && profile?.platform_role === "super_admin") {
-      void loadAdminData();
-    }
-  }, [mounted, profile]);
+  if (mounted && profile?.platform_role === "super_admin") {
+    void loadAdminData();
+  }
+}, [mounted, profile]);
 
   useEffect(() => {
     if (!selectedWorkspace) return;
@@ -319,24 +332,18 @@ setAdminLogs((overview.logs ?? []).slice(0, 30));
   }, [selectedWorkspace]);
 
   async function reloadWorkspaces(keepSelectedWorkspaceId?: string) {
-    const overview = await getAdminOverviewAction();
+  const overview = await fetchAdminOverview();
 
-if (!overview.ok) {
-  console.error("Admin reload error:", overview.error);
-  alert(`ADMIN RELOAD ERROR: ${overview.error}`);
-  return;
-}
+  setWorkspaces(overview.workspaces ?? []);
+  setAdminLogs((overview.logs ?? []).slice(0, 30));
 
-setWorkspaces(overview.workspaces ?? []);
-setAdminLogs((overview.logs ?? []).slice(0, 30));
-
-if (keepSelectedWorkspaceId) {
-  const fresh = (overview.workspaces ?? []).find(
-    (w) => w.id === keepSelectedWorkspaceId
-  );
-  setSelectedWorkspace(fresh ?? null);
-}
+  if (keepSelectedWorkspaceId) {
+    const fresh = (overview.workspaces ?? []).find(
+      (w) => w.id === keepSelectedWorkspaceId
+    );
+    setSelectedWorkspace(fresh ?? null);
   }
+}
 
   async function handleBalanceChange() {
     if (!selectedWorkspace) return;

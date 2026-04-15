@@ -1,6 +1,26 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminRoute, getErrorMessage } from "../_utils";
 
+type BillingRow = {
+  workspace_id: string;
+  plan_code: string | null;
+  subscription_status: string | null;
+  billing_period: "monthly" | "yearly" | null;
+};
+
+type TransactionRow = {
+  workspace_id: string;
+  amount: number | string | null;
+  status: string | null;
+};
+
+type WorkspaceRow = {
+  id: string;
+  name: string;
+  slug: string | null;
+  created_at: string;
+};
+
 export async function GET() {
   try {
     const { serviceSupabase } = await requireSuperAdminRoute();
@@ -47,30 +67,22 @@ export async function GET() {
       throw new Error(`Не удалось загрузить admin logs: ${logsError.message}`);
     }
 
-    const billingMap = new Map<
-      string,
-      {
-        workspace_id: string;
-        plan_code: string | null;
-        subscription_status: string | null;
-        billing_period: "monthly" | "yearly" | null;
-      }
-    >();
+    const billingMap = new Map<string, BillingRow>();
 
-    for (const row of billingRows ?? []) {
+    for (const row of (billingRows ?? []) as BillingRow[]) {
       billingMap.set(row.workspace_id, row);
     }
 
     const balanceMap = new Map<string, number>();
 
-    for (const row of transactionRows ?? []) {
-      if (row.status !== "completed") continue;
+    for (const row of (transactionRows ?? []) as TransactionRow[]) {
+      if (row.status && row.status !== "completed") continue;
 
       const current = balanceMap.get(row.workspace_id) ?? 0;
       balanceMap.set(row.workspace_id, current + Number(row.amount ?? 0));
     }
 
-    const normalizedWorkspaces = (workspaces ?? []).map((ws) => {
+    const normalizedWorkspaces = ((workspaces ?? []) as WorkspaceRow[]).map((ws) => {
       const billing = billingMap.get(ws.id);
 
       return {
@@ -92,12 +104,23 @@ export async function GET() {
     });
 
     return NextResponse.json({
+      ok: true,
       workspaces: normalizedWorkspaces,
       logs: logsRows ?? [],
+      error: "",
     });
   } catch (error) {
+    const message = getErrorMessage(error);
+
+    console.error("GET /api/admin/overview error:", error);
+
     return NextResponse.json(
-      { error: getErrorMessage(error) },
+      {
+        ok: false,
+        workspaces: [],
+        logs: [],
+        error: message,
+      },
       { status: 500 }
     );
   }
