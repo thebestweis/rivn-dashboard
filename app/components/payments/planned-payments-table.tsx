@@ -17,7 +17,7 @@ interface PlannedPaymentsTableProps {
   onDelete: (id: string) => void;
   processingPaymentId?: string | null;
   deletingPaymentId?: string | null;
-  canManage?: boolean;
+    canManagePayments?: boolean;
 }
 
 export function PlannedPaymentsTable({
@@ -27,11 +27,19 @@ export function PlannedPaymentsTable({
   onDelete,
   processingPaymentId,
   deletingPaymentId,
-  canManage = false,
+  canManagePayments,
 }: PlannedPaymentsTableProps) {
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-      
+      <div className="flex items-center justify-between gap-4">
+        <div className="text-sm text-white/50">Плановые счета</div>
+
+        {!canManagePayments ? (
+          <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/50">
+            Только просмотр
+          </div>
+        ) : null}
+      </div>
 
       <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
         <table className="w-full text-left text-sm">
@@ -45,7 +53,9 @@ export function PlannedPaymentsTable({
               <th className="px-4 py-3 font-medium">Статус</th>
               <th className="px-4 py-3 font-medium">Комментарий</th>
               <th className="px-4 py-3 font-medium">Документ</th>
-              <th className="px-4 py-3 font-medium">Действия</th>
+              {canManagePayments ? (
+                <th className="px-4 py-3 font-medium">Действия</th>
+              ) : null}
             </tr>
           </thead>
 
@@ -67,19 +77,19 @@ export function PlannedPaymentsTable({
                       item.status === "planned"
                         ? "bg-violet-500/15 text-violet-300"
                         : item.status === "waiting"
-                        ? "bg-amber-500/15 text-amber-300"
-                        : item.status === "overdue"
-                        ? "bg-rose-500/15 text-rose-300"
-                        : "bg-emerald-500/15 text-emerald-300"
+                          ? "bg-amber-500/15 text-amber-300"
+                          : item.status === "overdue"
+                            ? "bg-rose-500/15 text-rose-300"
+                            : "bg-emerald-500/15 text-emerald-300"
                     }`}
                   >
                     {item.status === "planned"
                       ? "Ожидается"
                       : item.status === "overdue"
-                      ? "Просрочен"
-                      : item.status === "paid"
-                      ? "Оплачен"
-                      : "Ожидается"}
+                        ? "Просрочен"
+                        : item.status === "paid"
+                          ? "Оплачен"
+                          : "Ожидается"}
                   </span>
                 </td>
 
@@ -102,8 +112,8 @@ export function PlannedPaymentsTable({
                   )}
                 </td>
 
-                <td className="px-4 py-3">
-                  {canManage ? (
+                {canManagePayments ? (
+                  <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => onEdit(item.id)}
@@ -122,9 +132,7 @@ export function PlannedPaymentsTable({
                               : "border border-emerald-400/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
                           }`}
                         >
-                          {processingPaymentId === item.id
-                            ? "Обработка..."
-                            : "Оплачено"}
+                          {processingPaymentId === item.id ? "Обработка..." : "Оплачено"}
                         </button>
                       ) : (
                         <span className="text-xs text-white/35">—</span>
@@ -142,10 +150,8 @@ export function PlannedPaymentsTable({
                         {deletingPaymentId === item.id ? "Удаление..." : "Удалить"}
                       </button>
                     </div>
-                  ) : (
-                    <span className="text-xs text-white/30">Только просмотр</span>
-                  )}
-                </td>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>

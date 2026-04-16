@@ -10,12 +10,14 @@ interface PayrollExtraTableProps {
   items: PayrollExtraRow[];
   onEdit?: (item: PayrollExtraRow) => void;
   onDelete?: (id: string) => void;
+  canManagePayroll?: boolean;
 }
 
 export function PayrollExtraTable({
   items,
   onEdit,
   onDelete,
+  canManagePayroll = false,
 }: PayrollExtraTableProps) {
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -46,23 +48,27 @@ export function PayrollExtraTable({
                   {item.amount}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onEdit?.(item)}
-                      className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white"
-                    >
-                      Редактировать
-                    </button>
+                  {canManagePayroll ? (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onEdit?.(item)}
+                        className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white"
+                      >
+                        Редактировать
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => onDelete?.(item.id)}
-                      className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/15"
-                    >
-                      Удалить
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => onDelete?.(item.id)}
+                        className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/15"
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-white/30">Только просмотр</span>
+                  )}
                 </td>
               </tr>
             ))}

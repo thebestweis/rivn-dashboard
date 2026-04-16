@@ -1,10 +1,11 @@
-import { autoCreatePayrollAccrualFromPayment } from "@/app/lib/payroll-auto";
+import { syncPayrollAccrualFromPayment } from "@/app/lib/payroll-auto";
 import type {
   Payment,
   PaymentFormData,
   PaymentStatus,
 } from "@/app/lib/types/payment";
 import { getAppContext } from "./app-context";
+
 
 type DbPaymentRow = {
   id: string;
@@ -87,15 +88,14 @@ export async function createPaymentInSupabase(
 
   const createdPayment = mapPayment(data as DbPaymentRow);
 
-  if (createdPayment.status === "paid") {
-    await autoCreatePayrollAccrualFromPayment({
-      paymentId: createdPayment.id,
-      clientId: createdPayment.client_id,
-      projectId: createdPayment.project_id ?? null,
-      periodLabel: createdPayment.period_label ?? null,
-      paidDate: createdPayment.paid_date ?? null,
-    });
-  }
+  await syncPayrollAccrualFromPayment({
+    paymentId: createdPayment.id,
+    clientId: createdPayment.client_id,
+    projectId: createdPayment.project_id ?? null,
+    periodLabel: createdPayment.period_label ?? null,
+    paidDate: createdPayment.paid_date ?? null,
+    shouldExist: createdPayment.status === "paid",
+  });
 
   return createdPayment;
 }
@@ -114,7 +114,9 @@ export async function updatePaymentInSupabase(
     .single();
 
   if (oldPaymentError) {
-    throw new Error(`Не удалось загрузить текущий платёж: ${oldPaymentError.message}`);
+    throw new Error(
+      `Не удалось загрузить текущий платёж: ${oldPaymentError.message}`
+    );
   }
 
   const { data, error } = await supabase
@@ -141,25 +143,29 @@ export async function updatePaymentInSupabase(
 
   const updatedPayment = mapPayment(data as DbPaymentRow);
 
-  const becamePaid =
-    (oldPayment as DbPaymentRow | null)?.status !== "paid" &&
-    updatedPayment.status === "paid";
-
-  if (becamePaid) {
-    await autoCreatePayrollAccrualFromPayment({
-      paymentId: updatedPayment.id,
-      clientId: updatedPayment.client_id,
-      projectId: updatedPayment.project_id ?? null,
-      periodLabel: updatedPayment.period_label ?? null,
-      paidDate: updatedPayment.paid_date ?? null,
-    });
-  }
+  await syncPayrollAccrualFromPayment({
+    paymentId: updatedPayment.id,
+    clientId: updatedPayment.client_id,
+    projectId: updatedPayment.project_id ?? null,
+    periodLabel: updatedPayment.period_label ?? null,
+    paidDate: updatedPayment.paid_date ?? null,
+    shouldExist: updatedPayment.status === "paid",
+  });
 
   return updatedPayment;
 }
 
 export async function deletePaymentFromSupabase(id: string): Promise<void> {
   const { supabase, workspace } = await getAppContext();
+
+  await syncPayrollAccrualFromPayment({
+    paymentId: id,
+    clientId: null,
+    projectId: null,
+    periodLabel: null,
+    paidDate: null,
+    shouldExist: false,
+  });
 
   const { error } = await supabase
     .from("payments")

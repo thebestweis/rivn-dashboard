@@ -24,8 +24,17 @@ export function useActiveWorkspaceMembers(enabled = true) {
     [query.data]
   );
 
+  const activePayrollMembers = useMemo<WorkspaceMemberItem[]>(
+    () =>
+      activeMembers.filter(
+        (member) => member.is_payroll_active && member.status === "active"
+      ),
+    [activeMembers]
+  );
+
   return {
     ...query,
     activeMembers,
+    activePayrollMembers,
   };
 }

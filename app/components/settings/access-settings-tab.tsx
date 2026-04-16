@@ -91,7 +91,7 @@ function getDefaultPermissionByRole(
 }
 
 function getMemberLabel(member: WorkspaceMemberItem) {
-  const displayName = member.name?.trim();
+  const displayName = member.display_name?.trim();
   if (displayName && displayName !== "Без имени") {
     return `${displayName} — ${member.email}`;
   }

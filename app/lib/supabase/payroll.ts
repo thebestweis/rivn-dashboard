@@ -123,7 +123,7 @@ export async function createPayrollAccrualInSupabase(
     project: accrual.project,
     project_id: accrual.projectId ?? null,
     payment_id: accrual.paymentId ?? null,
-    amount: accrual.amount,
+        amount: normalizeMoneyString(accrual.amount),
     date: accrual.date,
     status: accrual.status,
   };
@@ -155,7 +155,7 @@ export async function updatePayrollAccrualInSupabase(
     project: accrual.project,
     project_id: accrual.projectId ?? null,
     payment_id: accrual.paymentId ?? null,
-    amount: accrual.amount,
+        amount: normalizeMoneyString(accrual.amount),
     date: accrual.date,
     status: accrual.status,
   };

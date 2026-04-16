@@ -28,7 +28,7 @@ function mapWorkspaceMemberToStoredEmployee(
 ): StoredEmployee {
   return {
     id: member.id,
-    name: member.name?.trim() || member.email || "Без имени",
+    name: member.display_name?.trim() || member.email || "Без имени",
     role: member.role,
     payType: "fixed_per_paid_project",
     payValue: "₽0",

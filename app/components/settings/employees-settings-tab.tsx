@@ -1,36 +1,36 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { StoredEmployee } from "../../lib/storage";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  fetchEmployeesFromSupabase,
-  createEmployeeInSupabase,
-  updateEmployeeInSupabase,
-  deleteEmployeeFromSupabase,
-} from "../../lib/supabase/employees";
-import { ensureSystemSettings } from "../../lib/supabase/system-settings";
+  ensureSystemSettings,
+  type SystemSettings,
+} from "../../lib/supabase/system-settings";
+import {
+  getWorkspaceMembers,
+  getWorkspaceMemberDisplayName,
+  updateWorkspaceMemberPayrollSettings,
+  type WorkspaceMemberItem,
+  type WorkspaceMemberPayType,
+} from "../../lib/supabase/workspace-members";
 import { useAppContextState } from "../../providers/app-context-provider";
 import { AppToast } from "../ui/app-toast";
 import { BillingAccessBanner } from "../ui/billing-access-banner";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../lib/query-keys";
 
-type EmployeeFormState = {
+type MemberPayrollFormState = {
   id: string | null;
   name: string;
   role: string;
-  payType:
-    | "fixed_per_paid_project"
-    | "fixed_salary"
-    | "fixed_salary_plus_project";
+  payType: WorkspaceMemberPayType;
   payValue: string;
   fixedSalary: string;
   payoutDay: string;
-  isActive: boolean;
+  isPayrollActive: boolean;
 };
 
-const initialFormState: EmployeeFormState = {
+const initialFormState: MemberPayrollFormState = {
   id: null,
   name: "",
   role: "",
@@ -38,7 +38,7 @@ const initialFormState: EmployeeFormState = {
   payValue: "₽5,000",
   fixedSalary: "",
   payoutDay: "1",
-  isActive: true,
+  isPayrollActive: true,
 };
 
 export function EmployeesSettingsTab() {
@@ -50,7 +50,7 @@ export function EmployeesSettingsTab() {
   } = useAppContextState();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [form, setForm] = useState<EmployeeFormState>(initialFormState);
+  const [form, setForm] = useState<MemberPayrollFormState>(initialFormState);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -61,33 +61,40 @@ export function EmployeesSettingsTab() {
 
   const isBillingReadOnly = billingAccess?.isReadOnly ?? false;
   const teamEnabled = billingAccess?.teamEnabled ?? false;
-  const canManageEmployees = !isBillingReadOnly && teamEnabled;
+  const canManageMembersPayroll = !isBillingReadOnly && teamEnabled;
 
   const {
-    data: employees = [],
-    isLoading: isEmployeesLoading,
-  } = useQuery<StoredEmployee[]>({
-    queryKey: queryKeys.employees,
-    queryFn: fetchEmployeesFromSupabase,
+    data: members = [],
+    isLoading: isMembersLoading,
+  } = useQuery<WorkspaceMemberItem[]>({
+    queryKey: queryKeys.workspaceMembers,
+    queryFn: getWorkspaceMembers,
     staleTime: 1000 * 60 * 5,
   });
 
   const {
     data: systemSettings,
     isLoading: isSystemSettingsLoading,
-  } = useQuery({
+  } = useQuery<SystemSettings>({
     queryKey: queryKeys.systemSettings,
     queryFn: ensureSystemSettings,
-    staleTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 5,
   });
 
   const defaultEmployeePay =
     systemSettings?.default_employee_pay?.trim() || "₽5,000";
 
+  async function refreshMembersData() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaceMembers }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.systemSettings }),
+    ]);
+  }
+
   useEffect(() => {
-    if (canManageEmployees) return;
+    if (canManageMembersPayroll) return;
     setIsModalOpen(false);
-  }, [canManageEmployees]);
+  }, [canManageMembersPayroll]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -99,44 +106,31 @@ export function EmployeesSettingsTab() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  const sortedEmployees = useMemo(() => {
-    return [...employees].sort(
-      (a, b) => Number(b.isActive) - Number(a.isActive)
+  const activeAndInvitedMembers = useMemo(() => {
+    return members.filter(
+      (member) => member.status === "active" || member.status === "invited"
     );
-  }, [employees]);
+  }, [members]);
 
-  function resetForm() {
-    setErrors({});
-    setForm({
-      id: null,
-      name: "",
-      role: "",
-      payType: "fixed_per_paid_project",
-      payValue: defaultEmployeePay,
-      fixedSalary: "",
-      payoutDay: "1",
-      isActive: true,
+  const sortedMembers = useMemo(() => {
+    return [...activeAndInvitedMembers].sort((a, b) => {
+      const aActive = a.status === "active" ? 1 : 0;
+      const bActive = b.status === "active" ? 1 : 0;
+
+      if (bActive !== aActive) {
+        return bActive - aActive;
+      }
+
+      return getWorkspaceMemberDisplayName(a).localeCompare(
+        getWorkspaceMemberDisplayName(b),
+        "ru"
+      );
     });
-  }
+  }, [activeAndInvitedMembers]);
 
-  function openCreateModal() {
-    if (isBillingReadOnly) {
-      setToastType("error");
-      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
-      return;
-    }
+  const isLoading = isMembersLoading || isSystemSettingsLoading;
 
-    if (!teamEnabled) {
-      setToastType("error");
-      setToastMessage("Функция команды доступна только на тарифе Team и выше.");
-      return;
-    }
-
-    resetForm();
-    setIsModalOpen(true);
-  }
-
-  function openEditModal(employee: StoredEmployee) {
+  function openEditModal(member: WorkspaceMemberItem) {
     if (isBillingReadOnly) {
       setToastType("error");
       setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
@@ -151,29 +145,27 @@ export function EmployeesSettingsTab() {
 
     setErrors({});
     setForm({
-      id: employee.id,
-      name: employee.name,
-      role: employee.role,
-      payType: employee.payType,
-      payValue: employee.payValue,
-      fixedSalary: employee.fixedSalary ?? "",
-      payoutDay: employee.payoutDay ? String(employee.payoutDay) : "1",
-      isActive: employee.isActive,
+      id: member.id,
+      name: getWorkspaceMemberDisplayName(member),
+      role: member.role,
+      payType: member.pay_type ?? "fixed_per_paid_project",
+      payValue: member.pay_value?.trim() || defaultEmployeePay,
+      fixedSalary: member.fixed_salary?.trim() || "",
+      payoutDay: member.payout_day ? String(member.payout_day) : "1",
+      isPayrollActive: member.is_payroll_active ?? true,
     });
     setIsModalOpen(true);
   }
 
   function closeModal() {
     if (isSaving) return;
-    resetForm();
+
+    setErrors({});
+    setForm(initialFormState);
     setIsModalOpen(false);
   }
 
-  async function refreshEmployees() {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.employees });
-  }
-
-  async function handleSaveEmployee() {
+  async function handleSaveMemberPayroll() {
     if (isBillingReadOnly) {
       setToastType("error");
       setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
@@ -186,15 +178,13 @@ export function EmployeesSettingsTab() {
       return;
     }
 
+    if (!form.id) {
+      setToastType("error");
+      setToastMessage("Пользователь не найден");
+      return;
+    }
+
     const newErrors: Record<string, string> = {};
-
-    if (!form.name.trim()) {
-      newErrors.name = "Укажи имя сотрудника";
-    }
-
-    if (!form.role.trim()) {
-      newErrors.role = "Укажи роль";
-    }
 
     if (!form.payValue.trim()) {
       newErrors.payValue = "Укажи ставку";
@@ -222,102 +212,29 @@ export function EmployeesSettingsTab() {
     try {
       setIsSaving(true);
 
-      if (form.id) {
-        const updated = await updateEmployeeInSupabase(form.id, {
-          name: form.name.trim(),
-          role: form.role.trim(),
-          payType: form.payType,
-          payValue: form.payValue.trim(),
-          fixedSalary: form.fixedSalary.trim(),
-          payoutDay: Number(form.payoutDay || 1),
-          isActive: form.isActive,
-        });
+            await updateWorkspaceMemberPayrollSettings({
+        memberId: form.id,
+        displayName: form.name.trim(),
+        payType: form.payType,
+        payValue: form.payValue.trim() || defaultEmployeePay,
+        fixedSalary: form.fixedSalary.trim(),
+        payoutDay: Number(form.payoutDay || 1),
+        isPayrollActive: form.isPayrollActive,
+      });
 
-        queryClient.setQueryData<StoredEmployee[]>(
-          queryKeys.employees,
-          (prev = []) =>
-            prev.map((employee) =>
-              employee.id === updated.id ? updated : employee
-            )
-        );
-
-        setToastType("success");
-        setToastMessage(`Сотрудник "${updated.name}" сохранён`);
-      } else {
-        const created = await createEmployeeInSupabase({
-          name: form.name.trim(),
-          role: form.role.trim(),
-          payType: form.payType,
-          payValue: form.payValue.trim(),
-          fixedSalary: form.fixedSalary.trim(),
-          payoutDay: Number(form.payoutDay || 1),
-          isActive: form.isActive,
-        });
-
-        queryClient.setQueryData<StoredEmployee[]>(
-          queryKeys.employees,
-          (prev = []) => [created, ...prev]
-        );
-
-        setToastType("success");
-        setToastMessage(`Сотрудник "${created.name}" создан`);
-      }
-
+      await refreshMembersData();
       closeModal();
+
+      setToastType("success");
+      setToastMessage(`Параметры пользователя "${form.name}" сохранены`);
     } catch (error) {
-      console.error("Ошибка сохранения сотрудника:", error);
+      console.error("Ошибка сохранения payroll-настроек пользователя:", error);
       setToastType("error");
       setToastMessage(getBillingErrorMessage(error));
     } finally {
       setIsSaving(false);
     }
   }
-
-  async function handleDeleteEmployee(employeeId: string) {
-    if (isBillingReadOnly) {
-      setToastType("error");
-      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
-      return;
-    }
-
-    if (!teamEnabled) {
-      setToastType("error");
-      setToastMessage("Функция команды доступна только на тарифе Team и выше.");
-      return;
-    }
-
-    const target = employees.find((employee) => employee.id === employeeId);
-
-    if (!target) {
-      setToastType("error");
-      setToastMessage("Сотрудник не найден");
-      return;
-    }
-
-    const shouldDelete = window.confirm(
-      "Удалить сотрудника? Это действие нельзя отменить."
-    );
-
-    if (!shouldDelete) return;
-
-    try {
-      await deleteEmployeeFromSupabase(employeeId);
-
-      queryClient.setQueryData<StoredEmployee[]>(
-        queryKeys.employees,
-        (prev = []) => prev.filter((employee) => employee.id !== employeeId)
-      );
-
-      setToastType("success");
-      setToastMessage(`Сотрудник "${target.name}" удалён`);
-    } catch (error) {
-      console.error("Ошибка удаления сотрудника:", error);
-      setToastType("error");
-      setToastMessage(getBillingErrorMessage(error));
-    }
-  }
-
-  const isLoading = isEmployeesLoading || isSystemSettingsLoading;
 
   return (
     <>
@@ -326,47 +243,38 @@ export function EmployeesSettingsTab() {
           isLoading={isAppContextLoading}
           isBillingReadOnly={isBillingReadOnly}
           canManage={teamEnabled}
-          readOnlyMessage="Подписка неактивна. Раздел сотрудников доступен только в режиме просмотра, пока тариф не будет активирован."
+          readOnlyMessage="Подписка неактивна. Раздел payroll-настроек пользователей доступен только в режиме просмотра, пока тариф не будет активирован."
           roleRestrictedMessage="Функция команды доступна только на тарифе Team и выше."
           className="mb-5"
         />
 
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm text-white/50">Сотрудники</div>
+            <div className="text-sm text-white/50">Пользователи</div>
             <h2 className="mt-1 text-xl font-semibold">
-              Управление сотрудниками
+              Payroll-настройки пользователей
             </h2>
             <div className="mt-2 text-sm text-white/55">
-              Добавляй сотрудников, меняй их статус и ставку для дальнейшей
-              привязки к клиентам, проектам и зарплатам.
+              Здесь настраивается логика начисления зарплаты для участников
+              кабинета: ставка за проект, оклад, день выплаты и участие в payroll.
             </div>
             <div className="mt-2 text-xs text-white/35">
               Ставка по умолчанию из системных настроек: {defaultEmployeePay}
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={openCreateModal}
-            disabled={!canManageEmployees}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Добавить сотрудника
-          </button>
         </div>
 
         <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
           <table className="w-full text-left text-sm">
             <thead className="bg-white/[0.04] text-white/45">
               <tr>
-                <th className="px-4 py-3 font-medium">Имя</th>
+                <th className="px-4 py-3 font-medium">Пользователь</th>
                 <th className="px-4 py-3 font-medium">Роль</th>
                 <th className="px-4 py-3 font-medium">Механизм</th>
                 <th className="px-4 py-3 font-medium">Ставка</th>
                 <th className="px-4 py-3 font-medium">Оклад</th>
                 <th className="px-4 py-3 font-medium">День выплаты</th>
-                <th className="px-4 py-3 font-medium">Статус</th>
+                <th className="px-4 py-3 font-medium">Payroll</th>
                 <th className="px-4 py-3 font-medium">Действия</th>
               </tr>
             </thead>
@@ -378,40 +286,46 @@ export function EmployeesSettingsTab() {
                     colSpan={8}
                     className="px-4 py-10 text-center text-sm text-white/45"
                   >
-                    Загрузка сотрудников...
+                    Загрузка пользователей...
                   </td>
                 </tr>
-              ) : sortedEmployees.length > 0 ? (
-                sortedEmployees.map((item) => (
+              ) : sortedMembers.length > 0 ? (
+                sortedMembers.map((item) => (
                   <tr
                     key={item.id}
                     className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
                   >
-                    <td className="px-4 py-3 font-medium">{item.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {getWorkspaceMemberDisplayName(item)}
+                    </td>
                     <td className="px-4 py-3 text-white/75">{item.role}</td>
                     <td className="px-4 py-3 text-white/75">
-                      {item.payType === "fixed_per_paid_project"
-                        ? "За проект"
-                        : item.payType === "fixed_salary"
-                          ? "Оклад"
-                          : "Оклад + проект"}
-                    </td>
-                    <td className="px-4 py-3 text-white/75">{item.payValue}</td>
-                    <td className="px-4 py-3 text-white/75">
-                      {item.fixedSalary || "—"}
+                      {item.pay_type === "fixed_per_paid_project"
+                        ? "За оплаченный проект"
+                        : item.pay_type === "fixed_salary"
+                        ? "Оклад"
+                        : item.pay_type === "fixed_salary_plus_project"
+                        ? "Оклад + проект"
+                        : "За оплаченный проект"}
                     </td>
                     <td className="px-4 py-3 text-white/75">
-                      {item.payoutDay ? item.payoutDay : "—"}
+                      {item.pay_value?.trim() || defaultEmployeePay}
+                    </td>
+                    <td className="px-4 py-3 text-white/75">
+                      {item.fixed_salary?.trim() || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-white/75">
+                      {item.payout_day ? item.payout_day : "—"}
                     </td>
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full px-3 py-1 text-xs ${
-                          item.isActive
+                          item.is_payroll_active
                             ? "bg-emerald-500/15 text-emerald-300"
                             : "bg-amber-500/15 text-amber-300"
                         }`}
                       >
-                        {item.isActive ? "Активен" : "Приостановлен"}
+                        {item.is_payroll_active ? "Включён" : "Выключен"}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -419,19 +333,10 @@ export function EmployeesSettingsTab() {
                         <button
                           type="button"
                           onClick={() => openEditModal(item)}
-                          disabled={!canManageEmployees}
+                          disabled={!canManageMembersPayroll}
                           className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Редактировать
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteEmployee(item.id)}
-                          disabled={!canManageEmployees}
-                          className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Удалить
                         </button>
                       </div>
                     </td>
@@ -443,7 +348,7 @@ export function EmployeesSettingsTab() {
                     colSpan={8}
                     className="px-4 py-10 text-center text-sm text-white/45"
                   >
-                    Пока нет сотрудников. Добавь первого сотрудника.
+                    Пока нет пользователей в кабинете.
                   </td>
                 </tr>
               )}
@@ -457,9 +362,9 @@ export function EmployeesSettingsTab() {
           <div className="w-full max-w-[560px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-sm text-white/50">Сотрудник</div>
+                <div className="text-sm text-white/50">Пользователь</div>
                 <h3 className="mt-1 text-xl font-semibold text-white">
-                  {form.id ? "Редактирование сотрудника" : "Новый сотрудник"}
+                  Payroll-настройки пользователя
                 </h3>
               </div>
 
@@ -481,47 +386,19 @@ export function EmployeesSettingsTab() {
               ) : null}
 
               <div>
-                <label className="mb-2 block text-sm text-white/55">Имя</label>
-                <input
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      name: e.target.value,
-                    }))
-                  }
-                  placeholder="Например: Дмитрий"
-                  className={`h-[48px] w-full rounded-2xl border bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 ${
-                    errors.name ? "border-rose-500/50" : "border-white/10"
-                  }`}
-                />
-                {errors.name ? (
-                  <div className="mt-2 text-xs text-rose-400">
-                    {errors.name}
-                  </div>
-                ) : null}
+                <label className="mb-2 block text-sm text-white/55">
+                  Пользователь
+                </label>
+                <div className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm leading-[48px] text-white/85">
+                  {form.name}
+                </div>
               </div>
 
               <div>
                 <label className="mb-2 block text-sm text-white/55">Роль</label>
-                <input
-                  value={form.role}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      role: e.target.value,
-                    }))
-                  }
-                  placeholder="Например: Аккаунт-менеджер"
-                  className={`h-[48px] w-full rounded-2xl border bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 ${
-                    errors.role ? "border-rose-500/50" : "border-white/10"
-                  }`}
-                />
-                {errors.role ? (
-                  <div className="mt-2 text-xs text-rose-400">
-                    {errors.role}
-                  </div>
-                ) : null}
+                <div className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm leading-[48px] text-white/65">
+                  {form.role}
+                </div>
               </div>
 
               <div>
@@ -533,7 +410,7 @@ export function EmployeesSettingsTab() {
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
-                      payType: e.target.value as EmployeeFormState["payType"],
+                      payType: e.target.value as WorkspaceMemberPayType,
                     }))
                   }
                   className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
@@ -615,8 +492,7 @@ export function EmployeesSettingsTab() {
                       payoutDay: e.target.value,
                     }))
                   }
-                  placeholder="Например: 1 (каждого месяца)"
-                  className={`h-[48px] w-full rounded-2xl border bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 ${
+                  className={`h-[48px] w-full rounded-2xl border bg-white/[0.04] px-4 text-sm text-white outline-none ${
                     errors.payoutDay
                       ? "border-rose-500/50"
                       : "border-white/10"
@@ -631,7 +507,7 @@ export function EmployeesSettingsTab() {
 
               <div>
                 <label className="mb-2 block text-sm text-white/55">
-                  Статус
+                  Участвует в payroll
                 </label>
                 <div className="flex gap-2">
                   <button
@@ -639,16 +515,16 @@ export function EmployeesSettingsTab() {
                     onClick={() =>
                       setForm((prev) => ({
                         ...prev,
-                        isActive: true,
+                        isPayrollActive: true,
                       }))
                     }
                     className={`rounded-xl px-4 py-2 text-sm transition ${
-                      form.isActive
+                      form.isPayrollActive
                         ? "bg-emerald-500/20 text-emerald-300"
                         : "bg-white/[0.04] text-white/60 hover:text-white"
                     }`}
                   >
-                    Активен
+                    Включён
                   </button>
 
                   <button
@@ -656,16 +532,16 @@ export function EmployeesSettingsTab() {
                     onClick={() =>
                       setForm((prev) => ({
                         ...prev,
-                        isActive: false,
+                        isPayrollActive: false,
                       }))
                     }
                     className={`rounded-xl px-4 py-2 text-sm transition ${
-                      !form.isActive
+                      !form.isPayrollActive
                         ? "bg-amber-500/20 text-amber-300"
                         : "bg-white/[0.04] text-white/60 hover:text-white"
                     }`}
                   >
-                    Приостановлен
+                    Выключен
                   </button>
                 </div>
               </div>
@@ -683,7 +559,7 @@ export function EmployeesSettingsTab() {
 
               <button
                 type="button"
-                onClick={handleSaveEmployee}
+                onClick={handleSaveMemberPayroll}
                 disabled={isSaving}
                 className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:opacity-60"
               >

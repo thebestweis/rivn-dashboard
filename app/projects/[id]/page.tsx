@@ -201,7 +201,7 @@ const [mounted, setMounted] = useState(false);
     () =>
       workspaceMembersData.map((member) => ({
         id: member.id,
-        name: member.name || member.email || "Без имени",
+        name: member.display_name || member.email || "Без имени",
       })),
     [workspaceMembersData]
   );

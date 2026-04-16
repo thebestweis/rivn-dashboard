@@ -5,25 +5,29 @@ import { usePageAccess } from "../lib/use-page-access";
 import { canManageFinance, isAppRole, type AppRole } from "../lib/permissions";
 import { useAppContextState } from "../providers/app-context-provider";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PayrollPageHeader } from "../components/payroll/payroll-page-header";
 import { PayrollAccrualsTable } from "../components/payroll/payroll-accruals-table";
 import { PayrollPayoutsTable } from "../components/payroll/payroll-payouts-table";
 import { PayrollExtraTable } from "../components/payroll/payroll-extra-table";
 import { AppToast } from "../components/ui/app-toast";
 
+import { useQueryClient } from "@tanstack/react-query";
+
 import {
   generateEntityId,
   parseRubAmount,
-  calculateEmployeePayrollAmount,
   formatRub,
-  type StoredEmployee,
   type StoredPayrollAccrual,
   type StoredPayrollExtraPayment,
   type StoredPayrollPayout,
 } from "../lib/storage";
 
-import { fetchEmployeesFromSupabase } from "../lib/supabase/employees";
+import {
+  getWorkspaceMembers,
+  getWorkspaceMemberDisplayName,
+  type WorkspaceMemberItem,
+} from "../lib/supabase/workspace-members";
 import {
   ensureSystemSettings,
   type SystemSettings,
@@ -140,14 +144,48 @@ function hasPayoutForMonth(
   });
 }
 
+function calculateWorkspaceMemberPayrollAmount(member: WorkspaceMemberItem) {
+  const projectRate = parseRubAmount(member.pay_value ?? "");
+  const fixedSalary = parseRubAmount(member.fixed_salary ?? "");
+
+  if (member.pay_type === "fixed_salary") {
+    return fixedSalary;
+  }
+
+  if (member.pay_type === "fixed_salary_plus_project") {
+    return fixedSalary + projectRate;
+  }
+
+  return projectRate;
+}
+
+function isActivePayrollMember(member: WorkspaceMemberItem) {
+  return member.status === "active" && (member.is_payroll_active ?? true);
+}
+
+function getMemberNameById(
+  members: WorkspaceMemberItem[],
+  memberId: string | null | undefined,
+  fallback = "Без имени"
+) {
+  if (!memberId) return fallback;
+
+  const member = members.find((item) => item.id === memberId);
+  if (!member) return fallback;
+
+  return getWorkspaceMemberDisplayName(member);
+}
+
 export default function PayrollPage() {
+    const queryClient = useQueryClient();
   const { role, isLoading: isAppContextLoading } = useAppContextState();
 const { isLoading: isAccessLoading, hasAccess } = usePageAccess("payroll");
 
 const currentRole: AppRole | null = isAppRole(role) ? role : null;
 const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
-  const [employees, setEmployees] = useState<StoredEmployee[]>([]);
-  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+
+const [members, setMembers] = useState<WorkspaceMemberItem[]>([]);
+const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
 
   const [activeTab, setActiveTab] = useState<"accruals" | "payouts" | "extra">(
     "accruals"
@@ -219,6 +257,14 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
   );
   const [createExtraReason, setCreateExtraReason] = useState("");
 
+  const [isMounted, setIsMounted] = useState(false);
+
+    const isAccruingSalariesRef = useRef(false);
+
+useEffect(() => {
+  setIsMounted(true);
+}, []);
+
   useEffect(() => {
     if (!toastMessage) return;
 
@@ -245,12 +291,8 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
   }, [canManagePayroll]);
 
     useEffect(() => {
-    if (isAppContextLoading || isAccessLoading) return;
+  if (isAppContextLoading || isAccessLoading || !hasAccess) return;
 
-    if (!hasAccess) {
-      setIsLoadingPayroll(false);
-      return;
-    }
 
     let isMounted = true;
 
@@ -262,23 +304,23 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
           accrualsData,
           payoutsData,
           extraData,
-          employeesData,
+          membersData,
           settingsData,
         ] = await Promise.all([
           fetchPayrollAccrualsFromSupabase(),
           fetchPayrollPayoutsFromSupabase(),
           fetchPayrollExtraPaymentsFromSupabase(),
-          fetchEmployeesFromSupabase(),
+          getWorkspaceMembers(),
           ensureSystemSettings(),
         ]);
 
         if (!isMounted) return;
 
         setAccruals(accrualsData);
-        setPayouts(payoutsData);
-        setExtraPayments(extraData);
-        setEmployees(employeesData);
-        setSystemSettings(settingsData);
+setPayouts(payoutsData);
+setExtraPayments(extraData);
+setMembers(membersData);
+setSystemSettings(settingsData);
       } catch (error) {
         console.error(error);
 
@@ -300,15 +342,19 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
     };
   }, [isAppContextLoading, isAccessLoading, hasAccess]);
 
-  const employeeOptions = useMemo(() => {
-    return employees
-      .filter((employee) => employee.isActive)
-      .map((employee) => ({
-        id: employee.id,
-        name: employee.name,
-        role: employee.role,
-      }));
-  }, [employees]);
+  const memberOptions = useMemo(() => {
+  return members
+    .filter(isActivePayrollMember)
+    .map((member) => ({
+      id: member.id,
+      name: getWorkspaceMemberDisplayName(member),
+      role: member.role,
+      payType: member.pay_type ?? "fixed_per_paid_project",
+      payValue: member.pay_value ?? "₽0",
+      fixedSalary: member.fixed_salary ?? "",
+      payoutDay: member.payout_day ?? null,
+    }));
+}, [members]);
 
   const projectOptions = useMemo(() => {
     return Array.from(
@@ -320,23 +366,23 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
     );
   }, [accruals]);
 
-  const employeesMap = useMemo(() => {
-    return new Map(employees.map((employee) => [employee.id, employee]));
-  }, [employees]);
+  const membersMap = useMemo(() => {
+  return new Map(members.map((member) => [member.id, member]));
+}, [members]);
 
-  function getEmployeeAmountById(employeeId: string | null | undefined) {
-    if (!employeeId) {
-      return systemSettings?.default_employee_pay || "₽5,000";
-    }
-
-    const employee = employeesMap.get(employeeId);
-
-    if (!employee) {
-      return systemSettings?.default_employee_pay || "₽5,000";
-    }
-
-    return formatRub(calculateEmployeePayrollAmount(employee));
+  function getMemberAmountById(memberId: string | null | undefined) {
+  if (!memberId) {
+    return systemSettings?.default_employee_pay || "₽5,000";
   }
+
+  const member = membersMap.get(memberId);
+
+  if (!member) {
+    return systemSettings?.default_employee_pay || "₽5,000";
+  }
+
+  return formatRub(calculateWorkspaceMemberPayrollAmount(member));
+}
 
   const employeeFilterOptions = useMemo(() => {
     return Array.from(
@@ -405,21 +451,21 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
       accrualsData,
       payoutsData,
       extraData,
-      employeesData,
+      membersData,
       settingsData,
     ] = await Promise.all([
       fetchPayrollAccrualsFromSupabase(),
       fetchPayrollPayoutsFromSupabase(),
       fetchPayrollExtraPaymentsFromSupabase(),
-      fetchEmployeesFromSupabase(),
+      getWorkspaceMembers(),
       ensureSystemSettings(),
     ]);
 
     setAccruals(accrualsData);
-    setPayouts(payoutsData);
-    setExtraPayments(extraData);
-    setEmployees(employeesData);
-    setSystemSettings(settingsData);
+setPayouts(payoutsData);
+setExtraPayments(extraData);
+setMembers(membersData);
+setSystemSettings(settingsData);
   }
 
   const visibleAccruals = useMemo(() => {
@@ -533,41 +579,53 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
       month: string;
       salaryPart: number;
       projectPart: number;
-      payType: StoredEmployee["payType"] | null;
+      payType: WorkspaceMemberItem["pay_type"];
     }
   >();
 
-  const activeEmployees = employees.filter((employee) => employee.isActive);
+    async function invalidatePayrollQueries() {
+    await queryClient.invalidateQueries({
+      predicate: (query) =>
+        Array.isArray(query.queryKey) &&
+        query.queryKey.some(
+          (part) => typeof part === "string" && part.toLowerCase().includes("payroll")
+        ),
+    });
+  }
 
-  activeEmployees.forEach((employee) => {
+  const activeMembers = members.filter(isActivePayrollMember);
+
+  activeMembers.forEach((member) => {
+    const memberName = getWorkspaceMemberDisplayName(member);
+
     const alreadyHasPayoutThisMonth = hasPayoutForMonth(
       payouts,
-      employee.id,
-      employee.name,
+      member.id,
+      memberName,
       currentMonthLabel
     );
 
     const alreadyHasSalaryAccrualThisMonth = accruals.some((item) =>
-      isSalaryAccrualForMonth(item, employee.id, currentMonthLabel)
+      isSalaryAccrualForMonth(item, member.id, currentMonthLabel)
     );
 
     const baseSalary =
       !alreadyHasPayoutThisMonth &&
       !alreadyHasSalaryAccrualThisMonth &&
-      (employee.payType === "fixed_salary" ||
-        employee.payType === "fixed_salary_plus_project")
-        ? parseRubAmount(employee.fixedSalary || "0")
+      (member.pay_type === "fixed_salary" ||
+        member.pay_type === "fixed_salary_plus_project")
+        ? parseRubAmount(member.fixed_salary || "0")
         : 0;
 
-    groups.set(employee.id, {
-      employee: employee.name,
-      employeeId: employee.id,
+    groups.set(member.id, {
+      employee: memberName,
+      employeeId: member.id,
       total: baseSalary,
       accrualIds: [],
       month: currentMonthLabel,
       salaryPart: baseSalary,
       projectPart: 0,
-      payType: employee.payType,
+      payType: member.pay_type,
     });
   });
 
@@ -609,7 +667,7 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
     });
 
   return Array.from(groups.values()).filter((item) => item.total > 0);
-}, [accruals, employees, payouts]);
+}, [accruals, members, payouts]);
 
   const filteredAccruals = useMemo(() => {
     return visibleAccruals.filter((item) => {
@@ -850,12 +908,12 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
 
     if (!targetGroup) {
       setToastType("error");
-      setToastMessage("Не удалось найти начисления сотрудника");
+      setToastMessage("Не удалось найти начисления пользователя");
       return;
     }
 
     const confirmed = window.confirm(
-      `Провести выплату сотруднику "${targetGroup.employee}" на сумму ₽${targetGroup.total.toLocaleString(
+      `Провести выплату пользователю "${targetGroup.employee}" на сумму ₽${targetGroup.total.toLocaleString(
         "ru-RU"
       )}?`
     );
@@ -918,11 +976,11 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
 
       setActiveTab("payouts");
       setToastType("success");
-      setToastMessage(`Выплата сотруднику "${targetGroup.employee}" проведена`);
+      setToastMessage(`Выплата пользователю "${targetGroup.employee}" проведена`);
     } catch (error) {
       console.error(error);
       setToastType("error");
-      setToastMessage("Не удалось провести выплату сотруднику");
+      setToastMessage("Не удалось Провести выплату пользователю");
     }
   }
 
@@ -1232,7 +1290,7 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
   }
   if (!createEmployee.trim()) {
     setToastType("error");
-    setToastMessage("Выбери сотрудника");
+    setToastMessage("Выбери пользователя");
     return;
   }
 
@@ -1244,7 +1302,7 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
 
   const normalizedCreateAmount =
     createPayoutAmount.trim() ||
-    getEmployeeAmountById(createEmployeeId || null);
+    getMemberAmountById(createEmployeeId || null);
 
   try {
     if (createPayoutType === "payout") {
@@ -1340,73 +1398,90 @@ const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
 }
 
 async function handleAccrueSalaries() {
-    if (!canManagePayroll) {
+  if (!canManagePayroll) {
     setToastType("error");
     setToastMessage("У тебя нет прав на начисление окладов");
     return;
   }
-  const monthLabel = getCurrentMonthAccrualLabel();
 
-  const targetEmployees = employees.filter(
-    (employee) =>
-      employee.isActive &&
-      (employee.payType === "fixed_salary" ||
-        employee.payType === "fixed_salary_plus_project") &&
-      parseRubAmount(employee.fixedSalary || "0") > 0
-  );
-
-  if (targetEmployees.length === 0) {
+  if (isAccruingSalariesRef.current) {
     setToastType("info");
-    setToastMessage("Нет сотрудников с окладной системой оплаты");
+    setToastMessage("Начисление окладов уже выполняется");
     return;
   }
 
-  const employeesWithoutAccrual = targetEmployees.filter((employee) => {
-    const hasSalaryAccrual = accruals.some((item) =>
-      isSalaryAccrualForMonth(item, employee.id, monthLabel)
-    );
-
-    const hasMonthPayout = hasPayoutForMonth(
-      payouts,
-      employee.id,
-      employee.name,
-      monthLabel
-    );
-
-    return !hasSalaryAccrual && !hasMonthPayout;
-  });
-
-  if (employeesWithoutAccrual.length === 0) {
-    setToastType("info");
-    setToastMessage("Окладные начисления за этот месяц уже созданы");
-    return;
-  }
+  isAccruingSalariesRef.current = true;
 
   try {
-    for (const employee of employeesWithoutAccrual) {
+    const monthLabel = getCurrentMonthAccrualLabel();
+
+    const targetMembers = members.filter(
+      (member) =>
+        isActivePayrollMember(member) &&
+        (member.pay_type === "fixed_salary" ||
+          member.pay_type === "fixed_salary_plus_project") &&
+        parseRubAmount(member.fixed_salary || "0") > 0
+    );
+
+    if (targetMembers.length === 0) {
+      setToastType("info");
+      setToastMessage("Нет пользователей с окладной системой оплаты");
+      return;
+    }
+
+    const [freshAccruals, freshPayouts] = await Promise.all([
+      fetchPayrollAccrualsFromSupabase(),
+      fetchPayrollPayoutsFromSupabase(),
+    ]);
+
+    const membersWithoutAccrual = targetMembers.filter((member) => {
+      const memberName = getWorkspaceMemberDisplayName(member);
+
+      const hasSalaryAccrual = freshAccruals.some((item) =>
+        isSalaryAccrualForMonth(item, member.id, monthLabel)
+      );
+
+      const hasMonthPayout = hasPayoutForMonth(
+        freshPayouts,
+        member.id,
+        memberName,
+        monthLabel
+      );
+
+      return !hasSalaryAccrual && !hasMonthPayout;
+    });
+
+    if (membersWithoutAccrual.length === 0) {
+      setToastType("info");
+      setToastMessage("Окладные начисления за этот месяц уже созданы");
+      await reloadPayrollData();
+      return;
+    }
+
+    for (const member of membersWithoutAccrual) {
       await createPayrollAccrualInSupabase({
         id: generateEntityId("payroll_accrual"),
-        employee: employee.name,
-        employeeId: employee.id,
+        employee: getWorkspaceMemberDisplayName(member),
+        employeeId: member.id,
         client: "Оклад",
         clientId: null,
         project: `Оклад за ${monthLabel}`,
         projectId: null,
         paymentId: null,
-        amount: employee.fixedSalary || "₽0",
+        amount: member.fixed_salary || "₽0",
         date: getTodayDisplayDate(),
         status: "accrued",
       });
     }
 
-        try {
-      const totalAmount = employeesWithoutAccrual.reduce((sum, employee) => {
-        return sum + parseRubAmount(employee.fixedSalary || "0");
+    try {
+      const totalAmount = membersWithoutAccrual.reduce((sum, member) => {
+        return sum + parseRubAmount(member.fixed_salary || "0");
       }, 0);
 
       await sendSalaryAccruedNotification({
         accrualMonth: monthLabel,
-        employeesCount: employeesWithoutAccrual.length,
+        employeesCount: membersWithoutAccrual.length,
         totalAmount: formatRub(totalAmount),
       });
     } catch (notificationError) {
@@ -1421,18 +1496,35 @@ async function handleAccrueSalaries() {
     setActiveTab("accruals");
     setToastType("success");
     setToastMessage(
-      `Окладные начисления созданы: ${employeesWithoutAccrual.length}`
+      `Окладные начисления созданы: ${membersWithoutAccrual.length}`
     );
   } catch (error) {
     console.error(error);
     setToastType("error");
     setToastMessage("Не удалось создать окладные начисления");
+  } finally {
+    isAccruingSalariesRef.current = false;
   }
 }
 
+if (!isMounted || isAppContextLoading || isAccessLoading) {
+  return (
+    <main className="flex-1">
+      <div className="space-y-6 px-5 py-6 lg:px-8">
+        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          Загрузка payroll...
+        </div>
+      </div>
+    </main>
+  );
+}
 
+if (!hasAccess) {
+  return <AccessDenied />;
+}
   return (
   <>
+  
     <main className="flex-1">
       <div className="space-y-6 px-5 py-6 lg:px-8">
                 {!isAppContextLoading && !canManagePayroll ? (
@@ -1633,7 +1725,7 @@ async function handleAccrueSalaries() {
                         key={item.employeeId || item.employee}
                         className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
                       >
-                        <div className="text-sm text-white/45">Сотрудник</div>
+                        <div className="text-sm text-white/45">Пользователь</div>
                         <div className="mt-1 text-lg font-semibold">
                           {item.employee}
                         </div>
@@ -1665,7 +1757,7 @@ async function handleAccrueSalaries() {
                             }
                             className="mt-4 rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
                           >
-                            Выплатить сотруднику
+                            Выплатить пользователю
                           </button>
                         ) : null}
                       </div>
@@ -1687,10 +1779,10 @@ async function handleAccrueSalaries() {
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={
                     activeTab === "accruals"
-                      ? "Поиск по сотруднику, клиенту, проекту..."
+                      ? "Поиск по пользователю, клиенту, проекту..."
                       : activeTab === "payouts"
-                      ? "Поиск по сотруднику..."
-                      : "Поиск по сотруднику, причине..."
+                      ? "Поиск по пользователю..."
+                      : "Поиск по пользователю, причине..."
                   }
                   className="h-[48px] min-w-[320px] flex-[1.4] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
                 />
@@ -1700,7 +1792,7 @@ async function handleAccrueSalaries() {
                   onChange={(e) => setEmployeeFilter(e.target.value)}
                   className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
                 >
-                  <option value="all">Все сотрудники</option>
+                  <option value="all">Все пользователи</option>
                   {employeeFilterOptions.map((employee) => (
                     <option key={employee} value={employee}>
                       {employee}
@@ -1775,9 +1867,10 @@ async function handleAccrueSalaries() {
               />
             ) : (
                             <PayrollExtraTable
-  items={extraPayments}
+  items={filteredExtraPayments}
   onEdit={handleStartEditExtra}
   onDelete={handleDeleteExtra}
+  canManagePayroll={canManagePayroll}
 />
             )}
           </>
@@ -1804,27 +1897,31 @@ async function handleAccrueSalaries() {
               </button>
             </div>
 
+            <div className="mt-4 text-xs text-white/35">
+  Доступно пользователей для выплаты: {memberOptions.length}
+</div>
+
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <select
-                value={editEmployeeId}
-                onChange={(e) => {
-                  const nextEmployeeId = e.target.value;
-                  const selectedEmployee = employees.find(
-                    (employee) => employee.id === nextEmployeeId
-                  );
+  value={editEmployeeId}
+  onChange={(e) => {
+    const nextEmployeeId = e.target.value;
+    const selectedMember = memberOptions.find(
+      (member) => member.id === nextEmployeeId
+    );
 
-                  setEditEmployeeId(nextEmployeeId);
-                  setEditEmployee(selectedEmployee?.name ?? "");
-                }}
-                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-              >
-                <option value="">Выбери сотрудника</option>
-                {employeeOptions.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.name} — {employee.role}
-                  </option>
-                ))}
-              </select>
+    setEditEmployeeId(nextEmployeeId);
+    setEditEmployee(selectedMember?.name ?? "");
+  }}
+  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+>
+  <option value="">Выбери пользователя</option>
+  {memberOptions.map((member) => (
+    <option key={member.id} value={member.id}>
+      {member.name} — {member.role}
+    </option>
+  ))}
+</select>
 
               <input
                 value={editClient}
@@ -1915,25 +2012,25 @@ async function handleAccrueSalaries() {
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <select
-                value={editPayoutEmployeeId}
-                onChange={(e) => {
-                  const nextEmployeeId = e.target.value;
-                  const selectedEmployee = employees.find(
-                    (employee) => employee.id === nextEmployeeId
-                  );
+  value={editPayoutEmployeeId}
+  onChange={(e) => {
+    const nextEmployeeId = e.target.value;
+    const selectedMember = memberOptions.find(
+      (member) => member.id === nextEmployeeId
+    );
 
-                  setEditPayoutEmployeeId(nextEmployeeId);
-                  setEditPayoutEmployee(selectedEmployee?.name ?? "");
-                }}
-                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-              >
-                <option value="">Выбери сотрудника</option>
-                {employeeOptions.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.name} — {employee.role}
-                  </option>
-                ))}
-              </select>
+    setEditPayoutEmployeeId(nextEmployeeId);
+    setEditPayoutEmployee(selectedMember?.name ?? "");
+  }}
+  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+>
+  <option value="">Выбери пользователя</option>
+  {memberOptions.map((member) => (
+    <option key={member.id} value={member.id}>
+      {member.name} — {member.role}
+    </option>
+  ))}
+</select>
 
               <input
                 value={editPayoutMonth}
@@ -2011,25 +2108,25 @@ async function handleAccrueSalaries() {
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <select
-                value={editExtraEmployeeId}
-                onChange={(e) => {
-                  const nextEmployeeId = e.target.value;
-                  const selectedEmployee = employees.find(
-                    (employee) => employee.id === nextEmployeeId
-                  );
+  value={editExtraEmployeeId}
+  onChange={(e) => {
+    const nextEmployeeId = e.target.value;
+    const selectedMember = memberOptions.find(
+      (member) => member.id === nextEmployeeId
+    );
 
-                  setEditExtraEmployeeId(nextEmployeeId);
-                  setEditExtraEmployee(selectedEmployee?.name ?? "");
-                }}
-                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-              >
-                <option value="">Выбери сотрудника</option>
-                {employeeOptions.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.name} — {employee.role}
-                  </option>
-                ))}
-              </select>
+    setEditExtraEmployeeId(nextEmployeeId);
+    setEditExtraEmployee(selectedMember?.name ?? "");
+  }}
+  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+>
+  <option value="">Выбери пользователя</option>
+  {memberOptions.map((member) => (
+    <option key={member.id} value={member.id}>
+      {member.name} — {member.role}
+    </option>
+  ))}
+</select>
 
               <input
                 value={editExtraDate}
@@ -2122,25 +2219,36 @@ async function handleAccrueSalaries() {
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <select
-                value={createEmployeeId}
-                onChange={(e) => {
-                  const nextEmployeeId = e.target.value;
-                  const selectedEmployee = employees.find(
-                    (employee) => employee.id === nextEmployeeId
-                  );
+  value={createEmployeeId}
+  onChange={(e) => {
+    const nextEmployeeId = e.target.value;
+    const selectedMember = memberOptions.find(
+  (member) => member.id === nextEmployeeId
+);
 
-                  setCreateEmployeeId(nextEmployeeId);
-                  setCreateEmployee(selectedEmployee?.name ?? "");
-                }}
-                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-              >
-                <option value="">Выбери сотрудника</option>
-                {employeeOptions.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.name} — {employee.role}
-                  </option>
-                ))}
-              </select>
+    setCreateEmployeeId(nextEmployeeId);
+    setCreateEmployee(selectedMember?.name ?? "");
+
+    if (!createPayoutAmount.trim() && selectedMember) {
+      if (
+        selectedMember.payType === "fixed_salary" ||
+        selectedMember.payType === "fixed_salary_plus_project"
+      ) {
+        setCreatePayoutAmount(selectedMember.fixedSalary || "");
+      } else {
+        setCreatePayoutAmount(selectedMember.payValue || "");
+      }
+    }
+  }}
+  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+>
+  <option value="">Выбери пользователя</option>
+  {memberOptions.map((member) => (
+    <option key={member.id} value={member.id}>
+      {member.name} — {member.role}
+    </option>
+  ))}
+</select>
 
               <input
                 value={createPayoutDate}

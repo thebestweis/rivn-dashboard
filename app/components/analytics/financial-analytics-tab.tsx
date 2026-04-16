@@ -451,6 +451,7 @@ const filteredFinancialData = useMemo(() => {
     const safePayrollPayouts = Array.isArray(payrollPayouts) ? payrollPayouts : [];
 
 const payoutsFot = safePayrollPayouts
+  .filter((item) => item.status === "paid")
   .filter((item) => normalizePayrollPayoutMonth(item.payoutDate) === month)
   .reduce(
     (sum, item) => sum + parseRubAmount(String(item.amount ?? "")),
@@ -502,15 +503,33 @@ const extraFot = safeExtraPayments
   })
   .reduce((sum, item) => sum + item.amountNumber, 0);
 
-  const totalFot = payrollPayouts
-  .filter((item) => {
-    if (period === "all_time") return true;
-    if (!item.payoutDate) return false;
+    const totalFot = (() => {
+    const safePayrollPayouts = Array.isArray(payrollPayouts) ? payrollPayouts : [];
+    const safeExtraPayments = Array.isArray(extraPayments) ? extraPayments : [];
 
-    const monthKey = normalizeDateToMonthKey(item.payoutDate);
-    return activePeriodMonths?.includes(monthKey);
-  })
-  .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
+    const payoutsSum = safePayrollPayouts
+      .filter((item) => item.status === "paid")
+      .filter((item) => {
+        if (period === "all_time") return true;
+        if (!item.payoutDate) return false;
+
+        const monthKey = normalizePayrollPayoutMonth(item.payoutDate);
+        return activePeriodMonths?.includes(monthKey);
+      })
+      .reduce((sum, item) => sum + parseRubAmount(String(item.amount ?? "")), 0);
+
+    const extraSum = safeExtraPayments
+      .filter((item) => {
+        if (period === "all_time") return true;
+        if (!item.date) return false;
+
+        const monthKey = toSupabaseLikeDate(item.date).slice(0, 7);
+        return activePeriodMonths?.includes(monthKey);
+      })
+      .reduce((sum, item) => sum + parseRubAmount(String(item.amount ?? "")), 0);
+
+    return payoutsSum + extraSum;
+  })();
 
   const [systemSettings, setSystemSettings] = useState<{
   tax_rate: number;

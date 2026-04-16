@@ -1,5 +1,6 @@
 "use client";
 
+
 import { AccessDenied } from "../components/access/access-denied";
 import { usePageAccess } from "../lib/use-page-access";
 import { useEffect, useMemo, useState } from "react";
@@ -25,9 +26,11 @@ import {
   type StoredClient,
   type StoredExpense,
   type StoredPayment,
-  type StoredPayrollPayout,
   type StoredPayrollAccrual,
+  type StoredPayrollPayout,
+  type StoredPayrollExtraPayment,
 } from "../lib/storage";
+
 
 import {
   useClientsQuery,
@@ -460,8 +463,9 @@ export default function AnalyticsPage() {
     );
   }, [filteredExpenses]);
 
-  const totalFotNumber = useMemo(() => {
+    const totalFotNumber = useMemo(() => {
     const payoutsSum = (payrollPayouts as StoredPayrollPayout[])
+      .filter((p) => p.status === "paid")
       .filter((p) => {
         if (!p.payoutDate) return false;
         return normalizePayrollPayoutMonth(p.payoutDate) === selectedMonth;
@@ -503,8 +507,9 @@ export default function AnalyticsPage() {
     );
   }, [planMonthExpenses]);
 
-  const planMonthFotNumber = useMemo(() => {
+    const planMonthFotNumber = useMemo(() => {
     const payoutsSum = (payrollPayouts as StoredPayrollPayout[])
+      .filter((p) => p.status === "paid")
       .filter((p) => {
         if (!p.payoutDate) return false;
         return normalizePayrollPayoutMonth(p.payoutDate) === planEditorMonth;
@@ -693,7 +698,8 @@ export default function AnalyticsPage() {
       map.set(month, current);
     });
 
-    (payrollPayouts as StoredPayrollPayout[]).forEach((p) => {
+        (payrollPayouts as StoredPayrollPayout[]).forEach((p) => {
+      if (p.status !== "paid") return;
       if (!p.payoutDate) return;
 
       const month = normalizePayrollPayoutMonth(p.payoutDate);
@@ -1179,13 +1185,15 @@ export default function AnalyticsPage() {
         })
         .reduce((sum, expense) => sum + parseRubAmount(expense.amount), 0);
 
-      const monthPayoutsFot = (payrollPayouts as StoredPayrollPayout[])
-        .filter((payout) => normalizePayrollPayoutMonth(payout.payoutDate) === item.month)
+            const monthPayoutsFot = (payrollPayouts as StoredPayrollPayout[])
+        .filter((payout) => payout.status === "paid")
+        .filter(
+          (payout) => normalizePayrollPayoutMonth(payout.payoutDate) === item.month
+        )
         .reduce(
           (sum, payout) => sum + parseRubAmount(String(payout.amount ?? "")),
           0
         );
-
       const monthExtraFot = (extraPayments as ExtraPaymentRow[])
         .filter((extra) => toSupabaseLikeDate(extra.date).startsWith(item.month))
         .reduce(
@@ -1304,24 +1312,25 @@ export default function AnalyticsPage() {
             <SectionSkeleton text="Загрузка финансовых данных..." />
           ) : (
             <FinancialAnalyticsTab
-              expenses={expenses}
-              payments={payments}
-              payrollPayouts={payrollPayouts as StoredPayrollPayout[]}
-              revenueDynamics={revenueDynamics}
-              forecastMetrics={forecastMetrics}
-              targetProfit={targetProfit}
-              setTargetProfit={setTargetProfit}
-              targetMetrics={targetMetrics}
-              growthScenario={growthScenario}
-              setGrowthScenario={setGrowthScenario}
-              growthMetrics={growthMetrics}
-              growthInsights={growthInsights}
-              growthPlan={growthPlan}
-              ceoSummary={ceoSummary}
-              growthBasePeriod={growthBasePeriod}
-              setGrowthBasePeriod={setGrowthBasePeriod}
-              stableRevenue={stableRevenue}
-            />
+  expenses={expenses}
+  payments={payments}
+  payrollPayouts={payrollPayouts as StoredPayrollPayout[]}
+  extraPayments={extraPayments as StoredPayrollExtraPayment[]}
+  stableRevenue={stableRevenue}
+  growthBasePeriod={growthBasePeriod}
+  setGrowthBasePeriod={setGrowthBasePeriod}
+  revenueDynamics={revenueDynamics}
+  forecastMetrics={forecastMetrics}
+  targetProfit={targetProfit}
+  setTargetProfit={setTargetProfit}
+  targetMetrics={targetMetrics}
+  growthScenario={growthScenario}
+  setGrowthScenario={setGrowthScenario}
+  growthMetrics={growthMetrics}
+  growthInsights={growthInsights}
+  growthPlan={growthPlan}
+  ceoSummary={ceoSummary}
+/>
           )
         ) : activeTab === "planfact" ? (
           isLoadingFinance ? (

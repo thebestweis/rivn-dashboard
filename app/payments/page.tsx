@@ -22,13 +22,7 @@ import {
   sendInvoiceCreatedNotification,
   sendPaymentReceivedNotification,
 } from "../lib/notifications-client";
-import { generateEntityId, parseRubAmount } from "../lib/storage";
-import {
-  createPayrollAccrualInSupabase,
-  fetchPayrollAccrualsFromSupabase,
-  updatePayrollAccrualInSupabase,
-  deletePayrollAccrualFromSupabase,
-} from "../lib/supabase/payroll";
+import { parseRubAmount } from "../lib/storage";
 import type { PaymentFormData } from "../lib/types/payment";
 import {
   createPaymentInSupabase,
@@ -37,7 +31,6 @@ import {
 } from "../lib/supabase/payments";
 import {
   usePaymentClientsQuery,
-  usePaymentEmployeesQuery,
   usePaymentProjectsQuery,
   usePaymentsQuery,
 } from "../lib/queries/use-payments-query";
@@ -56,18 +49,6 @@ interface ProjectItem {
   name: string;
   client_id: string;
   employee_id?: string | null;
-}
-
-interface EmployeeItem {
-  id: string;
-  name: string;
-  role: string;
-  payType:
-    | "fixed_per_paid_project"
-    | "fixed_salary"
-    | "fixed_salary_plus_project";
-  payValue: string;
-  isActive: boolean;
 }
 
 interface FactPaymentRow {
@@ -258,12 +239,6 @@ export default function PaymentsPage() {
   } = usePaymentProjectsQuery(hasAccess);
 
   const {
-    data: employees = [],
-    isLoading: isEmployeesLoading,
-    error: employeesError,
-  } = usePaymentEmployeesQuery(hasAccess);
-
-  const {
     data: paymentsData = [],
     isLoading: isPaymentsLoading,
     error: paymentsError,
@@ -279,15 +254,14 @@ export default function PaymentsPage() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  const loadingPayments =
+    const loadingPayments =
     isClientsLoading ||
     isProjectsLoading ||
-    isEmployeesLoading ||
     isPaymentsLoading;
 
-  useEffect(() => {
+    useEffect(() => {
     const firstError =
-      clientsError || projectsError || employeesError || paymentsError;
+      clientsError || projectsError || paymentsError;
 
     if (!firstError) return;
 
@@ -298,7 +272,7 @@ export default function PaymentsPage() {
         ? firstError.message
         : "Не удалось загрузить оплаты"
     );
-  }, [clientsError, projectsError, employeesError, paymentsError]);
+    }, [clientsError, projectsError, paymentsError]);
 
   const clientMap = useMemo<PaymentClientMap>(() => {
     const safeClients = (clients ?? []) as ClientItem[];
@@ -415,81 +389,6 @@ export default function PaymentsPage() {
     setEditMode("fact");
   }
 
-  async function syncPayrollAccrualForPayment(params: {
-    paymentId: string;
-    clientId: string;
-    projectId: string | null;
-    paidAt: string;
-    shouldExist: boolean;
-  }) {
-    const allAccruals = await fetchPayrollAccrualsFromSupabase();
-    const existingAccrual = allAccruals.find(
-      (accrual) => accrual.paymentId === params.paymentId
-    );
-
-    if (!params.shouldExist) {
-      if (existingAccrual) {
-        await deletePayrollAccrualFromSupabase(existingAccrual.id);
-      }
-      return;
-    }
-
-    if (!params.projectId) {
-      if (existingAccrual) {
-        await deletePayrollAccrualFromSupabase(existingAccrual.id);
-      }
-      return;
-    }
-
-    const project = projects.find((item) => item.id === params.projectId);
-    const client = clients.find((item) => item.id === params.clientId);
-
-    if (!project || !client || !project.employee_id) {
-      if (existingAccrual) {
-        await deletePayrollAccrualFromSupabase(existingAccrual.id);
-      }
-      return;
-    }
-
-    const employee = (employees as EmployeeItem[]).find(
-      (item) =>
-        item.id === project.employee_id &&
-        item.isActive &&
-        (item.payType === "fixed_per_paid_project" ||
-          item.payType === "fixed_salary_plus_project")
-    );
-
-    if (!employee) {
-      if (existingAccrual) {
-        await deletePayrollAccrualFromSupabase(existingAccrual.id);
-      }
-      return;
-    }
-
-    const nextAccrualData = {
-      employee: employee.name,
-      employeeId: employee.id,
-      client: getClientDisplayName(client),
-      clientId: client.id,
-      project: project.name,
-      projectId: project.id,
-      paymentId: params.paymentId,
-      amount: employee.payValue,
-      date: params.paidAt,
-      status: "accrued" as const,
-    };
-
-    if (existingAccrual) {
-      await updatePayrollAccrualInSupabase(existingAccrual.id, nextAccrualData);
-      return;
-    }
-
-    await createPayrollAccrualInSupabase({
-      id: generateEntityId("payroll_accrual"),
-      ...nextAccrualData,
-    });
-  }
-
   useEffect(() => {
     if (canManage) return;
 
@@ -544,14 +443,6 @@ export default function PaymentsPage() {
       };
 
       const createdPayment = await createPaymentInSupabase(payload);
-
-      await syncPayrollAccrualForPayment({
-        paymentId: createdPayment.id,
-        clientId: payment.clientId,
-        projectId: payment.projectId,
-        paidAt: payment.paidAt,
-        shouldExist: !isInvoice,
-      });
 
       if (!isInvoice) {
         try {
@@ -710,14 +601,6 @@ export default function PaymentsPage() {
 
       await updatePaymentInSupabase(editingPaymentId, payload);
 
-      await syncPayrollAccrualForPayment({
-        paymentId: editingPaymentId,
-        clientId: updatedPayment.clientId,
-        projectId: updatedPayment.projectId,
-        paidAt: fromSupabaseDate(supabaseDate),
-        shouldExist,
-      });
-
       setIsEditOpen(false);
       resetEditForm();
 
@@ -780,14 +663,6 @@ export default function PaymentsPage() {
 
       await updatePaymentInSupabase(id, payload);
 
-      await syncPayrollAccrualForPayment({
-        paymentId: id,
-        clientId: target.clientId,
-        projectId: target.projectId,
-        paidAt: fromSupabaseDate(paymentDate),
-        shouldExist: true,
-      });
-
       try {
         await sendPaymentReceivedNotification({
           paymentId: id,
@@ -847,15 +722,6 @@ export default function PaymentsPage() {
     try {
       setDeletingPaymentId(paymentId);
       await deletePaymentFromSupabase(paymentId);
-
-      await syncPayrollAccrualForPayment({
-        paymentId,
-        clientId: "",
-        projectId: null,
-        paidAt: "",
-        shouldExist: false,
-      });
-
       if (editingPaymentId === paymentId) {
         setIsEditOpen(false);
         resetEditForm();

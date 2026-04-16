@@ -15,15 +15,27 @@ export type WorkspaceMemberStatus =
   | "suspended"
   | "removed";
 
+export type WorkspaceMemberPayType =
+  | "fixed_per_paid_project"
+  | "fixed_salary"
+  | "fixed_salary_plus_project";
+
 export type WorkspaceMemberItem = {
   id: string;
   workspace_id: string;
   user_id: string;
   email: string;
+  display_name: string | null;
   role: WorkspaceMemberRole;
   status: WorkspaceMemberStatus;
   created_at: string;
   updated_at: string;
+
+  pay_type: WorkspaceMemberPayType | null;
+  pay_value: string | null;
+  fixed_salary: string | null;
+  payout_day: number | null;
+  is_payroll_active: boolean;
 };
 
 export type WorkspaceMemberLimitState = {
@@ -44,30 +56,80 @@ type DbWorkspaceMemberRow = {
   status: WorkspaceMemberStatus;
   created_at: string;
   updated_at: string;
+
+  display_name: string | null;
+  pay_type: WorkspaceMemberPayType | null;
+  pay_value: string | null;
+  fixed_salary: string | null;
+  payout_day: number | null;
+  is_payroll_active: boolean | null;
+
   profiles:
     | {
         id: string;
-        email: string;
+        email: string | null;
       }
     | {
         id: string;
-        email: string;
+        email: string | null;
       }[]
     | null;
 };
 
+function buildDisplayNameFromEmail(email: string) {
+  const localPart = email.split("@")[0]?.trim();
+
+  if (!localPart) {
+    return "Без имени";
+  }
+
+  return localPart
+    .replace(/[._-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export function getWorkspaceMemberDisplayName(member: {
+  display_name?: string | null;
+  email?: string | null;
+}) {
+  const displayName = member.display_name?.trim();
+
+  if (displayName) {
+    return displayName;
+  }
+
+  const email = member.email?.trim();
+
+  if (email) {
+    return buildDisplayNameFromEmail(email);
+  }
+
+  return "Без имени";
+}
+
 function mapWorkspaceMember(row: DbWorkspaceMemberRow): WorkspaceMemberItem {
   const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+  const email = profile?.email ?? "";
 
   return {
     id: row.id,
     workspace_id: row.workspace_id,
     user_id: row.user_id,
-    email: profile?.email ?? "Без email",
+    email,
+    display_name: row.display_name ?? null,
     role: row.role,
     status: row.status,
     created_at: row.created_at,
     updated_at: row.updated_at,
+
+    pay_type: row.pay_type ?? null,
+    pay_value: row.pay_value ?? null,
+    fixed_salary: row.fixed_salary ?? null,
+    payout_day: row.payout_day ?? null,
+    is_payroll_active: row.is_payroll_active ?? true,
   };
 }
 
@@ -85,6 +147,12 @@ export async function getWorkspaceMembers(): Promise<WorkspaceMemberItem[]> {
       status,
       created_at,
       updated_at,
+      display_name,
+      pay_type,
+      pay_value,
+      fixed_salary,
+      payout_day,
+      is_payroll_active,
       profiles!workspace_members_user_id_fkey (
         id,
         email
@@ -167,7 +235,7 @@ export async function addWorkspaceMemberByEmail(params: {
     throw new Error("Укажи email пользователя");
   }
 
-    const billing = await getWorkspaceBillingByWorkspaceId(workspace.id);
+  const billing = await getWorkspaceBillingByWorkspaceId(workspace.id);
   const billingAccess = buildBillingAccessState(billing);
 
   if (billingAccess.isReadOnly) {
@@ -181,6 +249,7 @@ export async function addWorkspaceMemberByEmail(params: {
   if (!limitState.canInviteMembers) {
     throw new Error(limitState.reason);
   }
+
   const { error } = await supabase.rpc("add_workspace_member_by_email", {
     p_workspace_id: workspace.id,
     p_email: normalizedEmail,
@@ -198,7 +267,7 @@ export async function updateWorkspaceMemberRole(params: {
 }): Promise<void> {
   const { supabase, workspace, user } = await getAppContext();
 
-    const billing = await getWorkspaceBillingByWorkspaceId(workspace.id);
+  const billing = await getWorkspaceBillingByWorkspaceId(workspace.id);
   const billingAccess = buildBillingAccessState(billing);
 
   if (billingAccess.isReadOnly) {
@@ -254,10 +323,51 @@ export async function updateWorkspaceMemberRole(params: {
   }
 }
 
+export async function updateWorkspaceMemberPayrollSettings(params: {
+  memberId: string;
+  displayName: string;
+  payType: WorkspaceMemberPayType;
+  payValue: string;
+  fixedSalary: string;
+  payoutDay: number;
+  isPayrollActive: boolean;
+}): Promise<void> {
+  const { supabase, workspace } = await getAppContext();
+
+  const billing = await getWorkspaceBillingByWorkspaceId(workspace.id);
+  const billingAccess = buildBillingAccessState(billing);
+
+  if (billingAccess.isReadOnly) {
+    throw new Error(
+      "Кабинет находится в режиме только просмотра. Сначала продли подписку."
+    );
+  }
+
+  const { error } = await supabase
+    .from("workspace_members")
+    .update({
+      display_name: params.displayName.trim() || null,
+      pay_type: params.payType,
+      pay_value: params.payValue.trim() || "₽0",
+      fixed_salary: params.fixedSalary.trim() || null,
+      payout_day: params.payoutDay,
+      is_payroll_active: params.isPayrollActive,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", params.memberId)
+    .eq("workspace_id", workspace.id);
+
+  if (error) {
+    throw new Error(
+      `Не удалось обновить payroll-настройки пользователя: ${error.message}`
+    );
+  }
+}
+
 export async function removeWorkspaceMember(memberId: string): Promise<void> {
   const { supabase, workspace, user } = await getAppContext();
 
-    const billing = await getWorkspaceBillingByWorkspaceId(workspace.id);
+  const billing = await getWorkspaceBillingByWorkspaceId(workspace.id);
   const billingAccess = buildBillingAccessState(billing);
 
   if (billingAccess.isReadOnly) {

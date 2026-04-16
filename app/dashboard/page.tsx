@@ -242,9 +242,14 @@ export default function Home() {
   const [dashboardPeriod, setDashboardPeriod] = useState<"30d" | "90d" | "all">(
     "30d"
   );
+    const [isMounted, setIsMounted] = useState(false);
 
   const [planFactStartMonth, setPlanFactStartMonth] = useState(getCurrentMonthValue);
   const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
+
+    useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const {
     data: clients = [],
@@ -276,7 +281,10 @@ export default function Home() {
     isLoading: isMonthlyPlansLoading,
   } = useMonthlyPlansQuery(hasAccess);
 
-  const isLoadingDashboard =
+    const isLoadingDashboard =
+    !isMounted ||
+    isAppContextLoading ||
+    isAccessLoading ||
     isClientsLoading ||
     isPaymentsLoading ||
     isExpensesLoading ||
@@ -762,7 +770,7 @@ export default function Home() {
     )}`;
   }, [planFactStartMonth, planFactEndMonth]);
 
-  if (!isAccessLoading && !hasAccess) {
+    if (isMounted && !isAccessLoading && !hasAccess) {
     return (
       <main className="flex-1">
         <div className="space-y-6 px-5 py-6 lg:px-8">
