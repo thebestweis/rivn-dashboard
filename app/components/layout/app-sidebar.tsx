@@ -355,37 +355,52 @@ export function AppSidebar() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                    <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             {!showResolvedMenu ? (
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/45">
                 Загружаем меню...
               </div>
             ) : (
-              <nav className="space-y-2">
-                {filteredNavItems.map((item) => {
-                  const isActive = isItemActive(pathname, item.href);
+              <div className="space-y-5">
+                <nav className="space-y-2">
+                  {filteredNavItems.map((item) => {
+                    const isActive = isItemActive(pathname, item.href);
 
-                  const className = `flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
-                    isActive
-                      ? "bg-slate-100 text-slate-900 shadow-sm dark:bg-white/8 dark:text-white dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_30px_rgba(123,97,255,0.18)]"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-white/65 dark:hover:bg-white/5 dark:hover:text-white"
-                  }`;
+                    const className = `flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
+                      isActive
+                        ? "bg-slate-100 text-slate-900 shadow-sm dark:bg-white/8 dark:text-white dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_30px_rgba(123,97,255,0.18)]"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-white/65 dark:hover:bg-white/5 dark:hover:text-white"
+                    }`;
 
-                  return (
-                    <Link
-                      key={item.label}
-                      href={item.href}
-                      className={className}
-                      onMouseEnter={() => prefetchRoute(item.href)}
-                    >
-                      <span>{item.label}</span>
-                      {isActive ? (
-                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                      ) : null}
-                    </Link>
-                  );
-                })}
-              </nav>
+                    return (
+                      <Link
+                        key={item.label}
+                        href={item.href}
+                        className={className}
+                        onMouseEnter={() => prefetchRoute(item.href)}
+                      >
+                        <span>{item.label}</span>
+                        {isActive ? (
+                          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                        ) : null}
+                      </Link>
+                    );
+                  })}
+                </nav>
+
+                <div className="border-t border-white/10 pt-4">
+                  <div className="mb-2 px-2 text-xs uppercase tracking-[0.12em] text-white/30">
+                    Помощь
+                  </div>
+
+                  <Link
+                    href="/guide"
+                    className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-white/65 dark:hover:bg-white/5 dark:hover:text-white"
+                  >
+                    <span>Инструкция по использованию</span>
+                  </Link>
+                </div>
+              </div>
             )}
           </div>
 

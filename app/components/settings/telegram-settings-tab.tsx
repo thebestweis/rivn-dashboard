@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createClient } from "../../lib/supabase/client";
 import {
   defaultTelegramSettings,
   getTelegramSettings,
@@ -9,7 +11,7 @@ import {
   type TelegramSettings,
 } from "@/app/lib/telegram-settings";
 import { AppToast } from "../ui/app-toast";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../lib/query-keys";
 
 const notificationItems: Array<{
   key: keyof TelegramSettings;
@@ -26,7 +28,39 @@ const notificationItems: Array<{
   },
 ];
 
-const telegramSettingsQueryKey = ["telegram-settings"] as const;
+type ChatDiscoveryResult = {
+  success?: boolean;
+  tokenValid?: boolean;
+  botName?: string;
+  botUsername?: string;
+  botLink?: string;
+  chatId?: string;
+  chatType?: string;
+  chatTitle?: string;
+  lastMessageText?: string;
+  lastMessageDate?: string | null;
+  error?: string;
+};
+
+function formatChatType(value: string | undefined) {
+  if (value === "private") return "Личный чат";
+  if (value === "group") return "Группа";
+  if (value === "supergroup") return "Супергруппа";
+  if (value === "channel") return "Канал";
+  return "Неизвестный тип";
+}
+
+function formatLastMessageDate(value?: string | null) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleString("ru-RU");
+}
 
 export function TelegramSettingsTab() {
   const queryClient = useQueryClient();
@@ -36,28 +70,26 @@ export function TelegramSettingsTab() {
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
-  const [hasLocalChanges, setHasLocalChanges] = useState(false);
+  const [isDiscoveringChat, setIsDiscoveringChat] = useState(false);
+
+  const [discoveryResult, setDiscoveryResult] =
+    useState<ChatDiscoveryResult | null>(null);
 
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
     "success"
   );
 
-  const {
-    data,
-    isLoading,
-    isFetching,
-  } = useQuery({
-    queryKey: telegramSettingsQueryKey,
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.telegramSettings,
     queryFn: getTelegramSettings,
     staleTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: false,
   });
 
   useEffect(() => {
-    if (!data) return;
-    setSettings(data);
-    setHasLocalChanges(false);
+    if (data) {
+      setSettings(data);
+    }
   }, [data]);
 
   useEffect(() => {
@@ -78,7 +110,12 @@ export function TelegramSettingsTab() {
       ...prev,
       [key]: value,
     }));
-    setHasLocalChanges(true);
+  }
+
+  async function refreshTelegramSettings() {
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.telegramSettings,
+    });
   }
 
   async function handleSave() {
@@ -86,18 +123,15 @@ export function TelegramSettingsTab() {
       setIsSaving(true);
 
       await saveTelegramSettings(settings);
-
-      queryClient.setQueryData(telegramSettingsQueryKey, settings);
-      setHasLocalChanges(false);
+      await refreshTelegramSettings();
 
       setToastType("success");
-      setToastMessage("Настройки Telegram сохранены");
+      setToastMessage("Настройки Telegram успешно сохранены");
     } catch (error) {
+      console.error(error);
       setToastType("error");
       setToastMessage(
-        error instanceof Error
-          ? error.message
-          : "Не удалось сохранить настройки"
+        error instanceof Error ? error.message : "Не удалось сохранить настройки"
       );
     } finally {
       setIsSaving(false);
@@ -109,14 +143,13 @@ export function TelegramSettingsTab() {
       setIsSendingTest(true);
 
       await saveTelegramSettings(settings);
-      queryClient.setQueryData(telegramSettingsQueryKey, settings);
-      setHasLocalChanges(false);
-
       await sendTelegramTestMessage();
+      await refreshTelegramSettings();
 
       setToastType("success");
-      setToastMessage("Тестовое сообщение отправлено в Telegram");
+      setToastMessage("Telegram полностью подключён");
     } catch (error) {
+      console.error(error);
       setToastType("error");
       setToastMessage(
         error instanceof Error
@@ -128,7 +161,137 @@ export function TelegramSettingsTab() {
     }
   }
 
-  const isBusy = isLoading || isSaving || isSendingTest;
+  async function handleDiscoverChatId() {
+    const botToken = settings.bot_token.trim();
+
+    if (!botToken) {
+      setToastType("error");
+      setToastMessage("Сначала вставь bot token");
+      return;
+    }
+
+    try {
+      setIsDiscoveringChat(true);
+      setDiscoveryResult(null);
+
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error("Не удалось получить сессию пользователя");
+      }
+
+      const response = await fetch("/api/telegram/discover-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          botToken,
+        }),
+      });
+
+      const result = (await response.json()) as ChatDiscoveryResult;
+
+      setDiscoveryResult(result);
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || "Не удалось автоматически получить chat_id"
+        );
+      }
+
+      const nextChatId = String(result.chatId ?? "").trim();
+
+      if (!nextChatId) {
+        throw new Error("Сервис не вернул chat_id");
+      }
+
+      setSettings((prev) => ({
+        ...prev,
+        chat_id: nextChatId,
+      }));
+
+      const nextSettings = {
+        ...settings,
+        chat_id: nextChatId,
+      };
+
+      await saveTelegramSettings(nextSettings);
+      await refreshTelegramSettings();
+
+      setToastType("success");
+      setToastMessage("chat_id успешно найден, подставлен и сохранён");
+    } catch (error) {
+      console.error(error);
+      setToastType("error");
+      setToastMessage(
+        error instanceof Error
+          ? error.message
+          : "Не удалось автоматически получить chat_id"
+      );
+    } finally {
+      setIsDiscoveringChat(false);
+    }
+  }
+
+  async function handleCopyBotLink() {
+    const botLink = discoveryResult?.botLink?.trim();
+
+    if (!botLink) {
+      setToastType("error");
+      setToastMessage("Ссылка на бота пока недоступна");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(botLink);
+      setToastType("success");
+      setToastMessage("Ссылка на бота скопирована");
+    } catch (error) {
+      console.error(error);
+      setToastType("error");
+      setToastMessage("Не удалось скопировать ссылку");
+    }
+  }
+
+  const isBusy = isLoading || isSaving || isSendingTest || isDiscoveringChat;
+  const trimmedBotToken = settings.bot_token.trim();
+
+  const canOpenBot = useMemo(() => {
+    return Boolean(discoveryResult?.botLink);
+  }, [discoveryResult]);
+
+  const connectionStatus = useMemo(() => {
+    if (!trimmedBotToken) {
+      return {
+        label: "Бот ещё не настроен",
+        className: "bg-white/10 text-white/50",
+      };
+    }
+
+    if (discoveryResult?.tokenValid && settings.chat_id.trim()) {
+      return {
+        label: "Telegram подключён",
+        className: "bg-emerald-500/20 text-emerald-200",
+      };
+    }
+
+    if (discoveryResult?.tokenValid) {
+      return {
+        label: "Токен валиден, нужен chat_id",
+        className: "bg-violet-500/15 text-violet-200",
+      };
+    }
+
+    return {
+      label: "Нужно проверить подключение",
+      className: "bg-amber-500/15 text-amber-300",
+    };
+  }, [trimmedBotToken, discoveryResult, settings.chat_id]);
 
   return (
     <>
@@ -137,12 +300,51 @@ export function TelegramSettingsTab() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-sm text-white/50">Telegram bot</div>
-              <h2 className="mt-1 text-xl font-semibold">Интеграция Telegram</h2>
+              <h2 className="mt-1 text-xl font-semibold">
+                Интеграция Telegram
+              </h2>
             </div>
 
-            {isFetching && !isLoading ? (
-              <div className="text-xs text-white/35">Обновляем данные...</div>
-            ) : null}
+            <div
+              className={`rounded-full px-3 py-1 text-xs font-medium ${connectionStatus.className}`}
+            >
+              {connectionStatus.label}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-[24px] border border-violet-400/15 bg-violet-500/[0.08] p-4">
+            <div className="text-sm font-medium text-violet-200">
+              Быстрое подключение
+            </div>
+
+            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-white/70">
+              <li>
+                Создай нового бота через{" "}
+                <span className="text-white">@BotFather</span> и скопируй его{" "}
+                <span className="text-white">bot token</span>.
+              </li>
+              <li>Вставь bot token в поле ниже.</li>
+              <li>
+                Нажми{" "}
+                <span className="text-white">
+                  «Получить chat_id автоматически»
+                </span>
+                .
+              </li>
+              <li>
+                Если бот уже определится, открой его в Telegram, нажми{" "}
+                <span className="text-white">Start</span> или отправь любое
+                сообщение.
+              </li>
+              <li>
+                Вернись сюда и ещё раз нажми{" "}
+                <span className="text-white">
+                  «Получить chat_id автоматически»
+                </span>
+                .
+              </li>
+              <li>После этого можно сразу отправить тест.</li>
+            </ol>
           </div>
 
           <div className="mt-5 space-y-4">
@@ -151,28 +353,182 @@ export function TelegramSettingsTab() {
               <input
                 type="password"
                 value={settings.bot_token}
-                onChange={(event) => updateField("bot_token", event.target.value)}
-                placeholder="Вставь токен бота"
+                onChange={(event) =>
+                  updateField("bot_token", event.target.value)
+                }
+                placeholder="Вставь токен бота из BotFather"
                 className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
                 disabled={isBusy}
               />
-            </div>
 
-            <div className="rounded-2xl bg-white/[0.04] p-4">
-              <label className="text-sm text-white/50">Chat ID</label>
-              <input
-                type="text"
-                value={settings.chat_id}
-                onChange={(event) => updateField("chat_id", event.target.value)}
-                placeholder="Например: 511872773"
-                className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
-                disabled={isBusy}
-              />
-              <p className="mt-2 text-xs text-white/40">
-                Для личного Telegram чата используй chat_id, который ты получил
-                через getUpdates.
+              <div className="mt-3 flex flex-wrap gap-3">
+                <a
+                  href="https://t.me/BotFather"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+                >
+                  Открыть BotFather
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleDiscoverChatId}
+                  disabled={isBusy || !trimmedBotToken}
+                  className="rounded-2xl border border-violet-400/20 bg-violet-500/15 px-4 py-3 text-sm font-medium text-violet-200 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDiscoveringChat
+                    ? "Проверяем бота и ищем chat_id..."
+                    : "Получить chat_id автоматически"}
+                </button>
+
+                {canOpenBot ? (
+                  <>
+                    <a
+                      href={discoveryResult?.botLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-2xl border border-emerald-400/20 bg-emerald-500/12 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/18"
+                    >
+                      Открыть бота в Telegram
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyBotLink}
+                      disabled={isBusy}
+                      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Скопировать ссылку
+                    </button>
+                  </>
+                ) : null}
+              </div>
+
+              <p className="mt-3 text-xs leading-5 text-white/40">
+                Система сначала проверит токен бота, а затем попробует найти
+                chat_id по последнему сообщению, которое пришло этому боту.
               </p>
             </div>
+
+            {discoveryResult?.tokenValid ? (
+              <div className="rounded-2xl border border-violet-400/10 bg-violet-500/[0.05] p-4">
+                <div className="text-sm font-medium text-violet-200">
+                  Информация о боте
+                </div>
+
+                <div className="mt-3 grid gap-3 text-sm text-white/75 md:grid-cols-2">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                      Имя бота
+                    </div>
+                    <div className="mt-1">{discoveryResult.botName || "—"}</div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                      Username
+                    </div>
+                    <div className="mt-1">
+                      {discoveryResult.botUsername
+                        ? `@${discoveryResult.botUsername}`
+                        : "—"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {!discoveryResult?.chatId && discoveryResult?.tokenValid ? (
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-200">
+                Открой бота и отправь ему любое сообщение, например{" "}
+                <span className="text-white">start</span>, затем нажми кнопку
+                получения chat_id ещё раз.
+              </div>
+            ) : null}
+
+            <details className="rounded-2xl bg-white/[0.04] p-4">
+              <summary className="cursor-pointer text-sm text-white/60">
+                Расширенные настройки (chat_id)
+              </summary>
+
+              <div className="mt-4">
+                <label className="text-sm text-white/50">Chat ID</label>
+                <input
+                  type="text"
+                  value={settings.chat_id}
+                  onChange={(event) =>
+                    updateField("chat_id", event.target.value)
+                  }
+                  placeholder="Например: 511872773"
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
+                  disabled={isBusy}
+                />
+
+                <p className="mt-2 text-xs text-white/40">
+                  Обычно поле заполняется автоматически. Вручную вводить нужно
+                  только в редких случаях.
+                </p>
+              </div>
+            </details>
+
+            {discoveryResult?.chatId ? (
+              <div className="rounded-2xl border border-emerald-400/10 bg-emerald-400/[0.06] p-4">
+                <div className="text-sm font-medium text-emerald-200">
+                  Найденный чат
+                </div>
+
+                <div className="mt-3 grid gap-3 text-sm text-white/75 md:grid-cols-2">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                      Чат
+                    </div>
+                    <div className="mt-1">
+                      {discoveryResult.chatTitle || "—"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                      Тип
+                    </div>
+                    <div className="mt-1">
+                      {formatChatType(discoveryResult.chatType)}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                      chat_id
+                    </div>
+                    <div className="mt-1 break-all">
+                      {discoveryResult.chatId || "—"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                      Последнее сообщение
+                    </div>
+                    <div className="mt-1">
+                      {formatLastMessageDate(discoveryResult.lastMessageDate)}
+                    </div>
+                  </div>
+                </div>
+
+                {discoveryResult.lastMessageText ? (
+                  <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white/65">
+                    {discoveryResult.lastMessageText}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {discoveryResult?.error && !discoveryResult.chatId ? (
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-200">
+                {discoveryResult.error}
+              </div>
+            ) : null}
 
             <div className="rounded-2xl bg-white/[0.04] p-4">
               <div className="flex items-center justify-between gap-4">
@@ -187,7 +543,9 @@ export function TelegramSettingsTab() {
 
                 <button
                   type="button"
-                  onClick={() => updateField("is_enabled", !settings.is_enabled)}
+                  onClick={() =>
+                    updateField("is_enabled", !settings.is_enabled)
+                  }
                   disabled={isBusy}
                   className={`rounded-full px-4 py-2 text-xs font-medium transition ${
                     settings.is_enabled
@@ -204,7 +562,7 @@ export function TelegramSettingsTab() {
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={isBusy || !hasLocalChanges}
+                disabled={isBusy}
                 className="rounded-2xl border border-emerald-400/20 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? "Сохраняем..." : "Сохранить"}
@@ -263,7 +621,9 @@ export function TelegramSettingsTab() {
         </div>
       </div>
 
-      {toastMessage ? <AppToast message={toastMessage} type={toastType} /> : null}
+      {toastMessage ? (
+        <AppToast message={toastMessage} type={toastType} />
+      ) : null}
     </>
   );
 }

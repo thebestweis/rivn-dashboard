@@ -32,6 +32,8 @@ import {
 } from "../lib/queries/use-payroll-query";
 import { useMonthlyPlansQuery } from "../lib/queries/use-monthly-plans-query";
 
+import Link from "next/link";
+
 type SupabasePaymentItem = {
   id: string;
   client_id: string | null;
@@ -792,34 +794,41 @@ export default function Home() {
         showPeriodTabs={false}
         showThemeToggle={false}
         customActions={
-          <>
-            <a
-              href="https://t.me/weismakeleadgen"
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
-            >
-              TG основателя
-            </a>
+  <>
+    <Link
+      href="/guide"
+      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+    >
+      Инструкция
+    </Link>
 
-            <a
-              href="https://t.me/thebestweis"
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-2xl border border-emerald-400/15 bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition hover:bg-emerald-400/18 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)]"
-            >
-              Техническая поддержка
-            </a>
+    <a
+      href="https://t.me/weismakeleadgen"
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+    >
+      TG основателя
+    </a>
 
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
-            >
-              Выйти
-            </button>
-          </>
-        }
+    <a
+      href="https://t.me/thebestweis"
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-2xl border border-emerald-400/15 bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition hover:bg-emerald-400/18 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)]"
+    >
+      Техническая поддержка
+    </a>
+
+    <button
+      type="button"
+      onClick={handleLogout}
+      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+    >
+      Выйти
+    </button>
+  </>
+}
       />
 
       <div className="space-y-6 px-5 py-5 lg:px-8">
