@@ -34,7 +34,7 @@ async function sendTelegramMessage(chatId: string | number, text: string) {
     throw new Error("Не найден TELEGRAM_BOT_TOKEN");
   }
 
-  await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+  const response = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -45,6 +45,12 @@ async function sendTelegramMessage(chatId: string | number, text: string) {
       parse_mode: "HTML",
     }),
   });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(`Telegram sendMessage error: ${JSON.stringify(data)}`);
+  }
 }
 
 async function saveTelegramChatFromUpdate(update: any) {
@@ -188,21 +194,37 @@ async function linkChatToClientCode(params: {
     return;
   }
 
-  const { error: linkError } = await supabase
-    .from("avito_report_chat_links")
-    .upsert(
-      {
+  const { data: existingLinkByChat, error: existingLinkByChatError } =
+    await supabase
+      .from("avito_report_chat_links")
+      .select("id")
+      .eq("telegram_chat_id", chatId)
+      .maybeSingle();
+
+  if (existingLinkByChatError) {
+    await sendTelegramMessage(
+      params.chatId,
+      `❌ Не удалось проверить связь чата: ${existingLinkByChatError.message}`
+    );
+
+    return;
+  }
+
+  const linkPayload = {
         client_id: client.id,
         telegram_chat_id: chatId,
         telegram_chat_title: params.chatTitle,
         linked_by_telegram_id: params.fromId ? String(params.fromId) : null,
         linked_by_username: params.fromUsername,
         is_active: true,
-      },
-      {
-        onConflict: "telegram_chat_id",
-      }
-    );
+      };
+
+  const { error: linkError } = existingLinkByChat
+    ? await supabase
+        .from("avito_report_chat_links")
+        .update(linkPayload)
+        .eq("id", existingLinkByChat.id)
+    : await supabase.from("avito_report_chat_links").insert(linkPayload);
 
   if (linkError) {
     await sendTelegramMessage(
