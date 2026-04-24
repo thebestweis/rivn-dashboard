@@ -362,11 +362,11 @@ function buildDailyReport(params: {
 }
 
 export async function GET(request: Request) {
-  if (!verifyCronSecret(request)) {
-    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    if (!verifyCronSecret(request)) {
+      return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const supabase = getSupabase();
     const url = new URL(request.url);
     const clientCode = url.searchParams.get("clientCode");
