@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AvitoChart } from "@/app/components/avito/avito-chart";
-import { getAvitoMetrics } from "@/app/lib/supabase/avito-metrics";
 import { useAppContextState } from "@/app/providers/app-context-provider";
 
 type AvitoMetric = {
@@ -194,14 +193,24 @@ setIntegrations(integrationsData.integrations ?? []);
         setIsLoading(true);
         setMetricsMessage("");
 
-        const metricsResult = await getAvitoMetrics({
+        const params = new URLSearchParams({
           clientId: selectedAnalyticsClientId,
           workspaceId: workspace.id,
           from: metricsPeriod.from,
           to: metricsPeriod.to,
         });
 
-        setData(metricsResult as AvitoMetric[]);
+        const response = await fetch(`/api/avito/metrics?${params.toString()}`, {
+          cache: "no-store",
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || "Не удалось загрузить метрики Avito");
+        }
+
+        setData(result.metrics as AvitoMetric[]);
       } catch (error) {
         setData([]);
         setMetricsMessage(
