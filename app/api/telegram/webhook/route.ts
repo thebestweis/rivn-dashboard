@@ -108,6 +108,124 @@ async function isChatAdmin(chatId: number, userId: number) {
   return status === "creator" || status === "administrator";
 }
 
+async function linkChatToClientCode(params: {
+  clientCode: string;
+  chatId: number;
+  chatTitle: string;
+  fromId: number | null;
+  fromUsername: string | null;
+}) {
+  const supabase = getSupabase();
+  const clientCode = params.clientCode.trim();
+
+  const { data: client, error: clientError } = await supabase
+    .from("avito_report_clients")
+    .select("id, name, client_code, telegram_chat_id")
+    .eq("client_code", clientCode)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (clientError || !client) {
+    await sendTelegramMessage(
+      params.chatId,
+      `❌ Код "${clientCode}" не найден. Проверь ссылку или попроси менеджера RIVN OS отправить новую.`
+    );
+
+    return;
+  }
+
+  const chatId = String(params.chatId);
+
+  const { data: existingChatLink, error: existingChatLinkError } =
+    await supabase
+      .from("avito_report_chat_links")
+      .select("client_id")
+      .eq("telegram_chat_id", chatId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+  if (existingChatLinkError) {
+    await sendTelegramMessage(
+      params.chatId,
+      `❌ Не удалось проверить привязку чата: ${existingChatLinkError.message}`
+    );
+
+    return;
+  }
+
+  if (existingChatLink && existingChatLink.client_id !== client.id) {
+    await sendTelegramMessage(
+      params.chatId,
+      "⚠️ Этот Telegram-чат уже привязан к другому проекту. Чтобы не отправить отчёты не туда, я не буду менять привязку автоматически."
+    );
+
+    return;
+  }
+
+  if (client.telegram_chat_id && String(client.telegram_chat_id) !== chatId) {
+    await sendTelegramMessage(
+      params.chatId,
+      "⚠️ Этот проект уже привязан к другому Telegram-чату. Если нужно заменить чат, сначала отключи старую привязку в RIVN OS."
+    );
+
+    return;
+  }
+
+  const { error: updateClientError } = await supabase
+    .from("avito_report_clients")
+    .update({
+      telegram_chat_id: chatId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", client.id);
+
+  if (updateClientError) {
+    await sendTelegramMessage(
+      params.chatId,
+      `❌ Ошибка при сохранении chat_id: ${updateClientError.message}`
+    );
+
+    return;
+  }
+
+  const { error: linkError } = await supabase
+    .from("avito_report_chat_links")
+    .upsert(
+      {
+        client_id: client.id,
+        telegram_chat_id: chatId,
+        telegram_chat_title: params.chatTitle,
+        linked_by_telegram_id: params.fromId ? String(params.fromId) : null,
+        linked_by_username: params.fromUsername,
+        is_active: true,
+      },
+      {
+        onConflict: "telegram_chat_id",
+      }
+    );
+
+  if (linkError) {
+    await sendTelegramMessage(
+      params.chatId,
+      `❌ Ошибка при привязке чата: ${linkError.message}`
+    );
+
+    return;
+  }
+
+  await sendTelegramMessage(
+    params.chatId,
+    [
+      "✅ <b>Готово! Чат привязан к Avito Reports</b>",
+      "",
+      `Проект: ${client.name}`,
+      `Код привязки: ${client.client_code}`,
+      "",
+      "Теперь daily и weekly отчёты будут приходить в этот чат, если они включены в RIVN OS.",
+    ].join("\n")
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const update = (await req.json()) as TelegramUpdate;
@@ -122,8 +240,43 @@ export async function POST(req: Request) {
 
     const chatId = message.chat.id;
     const chatTitle = message.chat.title || "Личный чат";
+    const chatType = message.chat.type;
     const fromId = message.from?.id;
     const fromUsername = message.from?.username || null;
+    const [commandRaw = "", commandPayload = ""] = text.split(/\s+/);
+    const command = commandRaw.split("@")[0].toLowerCase();
+
+    if (command === "/start") {
+      if (commandPayload) {
+        await linkChatToClientCode({
+          clientCode: commandPayload,
+          chatId,
+          chatTitle,
+          fromId: fromId ?? null,
+          fromUsername,
+        });
+
+        return Response.json({ ok: true });
+      }
+
+      await sendTelegramMessage(
+        chatId,
+        [
+          "👋 <b>Привет! Это бот RIVN OS для Avito Reports.</b>",
+          "",
+          chatType === "private"
+            ? "Чтобы подключить отчёты, открой специальную ссылку из RIVN OS."
+            : "Чтобы привязать эту беседу к проекту, добавь бота по специальной ссылке из RIVN OS.",
+          "Ссылка выглядит примерно так:",
+          "",
+          "https://t.me/stat_rivnos_bot?startgroup=rivn-xxxxxxx",
+          "",
+          "Если ссылки нет, попроси менеджера открыть Avito Reports и отправить ссылку для беседы.",
+        ].join("\n")
+      );
+
+      return Response.json({ ok: true });
+    }
 
     if (text === "/help" || text.startsWith("/help@")) {
       await sendTelegramMessage(
@@ -215,75 +368,13 @@ export async function POST(req: Request) {
         return Response.json({ ok: true });
       }
 
-      const supabase = getSupabase();
-
-      const { data: client, error: clientError } = await supabase
-        .from("avito_report_clients")
-        .select("id, name, client_code")
-        .eq("client_code", clientCode)
-        .maybeSingle();
-
-      if (clientError || !client) {
-        await sendTelegramMessage(
-          chatId,
-          `❌ Клиент с кодом "${clientCode}" не найден.`
-        );
-
-        return Response.json({ ok: true });
-      }
-
-      const { error: updateClientError } = await supabase
-        .from("avito_report_clients")
-        .update({
-          telegram_chat_id: String(chatId),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", client.id);
-
-      if (updateClientError) {
-        await sendTelegramMessage(
-          chatId,
-          `❌ Ошибка при обновлении клиента: ${updateClientError.message}`
-        );
-
-        return Response.json({ ok: true });
-      }
-
-      const { error: linkError } = await supabase
-        .from("avito_report_chat_links")
-        .upsert(
-          {
-            client_id: client.id,
-            telegram_chat_id: String(chatId),
-            telegram_chat_title: chatTitle,
-            linked_by_telegram_id: String(fromId),
-            linked_by_username: fromUsername,
-            is_active: true,
-          },
-          {
-            onConflict: "telegram_chat_id",
-          }
-        );
-
-      if (linkError) {
-        await sendTelegramMessage(
-          chatId,
-          `❌ Ошибка при привязке чата: ${linkError.message}`
-        );
-
-        return Response.json({ ok: true });
-      }
-
-      await sendTelegramMessage(
+      await linkChatToClientCode({
+        clientCode,
         chatId,
-        [
-          "✅ <b>Чат успешно привязан</b>",
-          "",
-          `Клиент: ${client.name}`,
-          `Код клиента: ${client.client_code}`,
-          `Chat ID: ${chatId}`,
-        ].join("\n")
-      );
+        chatTitle,
+        fromId,
+        fromUsername,
+      });
 
       return Response.json({ ok: true });
     }

@@ -32,6 +32,7 @@ type AvitoAccountForm = {
 type AvitoIntegration = {
   id: string;
   name: string;
+  client_code: string | null;
   project_id: string | null;
   telegram_chat_id: string | null;
   is_active: boolean;
@@ -51,6 +52,24 @@ type TelegramChat = {
   username: string | null;
   type: string;
 };
+
+const TELEGRAM_BOT_USERNAME = "stat_rivnos_bot";
+
+function buildTelegramBotLink(clientCode: string) {
+  return buildTelegramGroupLink(clientCode);
+}
+
+function buildTelegramGroupLink(clientCode: string) {
+  return `https://t.me/${TELEGRAM_BOT_USERNAME}?startgroup=${encodeURIComponent(
+    clientCode
+  )}`;
+}
+
+function buildTelegramPrivateLink(clientCode: string) {
+  return `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(
+    clientCode
+  )}`;
+}
 
 function formatNumber(value: number) {
   return Math.round(value || 0).toLocaleString("ru-RU");
@@ -90,6 +109,9 @@ export default function AvitoReportsPage() {
   const [accounts, setAccounts] = useState<AvitoAccountForm[]>([emptyAccount()]);
   const [isSaving, setIsSaving] = useState(false);
   const [formMessage, setFormMessage] = useState("");
+  const [telegramBotLink, setTelegramBotLink] = useState("");
+  const [telegramPrivateLink, setTelegramPrivateLink] = useState("");
+  const [createdClientCode, setCreatedClientCode] = useState("");
 
   const [integrations, setIntegrations] = useState<AvitoIntegration[]>([]);
 const [telegramChats, setTelegramChats] = useState<TelegramChat[]>([]);
@@ -170,14 +192,12 @@ setIntegrations(integrationsData.integrations ?? []);
 
   async function handleCreateIntegration() {
     setFormMessage("");
+    setTelegramBotLink("");
+    setTelegramPrivateLink("");
+    setCreatedClientCode("");
 
     if (!projectId || !selectedProject) {
       setFormMessage("Выбери проект");
-      return;
-    }
-
-    if (!telegramChatId.trim()) {
-      setFormMessage("Укажи Telegram chat_id");
       return;
     }
 
@@ -230,7 +250,12 @@ setIntegrations(integrationsData.integrations ?? []);
         throw new Error(result.error || "Не удалось создать интеграцию");
       }
 
-      setFormMessage(`Проект подключен. Добавлено Avito-аккаунтов: ${result.accountsCount}`);
+      setFormMessage(
+        `Проект подключен. Добавлено Avito-аккаунтов: ${result.accountsCount}. Отправь клиенту ссылку для Telegram.`
+      );
+      setCreatedClientCode(result.clientCode ?? "");
+      setTelegramBotLink(result.telegramGroupLink ?? result.telegramBotLink ?? "");
+      setTelegramPrivateLink(result.telegramPrivateLink ?? "");
 
       setProjectId("");
       setTelegramChatId("");
@@ -246,35 +271,45 @@ setIntegrations(integrationsData.integrations ?? []);
   }
 
   async function handleLoadTelegramChats() {
-  try {
-    setIsLoadingChats(true);
-    setFormMessage("");
+    try {
+      setIsLoadingChats(true);
+      setFormMessage("");
 
-    const response = await fetch("/api/avito/telegram-updates", {
-      cache: "no-store",
-    });
+      if (!workspace?.id) {
+        setFormMessage("Кабинет еще загружается. Подожди пару секунд и попробуй снова.");
+        return;
+      }
 
-    const result = await response.json();
-
-    if (!response.ok || !result.ok) {
-      throw new Error(result.error || "Не удалось получить chat_id");
-    }
-
-    setTelegramChats(result.chats ?? []);
-
-    if ((result.chats ?? []).length === 0) {
-      setFormMessage(
-        "Бот пока не видит чаты. Попроси клиента открыть @stat_rivnos_bot и нажать Start."
+      const response = await fetch(
+        `/api/avito/telegram-updates?workspaceId=${encodeURIComponent(
+          workspace.id
+        )}`,
+        {
+          cache: "no-store",
+        }
       );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Не удалось получить chat_id");
+      }
+
+      setTelegramChats(result.chats ?? []);
+
+      if ((result.chats ?? []).length === 0) {
+        setFormMessage(
+          "Бот пока не видит чаты. Попроси клиента открыть @stat_rivnos_bot и нажать Start."
+        );
+      }
+    } catch (error) {
+      setFormMessage(
+        error instanceof Error ? error.message : "Ошибка получения chat_id"
+      );
+    } finally {
+      setIsLoadingChats(false);
     }
-  } catch (error) {
-    setFormMessage(
-      error instanceof Error ? error.message : "Ошибка получения chat_id"
-    );
-  } finally {
-    setIsLoadingChats(false);
   }
-}
 
   return (
     
@@ -312,7 +347,7 @@ setIntegrations(integrationsData.integrations ?? []);
           <div className="flex flex-col gap-2">
             <h2 className="text-lg font-semibold text-white">Подключить проект к Avito</h2>
             <p className="text-sm text-white/45">
-              Выбери проект из RIVN OS, укажи Telegram chat_id и добавь один или несколько Avito-аккаунтов.
+              Выбери проект из RIVN OS и добавь Avito-аккаунты. После сохранения система даст готовую ссылку для Telegram-бота.
             </p>
           </div>
 
@@ -341,7 +376,7 @@ setIntegrations(integrationsData.integrations ?? []);
     disabled={isLoadingChats}
     className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50"
   >
-    {isLoadingChats ? "Ищем chat_id..." : "Получить chat_id из бота"}
+    {isLoadingChats ? "Ищем chat_id..." : "Запасной способ: выбрать chat_id"}
   </button>
 
   {telegramChats.length > 0 ? (
@@ -366,7 +401,7 @@ setIntegrations(integrationsData.integrations ?? []);
             </div>
 
             <div>
-              <label className="text-sm text-white/60">Telegram chat_id</label>
+              <label className="text-sm text-white/60">Telegram chat_id (необязательно)</label>
               <input
                 value={telegramChatId}
                 onChange={(e) => setTelegramChatId(e.target.value)}
@@ -374,7 +409,7 @@ setIntegrations(integrationsData.integrations ?? []);
                 className="mt-2 h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/25"
               />
               <FieldHint>
-                Как получить: клиент открывает{" "}
+                Основной способ теперь проще: сохрани проект, скопируй готовую ссылку на бота и отправь её клиенту. Это поле можно оставить пустым. Запасной способ: клиент открывает{" "}
                 <a
                   href="https://t.me/stat_rivnos_bot"
                   target="_blank"
@@ -382,7 +417,7 @@ setIntegrations(integrationsData.integrations ?? []);
                 >
                   @stat_rivnos_bot
                 </a>
-                , нажимает Start, после этого мы берём его chat_id из логов бота/webhook. Позже сделаем автоматическую кнопку получения chat_id.
+                , нажимает Start, а ты выбираешь его chat_id кнопкой слева.
               </FieldHint>
             </div>
           </div>
@@ -545,6 +580,35 @@ setIntegrations(integrationsData.integrations ?? []);
               {formMessage}
             </div>
           ) : null}
+
+          {telegramBotLink ? (
+            <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+              <div className="text-sm font-medium text-emerald-200">
+                Рекомендуется: добавить бота в беседу клиента
+              </div>
+              <div className="mt-2 text-sm text-white/70">
+                Отправь эту ссылку клиенту или нажми сам. Telegram предложит выбрать беседу. После добавления бот сам привяжет эту беседу к проекту, и отчёты будут приходить туда.
+              </div>
+              <div className="mt-3 break-all rounded-xl border border-white/10 bg-[#0F1524] px-3 py-2 text-sm text-emerald-300">
+                {telegramBotLink}
+              </div>
+              {telegramPrivateLink ? (
+                <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/55">
+                  Запасной вариант для личного чата:{" "}
+                  <a
+                    href={telegramPrivateLink}
+                    target="_blank"
+                    className="break-all text-emerald-300 underline underline-offset-4"
+                  >
+                    {telegramPrivateLink}
+                  </a>
+                </div>
+              ) : null}
+              <div className="mt-2 text-xs text-white/45">
+                Код привязки: {createdClientCode}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -573,6 +637,28 @@ setIntegrations(integrationsData.integrations ?? []);
                 <div className="mt-1 text-sm text-white/45">
                   Telegram chat_id: {integration.telegram_chat_id || "не указан"}
                 </div>
+                {integration.client_code ? (
+                  <div className="mt-2 text-xs text-white/45">
+                    Ссылка для беседы:{" "}
+                    <a
+                      href={buildTelegramGroupLink(integration.client_code)}
+                      target="_blank"
+                      className="break-all text-emerald-300 underline underline-offset-4"
+                    >
+                      {buildTelegramGroupLink(integration.client_code)}
+                    </a>
+                    <div className="mt-1">
+                      Личная ссылка:{" "}
+                      <a
+                        href={buildTelegramPrivateLink(integration.client_code)}
+                        target="_blank"
+                        className="break-all text-white/55 underline underline-offset-4 hover:text-emerald-300"
+                      >
+                        {buildTelegramPrivateLink(integration.client_code)}
+                      </a>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap gap-2 text-xs">
@@ -799,22 +885,26 @@ setIntegrations(integrationsData.integrations ?? []);
               <section>
                 <h3 className="text-lg font-semibold text-white">Как подключить проект</h3>
                 <ol className="mt-3 list-decimal space-y-3 pl-5">
-                  <li>Создай проект в RIVN OS, если он ещё не создан.</li>
+                  <li>Сначала создай проект в RIVN OS, если его ещё нет.</li>
                   <li>Открой раздел Avito Reports.</li>
-                  <li>В поле “Проект” выбери нужный проект.</li>
-                  <li>Получи Telegram chat_id клиента.</li>
-                  <li>Получи Avito user_id, client_id и client_secret.</li>
-                  <li>Если у проекта несколько кабинетов Avito — нажми “Добавить ещё Avito-аккаунт”.</li>
-                  <li>Включи daily и weekly отчёты.</li>
+                  <li>В поле “Проект” выбери нужный проект клиента.</li>
+                  <li>Заполни Avito user_id, client_id и client_secret.</li>
+                  <li>Если у клиента несколько Avito-кабинетов, нажми “Добавить ещё Avito-аккаунт” и заполни данные каждого кабинета.</li>
+                  <li>Включи daily и weekly отчёты, если они нужны.</li>
                   <li>Нажми “Подключить проект”.</li>
+                  <li>После сохранения появится ссылка “Добавить бота в беседу клиента”.</li>
+                  <li>Отправь эту ссылку клиенту или нажми сам, если ты уже состоишь в нужной беседе.</li>
+                  <li>В Telegram выбери беседу, где общаются клиент и команда.</li>
+                  <li>Telegram добавит бота в эту беседу. Бот напишет “Готово”.</li>
+                  <li>После этого daily и weekly отчёты будут приходить в эту беседу.</li>
                 </ol>
               </section>
 
               <section>
-                <h3 className="text-lg font-semibold text-white">Где взять Telegram chat_id</h3>
+                <h3 className="text-lg font-semibold text-white">Как подключается Telegram</h3>
                 <ol className="mt-3 list-decimal space-y-3 pl-5">
                   <li>
-                    Клиент должен открыть Telegram-бота{" "}
+                    После нажатия “Подключить проект” RIVN OS создаёт специальную ссылку на бота{" "}
                     <a
                       href="https://t.me/stat_rivnos_bot"
                       target="_blank"
@@ -824,12 +914,12 @@ setIntegrations(integrationsData.integrations ?? []);
                     </a>
                     .
                   </li>
-                  <li>Нажать кнопку Start или отправить команду /start.</li>
-                  <li>После этого бот сможет получать сообщения от этого пользователя/чата.</li>
-                  <li>
-                    Сейчас chat_id нужно взять из логов webhook/бота или из уже сохранённых данных.
-                    Следующим этапом мы добавим автоматическую кнопку “Получить chat_id”.
-                  </li>
+                  <li>В ссылке спрятан уникальный код проекта. Благодаря этому бот понимает, к какому проекту относится беседа.</li>
+                  <li>Основная ссылка открывает выбор Telegram-беседы. Это удобно для агентств: отчёты видят клиент, менеджер и команда.</li>
+                  <li>Человек, который добавляет бота, должен иметь право добавлять участников в эту беседу.</li>
+                  <li>После добавления бот автоматически сохраняет chat_id беседы в RIVN OS. Вручную искать chat_id больше не нужно.</li>
+                  <li>Если клиент хочет получать отчёты в личку, используй запасную личную ссылку.</li>
+                  <li>Если клиент уже написал боту без ссылки, можно использовать запасной способ: нажать “Запасной способ: выбрать chat_id” и выбрать нужный чат из свежих сообщений.</li>
                 </ol>
               </section>
 
@@ -859,6 +949,9 @@ setIntegrations(integrationsData.integrations ?? []);
                 <h3 className="text-lg font-semibold text-white">Что важно помнить</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5">
                   <li>client_secret — это секретный ключ, его нельзя публиковать.</li>
+                  <li>Telegram-ссылку для беседы можно отправлять только тому клиенту, чей проект ты подключаешь.</li>
+                  <li>Лучше добавлять бота именно в рабочую беседу с клиентом, чтобы отчёты видела вся команда.</li>
+                  <li>Если проект уже привязан к одному Telegram-чату, бот не заменит чат автоматически. Это защита от случайной отправки отчётов не туда.</li>
                   <li>Если проект выключен, отчёты по нему не отправляются.</li>
                   <li>Если daily выключен, ежедневные отчёты не приходят.</li>
                   <li>Если weekly выключен, еженедельные отчёты не приходят.</li>

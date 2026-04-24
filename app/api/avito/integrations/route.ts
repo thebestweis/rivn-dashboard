@@ -11,6 +11,44 @@ function getServiceSupabase() {
   return createClient(supabaseUrl, supabaseKey);
 }
 
+function buildTelegramPrivateLink(clientCode: string) {
+  return `https://t.me/stat_rivnos_bot?start=${encodeURIComponent(clientCode)}`;
+}
+
+function buildTelegramGroupLink(clientCode: string) {
+  return `https://t.me/stat_rivnos_bot?startgroup=${encodeURIComponent(
+    clientCode
+  )}`;
+}
+
+function generateClientCode() {
+  return `rivn-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+}
+
+async function generateUniqueClientCode(
+  supabase: ReturnType<typeof getServiceSupabase>
+) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const clientCode = generateClientCode();
+
+    const { data, error } = await supabase
+      .from("avito_report_clients")
+      .select("id")
+      .eq("client_code", clientCode)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Ошибка проверки кода Telegram: ${error.message}`);
+    }
+
+    if (!data) {
+      return clientCode;
+    }
+  }
+
+  throw new Error("Не удалось создать уникальный код Telegram");
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -37,6 +75,7 @@ export async function GET(request: Request) {
         .select(`
           id,
           name,
+          client_code,
           project_id,
           telegram_chat_id,
           is_active,
@@ -100,10 +139,6 @@ export async function POST(request: Request) {
       throw new Error("Выбери проект");
     }
 
-    if (!body.telegramChatId) {
-      throw new Error("Укажи Telegram chat_id");
-    }
-
     if (!Array.isArray(body.accounts) || body.accounts.length === 0) {
       throw new Error("Добавь хотя бы один Avito-аккаунт");
     }
@@ -123,13 +158,16 @@ export async function POST(request: Request) {
       throw new Error("Проект не найден в текущем кабинете");
     }
 
+    const clientCode = await generateUniqueClientCode(supabase);
+
     const { data: client, error: clientError } = await supabase
       .from("avito_report_clients")
       .insert({
         workspace_id: workspaceId,
         project_id: project.id,
         name: project.name || body.projectName || "Без названия",
-        telegram_chat_id: body.telegramChatId,
+        client_code: clientCode,
+        telegram_chat_id: body.telegramChatId?.trim() || null,
         is_active: body.isActive ?? true,
         daily_reports_enabled: body.dailyEnabled ?? true,
         weekly_reports_enabled: body.weeklyEnabled ?? true,
@@ -173,6 +211,10 @@ export async function POST(request: Request) {
     return Response.json({
       ok: true,
       clientId: client.id,
+      clientCode,
+      telegramBotLink: buildTelegramGroupLink(clientCode),
+      telegramGroupLink: buildTelegramGroupLink(clientCode),
+      telegramPrivateLink: buildTelegramPrivateLink(clientCode),
       accountsCount: accountsPayload.length,
     });
   } catch (error) {
