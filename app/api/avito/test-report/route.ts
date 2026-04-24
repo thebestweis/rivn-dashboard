@@ -1,4 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
+import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
+import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
+import { verifyCronSecret } from "../../cron/verify-cron-secret";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -9,6 +13,8 @@ type AvitoAccount = {
   name: string;
   access_token: string | null;
   avito_user_id: string | null;
+  avito_client_id: string | null;
+  avito_client_secret: string | null;
 };
 
 type AvitoStatPoint = {
@@ -355,16 +361,32 @@ function buildDailyReport(params: {
   ].join("\n");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!verifyCronSecret(request)) {
+    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const supabase = getSupabase();
+    const url = new URL(request.url);
+    const clientCode = url.searchParams.get("clientCode");
+
+    if (!clientCode) {
+      return Response.json(
+        {
+          ok: false,
+          error: "Передай clientCode для точечного теста",
+        },
+        { status: 400 }
+      );
+    }
 
     const { data: client, error: clientError } = await supabase
       .from("avito_report_clients")
-      .select("id, name, telegram_chat_id")
+      .select("id, name, client_code, telegram_chat_id")
       .eq("is_active", true)
+      .eq("client_code", clientCode)
       .not("telegram_chat_id", "is", null)
-      .limit(1)
       .maybeSingle();
 
     if (clientError || !client) {
@@ -379,7 +401,7 @@ export async function GET() {
 
     const { data: accounts, error: accountsError } = await supabase
       .from("avito_report_accounts")
-      .select("id, name, access_token, avito_user_id")
+      .select("id, name, access_token, avito_user_id, avito_client_id, avito_client_secret")
       .eq("client_id", client.id)
       .eq("is_active", true);
 
@@ -413,35 +435,70 @@ export async function GET() {
     };
 
     for (const account of accounts as AvitoAccount[]) {
-      if (!account.access_token || !account.avito_user_id) {
+      if (!account.avito_user_id) {
         accountBlocks.push(
           [
             "━━━━━━━━━━━━",
             `Аккаунт: <b>${account.name}</b>`,
             "",
-            "⚠️ Аккаунт не проверен: нет access_token или avito_user_id.",
+            "⚠️ Аккаунт не проверен: нет avito_user_id.",
           ].join("\n")
         );
 
         continue;
       }
 
-      const itemIds = await getAllItemIds(account.access_token);
+      const accessToken =
+        account.access_token ||
+        (await getAvitoAccessToken({
+          clientId: account.avito_client_id,
+          clientSecret: account.avito_client_secret,
+        }));
 
-      const currentStats = await getStatsForPeriod({
-        accessToken: account.access_token,
+      const itemIds = await getAllItemIds(accessToken);
+
+      const currentStatsRaw = await getStatsForPeriod({
+        accessToken,
         avitoUserId: account.avito_user_id,
         itemIds,
         dateFrom: yesterday,
         dateTo: yesterday,
       });
 
-      const previousStats = await getStatsForPeriod({
-        accessToken: account.access_token,
+      const previousStatsRaw = await getStatsForPeriod({
+        accessToken,
         avitoUserId: account.avito_user_id,
         itemIds,
         dateFrom: beforeYesterday,
         dateTo: beforeYesterday,
+      });
+
+      const rawAvitoSpendings = await fetchAvitoSpendings({
+        accessToken,
+        userId: account.avito_user_id,
+        dateFrom: beforeYesterday,
+        dateTo: yesterday,
+        grouping: "day",
+      });
+
+      const currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
+        dateFrom: yesterday,
+        dateTo: yesterday,
+      });
+
+      const previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
+        dateFrom: beforeYesterday,
+        dateTo: beforeYesterday,
+      });
+
+      const currentStats = buildStats({
+        ...currentStatsRaw,
+        expenses: currentAvitoSpendings.total,
+      });
+
+      const previousStats = buildStats({
+        ...previousStatsRaw,
+        expenses: previousAvitoSpendings.total,
       });
 
       totalCurrentRaw.views += currentStats.views;
@@ -466,13 +523,17 @@ export async function GET() {
     const totalCurrent = buildStats(totalCurrentRaw);
     const totalPrevious = buildStats(totalPreviousRaw);
 
-    const reportText = buildDailyReport({
-      clientName: client.name,
-      date: yesterday,
-      accountBlocks,
-      totalCurrent,
-      totalPrevious,
-    });
+    const reportText = [
+      "🧪 <b>Тестовый Avito-отчёт RIVN OS</b>",
+      "",
+      buildDailyReport({
+        clientName: client.name,
+        date: yesterday,
+        accountBlocks,
+        totalCurrent,
+        totalPrevious,
+      }),
+    ].join("\n");
 
     await sendTelegramMessage(client.telegram_chat_id, reportText);
 
@@ -480,6 +541,8 @@ export async function GET() {
       client_id: client.id,
       telegram_chat_id: client.telegram_chat_id,
       report_type: "test",
+      period_start: yesterday,
+      period_end: yesterday,
       status: "success",
       message: reportText,
     });
