@@ -71,6 +71,10 @@ function buildTelegramPrivateLink(clientCode: string) {
   )}`;
 }
 
+function buildTelegramGroupCommand(clientCode: string) {
+  return `/link@${TELEGRAM_BOT_USERNAME} ${clientCode}`;
+}
+
 function formatNumber(value: number) {
   return Math.round(value || 0).toLocaleString("ru-RU");
 }
@@ -587,10 +591,16 @@ setIntegrations(integrationsData.integrations ?? []);
                 Рекомендуется: добавить бота в беседу клиента
               </div>
               <div className="mt-2 text-sm text-white/70">
-                Отправь эту ссылку клиенту или нажми сам. Telegram предложит выбрать беседу. После добавления бот сам привяжет эту беседу к проекту, и отчёты будут приходить туда.
+                Отправь эту ссылку клиенту или нажми сам. Telegram предложит выбрать беседу. После добавления бота отправь в этой беседе команду ниже.
               </div>
               <div className="mt-3 break-all rounded-xl border border-white/10 bg-[#0F1524] px-3 py-2 text-sm text-emerald-300">
                 {telegramBotLink}
+              </div>
+              <div className="mt-3 text-xs font-medium uppercase tracking-[0.12em] text-white/35">
+                Команда для беседы
+              </div>
+              <div className="mt-2 break-all rounded-xl border border-white/10 bg-[#0F1524] px-3 py-2 text-sm text-white/80">
+                {buildTelegramGroupCommand(createdClientCode)}
               </div>
               {telegramPrivateLink ? (
                 <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/55">
@@ -647,6 +657,12 @@ setIntegrations(integrationsData.integrations ?? []);
                     >
                       {buildTelegramGroupLink(integration.client_code)}
                     </a>
+                    <div className="mt-1">
+                      Команда для беседы:{" "}
+                      <span className="break-all text-white/70">
+                        {buildTelegramGroupCommand(integration.client_code)}
+                      </span>
+                    </div>
                     <div className="mt-1">
                       Личная ссылка:{" "}
                       <a
@@ -895,7 +911,8 @@ setIntegrations(integrationsData.integrations ?? []);
                   <li>После сохранения появится ссылка “Добавить бота в беседу клиента”.</li>
                   <li>Отправь эту ссылку клиенту или нажми сам, если ты уже состоишь в нужной беседе.</li>
                   <li>В Telegram выбери беседу, где общаются клиент и команда.</li>
-                  <li>Telegram добавит бота в эту беседу. Бот напишет “Готово”.</li>
+                  <li>После добавления бота скопируй команду “/link@stat_rivnos_bot ...” из RIVN OS.</li>
+                  <li>Отправь эту команду прямо в беседе. Бот напишет “Готово”.</li>
                   <li>После этого daily и weekly отчёты будут приходить в эту беседу.</li>
                 </ol>
               </section>
@@ -917,8 +934,8 @@ setIntegrations(integrationsData.integrations ?? []);
                   <li>В ссылке спрятан уникальный код проекта. Благодаря этому бот понимает, к какому проекту относится беседа.</li>
                   <li>Основная ссылка открывает выбор Telegram-беседы. Это удобно для агентств: отчёты видят клиент, менеджер и команда.</li>
                   <li>Человек, который добавляет бота, должен иметь право добавлять участников в эту беседу.</li>
-                  <li>После добавления бот автоматически сохраняет chat_id беседы в RIVN OS. Вручную искать chat_id больше не нужно.</li>
-                  <li>Если клиент хочет получать отчёты в личку, используй запасную личную ссылку.</li>
+                  <li>После команды /link бот сохраняет chat_id беседы в RIVN OS. Вручную искать chat_id больше не нужно.</li>
+                  <li>Если клиент случайно открыл ссылку в личке, бот не привяжет личный чат. Он подскажет команду, которую нужно отправить в беседе.</li>
                   <li>Если клиент уже написал боту без ссылки, можно использовать запасной способ: нажать “Запасной способ: выбрать chat_id” и выбрать нужный чат из свежих сообщений.</li>
                 </ol>
               </section>

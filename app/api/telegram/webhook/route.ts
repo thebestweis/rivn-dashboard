@@ -248,6 +248,26 @@ export async function POST(req: Request) {
 
     if (command === "/start") {
       if (commandPayload) {
+        if (chatType === "private") {
+          await sendTelegramMessage(
+            chatId,
+            [
+              "✅ <b>Код проекта получен</b>",
+              "",
+              "Чтобы отчёты приходили в рабочую беседу с клиентом:",
+              "",
+              "1. Добавь меня в нужную беседу.",
+              "2. Отправь в этой беседе команду:",
+              "",
+              `<code>/link@stat_rivnos_bot ${commandPayload}</code>`,
+              "",
+              "После этого я привяжу именно беседу, а не личный чат.",
+            ].join("\n")
+          );
+
+          return Response.json({ ok: true });
+        }
+
         await linkChatToClientCode({
           clientCode: commandPayload,
           chatId,
@@ -271,7 +291,9 @@ export async function POST(req: Request) {
           "",
           "https://t.me/stat_rivnos_bot?startgroup=rivn-xxxxxxx",
           "",
-          "Если ссылки нет, попроси менеджера открыть Avito Reports и отправить ссылку для беседы.",
+          "Если я уже добавлен в беседу, отправь сюда команду привязки из RIVN OS:",
+          "",
+          "<code>/link@stat_rivnos_bot rivn-xxxxxxx</code>",
         ].join("\n")
       );
 
@@ -345,17 +367,6 @@ export async function POST(req: Request) {
         return Response.json({ ok: true });
       }
 
-      const admin = await isChatAdmin(chatId, fromId);
-
-      if (!admin) {
-        await sendTelegramMessage(
-          chatId,
-          "⛔ Команду /link может использовать только администратор чата."
-        );
-
-        return Response.json({ ok: true });
-      }
-
       const parts = text.split(" ");
       const clientCode = parts[1]?.trim();
 
@@ -383,13 +394,10 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error(error);
 
-    return Response.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Неизвестная ошибка",
-      },
-      { status: 500 }
-    );
+    return Response.json({
+      ok: false,
+      error: error instanceof Error ? error.message : "Неизвестная ошибка",
+    });
   }
 }
 
