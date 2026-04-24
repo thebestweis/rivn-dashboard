@@ -230,3 +230,127 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const workspaceId = body.workspaceId;
+    const integrationId = body.integrationId;
+    const accountId = body.accountId;
+    const patch = body.patch ?? {};
+
+    if (!workspaceId) {
+      throw new Error("Не передан workspaceId");
+    }
+
+    if (!integrationId && !accountId) {
+      throw new Error("Не передан проект или Avito-аккаунт для обновления");
+    }
+
+    const supabase = getServiceSupabase();
+
+    if (integrationId) {
+      const { data: integration, error: integrationError } = await supabase
+        .from("avito_report_clients")
+        .select("id")
+        .eq("id", integrationId)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+
+      if (integrationError) {
+        throw new Error(
+          `Ошибка проверки проекта: ${integrationError.message}`
+        );
+      }
+
+      if (!integration) {
+        throw new Error("Проект не найден в текущем кабинете");
+      }
+
+      const updatePayload: Record<string, boolean> = {};
+
+      if (typeof patch.isActive === "boolean") {
+        updatePayload.is_active = patch.isActive;
+      }
+
+      if (typeof patch.dailyEnabled === "boolean") {
+        updatePayload.daily_reports_enabled = patch.dailyEnabled;
+      }
+
+      if (typeof patch.weeklyEnabled === "boolean") {
+        updatePayload.weekly_reports_enabled = patch.weeklyEnabled;
+      }
+
+      if (Object.keys(updatePayload).length === 0) {
+        throw new Error("Нет разрешённых полей для обновления проекта");
+      }
+
+      const { error: updateError } = await supabase
+        .from("avito_report_clients")
+        .update(updatePayload)
+        .eq("id", integrationId)
+        .eq("workspace_id", workspaceId);
+
+      if (updateError) {
+        throw new Error(`Ошибка обновления проекта: ${updateError.message}`);
+      }
+
+      return Response.json({ ok: true });
+    }
+
+    const { data: account, error: accountError } = await supabase
+      .from("avito_report_accounts")
+      .select("id, client_id")
+      .eq("id", accountId)
+      .maybeSingle();
+
+    if (accountError) {
+      throw new Error(`Ошибка проверки аккаунта: ${accountError.message}`);
+    }
+
+    if (!account) {
+      throw new Error("Avito-аккаунт не найден");
+    }
+
+    const { data: integration, error: integrationError } = await supabase
+      .from("avito_report_clients")
+      .select("id")
+      .eq("id", account.client_id)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    if (integrationError) {
+      throw new Error(`Ошибка проверки проекта: ${integrationError.message}`);
+    }
+
+    if (!integration) {
+      throw new Error("Avito-аккаунт не относится к текущему кабинету");
+    }
+
+    if (typeof patch.isActive !== "boolean") {
+      throw new Error("Нет разрешённых полей для обновления аккаунта");
+    }
+
+    const { error: updateError } = await supabase
+      .from("avito_report_accounts")
+      .update({ is_active: patch.isActive })
+      .eq("id", accountId);
+
+    if (updateError) {
+      throw new Error(`Ошибка обновления аккаунта: ${updateError.message}`);
+    }
+
+    return Response.json({ ok: true });
+  } catch (error) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Ошибка обновления Avito-интеграции",
+      },
+      { status: 500 }
+    );
+  }
+}

@@ -120,6 +120,8 @@ export default function AvitoReportsPage() {
   const [integrations, setIntegrations] = useState<AvitoIntegration[]>([]);
 const [telegramChats, setTelegramChats] = useState<TelegramChat[]>([]);
 const [isLoadingChats, setIsLoadingChats] = useState(false);
+const [integrationMessage, setIntegrationMessage] = useState("");
+const [updatingIntegrationId, setUpdatingIntegrationId] = useState("");
 
   const { workspace } = useAppContextState();
 
@@ -312,6 +314,107 @@ setIntegrations(integrationsData.integrations ?? []);
       );
     } finally {
       setIsLoadingChats(false);
+    }
+  }
+
+  async function refreshIntegrations() {
+    if (!workspace?.id) {
+      return;
+    }
+
+    const response = await fetch(
+      `/api/avito/integrations?workspaceId=${encodeURIComponent(workspace.id)}`,
+      {
+        cache: "no-store",
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Не удалось обновить список проектов");
+    }
+
+    setProjects(result.projects ?? []);
+    setIntegrations(result.integrations ?? []);
+  }
+
+  async function updateIntegration(
+    integrationId: string,
+    patch: {
+      isActive?: boolean;
+      dailyEnabled?: boolean;
+      weeklyEnabled?: boolean;
+    }
+  ) {
+    try {
+      setIntegrationMessage("");
+      setUpdatingIntegrationId(integrationId);
+
+      const response = await fetch("/api/avito/integrations", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace?.id,
+          integrationId,
+          patch,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Не удалось обновить проект");
+      }
+
+      await refreshIntegrations();
+      setIntegrationMessage("Настройки проекта обновлены");
+    } catch (error) {
+      setIntegrationMessage(
+        error instanceof Error ? error.message : "Ошибка обновления проекта"
+      );
+    } finally {
+      setUpdatingIntegrationId("");
+    }
+  }
+
+  async function updateIntegrationAccount(accountId: string, isActive: boolean) {
+    try {
+      setIntegrationMessage("");
+      setUpdatingIntegrationId(accountId);
+
+      const response = await fetch("/api/avito/integrations", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace?.id,
+          accountId,
+          patch: {
+            isActive,
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Не удалось обновить Avito-аккаунт");
+      }
+
+      await refreshIntegrations();
+      setIntegrationMessage("Настройки Avito-аккаунта обновлены");
+    } catch (error) {
+      setIntegrationMessage(
+        error instanceof Error
+          ? error.message
+          : "Ошибка обновления Avito-аккаунта"
+      );
+    } finally {
+      setUpdatingIntegrationId("");
     }
   }
 
@@ -627,6 +730,11 @@ setIntegrations(integrationsData.integrations ?? []);
     <div className="mt-1 text-sm text-white/45">
       Здесь отображаются проекты, для которых уже настроены Avito-отчёты.
     </div>
+    {integrationMessage ? (
+      <div className="mt-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-300">
+        {integrationMessage}
+      </div>
+    ) : null}
   </div>
 
   <div className="mt-5 space-y-3">
@@ -711,6 +819,49 @@ setIntegrations(integrationsData.integrations ?? []);
                 >
                   {integration.is_active ? "Активен" : "Выключен"}
                 </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateIntegration(integration.id, {
+                      isActive: !integration.is_active,
+                    })
+                  }
+                  disabled={updatingIntegrationId === integration.id}
+                  className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
+                >
+                  {integration.is_active ? "Выключить" : "Включить"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateIntegration(integration.id, {
+                      dailyEnabled: !integration.daily_reports_enabled,
+                    })
+                  }
+                  disabled={updatingIntegrationId === integration.id}
+                  className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
+                >
+                  {integration.daily_reports_enabled
+                    ? "Выключить daily"
+                    : "Включить daily"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateIntegration(integration.id, {
+                      weeklyEnabled: !integration.weekly_reports_enabled,
+                    })
+                  }
+                  disabled={updatingIntegrationId === integration.id}
+                  className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
+                >
+                  {integration.weekly_reports_enabled
+                    ? "Выключить weekly"
+                    : "Включить weekly"}
+                </button>
               </div>
             </div>
 
@@ -728,6 +879,16 @@ setIntegrations(integrationsData.integrations ?? []);
                     <div className="mt-1 text-xs text-white/40">
                       {account.is_active ? "Аккаунт активен" : "Аккаунт выключен"}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateIntegrationAccount(account.id, !account.is_active)
+                      }
+                      disabled={updatingIntegrationId === account.id}
+                      className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
+                    >
+                      {account.is_active ? "Выключить аккаунт" : "Включить аккаунт"}
+                    </button>
                   </div>
                 ))}
               </div>

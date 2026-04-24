@@ -1,12 +1,16 @@
 export function verifyCronSecret(request: Request) {
   const url = new URL(request.url);
   const secret = url.searchParams.get("secret");
+  const expectedSecret =
+    process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET;
 
-  if (!process.env.CRON_SECRET) {
-    throw new Error("CRON_SECRET не задан");
+  if (!expectedSecret) {
+    throw new Error(
+      "CRON_SECRET is not available in this Vercel function. Check the Vercel project and Production environment variables, then redeploy."
+    );
   }
 
-  if (secret !== process.env.CRON_SECRET) {
+  if (secret !== expectedSecret) {
     return false;
   }
 
