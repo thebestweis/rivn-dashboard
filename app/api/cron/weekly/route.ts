@@ -1,3 +1,5 @@
+import { sendCronErrorNotification } from "../send-cron-error-notification";
+
 export async function GET(request: Request) {
   try {
     const baseUrl = new URL(request.url).origin;
@@ -20,6 +22,12 @@ export async function GET(request: Request) {
       avitoWeeklyReport: data,
     });
   } catch (error) {
+    await sendCronErrorNotification({
+      title: "Ошибка Weekly Cron",
+      route: "/api/cron/weekly",
+      error,
+    });
+
     return Response.json(
       {
         ok: false,
