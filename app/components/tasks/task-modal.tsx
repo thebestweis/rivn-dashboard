@@ -35,7 +35,7 @@ import {
 
 type TaskModalProps = {
   isOpen: boolean;
-  projectId: string;
+  projectId: string | null;
   task: Task | null;
   tasks: Task[];
   onClose: () => void;
@@ -407,6 +407,12 @@ export function TaskModal({
 
   async function handleCreateSubtask() {
     if (!task) {
+      return;
+    }
+
+        if (!projectId) {
+      setToastType("error");
+      setToastMessage("У этой задачи нет проекта. Сначала привяжи её к проекту.");
       return;
     }
 

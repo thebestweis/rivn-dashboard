@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppContextState } from "../../providers/app-context-provider";
 import { AppToast } from "../ui/app-toast";
 import { BillingAccessBanner } from "../ui/billing-access-banner";
@@ -17,7 +18,6 @@ import {
   type ReferralStats,
 } from "../../lib/supabase/referrals";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../lib/query-keys";
 
 function formatMoney(value: number) {
@@ -102,7 +102,7 @@ export function ReferralSettingsTab() {
   const {
     data: links = [],
     isLoading: isLinksLoading,
-  } = useQuery({
+  } = useQuery<ReferralLinkItem[]>({
     queryKey: queryKeys.referralLinks,
     queryFn: async () => {
       await ensureMyStandardReferralLink();
@@ -114,10 +114,10 @@ export function ReferralSettingsTab() {
   const {
     data: rewards = [],
     isLoading: isRewardsLoading,
-  } = useQuery({
+  } = useQuery<ReferralRewardItem[]>({
     queryKey: queryKeys.referralRewards,
     queryFn: getMyReferralRewards,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
   });
 
   const {
@@ -126,7 +126,7 @@ export function ReferralSettingsTab() {
   } = useQuery<ReferralStats | null>({
     queryKey: queryKeys.referralStats,
     queryFn: getMyReferralStats,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
   });
 
   async function refreshReferralData() {
@@ -193,6 +193,7 @@ export function ReferralSettingsTab() {
 
       await refreshReferralData();
       setPersonalLinkLabel("");
+
       setToastType("success");
       setToastMessage("Персональная ссылка 50% создана");
     } catch (error) {
@@ -220,6 +221,7 @@ export function ReferralSettingsTab() {
       });
 
       await refreshReferralData();
+
       setToastType("success");
       setToastMessage(
         link.is_active ? "Ссылка деактивирована" : "Ссылка активирована"
@@ -477,8 +479,8 @@ export function ReferralSettingsTab() {
                               {togglingLinkId === link.id
                                 ? "Сохраняем..."
                                 : link.is_active
-                                  ? "Отключить"
-                                  : "Включить"}
+                                ? "Отключить"
+                                : "Включить"}
                             </button>
                           </div>
                         </div>

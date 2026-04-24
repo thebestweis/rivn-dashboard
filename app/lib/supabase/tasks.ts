@@ -19,7 +19,7 @@ export type TaskAssignee = {
 
 export type Task = {
   id: string;
-  project_id: string;
+  project_id: string | null;
   parent_task_id: string | null;
   title: string;
   description: string | null;
@@ -33,11 +33,12 @@ export type Task = {
 };
 
 export type CreateTaskInput = {
-  project_id: string;
+  project_id?: string | null;
   parent_task_id?: string | null;
   title: string;
   deadline_at?: string | null;
   assignee_ids?: string[];
+  description?: string | null;
 };
 
 export type UpdateTaskInput = {
@@ -52,7 +53,7 @@ type DbTaskRow = {
   id: string;
   user_id: string;
   workspace_id: string;
-  project_id: string;
+  project_id: string | null;
   parent_task_id: string | null;
   title: string;
   description: string | null;
@@ -389,7 +390,7 @@ export async function getTasksByProject(projectId: string): Promise<Task[]> {
   role: currentRole,
   membershipId: membership?.id ?? null,
   membershipRole: membership?.role ?? null,
-});
+  });
 }
 
 export async function createTask(input: CreateTaskInput): Promise<Task> {
@@ -397,14 +398,15 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
 
   const { supabase, workspace, user } = await getAppContext();
 
-  const { data, error } = await supabase
+   const { data, error } = await supabase
     .from("tasks")
     .insert({
       user_id: user.id,
       workspace_id: workspace.id,
-      project_id: input.project_id,
+      project_id: input.project_id ?? null,
       parent_task_id: input.parent_task_id ?? null,
       title: input.title,
+      description: input.description ?? null,
       deadline_at: input.deadline_at ?? null,
     })
     .select("*")
@@ -523,7 +525,7 @@ export async function updateTask(
 
 export async function createSubtask(
   parentTaskId: string,
-  projectId: string,
+  projectId: string | null,
   title: string
 ): Promise<Task> {
   await requireBillingAccess();
@@ -535,7 +537,7 @@ export async function createSubtask(
     .insert({
       user_id: user.id,
       workspace_id: workspace.id,
-      project_id: projectId,
+      project_id: projectId ?? null,
       parent_task_id: parentTaskId,
       title,
       status: "todo",

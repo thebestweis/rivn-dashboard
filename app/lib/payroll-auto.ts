@@ -33,21 +33,22 @@ function toDisplayDate(value: string | null | undefined) {
   return `${day}.${month}.${year}`;
 }
 
-function resolveAccrualAmount(params: {
+function resolveProjectAccrualAmount(params: {
   memberPayValue: string | null | undefined;
   defaultEmployeePay: string | null | undefined;
 }) {
-  const memberAmount = parseRubAmount(params.memberPayValue);
-  if (memberAmount > 0) {
-    return params.memberPayValue?.trim() || "₽5,000";
+  const memberPayValue = params.memberPayValue?.trim() || "";
+  const defaultEmployeePay = params.defaultEmployeePay?.trim() || "";
+
+  if (parseRubAmount(memberPayValue) > 0) {
+    return memberPayValue;
   }
 
-  const defaultAmount = parseRubAmount(params.defaultEmployeePay);
-  if (defaultAmount > 0) {
-    return params.defaultEmployeePay?.trim() || "₽5,000";
+  if (parseRubAmount(defaultEmployeePay) > 0) {
+    return defaultEmployeePay;
   }
 
-  return "₽5,000";
+  return "5000";
 }
 
 export async function syncPayrollAccrualFromPayment(
@@ -113,7 +114,7 @@ export async function syncPayrollAccrualFromPayment(
   const paymentDate =
     toDisplayDate(params.paidDate) || toDisplayDate(new Date().toISOString());
 
-  const accrualAmount = resolveAccrualAmount({
+  const resolvedAmount = resolveProjectAccrualAmount({
     memberPayValue: member.pay_value,
     defaultEmployeePay: systemSettings.default_employee_pay,
   });
@@ -126,7 +127,7 @@ export async function syncPayrollAccrualFromPayment(
     project: project.name ?? params.periodLabel ?? "Без проекта",
     projectId: project.id ?? params.projectId ?? null,
     paymentId: params.paymentId,
-    amount: accrualAmount,
+    amount: resolvedAmount,
     date: paymentDate,
     status: "accrued" as const,
   };

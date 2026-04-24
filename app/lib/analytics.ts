@@ -133,10 +133,28 @@ export function buildFinancialTimeSeries(params: {
   })
   .filter((date): date is Date => Boolean(date));
 
-  const monthStarts = getMonthStartsFromDates(
-    [...paymentDates, ...expenseDates, ...payrollDates],
-    6
-  );
+  const allDates = [...paymentDates, ...expenseDates, ...payrollDates]
+  .filter((date) => !Number.isNaN(date.getTime()))
+  .sort((a, b) => a.getTime() - b.getTime());
+
+const monthStarts =
+  allDates.length > 0
+    ? (() => {
+        const first = allDates[0];
+        const last = allDates[allDates.length - 1];
+
+        const months: Date[] = [];
+        const cursor = new Date(first.getFullYear(), first.getMonth(), 1);
+        const end = new Date(last.getFullYear(), last.getMonth(), 1);
+
+        while (cursor <= end) {
+          months.push(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
+          cursor.setMonth(cursor.getMonth() + 1);
+        }
+
+        return months;
+      })()
+    : getMonthStartsFromDates([], 6);
 
   const buckets: MonthlyBucket[] = monthStarts.map((date) => ({
     key: monthKey(date),

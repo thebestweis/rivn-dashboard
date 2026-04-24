@@ -40,6 +40,9 @@ export function ExpenseBreakdownDonut({
         <div>
         </div>
 
+        <span className="rounded-full bg-rose-500/15 px-3 py-1 text-xs text-rose-300">
+          Категории расходов
+        </span>
       </div>
 
       <div className="mt-2 grid gap-6 xl:grid-cols-[220px_1fr] xl:items-center">

@@ -839,15 +839,21 @@ export default function TasksPage() {
                                         {task.title}
                                       </div>
 
-                                      <Link
-  href={`/projects/${task.project_id}`}
-  onMouseEnter={() => prefetchProjectData(task.project_id)}
-  onFocus={() => prefetchProjectData(task.project_id)}
-  onClick={(event) => event.stopPropagation()}
-  className="mt-2 inline-block text-xs text-white/50 transition hover:text-white"
->
-  {projectsById[task.project_id]?.name ?? "Без проекта"}
-</Link>
+                                      {task.project_id ? (
+  <Link
+    href={`/projects/${task.project_id}`}
+    onMouseEnter={() => prefetchProjectData(task.project_id!)}
+    onFocus={() => prefetchProjectData(task.project_id!)}
+    onClick={(event) => event.stopPropagation()}
+    className="mt-2 inline-block text-xs text-white/50 transition hover:text-white"
+  >
+    {projectsById[task.project_id]?.name ?? "Без проекта"}
+  </Link>
+) : (
+  <div className="mt-2 inline-block text-xs text-white/35">
+    Без проекта
+  </div>
+)}
                                     </div>
 
                                     {canManageTasksWithBilling ? (

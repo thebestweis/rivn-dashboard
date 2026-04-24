@@ -177,9 +177,10 @@ function getMemberNameById(
 }
 
 export default function PayrollPage() {
-    const queryClient = useQueryClient();
+  const queryClient = useQueryClient();
+
   const { role, isLoading: isAppContextLoading } = useAppContextState();
-const { isLoading: isAccessLoading, hasAccess } = usePageAccess("payroll");
+  const { isLoading: isAccessLoading, hasAccess } = usePageAccess("payroll");
 
 const currentRole: AppRole | null = isAppRole(role) ? role : null;
 const canManagePayroll = currentRole ? canManageFinance(currentRole) : false;
@@ -566,6 +567,18 @@ setSystemSettings(settingsData);
       }, 0);
   }, [extraPayments, selectedPeriod]);
 
+    async function invalidatePayrollQueries() {
+    await queryClient.invalidateQueries({
+      predicate: (query) =>
+        Array.isArray(query.queryKey) &&
+        query.queryKey.some(
+          (part) =>
+            typeof part === "string" &&
+            part.toLowerCase().includes("payroll")
+        ),
+    });
+  }
+
   const pendingEmployeePayouts = useMemo(() => {
   const currentMonthLabel = getMonthLabelFromDate(getTodayDisplayDate());
 
@@ -582,16 +595,6 @@ setSystemSettings(settingsData);
       payType: WorkspaceMemberItem["pay_type"];
     }
   >();
-
-    async function invalidatePayrollQueries() {
-    await queryClient.invalidateQueries({
-      predicate: (query) =>
-        Array.isArray(query.queryKey) &&
-        query.queryKey.some(
-          (part) => typeof part === "string" && part.toLowerCase().includes("payroll")
-        ),
-    });
-  }
 
   const activeMembers = members.filter(isActivePayrollMember);
 
@@ -787,6 +790,7 @@ setSystemSettings(settingsData);
       });
 
       await reloadPayrollData();
+      await invalidatePayrollQueries();
 
       handleCloseEditAccrual();
       setToastType("success");
@@ -826,6 +830,7 @@ setSystemSettings(settingsData);
       }
 
       await reloadPayrollData();
+      await invalidatePayrollQueries();
 
       setToastType("success");
       setToastMessage("Начисление удалено");
@@ -886,6 +891,7 @@ setSystemSettings(settingsData);
       });
 
       await reloadPayrollData();
+      await invalidatePayrollQueries();
 
       setToastType("success");
       setToastMessage("Начисление выплачено и перенесено во внеплановые");
@@ -973,6 +979,7 @@ setSystemSettings(settingsData);
       }
 
       await reloadPayrollData();
+      await invalidatePayrollQueries();
 
       setActiveTab("payouts");
       setToastType("success");
@@ -1064,6 +1071,7 @@ setSystemSettings(settingsData);
       }
 
       await reloadPayrollData();
+      await invalidatePayrollQueries();
 
       setActiveTab("payouts");
       setToastType("success");
@@ -1125,6 +1133,7 @@ setSystemSettings(settingsData);
       });
 
       await reloadPayrollData();
+      await invalidatePayrollQueries();
 
       handleCloseEditPayout();
       setToastType("success");
@@ -1164,6 +1173,7 @@ setSystemSettings(settingsData);
       }
 
       await reloadPayrollData();
+      await invalidatePayrollQueries();
 
       setToastType("success");
       setToastMessage("Выплата удалена");
@@ -1221,6 +1231,7 @@ setSystemSettings(settingsData);
       });
 
       await reloadPayrollData();
+      await invalidatePayrollQueries();
 
       handleCloseEditExtra();
       setToastType("success");
@@ -1260,6 +1271,7 @@ setSystemSettings(settingsData);
       }
 
       await reloadPayrollData();
+      await invalidatePayrollQueries();
 
       setToastType("success");
       setToastMessage("Внеплановая выплата удалена");
@@ -1328,6 +1340,7 @@ setSystemSettings(settingsData);
         });
 
         await reloadPayrollData();
+        await invalidatePayrollQueries();
         handleCloseCreatePayout();
         setActiveTab("accruals");
         setToastType("success");
@@ -1363,6 +1376,7 @@ setSystemSettings(settingsData);
       }
 
       await reloadPayrollData();
+      await invalidatePayrollQueries();
       handleCloseCreatePayout();
       setActiveTab("payouts");
       setToastType("success");
@@ -1386,6 +1400,7 @@ setSystemSettings(settingsData);
     });
 
     await reloadPayrollData();
+    await invalidatePayrollQueries();
     handleCloseCreatePayout();
     setActiveTab("extra");
     setToastType("success");
@@ -1455,6 +1470,7 @@ async function handleAccrueSalaries() {
       setToastType("info");
       setToastMessage("Окладные начисления за этот месяц уже созданы");
       await reloadPayrollData();
+      await invalidatePayrollQueries();
       return;
     }
 
@@ -1492,6 +1508,7 @@ async function handleAccrueSalaries() {
     }
 
     await reloadPayrollData();
+    await invalidatePayrollQueries();
 
     setActiveTab("accruals");
     setToastType("success");

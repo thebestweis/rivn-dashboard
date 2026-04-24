@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../query-keys";
 import { fetchClientsFromSupabase } from "../supabase/clients";
-import { fetchEmployeesFromSupabase } from "../supabase/employees";
 import { getPaymentsFromSupabase } from "../supabase/payments";
 import { getProjects } from "../supabase/projects";
 import { useAppContextState } from "../../providers/app-context-provider";
@@ -37,17 +36,6 @@ export function usePaymentProjectsQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.projectsByWorkspace(workspaceId),
     queryFn: getProjects,
-    enabled: enabled && Boolean(workspaceId),
-  });
-}
-
-export function usePaymentEmployeesQuery(enabled = true) {
-  const { workspace } = useAppContextState();
-  const workspaceId = workspace?.id ?? "";
-
-  return useQuery({
-    queryKey: queryKeys.employeesByWorkspace(workspaceId),
-    queryFn: fetchEmployeesFromSupabase,
     enabled: enabled && Boolean(workspaceId),
   });
 }

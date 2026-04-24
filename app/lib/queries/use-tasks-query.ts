@@ -30,10 +30,12 @@ export function useCreateTaskMutation() {
         ...prev,
       ]);
 
-      queryClient.setQueryData<Task[]>(
-        queryKeys.projectTasks(createdTask.project_id),
-        (prev = []) => [createdTask, ...prev]
-      );
+      if (createdTask.project_id) {
+        queryClient.setQueryData<Task[]>(
+          queryKeys.projectTasks(createdTask.project_id),
+          (prev = []) => [createdTask, ...prev]
+        );
+      }
     },
   });
 }
@@ -88,20 +90,22 @@ export function syncTaskAcrossCaches(
     );
   });
 
-  queryClient.setQueryData<Task[]>(
-    queryKeys.projectTasks(updatedTask.project_id),
-    (prev = []) => {
-      const exists = prev.some((task) => task.id === updatedTask.id);
+  if (updatedTask.project_id) {
+    queryClient.setQueryData<Task[]>(
+      queryKeys.projectTasks(updatedTask.project_id),
+      (prev = []) => {
+        const exists = prev.some((task) => task.id === updatedTask.id);
 
-      if (!exists) {
-        return [updatedTask, ...prev];
+        if (!exists) {
+          return [updatedTask, ...prev];
+        }
+
+        return prev.map((task) =>
+          task.id === updatedTask.id ? updatedTask : task
+        );
       }
-
-      return prev.map((task) =>
-        task.id === updatedTask.id ? updatedTask : task
-      );
-    }
-  );
+    );
+  }
 }
 
 export function patchTaskStatusInCaches(
@@ -121,5 +125,11 @@ export function patchTaskStatusInCaches(
     );
 
   queryClient.setQueryData<Task[]>(queryKeys.tasks, patch);
-  queryClient.setQueryData<Task[]>(queryKeys.projectTasks(task.project_id), patch);
+
+  if (task.project_id) {
+    queryClient.setQueryData<Task[]>(
+      queryKeys.projectTasks(task.project_id),
+      patch
+    );
+  }
 }

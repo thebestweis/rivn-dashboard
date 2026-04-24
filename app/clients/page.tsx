@@ -129,7 +129,7 @@ export default function ClientsPage() {
     setToastMessage(
       employeesError instanceof Error
         ? employeesError.message
-        : "Не удалось загрузить сотрудников"
+        : "Не удалось загрузить пользователей"
     );
   }, [employeesError]);
 

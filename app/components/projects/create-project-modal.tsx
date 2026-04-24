@@ -10,7 +10,7 @@ type ClientOption = {
   name: string;
 };
 
-type EmployeeOption = {
+type MemberOption = {
   id: string;
   name: string;
 };
@@ -44,7 +44,7 @@ type CreateProjectModalFormState = {
 type CreateProjectModalProps = {
   isOpen: boolean;
   clients: ClientOption[];
-  employees: EmployeeOption[];
+  employees: MemberOption[];
   isSubmitting: boolean;
   mode?: "create" | "edit";
   initialProject?: Project | null;
@@ -203,11 +203,11 @@ export function CreateProjectModal({
     label: client.name,
   }));
 
-  const employeeOptions = [
+  const memberOptions = [
     { value: "", label: "Не выбран" },
-    ...employees.map((employee) => ({
-      value: employee.id,
-      label: employee.name,
+    ...employees.map((member) => ({
+      value: member.id,
+      label: member.name,
     })),
   ];
 
@@ -268,13 +268,13 @@ export function CreateProjectModal({
 
             <label className="block">
               <div className="mb-2 text-sm text-white/65">
-                Ответственный сотрудник
+                Ответственный пользователь
               </div>
               <CustomSelect
                 value={form.employee_id}
                 onChange={(value) => updateField("employee_id", value)}
-                options={employeeOptions}
-                placeholder="Выбери сотрудника"
+                options={memberOptions}
+                placeholder="Выбери пользователя"
                 className="w-full"
               />
             </label>

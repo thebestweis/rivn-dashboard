@@ -144,7 +144,11 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
         continue;
       }
 
-      counts[task.project_id] = (counts[task.project_id] ?? 0) + 1;
+      if (!task.project_id) {
+  return;
+}
+
+counts[task.project_id] = (counts[task.project_id] ?? 0) + 1;
     }
 
     return counts;
@@ -419,7 +423,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
                     clientName={clientNamesById[project.client_id] ?? "Без клиента"}
                     status={project.status}
                     startDate={project.start_date}
-                    activeTasksCount={activeTaskCountByProjectId[project.id] ?? 0}
+                    activeTasksCount={activeTaskCountByProjectId?.[project.id] ?? 0}
                     onDelete={handleDeleteProject}
                     onEdit={handleStartEdit}
                     isDeleting={deletingProjectId === project.id}

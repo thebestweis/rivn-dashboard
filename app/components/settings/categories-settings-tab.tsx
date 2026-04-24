@@ -11,6 +11,8 @@ export function CategoriesSettingsTab() {
     <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
       <div className="flex items-center justify-between">
         <div>
+          <div className="text-sm text-white/50">Expense categories</div>
+          <h2 className="mt-1 text-xl font-semibold">Категории расходов</h2>
         </div>
 
         <button className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80">

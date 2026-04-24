@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ensureSystemSettings,
   updateSystemSettings,
 } from "../../lib/supabase/system-settings";
 import { AppToast } from "../ui/app-toast";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-
-const systemSettingsQueryKey = ["system-settings"] as const;
+import { queryKeys } from "../../lib/query-keys";
 
 export function SystemSettingsTab() {
   const queryClient = useQueryClient();
@@ -19,22 +18,16 @@ export function SystemSettingsTab() {
   const [defaultEmployeePay, setDefaultEmployeePay] = useState("₽5,000");
 
   const [isSaving, setIsSaving] = useState(false);
-  const [hasLocalChanges, setHasLocalChanges] = useState(false);
 
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
     "success"
   );
 
-  const {
-    data: settings,
-    isLoading,
-    isFetching,
-  } = useQuery({
-    queryKey: systemSettingsQueryKey,
+  const { data: settings, isLoading } = useQuery({
+    queryKey: queryKeys.systemSettings,
     queryFn: ensureSystemSettings,
-    staleTime: 1000 * 60 * 10,
-    refetchOnWindowFocus: false,
+    staleTime: 1000 * 60 * 5,
   });
 
   useEffect(() => {
@@ -44,7 +37,6 @@ export function SystemSettingsTab() {
     setCurrency(settings.currency);
     setPayrollDay(String(settings.payroll_day));
     setDefaultEmployeePay(settings.default_employee_pay);
-    setHasLocalChanges(false);
   }, [settings]);
 
   useEffect(() => {
@@ -57,37 +49,44 @@ export function SystemSettingsTab() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
+  async function refreshSystemSettings() {
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.systemSettings,
+    });
+  }
+
   async function handleSave() {
     try {
       setIsSaving(true);
 
-      const updated = await updateSystemSettings({
+      await updateSystemSettings({
         tax_rate: Number(taxRate || 0),
         currency,
         payroll_day: Number(payrollDay || 1),
         default_employee_pay: defaultEmployeePay.trim() || "₽5,000",
       });
 
-      queryClient.setQueryData(systemSettingsQueryKey, updated);
-      setHasLocalChanges(false);
+      await refreshSystemSettings();
 
       setToastType("success");
       setToastMessage("Системные настройки сохранены");
     } catch (error) {
       console.error(error);
       setToastType("error");
-      setToastMessage("Не удалось сохранить системные настройки");
+      setToastMessage(
+        error instanceof Error
+          ? error.message
+          : "Не удалось сохранить системные настройки"
+      );
     } finally {
       setIsSaving(false);
     }
   }
 
-  const isBusy = isLoading || isSaving;
-
   return (
     <>
       <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm text-white/50">Система</div>
             <h2 className="mt-1 text-xl font-semibold">Системные параметры</h2>
@@ -95,14 +94,12 @@ export function SystemSettingsTab() {
               Налог, валюта, день выплаты зарплаты и базовые параметры системы.
             </div>
           </div>
-
-          {isFetching && !isLoading ? (
-            <div className="text-xs text-white/35">Обновляем данные...</div>
-          ) : null}
         </div>
 
         {isLoading ? (
-          <div className="mt-6 text-sm text-white/45">Загрузка настроек...</div>
+          <div className="mt-6 text-sm text-white/45">
+            Загрузка настроек...
+          </div>
         ) : (
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div>
@@ -114,22 +111,18 @@ export function SystemSettingsTab() {
                 step="0.1"
                 min="0"
                 value={taxRate}
-                onChange={(e) => {
-                  setTaxRate(e.target.value);
-                  setHasLocalChanges(true);
-                }}
+                onChange={(e) => setTaxRate(e.target.value)}
                 className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm text-white/55">Валюта</label>
+              <label className="mb-2 block text-sm text-white/55">
+                Валюта
+              </label>
               <select
                 value={currency}
-                onChange={(e) => {
-                  setCurrency(e.target.value);
-                  setHasLocalChanges(true);
-                }}
+                onChange={(e) => setCurrency(e.target.value)}
                 className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
               >
                 <option value="RUB">RUB</option>
@@ -147,10 +140,7 @@ export function SystemSettingsTab() {
                 min="1"
                 max="31"
                 value={payrollDay}
-                onChange={(e) => {
-                  setPayrollDay(e.target.value);
-                  setHasLocalChanges(true);
-                }}
+                onChange={(e) => setPayrollDay(e.target.value)}
                 className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
               />
             </div>
@@ -162,10 +152,7 @@ export function SystemSettingsTab() {
               <input
                 type="text"
                 value={defaultEmployeePay}
-                onChange={(e) => {
-                  setDefaultEmployeePay(e.target.value);
-                  setHasLocalChanges(true);
-                }}
+                onChange={(e) => setDefaultEmployeePay(e.target.value)}
                 className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
               />
             </div>
@@ -176,7 +163,7 @@ export function SystemSettingsTab() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={isBusy || !hasLocalChanges}
+            disabled={isLoading || isSaving}
             className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:opacity-60"
           >
             {isSaving ? "Сохраняем..." : "Сохранить настройки"}
@@ -184,7 +171,9 @@ export function SystemSettingsTab() {
         </div>
       </div>
 
-      {toastMessage ? <AppToast message={toastMessage} type={toastType} /> : null}
+      {toastMessage ? (
+        <AppToast message={toastMessage} type={toastType} />
+      ) : null}
     </>
   );
 }

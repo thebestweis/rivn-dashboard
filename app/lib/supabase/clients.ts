@@ -152,6 +152,8 @@ export async function updateClientInSupabase(
 }
 
 export async function deleteClientInSupabase(id: string): Promise<void> {
+  await requireBillingAccess();
+
   const { supabase, workspace } = await getAppContext();
 
   const { error } = await supabase
