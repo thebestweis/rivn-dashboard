@@ -4,6 +4,8 @@ import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 
+import { verifyCronSecret } from "../verify-cron-secret";
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -13,6 +15,8 @@ type AvitoAccount = {
   name: string;
   access_token: string | null;
   avito_user_id: string | null;
+  avito_client_id: string | null;
+  avito_client_secret: string | null;
 };
 
 type AvitoStatPoint = {
@@ -317,15 +321,21 @@ function buildWeeklyReport(params: {
   ].join("\n");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!verifyCronSecret(request)) {
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
   try {
     const supabase = getSupabase();
 
     const { data: clients, error: clientsError } = await supabase
       .from("avito_report_clients")
       .select("id, name, telegram_chat_id")
-      .eq("is_active", true)
-      .not("telegram_chat_id", "is", null);
+      .eq("weekly_reports_enabled", true)
 
     if (clientsError) {
       return NextResponse.json(
@@ -399,7 +409,7 @@ export async function GET() {
 
         const { data: accounts, error: accountsError } = await supabase
           .from("avito_report_accounts")
-          .select("id, name, access_token, avito_user_id")
+          .select("id, name, access_token, avito_user_id, avito_client_id, avito_client_secret")
           .eq("client_id", client.id)
           .eq("is_active", true);
 
@@ -449,7 +459,12 @@ export async function GET() {
             continue;
           }
 
-          const accessToken = account.access_token || (await getAvitoAccessToken());
+          const accessToken =
+  account.access_token ||
+  (await getAvitoAccessToken({
+    clientId: account.avito_client_id,
+    clientSecret: account.avito_client_secret,
+  }));
           const itemIds = await getAllItemIds(accessToken);
 
           const currentStatsRaw = await getStatsForPeriod({

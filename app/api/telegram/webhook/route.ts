@@ -47,6 +47,51 @@ async function sendTelegramMessage(chatId: string | number, text: string) {
   });
 }
 
+async function saveTelegramChatFromUpdate(update: any) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) return;
+
+  const message =
+    update.message ||
+    update.edited_message ||
+    update.channel_post ||
+    update.my_chat_member;
+
+  const chat = message?.chat;
+  const from = message?.from;
+
+  if (!chat?.id) return;
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const { error } = await supabase.from("telegram_bot_chats").upsert(
+    {
+      chat_id: String(chat.id),
+      title:
+        chat.title ||
+        [chat.first_name, chat.last_name].filter(Boolean).join(" ") ||
+        [from?.first_name, from?.last_name].filter(Boolean).join(" ") ||
+        chat.username ||
+        from?.username ||
+        "Без названия",
+      username: chat.username || from?.username || null,
+      type: chat.type || null,
+      last_message_text: message?.text || null,
+      last_seen_at: new Date().toISOString(),
+      raw: update,
+    },
+    {
+      onConflict: "chat_id",
+    }
+  );
+
+  if (error) {
+    console.error("Ошибка сохранения telegram_bot_chats:", error);
+  }
+}
+
 async function isChatAdmin(chatId: number, userId: number) {
   if (!telegramToken) {
     return false;
@@ -66,6 +111,7 @@ async function isChatAdmin(chatId: number, userId: number) {
 export async function POST(req: Request) {
   try {
     const update = (await req.json()) as TelegramUpdate;
+    await saveTelegramChatFromUpdate(update);
 
     const message = update.message;
     const text = message?.text?.trim();

@@ -23,6 +23,7 @@ const navItems: Array<{ label: string; href: string; section: AppSection }> = [
   { label: "Зарплаты", href: "/payroll", section: "payroll" },
   { label: "Расходы", href: "/expenses", section: "expenses" },
   { label: "Аналитика", href: "/analytics", section: "analytics" },
+    { label: "Авито отчёты", href: "/avito-reports", section: "analytics" },
   { label: "Тарифы", href: "/billing", section: "billing" },
   { label: "Настройки", href: "/settings", section: "settings" },
 ];

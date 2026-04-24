@@ -4,23 +4,33 @@ type AvitoTokenResponse = {
   token_type: string;
 };
 
-let cachedToken: {
-  accessToken: string;
-  expiresAt: number;
-} | null = null;
+const cachedTokens = new Map<
+  string,
+  {
+    accessToken: string;
+    expiresAt: number;
+  }
+>();
 
-export async function getAvitoAccessToken() {
+type GetAvitoAccessTokenParams = {
+  clientId?: string | null;
+  clientSecret?: string | null;
+};
+
+export async function getAvitoAccessToken(params: GetAvitoAccessTokenParams = {}) {
+  const clientId = params.clientId || process.env.AVITO_CLIENT_ID;
+  const clientSecret = params.clientSecret || process.env.AVITO_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Не найдены Avito client_id/client_secret");
+  }
+
+  const cacheKey = clientId;
   const now = Date.now();
+  const cachedToken = cachedTokens.get(cacheKey);
 
   if (cachedToken && cachedToken.expiresAt > now + 60_000) {
     return cachedToken.accessToken;
-  }
-
-  const clientId = process.env.AVITO_CLIENT_ID;
-  const clientSecret = process.env.AVITO_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error("Не найдены AVITO_CLIENT_ID или AVITO_CLIENT_SECRET");
   }
 
   const response = await fetch("https://api.avito.ru/token", {
@@ -43,10 +53,10 @@ export async function getAvitoAccessToken() {
     throw new Error(`Ошибка получения Avito токена: ${JSON.stringify(data)}`);
   }
 
-  cachedToken = {
+  cachedTokens.set(cacheKey, {
     accessToken: data.access_token,
     expiresAt: now + data.expires_in * 1000,
-  };
+  });
 
   return data.access_token;
 }

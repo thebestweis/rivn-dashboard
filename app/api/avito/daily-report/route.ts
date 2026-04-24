@@ -3,6 +3,10 @@ import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 
+import { verifyCronSecret } from "../../cron/verify-cron-secret";
+
+import { saveAvitoReportMetric } from "@/app/api/avito/save-avito-report-metric";
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -12,6 +16,8 @@ type AvitoAccount = {
   name: string;
   access_token: string | null;
   avito_user_id: string | null;
+  avito_client_id: string | null;
+  avito_client_secret: string | null;
 };
 
 type AvitoStatPoint = {
@@ -75,6 +81,8 @@ function getSupabase() {
 
   return createClient(supabaseUrl, supabaseKey);
 }
+
+
 
 function getMoscowDate(daysAgo: number) {
   const now = new Date();
@@ -346,7 +354,11 @@ function buildDailyReport(params: {
   ].join("\n");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!verifyCronSecret(request)) {
+    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const supabase = getSupabase();
 
@@ -354,7 +366,8 @@ export async function GET() {
       .from("avito_report_clients")
       .select("id, name, telegram_chat_id")
       .eq("is_active", true)
-      .not("telegram_chat_id", "is", null);
+.eq("daily_reports_enabled", true)
+.not("telegram_chat_id", "is", null);
 
     if (clientsError) {
       return Response.json(
@@ -413,7 +426,7 @@ export async function GET() {
 
         const { data: accounts, error: accountsError } = await supabase
           .from("avito_report_accounts")
-          .select("id, name, access_token, avito_user_id")
+          .select("id, name, access_token, avito_user_id, avito_client_id, avito_client_secret")
           .eq("client_id", client.id)
           .eq("is_active", true);
 
@@ -463,7 +476,12 @@ export async function GET() {
             continue;
           }
 
-          const accessToken = account.access_token || (await getAvitoAccessToken());
+          const accessToken =
+  account.access_token ||
+  (await getAvitoAccessToken({
+    clientId: account.avito_client_id,
+    clientSecret: account.avito_client_secret,
+  }));
           const itemIds = await getAllItemIds(accessToken);
 
           const currentStatsRaw = await getStatsForPeriod({
@@ -520,6 +538,26 @@ export async function GET() {
           totalPreviousRaw.favorites += previousStats.favorites;
           totalPreviousRaw.expenses += previousStats.expenses;
 
+          await saveAvitoReportMetric({
+  clientId: client.id,
+  accountId: account.id,
+  reportType: "daily",
+  periodStart: yesterday,
+  periodEnd: yesterday,
+  views: currentStats.views,
+  contacts: currentStats.contacts,
+  favorites: currentStats.favorites,
+  expenses: currentStats.expenses,
+  conversion: currentStats.conversion,
+  costPerContact: currentStats.costPerContact,
+  raw: {
+    accountName: account.name,
+    previous: previousStats,
+    currentAvitoSpendings,
+    previousAvitoSpendings,
+  },
+});
+
           accountBlocks.push(
             buildAccountBlock({
               accountName: account.name,
@@ -531,6 +569,24 @@ export async function GET() {
 
         const totalCurrent = buildStats(totalCurrentRaw);
         const totalPrevious = buildStats(totalPreviousRaw);
+
+        await saveAvitoReportMetric({
+  clientId: client.id,
+  accountId: null,
+  reportType: "daily",
+  periodStart: yesterday,
+  periodEnd: yesterday,
+  views: totalCurrent.views,
+  contacts: totalCurrent.contacts,
+  favorites: totalCurrent.favorites,
+  expenses: totalCurrent.expenses,
+  conversion: totalCurrent.conversion,
+  costPerContact: totalCurrent.costPerContact,
+  raw: {
+    type: "client_total",
+    previous: totalPrevious,
+  },
+});
 
         const reportText = buildDailyReport({
           date: yesterday,

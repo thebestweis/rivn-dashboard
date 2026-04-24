@@ -1,12 +1,19 @@
 import { sendCronErrorNotification } from "../send-cron-error-notification";
+import { verifyCronSecret } from "../verify-cron-secret";
 
 export async function GET(request: Request) {
+  if (!verifyCronSecret(request)) {
+    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const baseUrl = new URL(request.url).origin;
+    const secret = process.env.CRON_SECRET;
 
-    const response = await fetch(`${baseUrl}/api/cron/weekly-report?t=cron`, {
-      cache: "no-store",
-    });
+    const response = await fetch(
+      `${baseUrl}/api/cron/weekly-report?t=cron&secret=${secret}`,
+      { cache: "no-store" }
+    );
 
     const data = await response.json().catch(() => null);
 
@@ -29,10 +36,7 @@ export async function GET(request: Request) {
     });
 
     return Response.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Ошибка",
-      },
+      { ok: false, error: error instanceof Error ? error.message : "Ошибка" },
       { status: 500 }
     );
   }
