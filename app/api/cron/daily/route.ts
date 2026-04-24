@@ -1,18 +1,23 @@
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // 👉 Avito daily report
-try {
-  await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/avito/daily-report`);
-} catch (e) {
-  console.error("Avito daily report error:", e);
-}
-    const url = `${process.env.NEXT_PUBLIC_BASE_URL}/api/avito/daily-report?t=cron`;
+    const baseUrl = new URL(request.url).origin;
 
-    await fetch(url);
+    const response = await fetch(`${baseUrl}/api/avito/daily-report?t=cron`, {
+      cache: "no-store",
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(
+        `Avito daily report failed: ${response.status} ${JSON.stringify(data)}`
+      );
+    }
 
     return Response.json({
       ok: true,
       message: "Daily cron выполнен",
+      avitoDailyReport: data,
     });
   } catch (error) {
     return Response.json(

@@ -1,18 +1,23 @@
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // 👉 Avito weekly report
-try {
-  await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/cron/weekly-report`);
-} catch (e) {
-  console.error("Avito weekly report error:", e);
-}
-    const url = `${process.env.NEXT_PUBLIC_BASE_URL}/api/avito/weekly-report?t=cron`;
+    const baseUrl = new URL(request.url).origin;
 
-    await fetch(url);
+    const response = await fetch(`${baseUrl}/api/cron/weekly-report?t=cron`, {
+      cache: "no-store",
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(
+        `Avito weekly report failed: ${response.status} ${JSON.stringify(data)}`
+      );
+    }
 
     return Response.json({
       ok: true,
       message: "Weekly cron выполнен",
+      avitoWeeklyReport: data,
     });
   } catch (error) {
     return Response.json(
