@@ -87,6 +87,30 @@ function formatPercent(value: number) {
   return `${Number(value || 0).toFixed(2).replace(".", ",")}%`;
 }
 
+function getCurrentMonthRange() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const from = new Date(year, month, 1);
+  const to = new Date(year, month + 1, 0);
+
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10),
+  };
+}
+
+function getLastDaysRange(days: number) {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(to.getDate() - (days - 1));
+
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10),
+  };
+}
+
 function FieldHint({ children }: { children: React.ReactNode }) {
   return <div className="mt-2 text-xs leading-5 text-white/35">{children}</div>;
 }
@@ -122,6 +146,9 @@ const [telegramChats, setTelegramChats] = useState<TelegramChat[]>([]);
 const [isLoadingChats, setIsLoadingChats] = useState(false);
 const [integrationMessage, setIntegrationMessage] = useState("");
 const [updatingIntegrationId, setUpdatingIntegrationId] = useState("");
+const [selectedAnalyticsClientId, setSelectedAnalyticsClientId] = useState("");
+const [metricsMessage, setMetricsMessage] = useState("");
+const [metricsPeriod, setMetricsPeriod] = useState(() => getCurrentMonthRange());
 
   const { workspace } = useAppContextState();
 
@@ -131,24 +158,22 @@ const [updatingIntegrationId, setUpdatingIntegrationId] = useState("");
         if (!workspace?.id) {
   return;
 }
-        const [metricsResult, integrationsResponse] = await Promise.all([
-          getAvitoMetrics({
-            clientId: "c72e0d95-b777-47d4-9e60-2dd39865e519",
-            from: "2026-04-01",
-            to: "2026-04-30",
-          }),
-          fetch(`/api/avito/integrations?workspaceId=${workspace?.id ?? ""}`, {
+        const integrationsResponse = await fetch(`/api/avito/integrations?workspaceId=${workspace?.id ?? ""}`, {
   cache: "no-store",
-}),
-        ]);
+});
 
         const integrationsData = await integrationsResponse.json();
-
-        setData(metricsResult as AvitoMetric[]);
 
         if (integrationsData.ok) {
           setProjects(integrationsData.projects ?? []);
 setIntegrations(integrationsData.integrations ?? []);
+          setSelectedAnalyticsClientId((current) => {
+            if (current) {
+              return current;
+            }
+
+            return integrationsData.integrations?.[0]?.id ?? "";
+          });
         }
       } finally {
         setIsLoading(false);
@@ -158,7 +183,44 @@ setIntegrations(integrationsData.integrations ?? []);
     load();
   }, [workspace?.id]);
 
+  useEffect(() => {
+    async function loadMetrics() {
+      if (!workspace?.id || !selectedAnalyticsClientId) {
+        setData([]);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setMetricsMessage("");
+
+        const metricsResult = await getAvitoMetrics({
+          clientId: selectedAnalyticsClientId,
+          workspaceId: workspace.id,
+          from: metricsPeriod.from,
+          to: metricsPeriod.to,
+        });
+
+        setData(metricsResult as AvitoMetric[]);
+      } catch (error) {
+        setData([]);
+        setMetricsMessage(
+          error instanceof Error
+            ? error.message
+            : "Не удалось загрузить метрики Avito"
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadMetrics();
+  }, [metricsPeriod.from, metricsPeriod.to, selectedAnalyticsClientId, workspace?.id]);
+
   const selectedProject = projects.find((project) => project.id === projectId);
+  const selectedAnalyticsIntegration = integrations.find(
+    (integration) => integration.id === selectedAnalyticsClientId
+  );
 
   const totals = useMemo(() => {
     const views = data.reduce((sum, item) => sum + Number(item.views || 0), 0);
@@ -903,6 +965,109 @@ setIntegrations(integrationsData.integrations ?? []);
     )}
   </div>
 </div>
+
+        <div className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Аналитика проекта</h2>
+              <div className="mt-1 text-sm text-white/45">
+                Выбери подключённый Avito-проект и период, чтобы посмотреть сохранённые метрики.
+              </div>
+            </div>
+
+            <div className="w-full lg:w-[360px]">
+              <label className="text-sm text-white/60">Проект для аналитики</label>
+              <select
+                value={selectedAnalyticsClientId}
+                onChange={(event) => setSelectedAnalyticsClientId(event.target.value)}
+                className="mt-2 h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+              >
+                <option value="">Выбери проект</option>
+                {integrations.map((integration) => (
+                  <option key={integration.id} value={integration.id}>
+                    {integration.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+            <div>
+              <label className="text-sm text-white/60">С даты</label>
+              <input
+                type="date"
+                value={metricsPeriod.from}
+                onChange={(event) =>
+                  setMetricsPeriod((current) => ({
+                    ...current,
+                    from: event.target.value,
+                  }))
+                }
+                className="mt-2 h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-white/60">По дату</label>
+              <input
+                type="date"
+                value={metricsPeriod.to}
+                onChange={(event) =>
+                  setMetricsPeriod((current) => ({
+                    ...current,
+                    to: event.target.value,
+                  }))
+                }
+                className="mt-2 h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2">
+              <button
+                type="button"
+                onClick={() => setMetricsPeriod(getLastDaysRange(7))}
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/70 transition hover:bg-white/[0.07]"
+              >
+                7 дней
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetricsPeriod(getLastDaysRange(30))}
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/70 transition hover:bg-white/[0.07]"
+              >
+                30 дней
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetricsPeriod(getCurrentMonthRange())}
+                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/70 transition hover:bg-white/[0.07]"
+              >
+                Месяц
+              </button>
+            </div>
+          </div>
+
+          {selectedAnalyticsIntegration ? (
+            <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/60">
+                {selectedAnalyticsIntegration.is_active ? "Проект активен" : "Проект выключен"}
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/60">
+                Daily {selectedAnalyticsIntegration.daily_reports_enabled ? "вкл" : "выкл"}
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/60">
+                Weekly {selectedAnalyticsIntegration.weekly_reports_enabled ? "вкл" : "выкл"}
+              </span>
+            </div>
+          ) : null}
+
+          {metricsMessage ? (
+            <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+              {metricsMessage}
+            </div>
+          ) : null}
+        </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-[24px] border border-white/10 bg-[#121826] p-5">
