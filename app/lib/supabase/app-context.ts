@@ -9,7 +9,18 @@ export type AppContext = {
   isSuperAdmin: boolean;
 };
 
-export async function getAppContext(): Promise<AppContext> {
+const APP_CONTEXT_MEMORY_TTL_MS = 2000;
+
+let cachedAppContext:
+  | {
+      value: AppContext;
+      expiresAt: number;
+    }
+  | null = null;
+
+let pendingAppContext: Promise<AppContext> | null = null;
+
+async function loadAppContext(): Promise<AppContext> {
   const supabase = createClient();
 
   const {
@@ -135,4 +146,29 @@ export async function getAppContext(): Promise<AppContext> {
     membership: fallbackMembership,
     isSuperAdmin: profile.platform_role === "super_admin",
   };
+}
+
+export async function getAppContext(): Promise<AppContext> {
+  if (cachedAppContext && cachedAppContext.expiresAt > Date.now()) {
+    return cachedAppContext.value;
+  }
+
+  if (pendingAppContext) {
+    return pendingAppContext;
+  }
+
+  pendingAppContext = loadAppContext()
+    .then((context) => {
+      cachedAppContext = {
+        value: context,
+        expiresAt: Date.now() + APP_CONTEXT_MEMORY_TTL_MS,
+      };
+
+      return context;
+    })
+    .finally(() => {
+      pendingAppContext = null;
+    });
+
+  return pendingAppContext;
 }

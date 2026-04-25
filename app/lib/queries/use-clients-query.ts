@@ -20,8 +20,8 @@ import {
 import type { StoredClient, StoredEmployee } from "../storage";
 import { useAppContextState } from "../../providers/app-context-provider";
 
-const STALE_TIME = 1000 * 60 * 5;
-const GC_TIME = 1000 * 60 * 30;
+const STALE_TIME = 1000 * 60 * 10;
+const GC_TIME = 1000 * 60 * 60;
 
 function mapWorkspaceMemberToStoredEmployee(
   member: WorkspaceMemberItem

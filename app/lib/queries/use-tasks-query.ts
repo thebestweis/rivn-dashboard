@@ -4,18 +4,48 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../query-keys";
 import {
   createTask,
+  getActiveRootTaskCountsByProject,
   getAllTasks,
   updateTaskDeadline,
+  updateTaskPositions,
   updateTaskStatus,
   type Task,
   type TaskStatus,
+  type ActiveTaskCountByProject,
 } from "../supabase/tasks";
+import { useAppContextState } from "../../providers/app-context-provider";
+
+const STALE_TIME = 1000 * 60 * 5;
+const GC_TIME = 1000 * 60 * 30;
 
 export function useTasksQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.tasks,
     queryFn: getAllTasks,
     enabled,
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
+    placeholderData: (previousData) => previousData,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
+}
+
+export function useActiveTaskCountsByProjectQuery(enabled = true) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useQuery<ActiveTaskCountByProject[]>({
+    queryKey: queryKeys.activeTaskCountsByProject(workspaceId),
+    queryFn: getActiveRootTaskCountsByProject,
+    enabled: enabled && Boolean(workspaceId),
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
+    placeholderData: (previousData) => previousData,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 }
 
@@ -132,4 +162,48 @@ export function patchTaskStatusInCaches(
       patch
     );
   }
+}
+
+export function useUpdateTaskPositionsMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateTaskPositions,
+    onSuccess: (_result, updates) => {
+      patchTaskPositionsInCaches(queryClient, updates);
+    },
+  });
+}
+
+export function patchTaskPositionsInCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  updates: Array<{ taskId: string; position: number }>
+) {
+  const positionByTaskId = new Map(
+    updates.map((item) => [item.taskId, item.position])
+  );
+
+  const patch = (list: Task[] = []) =>
+    list.map((task) => {
+      const nextPosition = positionByTaskId.get(task.id);
+
+      if (nextPosition === undefined) {
+        return task;
+      }
+
+      return {
+        ...task,
+        position: nextPosition,
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+  queryClient.setQueryData<Task[]>(queryKeys.tasks, patch);
+
+  queryClient
+    .getQueryCache()
+    .findAll({ queryKey: ["tasks", "project"] })
+    .forEach((query) => {
+      queryClient.setQueryData<Task[]>(query.queryKey, patch);
+    });
 }

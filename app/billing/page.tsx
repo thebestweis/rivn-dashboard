@@ -185,11 +185,8 @@ export default function BillingPage() {
   }, [plans, selectedPeriod, selectedExtraMembers]);
 
   const showInitialLoading =
-    (isAppContextLoading && !canViewBilling) ||
-    ((isPlansLoading || isTransactionsLoading || isBalanceLoading) &&
-      plans.length === 0 &&
-      transactions.length === 0 &&
-      balance === 0);
+    (isAppContextLoading && !billingAccess) ||
+    (isPlansLoading && plans.length === 0);
 
   if (showInitialLoading) {
     return (
@@ -310,7 +307,7 @@ export default function BillingPage() {
             <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
               <div className="text-sm text-white/50">Баланс</div>
               <div className="mt-2 text-2xl font-semibold text-emerald-300">
-                {formatMoney(balance)}
+                {isBalanceLoading ? "Загрузка..." : formatMoney(balance)}
               </div>
               <div className="mt-4 text-sm text-white/60">
                 Баланс временно пополняется вручную со стороны администрации
@@ -551,7 +548,13 @@ export default function BillingPage() {
             </div>
 
             <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
-              {transactions.length > 0 ? (
+              {isTransactionsLoading && transactions.length === 0 ? (
+                <div className="space-y-3 p-4">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <Skeleton key={index} className="h-14 w-full rounded-2xl" />
+                  ))}
+                </div>
+              ) : transactions.length > 0 ? (
                 <table className="w-full text-left text-sm">
                   <thead className="bg-white/[0.04] text-white/45">
                     <tr>

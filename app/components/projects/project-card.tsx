@@ -104,7 +104,8 @@ export function ProjectCard({
       href={`/projects/${id}`}
       onMouseEnter={handlePrefetch}
       onFocus={handlePrefetch}
-      className="group rounded-[24px] border border-white/10 bg-[#0F1724] p-4 transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-[#111C2B]"
+      draggable={false}
+      className="group flex h-full min-h-[280px] flex-col rounded-[24px] border border-white/10 bg-[#0F1724] p-4 transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-[#111C2B]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -145,7 +146,7 @@ export function ProjectCard({
         </div>
       </div>
 
-      <div className="mt-4 border-t border-white/5 pt-4">
+      <div className="mt-auto border-t border-white/5 pt-4">
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs text-white/35">Открыть проект</span>
 

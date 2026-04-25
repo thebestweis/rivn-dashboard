@@ -8,8 +8,12 @@ import {
   deleteProject,
   getProjects,
   updateProject,
+  updateProjectOrder,
   type Project,
 } from "../supabase/projects";
+
+const STALE_TIME = 1000 * 60 * 10;
+const GC_TIME = 1000 * 60 * 60;
 
 export function useProjectsQuery(enabled = true) {
   const { workspace } = useAppContextState();
@@ -21,8 +25,9 @@ export function useProjectsQuery(enabled = true) {
       : queryKeys.projects,
     queryFn: getProjects,
     enabled: enabled && Boolean(workspaceId),
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 30,
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
+    placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
@@ -41,7 +46,7 @@ export function useCreateProjectMutation() {
 
       queryClient.setQueryData<Project[]>(
         queryKeys.projectsByWorkspace(workspaceId),
-        (prev = []) => [createdProject, ...prev]
+        (prev = []) => [createdProject, ...prev].sort((a, b) => a.sort_order - b.sort_order)
       );
     },
   });
@@ -101,6 +106,52 @@ export function useDeleteProjectMutation() {
       queryClient.removeQueries({
         queryKey: queryKeys.projectTasks(deletedProjectId),
       });
+    },
+  });
+}
+
+export function useUpdateProjectOrderMutation() {
+  const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useMutation({
+    mutationFn: updateProjectOrder,
+    onMutate: async (updates) => {
+      if (!workspaceId) return;
+
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.projectsByWorkspace(workspaceId),
+      });
+
+      const previousProjects = queryClient.getQueryData<Project[]>(
+        queryKeys.projectsByWorkspace(workspaceId)
+      );
+
+      const orderByProjectId = new Map(
+        updates.map((item) => [item.projectId, item.sortOrder])
+      );
+
+      queryClient.setQueryData<Project[]>(
+        queryKeys.projectsByWorkspace(workspaceId),
+        (prev = []) =>
+          prev
+            .map((project) => ({
+              ...project,
+              sort_order: orderByProjectId.get(project.id) ?? project.sort_order,
+            }))
+            .sort((a, b) => a.sort_order - b.sort_order)
+      );
+
+      return { previousProjects };
+    },
+    onError: (_error, _updates, context) => {
+      if (!workspaceId || !context?.previousProjects) return;
+
+      queryClient.setQueryData(
+        queryKeys.projectsByWorkspace(workspaceId),
+        context.previousProjects
+      );
     },
   });
 }

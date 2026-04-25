@@ -11,6 +11,9 @@ import {
 import type { Expense, ExpenseFormData } from "../types/expense";
 import { useAppContextState } from "../../providers/app-context-provider";
 
+const STALE_TIME = 1000 * 60 * 10;
+const GC_TIME = 1000 * 60 * 60;
+
 export function useExpensesQuery(enabled = true) {
   const { workspace } = useAppContextState();
   const workspaceId = workspace?.id ?? "";
@@ -19,8 +22,8 @@ export function useExpensesQuery(enabled = true) {
     queryKey: queryKeys.expensesByWorkspace(workspaceId),
     queryFn: getExpensesFromSupabase,
     enabled: enabled && Boolean(workspaceId),
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 30,
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,

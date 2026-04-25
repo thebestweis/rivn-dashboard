@@ -244,14 +244,8 @@ export default function Home() {
   const [dashboardPeriod, setDashboardPeriod] = useState<"30d" | "90d" | "all">(
     "30d"
   );
-    const [isMounted, setIsMounted] = useState(false);
-
   const [planFactStartMonth, setPlanFactStartMonth] = useState(getCurrentMonthValue);
   const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
-
-    useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   const {
     data: clients = [],
@@ -283,16 +277,23 @@ export default function Home() {
     isLoading: isMonthlyPlansLoading,
   } = useMonthlyPlansQuery(hasAccess);
 
-    const isLoadingDashboard =
-    !isMounted ||
+    const isLoadingDashboardShell =
     isAppContextLoading ||
-    isAccessLoading ||
+    isAccessLoading;
+
+    const isLoadingDashboardKpis =
+    isLoadingDashboardShell ||
     isClientsLoading ||
     isPaymentsLoading ||
     isExpensesLoading ||
     isPayrollPayoutsLoading ||
-    isPayrollExtraPaymentsLoading ||
-    isMonthlyPlansLoading;
+    isPayrollExtraPaymentsLoading;
+
+    const isLoadingPlanFact =
+    isLoadingDashboardKpis || isMonthlyPlansLoading;
+
+    const isLoadingDashboardBottom =
+    isLoadingDashboardShell || isClientsLoading;
 
   async function handleLogout() {
     const supabase = createClient();
@@ -740,7 +741,7 @@ export default function Home() {
     },
     {
       label: "Активные клиенты",
-      value: isLoadingDashboard ? "..." : String(activeClientsCount),
+      value: isLoadingDashboardKpis ? "..." : String(activeClientsCount),
       delta: "из раздела клиенты",
       tone: "success" as const,
     },
@@ -772,7 +773,7 @@ export default function Home() {
     )}`;
   }, [planFactStartMonth, planFactEndMonth]);
 
-    if (isMounted && !isAccessLoading && !hasAccess) {
+    if (!isAccessLoading && !hasAccess) {
     return (
       <main className="flex-1">
         <div className="space-y-6 px-5 py-6 lg:px-8">
@@ -838,7 +839,7 @@ export default function Home() {
           </div>
         ) : null}
 
-        {isLoadingDashboard ? (
+        {isLoadingDashboardShell ? (
           <DashboardHeroSkeleton />
         ) : (
           <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.96),rgba(13,18,30,0.96))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -894,7 +895,7 @@ export default function Home() {
           </section>
         )}
 
-        {isLoadingDashboard ? (
+        {isLoadingDashboardKpis ? (
           <KpiGridSkeleton />
         ) : (
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
@@ -911,7 +912,14 @@ export default function Home() {
         )}
 
         <section className="space-y-6">
-          <FinancialOverviewChart data={financialChartData} />
+          {isLoadingDashboardKpis ? (
+            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="mt-6 h-64 w-full rounded-2xl" />
+            </div>
+          ) : (
+            <FinancialOverviewChart data={financialChartData} />
+          )}
 
           <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
             <AlertsPanel alerts={alerts} />
@@ -960,7 +968,18 @@ export default function Home() {
                 </div>
               </div>
 
-              <PlanFactPanel
+              {isLoadingPlanFact ? (
+                <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+                  <Skeleton className="h-5 w-44" />
+                  <div className="mt-5 grid gap-3 md:grid-cols-2">
+                    <Skeleton className="h-20 w-full rounded-2xl" />
+                    <Skeleton className="h-20 w-full rounded-2xl" />
+                    <Skeleton className="h-20 w-full rounded-2xl" />
+                    <Skeleton className="h-20 w-full rounded-2xl" />
+                  </div>
+                </div>
+              ) : (
+                <PlanFactPanel
                 periodLabel={planFactPeriodLabel}
                 revenuePlan={revenuePlanNumber}
                 revenueFact={totalRevenueNumber}
@@ -971,11 +990,12 @@ export default function Home() {
                 fotPlan={fotPlanNumber}
                 fotFact={totalFotNumber}
               />
+              )}
             </div>
           </div>
         </section>
 
-        {isLoadingDashboard ? (
+        {isLoadingDashboardBottom ? (
           <DashboardBottomSkeleton />
         ) : (
           <section className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">

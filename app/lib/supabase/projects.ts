@@ -15,6 +15,7 @@ export type Project = {
   description: string | null;
   project_overview: string | null;
   important_links: string | null;
+  sort_order: number;
   created_at: string;
 };
 
@@ -49,6 +50,7 @@ type DbProjectRow = {
   description: string | null;
   project_overview: string | null;
   important_links: string | null;
+  sort_order: number | string | null;
   created_at: string;
 };
 
@@ -65,6 +67,7 @@ function mapProject(row: DbProjectRow): Project {
     description: row.description ?? null,
     project_overview: row.project_overview ?? null,
     important_links: row.important_links ?? null,
+    sort_order: Number(row.sort_order ?? 0),
     created_at: row.created_at,
   };
 }
@@ -117,6 +120,7 @@ export async function getProjects(): Promise<Project[]> {
     .from("projects")
     .select("*")
     .eq("workspace_id", workspace.id)
+    .order("sort_order", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -138,6 +142,20 @@ export async function getProjects(): Promise<Project[]> {
 export async function createProject(input: CreateProjectInput): Promise<Project> {
   const { supabase, workspace, user } = await getAppContext();
 
+  const { data: firstProject, error: firstProjectError } = await supabase
+    .from("projects")
+    .select("sort_order")
+    .eq("workspace_id", workspace.id)
+    .order("sort_order", { ascending: true, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (firstProjectError) {
+    throw new Error(`РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРіРѕС‚РѕРІРёС‚СЊ РїРѕСЂСЏРґРѕРє РїСЂРѕРµРєС‚Р°: ${firstProjectError.message}`);
+  }
+
+  const firstSortOrder = Number(firstProject?.sort_order ?? 0);
+
   const payload = {
     user_id: user.id,
     workspace_id: workspace.id,
@@ -151,6 +169,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     description: input.description?.trim() || null,
     project_overview: input.project_overview?.trim() || null,
     important_links: input.important_links?.trim() || null,
+    sort_order: firstSortOrder - 1000,
   };
 
   const { data, error } = await supabase
@@ -245,4 +264,50 @@ export async function getProjectById(projectId: string): Promise<Project | null>
   });
 
   return accessibleProjects[0] ?? null;
+}
+
+export async function updateProjectOrder(
+  updates: Array<{ projectId: string; sortOrder: number }>
+): Promise<void> {
+  const { supabase, workspace } = await getAppContext();
+
+  const normalizedUpdates = updates.filter((item) => item.projectId);
+
+  if (normalizedUpdates.length === 0) {
+    return;
+  }
+
+  const { data: existingProjects, error: existingProjectsError } =
+    await supabase
+      .from("projects")
+      .select("id")
+      .eq("workspace_id", workspace.id)
+      .in(
+        "id",
+        normalizedUpdates.map((item) => item.projectId)
+      );
+
+  if (existingProjectsError) {
+    throw new Error(`РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕРІРµСЂРёС‚СЊ РїСЂРѕРµРєС‚С‹: ${existingProjectsError.message}`);
+  }
+
+  if ((existingProjects ?? []).length !== normalizedUpdates.length) {
+    throw new Error("РћРґРёРЅ РёР· РїСЂРѕРµРєС‚РѕРІ РЅРµ РЅР°Р№РґРµРЅ РІ С‚РµРєСѓС‰РµРј РєР°Р±РёРЅРµС‚Рµ");
+  }
+
+  const results = await Promise.all(
+    normalizedUpdates.map((item) =>
+      supabase
+        .from("projects")
+        .update({ sort_order: item.sortOrder })
+        .eq("id", item.projectId)
+        .eq("workspace_id", workspace.id)
+    )
+  );
+
+  const failedResult = results.find((result) => result.error);
+
+  if (failedResult?.error) {
+    throw new Error(`РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїРѕСЂСЏРґРѕРє РїСЂРѕРµРєС‚РѕРІ: ${failedResult.error.message}`);
+  }
 }

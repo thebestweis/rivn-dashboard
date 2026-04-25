@@ -56,11 +56,11 @@ function useResolvedPageAccess(
     placeholderData: (previousData) => previousData,
   });
 
-  if (!isReady && isAppContextLoading) {
+  if (!isReady && (isAppContextLoading || errorMessage)) {
     return {
       isLoading: true,
       hasAccess: false,
-      errorMessage: "",
+      errorMessage,
       resolvedSection: section,
       isBillingReadOnly,
       canInteract: false,
@@ -82,7 +82,7 @@ function useResolvedPageAccess(
 
   if (!currentRole) {
     return {
-      isLoading: false,
+      isLoading: !isReady,
       hasAccess: false,
       errorMessage:
         errorMessage ||

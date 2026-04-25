@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { motion } from "framer-motion";
 import {
   CreateProjectModal,
   type CreateProjectFormValues,
@@ -19,9 +20,10 @@ import {
   useCreateProjectMutation,
   useDeleteProjectMutation,
   useProjectsQuery,
+  useUpdateProjectOrderMutation,
   useUpdateProjectMutation,
 } from "../lib/queries/use-projects-query";
-import { useTasksQuery } from "../lib/queries/use-tasks-query";
+import { useActiveTaskCountsByProjectQuery } from "../lib/queries/use-tasks-query";
 import { useClientsQuery } from "../lib/queries/use-clients-query";
 import { useActiveWorkspaceMembers } from "../lib/queries/use-workspace-members-query";
 
@@ -36,6 +38,18 @@ type MemberOption = {
   id: string;
   name: string;
 };
+
+function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(fromIndex, 1);
+
+  if (!movedItem) {
+    return items;
+  }
+
+  nextItems.splice(toIndex, 0, movedItem);
+  return nextItems;
+}
 
 export default function ProjectsPage() {
   const { role, isLoading: isAppContextLoading } = useAppContextState();
@@ -53,6 +67,8 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
   const [errorMessage, setErrorMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [orderedProjectIds, setOrderedProjectIds] = useState<string[]>([]);
+  const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     if (canManageProjects) return;
@@ -68,10 +84,8 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
   } = useProjectsQuery(!isAppContextLoading);
 
   const {
-    data: tasks = [],
-    isLoading: isTasksLoading,
-    error: tasksError,
-  } = useTasksQuery(!isAppContextLoading);
+    data: activeTaskCounts = [],
+  } = useActiveTaskCountsByProjectQuery(!isAppContextLoading);
 
   const {
     data: clientsData = [],
@@ -81,22 +95,28 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
 
   const {
     activeMembers: workspaceMembersData,
-    isLoading: isWorkspaceMembersLoading,
-    error: workspaceMembersError,
-  } = useActiveWorkspaceMembers(!isAppContextLoading);
+  } = useActiveWorkspaceMembers(!isAppContextLoading && isCreateModalOpen);
 
   const createProjectMutation = useCreateProjectMutation();
   const updateProjectMutation = useUpdateProjectMutation();
   const deleteProjectMutation = useDeleteProjectMutation();
+  const updateProjectOrderMutation = useUpdateProjectOrderMutation();
 
-  const isLoading =
-    isProjectsLoading ||
-    isTasksLoading ||
-    isClientsLoading ||
-    isWorkspaceMembersLoading;
+  const isLoadingProjectStats = isProjectsLoading;
+  const isLoadingProjectsList = isProjectsLoading || isClientsLoading;
 
-  const combinedError =
-    projectsError || tasksError || clientsError || workspaceMembersError;
+  const combinedError = projectsError || clientsError;
+
+  useEffect(() => {
+    setOrderedProjectIds((currentIds) => {
+      const nextProjectIds = projects.map((project) => project.id);
+      const nextProjectIdSet = new Set(nextProjectIds);
+      const preservedIds = currentIds.filter((id) => nextProjectIdSet.has(id));
+      const addedIds = nextProjectIds.filter((id) => !preservedIds.includes(id));
+
+      return [...preservedIds, ...addedIds];
+    });
+  }, [projects]);
 
   const clients: ClientOption[] = useMemo(
     () =>
@@ -135,29 +155,30 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
   const activeTaskCountByProjectId = useMemo(() => {
     const counts: Record<string, number> = {};
 
-    for (const task of tasks) {
-      const isRootTask = task.parent_task_id === null;
-      const isActiveTask =
-        task.status === "todo" || task.status === "in_progress";
-
-      if (!isRootTask || task.is_archived || !isActiveTask) {
-        continue;
-      }
-
-      if (!task.project_id) {
-  return;
-}
-
-counts[task.project_id] = (counts[task.project_id] ?? 0) + 1;
+    for (const item of activeTaskCounts) {
+      counts[item.project_id] = item.count;
     }
 
     return counts;
-  }, [tasks]);
+  }, [activeTaskCounts]);
 
   const filteredProjects = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
-    return projects.filter((project) => {
+    const orderIndexByProjectId = new Map(
+      orderedProjectIds.map((id, index) => [id, index])
+    );
+
+    return [...projects].sort((a, b) => {
+      const aIndex = orderIndexByProjectId.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const bIndex = orderIndexByProjectId.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+
+      if (aIndex !== bIndex) {
+        return aIndex - bIndex;
+      }
+
+      return a.sort_order - b.sort_order;
+    }).filter((project) => {
       const clientName = clientNamesById[project.client_id] ?? "Без клиента";
 
       const matchesSearch =
@@ -170,7 +191,7 @@ counts[task.project_id] = (counts[task.project_id] ?? 0) + 1;
 
       return matchesSearch && matchesStatus;
     });
-  }, [projects, clientNamesById, searchQuery, statusFilter]);
+  }, [projects, clientNamesById, orderedProjectIds, searchQuery, statusFilter]);
 
   const hasActiveFilters =
     searchQuery.trim().length > 0 || statusFilter !== "all";
@@ -300,6 +321,50 @@ counts[task.project_id] = (counts[task.project_id] ?? 0) + 1;
     setIsCreateModalOpen(true);
   }
 
+  function handleProjectDragOver(targetProjectId: string) {
+    if (!draggedProjectId || draggedProjectId === targetProjectId) {
+      return;
+    }
+
+    setOrderedProjectIds((currentIds) => {
+      const fromIndex = currentIds.indexOf(draggedProjectId);
+      const toIndex = currentIds.indexOf(targetProjectId);
+
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+        return currentIds;
+      }
+
+      return moveItem(currentIds, fromIndex, toIndex);
+    });
+  }
+
+  async function handleProjectDrop() {
+    if (!draggedProjectId) {
+      return;
+    }
+
+    const orderedProjects = orderedProjectIds
+      .map((projectId) => projects.find((project) => project.id === projectId))
+      .filter((project): project is Project => Boolean(project));
+
+    setDraggedProjectId(null);
+
+    try {
+      await updateProjectOrderMutation.mutateAsync(
+        orderedProjects.map((project, index) => ({
+          projectId: project.id,
+          sortOrder: (index + 1) * 1000,
+        }))
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїРѕСЂСЏРґРѕРє РїСЂРѕРµРєС‚РѕРІ"
+      );
+    }
+  }
+
   return (
     <>
       <main className="flex-1 px-6 py-6 md:px-8">
@@ -346,13 +411,13 @@ counts[task.project_id] = (counts[task.project_id] ?? 0) + 1;
           <ProjectsStats
             totalProjects={totalProjects}
             activeProjects={activeProjects}
-            isLoading={isLoading}
+            isLoading={isLoadingProjectStats}
           />
 
           <ProjectsFilters
             searchQuery={searchQuery}
             statusFilter={statusFilter}
-            isLoading={isLoading}
+            isLoading={isLoadingProjectsList}
             resultsCount={filteredProjects.length}
             hasActiveFilters={hasActiveFilters}
             onSearchChange={setSearchQuery}
@@ -364,7 +429,7 @@ counts[task.project_id] = (counts[task.project_id] ?? 0) + 1;
           />
 
           <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            {isLoading ? (
+            {isLoadingProjectsList ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
                 {Array.from({ length: 10 }).map((_, index) => (
                   <div
@@ -416,8 +481,55 @@ counts[task.project_id] = (counts[task.project_id] ?? 0) + 1;
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
                 {filteredProjects.map((project) => (
-                  <ProjectCard
+                  <motion.div
                     key={project.id}
+                    layout
+                    transition={{
+                      layout: {
+                        type: "spring",
+                        stiffness: 420,
+                        damping: 34,
+                      },
+                    }}
+                    draggable={showManageProjectsActions && !hasActiveFilters}
+                    onDragStart={(event) => {
+                      if (!showManageProjectsActions || hasActiveFilters) {
+                        event.preventDefault();
+                        return;
+                      }
+
+                      const dragEvent =
+                        event as unknown as DragEvent<HTMLDivElement>;
+
+                      setDraggedProjectId(project.id);
+                      dragEvent.dataTransfer.effectAllowed = "move";
+                      dragEvent.dataTransfer.setData("text/plain", project.id);
+                    }}
+                    onDragOver={(event) => {
+                      if (!draggedProjectId || hasActiveFilters) return;
+
+                      event.preventDefault();
+                      handleProjectDragOver(project.id);
+                    }}
+                    onDrop={(event) => {
+                      if (hasActiveFilters) return;
+
+                      event.preventDefault();
+                    }}
+                    onDragEnd={() => {
+                      void handleProjectDrop();
+                    }}
+                    className={`h-full ${
+                      showManageProjectsActions && !hasActiveFilters
+                        ? "cursor-grab active:cursor-grabbing"
+                        : ""
+                    } ${
+                      draggedProjectId === project.id
+                        ? "scale-[0.98] opacity-70"
+                        : ""
+                    }`}
+                  >
+                  <ProjectCard
                     id={project.id}
                     name={project.name}
                     clientName={clientNamesById[project.client_id] ?? "Без клиента"}
@@ -429,6 +541,7 @@ counts[task.project_id] = (counts[task.project_id] ?? 0) + 1;
                     isDeleting={deletingProjectId === project.id}
                     canManageProject={canManageProjects}
                   />
+                  </motion.div>
                 ))}
 
                 {showManageProjectsActions ? (

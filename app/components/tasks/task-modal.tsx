@@ -4,8 +4,9 @@ import "react-day-picker/dist/style.css";
 
 import { ru } from "date-fns/locale";
 import { format } from "date-fns";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { DayPicker } from "react-day-picker";
 import { AppToast } from "../ui/app-toast";
 import {
@@ -31,6 +32,7 @@ import { useActiveWorkspaceMembers } from "../../lib/queries/use-workspace-membe
 import {
   patchTaskStatusInCaches,
   syncTaskAcrossCaches,
+  useUpdateTaskPositionsMutation,
 } from "../../lib/queries/use-tasks-query";
 
 type TaskModalProps = {
@@ -144,6 +146,18 @@ function combineDateAndTime(date: Date | undefined, time: string) {
   return next.toISOString();
 }
 
+function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(fromIndex, 1);
+
+  if (!movedItem) {
+    return items;
+  }
+
+  nextItems.splice(toIndex, 0, movedItem);
+  return nextItems;
+}
+
 function getMemberLabel(member: WorkspaceMemberItem) {
   return member.email || "Без имени";
 }
@@ -187,6 +201,8 @@ export function TaskModal({
   const [subtaskDraft, setSubtaskDraft] = useState("");
   const [isCreatingSubtask, setIsCreatingSubtask] = useState(false);
   const [updatingSubtaskId, setUpdatingSubtaskId] = useState<string | null>(null);
+  const [orderedSubtaskIds, setOrderedSubtaskIds] = useState<string[]>([]);
+  const [draggedSubtaskId, setDraggedSubtaskId] = useState<string | null>(null);
 
   const [commentDraft, setCommentDraft] = useState("");
   const [isCreatingComment, setIsCreatingComment] = useState(false);
@@ -226,12 +242,45 @@ export function TaskModal({
     },
   });
 
+  const updateTaskPositionsMutation = useUpdateTaskPositionsMutation();
+
   const subtasks = useMemo(() => {
     if (!task) return [];
-    return tasks.filter(
-      (item) => item.parent_task_id === task.id && !item.is_archived
-    );
+    return tasks
+      .filter((item) => item.parent_task_id === task.id && !item.is_archived)
+      .sort((a, b) => {
+        if (a.position !== b.position) {
+          return a.position - b.position;
+        }
+
+        return (
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+      });
   }, [task, tasks]);
+
+  useEffect(() => {
+    setOrderedSubtaskIds((currentIds) => {
+      const nextSubtaskIds = subtasks.map((subtask) => subtask.id);
+      const nextSubtaskIdSet = new Set(nextSubtaskIds);
+      const preservedIds = currentIds.filter((id) => nextSubtaskIdSet.has(id));
+      const addedIds = nextSubtaskIds.filter((id) => !preservedIds.includes(id));
+
+      return [...preservedIds, ...addedIds];
+    });
+  }, [subtasks]);
+
+  const orderedSubtasks = useMemo(() => {
+    const subtaskById = new Map(subtasks.map((subtask) => [subtask.id, subtask]));
+    const orderedItems = orderedSubtaskIds
+      .map((id) => subtaskById.get(id))
+      .filter((subtask): subtask is Task => Boolean(subtask));
+    const missingItems = subtasks.filter(
+      (subtask) => !orderedSubtaskIds.includes(subtask.id)
+    );
+
+    return [...orderedItems, ...missingItems];
+  }, [orderedSubtaskIds, subtasks]);
 
   const doneSubtasksCount = useMemo(
     () => subtasks.filter((subtask) => subtask.status === "done").length,
@@ -485,6 +534,44 @@ export function TaskModal({
       setToastMessage(getBillingErrorMessage(error));
     } finally {
       setUpdatingSubtaskId(null);
+    }
+  }
+
+  function handleSubtaskDragOver(targetSubtaskId: string) {
+    if (!draggedSubtaskId || draggedSubtaskId === targetSubtaskId) {
+      return;
+    }
+
+    setOrderedSubtaskIds((currentIds) => {
+      const fromIndex = currentIds.indexOf(draggedSubtaskId);
+      const toIndex = currentIds.indexOf(targetSubtaskId);
+
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+        return currentIds;
+      }
+
+      return moveItem(currentIds, fromIndex, toIndex);
+    });
+  }
+
+  async function handleSubtaskDrop() {
+    if (!draggedSubtaskId) {
+      return;
+    }
+
+    setDraggedSubtaskId(null);
+
+    try {
+      await updateTaskPositionsMutation.mutateAsync(
+        orderedSubtasks.map((subtask, index) => ({
+          taskId: subtask.id,
+          position: (index + 1) * 1000,
+        }))
+      );
+    } catch (error) {
+      console.error(error);
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
     }
   }
 
@@ -820,10 +907,48 @@ export function TaskModal({
                     Подзадач пока нет
                   </div>
                 ) : (
-                  subtasks.map((subtask) => (
-                    <div
+                  orderedSubtasks.map((subtask) => (
+                    <motion.div
                       key={subtask.id}
-                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3"
+                      layout
+                      transition={{
+                        layout: {
+                          type: "spring",
+                          stiffness: 430,
+                          damping: 35,
+                        },
+                      }}
+                      draggable={canManageTasksWithBilling}
+                      onDragStart={(event) => {
+                        if (!canManageTasksWithBilling) {
+                          event.preventDefault();
+                          return;
+                        }
+
+                        const dragEvent =
+                          event as unknown as DragEvent<HTMLDivElement>;
+
+                        setDraggedSubtaskId(subtask.id);
+                        dragEvent.dataTransfer.effectAllowed = "move";
+                        dragEvent.dataTransfer.setData("text/plain", subtask.id);
+                      }}
+                      onDragOver={(event) => {
+                        if (!draggedSubtaskId) return;
+
+                        event.preventDefault();
+                        handleSubtaskDragOver(subtask.id);
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                      }}
+                      onDragEnd={() => {
+                        void handleSubtaskDrop();
+                      }}
+                      className={`flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3 transition ${
+                        draggedSubtaskId === subtask.id
+                          ? "scale-[0.98] opacity-70"
+                          : ""
+                      }`}
                     >
                       {canManageTasksWithBilling ? (
                         <button
@@ -855,7 +980,7 @@ export function TaskModal({
                       >
                         {subtask.title}
                       </button>
-                    </div>
+                    </motion.div>
                   ))
                 )}
               </div>

@@ -9,8 +9,8 @@ import {
 } from "../supabase/payroll";
 import { useAppContextState } from "../../providers/app-context-provider";
 
-const STALE_TIME = 1000 * 60 * 5;
-const GC_TIME = 1000 * 60 * 30;
+const STALE_TIME = 1000 * 60 * 10;
+const GC_TIME = 1000 * 60 * 60;
 
 export function usePayrollAccrualsQuery(enabled = true) {
   const { workspace } = useAppContextState();

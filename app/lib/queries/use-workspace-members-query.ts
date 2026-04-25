@@ -8,11 +8,20 @@ import {
   type WorkspaceMemberItem,
 } from "../supabase/workspace-members";
 
+const STALE_TIME = 1000 * 60 * 10;
+const GC_TIME = 1000 * 60 * 30;
+
 export function useWorkspaceMembersQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.workspaceMembers,
     queryFn: getWorkspaceMembers,
     enabled,
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
+    placeholderData: (previousData) => previousData,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 }
 

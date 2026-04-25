@@ -244,16 +244,15 @@ export function AppSidebar() {
     };
   }, [isWorkspaceMenuOpen]);
 
-  const activeWorkspaceId = isMounted ? workspace?.id ?? "" : "";
-  const activeRole: AppRole | null =
-    isMounted && isAppRole(role) ? role : null;
+  const activeWorkspaceId = workspace?.id ?? "";
+  const activeRole: AppRole | null = isAppRole(role) ? role : null;
 
   function prefetchRoute(href: string) {
     router.prefetch(href);
   }
 
   const filteredNavItems = useMemo(() => {
-    if (!isMounted || !activeRole) return [];
+    if (!activeRole) return [];
 
     return navItems.filter((item) =>
       canAccessSectionWithCustomPermissions({
@@ -262,7 +261,7 @@ export function AppSidebar() {
         permissions: memberPermissions,
       })
     );
-  }, [isMounted, activeRole, memberPermissions]);
+  }, [activeRole, memberPermissions]);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -323,8 +322,8 @@ export function AppSidebar() {
     }
   }
 
-  const showResolvedContext = isMounted && !isLoading;
-  const showResolvedMenu = isMounted && !permissionsLoading;
+  const showResolvedContext = Boolean(activeRole || workspace) && !isLoading;
+  const showResolvedMenu = Boolean(activeRole);
 
   return (
     <>

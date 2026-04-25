@@ -64,12 +64,17 @@ type AppContextCache = {
 const AppContextStateContext = createContext<AppContextState | null>(null);
 
 function isBootstrapPendingErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
   return (
     message.includes("Profile not found") ||
     message.includes("Membership not found") ||
     message.includes("Workspace not found") ||
     message.includes("Auth session missing") ||
     message.includes("User not authenticated") ||
+    normalizedMessage.includes("lock broken") ||
+    normalizedMessage.includes("navigatorlockacquiretimeouterror") ||
+    normalizedMessage.includes("failed to acquire lock") ||
     message.includes("Пользователь не авторизован")
   );
 }
@@ -132,6 +137,7 @@ export function AppContextProvider({
   children: React.ReactNode;
 }) {
   const cachedRef = useRef<AppContextCache | null>(readCachedAppContext());
+  const refreshPromiseRef = useRef<Promise<void> | null>(null);
 
   const [isLoading, setIsLoading] = useState(() => !cachedRef.current);
   const [isReady, setIsReady] = useState(() => Boolean(cachedRef.current));
@@ -180,6 +186,11 @@ export function AppContextProvider({
   }, []);
 
   const refreshAppContext = useCallback(async () => {
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
+    }
+
+    const refreshPromise = (async () => {
     try {
       setErrorMessage("");
 
@@ -282,6 +293,13 @@ export function AppContextProvider({
     } finally {
       setIsLoading(false);
     }
+    })();
+
+    refreshPromiseRef.current = refreshPromise.finally(() => {
+      refreshPromiseRef.current = null;
+    });
+
+    return refreshPromiseRef.current;
   }, []);
 
   useEffect(() => {

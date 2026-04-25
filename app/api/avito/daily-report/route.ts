@@ -114,11 +114,12 @@ function formatMoney(value: number) {
 }
 
 function formatPercentValue(value: number) {
-  return `${value.toFixed(2).replace(".", ",")}%`;
+  return `${Math.round(value)}%`;
 }
 
 function formatChange(value: number) {
-  return `${value > 0 ? "+" : ""}${value.toFixed(2).replace(".", ",")}%`;
+  const rounded = Math.round(value);
+  return `${rounded > 0 ? "+" : ""}${rounded}%`;
 }
 
 function getChangePercent(current: number, previous: number) {
@@ -309,10 +310,10 @@ function buildAccountBlock(params: {
     "━━━━━━━━━━━━",
     `Аккаунт: <b>${params.accountName}</b>`,
     "",
-    buildMetricLine("Просмотры", params.current.views, params.previous.views, "number"),
-    buildMetricLine("Контакты", params.current.contacts, params.previous.contacts, "number"),
     buildMetricLine("Расходы", params.current.expenses, params.previous.expenses, "money"),
+    buildMetricLine("Просмотры", params.current.views, params.previous.views, "number"),
     buildMetricLine("Конверсия", params.current.conversion, params.previous.conversion, "percent"),
+    buildMetricLine("Контакты", params.current.contacts, params.previous.contacts, "number"),
     buildMetricLine("Стоимость 1 контакта", params.current.costPerContact, params.previous.costPerContact, "money"),
   ].join("\n");
 }
@@ -344,10 +345,10 @@ function buildDailyReport(params: {
     "━━━━━━━━━━━━",
     "<b>Итого по всем аккаунтам</b>",
     "",
-    buildMetricLine("Просмотры", params.totalCurrent.views, params.totalPrevious.views, "number"),
-    buildMetricLine("Контакты", params.totalCurrent.contacts, params.totalPrevious.contacts, "number"),
     buildMetricLine("Расходы", params.totalCurrent.expenses, params.totalPrevious.expenses, "money"),
+    buildMetricLine("Просмотры", params.totalCurrent.views, params.totalPrevious.views, "number"),
     buildMetricLine("Конверсия", params.totalCurrent.conversion, params.totalPrevious.conversion, "percent"),
+    buildMetricLine("Контакты", params.totalCurrent.contacts, params.totalPrevious.contacts, "number"),
     buildMetricLine("Стоимость 1 контакта", params.totalCurrent.costPerContact, params.totalPrevious.costPerContact, "money"),
     "",
     "✅ Аккаунты проверены",

@@ -32,6 +32,11 @@ export type Task = {
   assignees?: TaskAssignee[];
 };
 
+export type ActiveTaskCountByProject = {
+  project_id: string;
+  count: number;
+};
+
 export type CreateTaskInput = {
   project_id?: string | null;
   parent_task_id?: string | null;
@@ -49,6 +54,11 @@ export type UpdateTaskInput = {
   assignee_ids?: string[];
 };
 
+export type UpdateTaskPositionInput = {
+  taskId: string;
+  position: number;
+};
+
 type DbTaskRow = {
   id: string;
   user_id: string;
@@ -62,6 +72,13 @@ type DbTaskRow = {
   created_at: string;
   updated_at: string;
   position: number | string | null;
+  is_archived: boolean | null;
+};
+
+type DbProjectTaskCountRow = {
+  project_id: string | null;
+  parent_task_id: string | null;
+  status: TaskStatus;
   is_archived: boolean | null;
 };
 
@@ -398,6 +415,25 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
 
   const { supabase, workspace, user } = await getAppContext();
 
+  let nextPosition = 1000;
+
+  if (input.parent_task_id) {
+    const { data: lastSubtask, error: lastSubtaskError } = await supabase
+      .from("tasks")
+      .select("position")
+      .eq("workspace_id", workspace.id)
+      .eq("parent_task_id", input.parent_task_id)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (lastSubtaskError) {
+      throw new Error(`РћС€РёР±РєР° РїРѕРґРіРѕС‚РѕРІРєРё РїРѕСЂСЏРґРєР° Р·Р°РґР°С‡Рё: ${lastSubtaskError.message}`);
+    }
+
+    nextPosition = Number(lastSubtask?.position ?? 0) + 1000;
+  }
+
    const { data, error } = await supabase
     .from("tasks")
     .insert({
@@ -408,6 +444,7 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
       title: input.title,
       description: input.description ?? null,
       deadline_at: input.deadline_at ?? null,
+      position: nextPosition,
     })
     .select("*")
     .single();
@@ -532,6 +569,21 @@ export async function createSubtask(
 
   const { supabase, workspace, user } = await getAppContext();
 
+  const { data: lastSubtask, error: lastSubtaskError } = await supabase
+    .from("tasks")
+    .select("position")
+    .eq("workspace_id", workspace.id)
+    .eq("parent_task_id", parentTaskId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lastSubtaskError) {
+    throw new Error(`РћС€РёР±РєР° РїРѕРґРіРѕС‚РѕРІРєРё РїРѕСЂСЏРґРєР° РїРѕРґР·Р°РґР°С‡Рё: ${lastSubtaskError.message}`);
+  }
+
+  const nextPosition = Number(lastSubtask?.position ?? 0) + 1000;
+
   const { data, error } = await supabase
     .from("tasks")
     .insert({
@@ -541,6 +593,7 @@ export async function createSubtask(
       parent_task_id: parentTaskId,
       title,
       status: "todo",
+      position: nextPosition,
     })
     .select("*")
     .single();
@@ -592,6 +645,39 @@ export async function getAllTasks(): Promise<Task[]> {
 });
 }
 
+export async function getActiveRootTaskCountsByProject(): Promise<
+  ActiveTaskCountByProject[]
+> {
+  const { supabase, workspace } = await getAppContext();
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("project_id, parent_task_id, status, is_archived")
+    .eq("workspace_id", workspace.id)
+    .eq("is_archived", false)
+    .is("parent_task_id", null)
+    .in("status", ["todo", "in_progress"]);
+
+  if (error) {
+    throw new Error(`РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё СЃС‡С‘С‚С‡РёРєРѕРІ Р·Р°РґР°С‡: ${error.message}`);
+  }
+
+  const counts: Record<string, number> = {};
+
+  for (const row of (data ?? []) as DbProjectTaskCountRow[]) {
+    if (!row.project_id) {
+      continue;
+    }
+
+    counts[row.project_id] = (counts[row.project_id] ?? 0) + 1;
+  }
+
+  return Object.entries(counts).map(([project_id, count]) => ({
+    project_id,
+    count,
+  }));
+}
+
 export async function updateTaskDeadline(
   taskId: string,
   deadlineAt: string | null
@@ -622,4 +708,54 @@ export async function updateTaskDeadline(
     ...mappedTask,
     assignees,
   };
+}
+
+export async function updateTaskPositions(
+  updates: UpdateTaskPositionInput[]
+): Promise<void> {
+  await requireBillingAccess();
+
+  const { supabase, workspace } = await getAppContext();
+
+  const normalizedUpdates = updates.filter((item) => item.taskId);
+
+  if (normalizedUpdates.length === 0) {
+    return;
+  }
+
+  const { data: existingTasks, error: existingTasksError } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("workspace_id", workspace.id)
+    .in(
+      "id",
+      normalizedUpdates.map((item) => item.taskId)
+    );
+
+  if (existingTasksError) {
+    throw new Error(`РћС€РёР±РєР° РїСЂРѕРІРµСЂРєРё РїРѕРґР·Р°РґР°С‡: ${existingTasksError.message}`);
+  }
+
+  if ((existingTasks ?? []).length !== normalizedUpdates.length) {
+    throw new Error("РћРґРЅР° РёР· РїРѕРґР·Р°РґР°С‡ РЅРµ РЅР°Р№РґРµРЅР° РІ С‚РµРєСѓС‰РµРј РєР°Р±РёРЅРµС‚Рµ");
+  }
+
+  const results = await Promise.all(
+    normalizedUpdates.map((item) =>
+      supabase
+        .from("tasks")
+        .update({
+          position: item.position,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", item.taskId)
+        .eq("workspace_id", workspace.id)
+    )
+  );
+
+  const failedResult = results.find((result) => result.error);
+
+  if (failedResult?.error) {
+    throw new Error(`РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ РїРѕСЂСЏРґРєР° РїРѕРґР·Р°РґР°С‡: ${failedResult.error.message}`);
+  }
 }

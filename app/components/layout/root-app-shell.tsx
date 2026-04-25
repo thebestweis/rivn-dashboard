@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { AppSidebar } from "./app-sidebar";
 import { AccessDenied } from "../access/access-denied";
 import { usePathAccess } from "../../lib/use-page-access";
+import { useAppContextState } from "../../providers/app-context-provider";
 
 const appRoutes = [
   "/dashboard",
@@ -38,6 +39,11 @@ export function RootAppShell({
     isBillingReadOnly,
     canInteract,
   } = usePathAccess(pathname);
+  const {
+    isReady: isAppContextReady,
+    errorMessage: appContextErrorMessage,
+    refreshAppContext,
+  } = useAppContextState();
 
   const isInternalRoute = isInternalAppRoute(pathname);
   const isBillingRoute =
@@ -45,6 +51,41 @@ export function RootAppShell({
 
   if (!isInternalRoute) {
     return <>{children}</>;
+  }
+
+  if (!isAppContextReady && appContextErrorMessage) {
+    return (
+      <div className="min-h-screen bg-[#0B0F1A] text-white">
+        <div className="flex min-h-screen">
+          <AppSidebar />
+
+          <div className="min-w-0 flex-1">
+            <main className="flex-1 px-5 py-6 lg:px-8">
+              <div className="rounded-[24px] border border-white/10 bg-[#121827] p-8 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-200/80">
+                  Кабинет загружается
+                </p>
+                <h1 className="mt-3 text-2xl font-semibold text-white">
+                  Не удалось сразу загрузить роль и кабинет
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+                  Обычно это временный сбой авторизации в браузере. Нажми
+                  кнопку ниже, и RIVN OS повторно подтянет кабинет, роль и
+                  доступы.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void refreshAppContext()}
+                  className="mt-6 rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-[#06120f] transition hover:bg-emerald-400"
+                >
+                  Повторить загрузку
+                </button>
+              </div>
+            </main>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!isLoading && !hasAccess) {

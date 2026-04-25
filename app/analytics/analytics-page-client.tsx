@@ -313,49 +313,71 @@ export default function AnalyticsPage() {
   }, [searchParams]);
 
   const queryEnabled = hasAnalyticsAccess && !isAccessLoading;
+  const needsClients =
+    activeTab === "financial" || activeTab === "clients" || activeTab === "team";
+  const needsPayments = true;
+  const needsExpenses = true;
+  const needsMonthlyPlans = activeTab === "planfact";
+  const needsPayrollPayouts =
+    activeTab === "financial" || activeTab === "planfact";
+  const needsPayrollAccruals = activeTab === "clients" || activeTab === "team";
+  const needsExtraPayments =
+    activeTab === "financial" || activeTab === "planfact";
 
   const {
     data: clients = [],
     isLoading: isLoadingClients,
-  } = useClientsQuery(queryEnabled);
+  } = useClientsQuery(queryEnabled && needsClients);
 
   const {
     data: paymentsRaw = [],
     isLoading: isLoadingPayments,
-  } = usePaymentsQuery(queryEnabled);
+  } = usePaymentsQuery(queryEnabled && needsPayments);
 
   const {
     data: expensesRaw = [],
     isLoading: isLoadingExpenses,
-  } = useExpensesQuery(queryEnabled);
+  } = useExpensesQuery(queryEnabled && needsExpenses);
 
   const {
     data: monthlyPlansRaw = [],
     isLoading: isLoadingMonthlyPlans,
-  } = useMonthlyPlansQuery(queryEnabled);
+  } = useMonthlyPlansQuery(queryEnabled && needsMonthlyPlans);
 
   const {
     data: payrollPayouts = [],
     isLoading: isLoadingPayrollPayouts,
-  } = usePayrollPayoutsQuery(queryEnabled);
+  } = usePayrollPayoutsQuery(queryEnabled && needsPayrollPayouts);
 
   const {
     data: payrollAccruals = [],
     isLoading: isLoadingPayrollAccruals,
-  } = usePayrollAccrualsQuery(queryEnabled);
+  } = usePayrollAccrualsQuery(queryEnabled && needsPayrollAccruals);
 
   const {
     data: extraPayments = [],
     isLoading: isLoadingExtraPayments,
-  } = usePayrollExtraPaymentsQuery(queryEnabled);
+  } = usePayrollExtraPaymentsQuery(queryEnabled && needsExtraPayments);
 
-  const isLoadingFinance =
+  const isLoadingFinancialTab =
+    isLoadingClients ||
+    isLoadingPayments ||
+    isLoadingExpenses ||
+    isLoadingPayrollPayouts ||
+    isLoadingExtraPayments;
+
+  const isLoadingPlanFactTab =
     isLoadingPayments ||
     isLoadingExpenses ||
     isLoadingMonthlyPlans ||
     isLoadingPayrollPayouts ||
-    isLoadingPayrollAccruals ||
     isLoadingExtraPayments;
+
+  const isLoadingClientsTab =
+    isLoadingClients ||
+    isLoadingPayments ||
+    isLoadingExpenses ||
+    isLoadingPayrollAccruals;
 
   const clientNameMap = useMemo(() => {
     return new Map((clients as StoredClient[]).map((client) => [client.id, client.name]));
@@ -1308,7 +1330,7 @@ export default function AnalyticsPage() {
         ) : null}
 
         {activeTab === "financial" ? (
-          isLoadingFinance ? (
+          isLoadingFinancialTab ? (
             <SectionSkeleton text="Загрузка финансовых данных..." />
           ) : (
             <FinancialAnalyticsTab
@@ -1333,7 +1355,7 @@ export default function AnalyticsPage() {
 />
           )
         ) : activeTab === "planfact" ? (
-          isLoadingFinance ? (
+          isLoadingPlanFactTab ? (
             <SectionSkeleton text="Загрузка plan / fact..." />
           ) : (
             <PlanFactTab
@@ -1351,7 +1373,7 @@ export default function AnalyticsPage() {
               canEditPlan={canEditAnalyticsPlans}
             />
           )
-        ) : isLoadingClients || isLoadingFinance ? (
+        ) : isLoadingClientsTab ? (
           <SectionSkeleton text="Загрузка клиентов..." />
         ) : (
           <ClientsAnalyticsTab
