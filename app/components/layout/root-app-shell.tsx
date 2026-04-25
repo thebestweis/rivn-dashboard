@@ -14,6 +14,7 @@ const appRoutes = [
   "/payroll",
   "/expenses",
   "/analytics",
+  "/avito-reports",
   "/billing",
   "/settings",
   "/admin",

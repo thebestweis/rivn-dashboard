@@ -631,33 +631,23 @@ setIntegrations(integrationsData.integrations ?? []);
           </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="xl:sticky xl:top-6 xl:self-start">
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              <div className="px-2 pb-3 text-xs uppercase tracking-[0.16em] text-white/30">
-                Разделы
-              </div>
-              <nav className="space-y-2 text-sm">
-                {[
-                  ["#connect-avito", "Подключение"],
-                  ["#connected-projects", "Проекты"],
-                  ["#project-analytics", "Аналитика"],
-                  ["#metrics-dynamics", "Динамика"],
-                  ["#reports-history", "История"],
-                ].map(([href, label]) => (
-                  <a
-                    key={href}
-                    href={href}
-                    className="block rounded-2xl border border-transparent bg-white/[0.03] px-4 py-3 text-white/65 transition hover:border-white/10 hover:bg-white/[0.06] hover:text-white"
-                  >
-                    {label}
-                  </a>
-                ))}
-              </nav>
-            </div>
-          </aside>
-
-          <div className="space-y-6">
+        <nav className="flex gap-2 overflow-x-auto rounded-[24px] border border-white/10 bg-[#121826] p-2 text-sm shadow-[0_10px_40px_rgba(0,0,0,0.22)]">
+          {[
+            ["#connect-avito", "Подключение"],
+            ["#connected-projects", "Проекты"],
+            ["#project-analytics", "Аналитика"],
+            ["#metrics-dynamics", "Динамика"],
+            ["#reports-history", "История"],
+          ].map(([href, label]) => (
+            <a
+              key={href}
+              href={href}
+              className="shrink-0 rounded-2xl border border-transparent bg-white/[0.03] px-4 py-2.5 text-white/65 transition hover:border-white/10 hover:bg-white/[0.06] hover:text-white"
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
         <div id="connect-avito" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -1401,8 +1391,6 @@ setIntegrations(integrationsData.integrations ?? []);
             </table>
           </div>
         </div>
-      </div>
-      </div>
       </div>
 
       {isInstructionOpen ? (
