@@ -148,6 +148,8 @@ const [updatingIntegrationId, setUpdatingIntegrationId] = useState("");
 const [selectedAnalyticsClientId, setSelectedAnalyticsClientId] = useState("");
 const [metricsMessage, setMetricsMessage] = useState("");
 const [metricsPeriod, setMetricsPeriod] = useState(() => getCurrentMonthRange());
+const [isConnectFormOpen, setIsConnectFormOpen] = useState(false);
+const [expandedIntegrationId, setExpandedIntegrationId] = useState("");
 
   const { workspace } = useAppContextState();
 
@@ -522,13 +524,36 @@ setIntegrations(integrationsData.integrations ?? []);
         </div>
 
         <div className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-          <div className="flex flex-col gap-2">
-            <h2 className="text-lg font-semibold text-white">Подключить проект к Avito</h2>
-            <p className="text-sm text-white/45">
-              Выбери проект из RIVN OS и добавь Avito-аккаунты. После сохранения система даст готовую ссылку для Telegram-бота.
-            </p>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Подключить проект к Avito</h2>
+              <p className="mt-1 max-w-3xl text-sm text-white/45">
+                Добавь проект один раз, а дальше RIVN OS будет собирать расходы и отправлять отчёты в Telegram.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/55">
+                  1. Проект
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/55">
+                  2. Avito API
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/55">
+                  3. Telegram
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsConnectFormOpen((current) => !current)}
+              className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-5 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/15"
+            >
+              {isConnectFormOpen ? "Свернуть" : "Подключить проект"}
+            </button>
           </div>
 
+          {isConnectFormOpen ? (
+            <>
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             <div>
               <label className="text-sm text-white/60">Проект</label>
@@ -793,6 +818,8 @@ setIntegrations(integrationsData.integrations ?? []);
               </div>
             </div>
           ) : null}
+            </>
+          ) : null}
         </div>
 
         <div className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
@@ -812,6 +839,7 @@ setIntegrations(integrationsData.integrations ?? []);
     {integrations.length > 0 ? (
       integrations.map((integration) => {
         const integrationAccounts = integration.avito_report_accounts ?? [];
+        const isExpanded = expandedIntegrationId === integration.id;
 
         return (
           <div
@@ -826,7 +854,7 @@ setIntegrations(integrationsData.integrations ?? []);
                 <div className="mt-1 text-sm text-white/45">
                   Telegram chat_id: {integration.telegram_chat_id || "не указан"}
                 </div>
-                {integration.client_code ? (
+                {isExpanded && integration.client_code ? (
                   <div className="mt-2 text-xs text-white/45">
                     Ссылка для беседы:{" "}
                     <a
@@ -894,6 +922,20 @@ setIntegrations(integrationsData.integrations ?? []);
                 <button
                   type="button"
                   onClick={() =>
+                    setExpandedIntegrationId((current) =>
+                      current === integration.id ? "" : integration.id
+                    )
+                  }
+                  className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-emerald-300 transition hover:bg-emerald-400/15"
+                >
+                  {isExpanded ? "Скрыть детали" : "Подробнее"}
+                </button>
+
+                {isExpanded ? (
+                  <>
+                <button
+                  type="button"
+                  onClick={() =>
                     updateIntegration(integration.id, {
                       isActive: !integration.is_active,
                     })
@@ -933,10 +975,12 @@ setIntegrations(integrationsData.integrations ?? []);
                     ? "Выключить weekly"
                     : "Включить weekly"}
                 </button>
+                  </>
+                ) : null}
               </div>
             </div>
 
-            {integrationAccounts.length > 0 ? (
+            {isExpanded && integrationAccounts.length > 0 ? (
               <div className="mt-4 grid gap-2 md:grid-cols-2">
                 {integrationAccounts.map((account) => (
                   <div
