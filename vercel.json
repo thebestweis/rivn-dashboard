@@ -10,12 +10,12 @@
     },
 
     {
-  "path": "/api/cron/daily?secret=super_secure_random_string_123",
-  "schedule": "0 6 * * *"
-},
+      "path": "/api/cron/daily",
+      "schedule": "0 6 * * *"
+    },
     {
-  "path": "/api/cron/weekly?secret=super_secure_random_string_123",
-  "schedule": "0 7 * * 1"
-}
+      "path": "/api/cron/weekly",
+      "schedule": "0 7 * * 1"
+    }
   ]
 }

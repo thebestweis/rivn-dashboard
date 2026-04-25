@@ -1,6 +1,10 @@
 export function verifyCronSecret(request: Request) {
   const url = new URL(request.url);
   const secret = url.searchParams.get("secret");
+  const authorization = request.headers.get("authorization");
+  const bearerSecret = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : null;
   const expectedSecret =
     process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET;
 
@@ -10,7 +14,7 @@ export function verifyCronSecret(request: Request) {
     );
   }
 
-  if (secret !== expectedSecret) {
+  if (secret !== expectedSecret && bearerSecret !== expectedSecret) {
     return false;
   }
 

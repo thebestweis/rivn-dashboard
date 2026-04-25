@@ -336,6 +336,8 @@ export async function GET(request: Request) {
       .from("avito_report_clients")
       .select("id, name, telegram_chat_id")
       .eq("weekly_reports_enabled", true)
+      .eq("is_active", true)
+      .not("telegram_chat_id", "is", null);
 
     if (clientsError) {
       return NextResponse.json(
