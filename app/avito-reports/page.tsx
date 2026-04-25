@@ -150,6 +150,9 @@ const [metricsMessage, setMetricsMessage] = useState("");
 const [metricsPeriod, setMetricsPeriod] = useState(() => getCurrentMonthRange());
 const [isConnectFormOpen, setIsConnectFormOpen] = useState(false);
 const [expandedIntegrationId, setExpandedIntegrationId] = useState("");
+const [checkingAccountIndex, setCheckingAccountIndex] = useState<number | null>(null);
+const [accountCheckMessages, setAccountCheckMessages] = useState<Record<number, string>>({});
+const [sendingTestReportId, setSendingTestReportId] = useState("");
 
   const { workspace } = useAppContextState();
 
@@ -267,6 +270,69 @@ setIntegrations(integrationsData.integrations ?? []);
 
   function removeAccount(index: number) {
     setAccounts((prev) => prev.filter((_, accountIndex) => accountIndex !== index));
+  }
+
+  async function checkAvitoConnection(index: number) {
+    const account = accounts[index];
+
+    if (!account) {
+      return;
+    }
+
+    setAccountCheckMessages((current) => ({
+      ...current,
+      [index]: "",
+    }));
+
+    if (
+      !account.avitoUserId.trim() ||
+      !account.avitoClientId.trim() ||
+      !account.avitoClientSecret.trim()
+    ) {
+      setAccountCheckMessages((current) => ({
+        ...current,
+        [index]: "Заполни Avito user_id, client_id и client_secret",
+      }));
+      return;
+    }
+
+    try {
+      setCheckingAccountIndex(index);
+
+      const response = await fetch("/api/avito/check-connection", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace?.id,
+          avitoUserId: account.avitoUserId.trim(),
+          avitoClientId: account.avitoClientId.trim(),
+          avitoClientSecret: account.avitoClientSecret.trim(),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Avito не принял данные");
+      }
+
+      setAccountCheckMessages((current) => ({
+        ...current,
+        [index]: "Подключение работает. Avito API отвечает.",
+      }));
+    } catch (error) {
+      setAccountCheckMessages((current) => ({
+        ...current,
+        [index]:
+          error instanceof Error
+            ? error.message
+            : "Не удалось проверить Avito-подключение",
+      }));
+    } finally {
+      setCheckingAccountIndex(null);
+    }
   }
 
   async function handleCreateIntegration() {
@@ -491,6 +557,48 @@ setIntegrations(integrationsData.integrations ?? []);
     }
   }
 
+  async function sendTestReport(integration: AvitoIntegration) {
+    const confirmed = window.confirm(
+      `Отправить тестовый отчёт по проекту "${integration.name}" в привязанную Telegram-беседу?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIntegrationMessage("");
+      setSendingTestReportId(integration.id);
+
+      const response = await fetch("/api/avito/send-test-report", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace?.id,
+          clientId: integration.id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Не удалось отправить тестовый отчёт");
+      }
+
+      setIntegrationMessage("Тестовый отчёт отправлен в Telegram");
+    } catch (error) {
+      setIntegrationMessage(
+        error instanceof Error
+          ? error.message
+          : "Ошибка отправки тестового отчёта"
+      );
+    } finally {
+      setSendingTestReportId("");
+    }
+  }
+
   return (
     
     <main className="flex-1">
@@ -523,7 +631,34 @@ setIntegrations(integrationsData.integrations ?? []);
           </div>
         </div>
 
-        <div className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="xl:sticky xl:top-6 xl:self-start">
+            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+              <div className="px-2 pb-3 text-xs uppercase tracking-[0.16em] text-white/30">
+                Разделы
+              </div>
+              <nav className="space-y-2 text-sm">
+                {[
+                  ["#connect-avito", "Подключение"],
+                  ["#connected-projects", "Проекты"],
+                  ["#project-analytics", "Аналитика"],
+                  ["#metrics-dynamics", "Динамика"],
+                  ["#reports-history", "История"],
+                ].map(([href, label]) => (
+                  <a
+                    key={href}
+                    href={href}
+                    className="block rounded-2xl border border-transparent bg-white/[0.03] px-4 py-3 text-white/65 transition hover:border-white/10 hover:bg-white/[0.06] hover:text-white"
+                  >
+                    {label}
+                  </a>
+                ))}
+              </nav>
+            </div>
+          </aside>
+
+          <div className="space-y-6">
+        <div id="connect-avito" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">Подключить проект к Avito</h2>
@@ -714,6 +849,25 @@ setIntegrations(integrationsData.integrations ?? []);
                   </div>
                 </div>
 
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <button
+                    type="button"
+                    onClick={() => checkAvitoConnection(index)}
+                    disabled={checkingAccountIndex === index}
+                    className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50"
+                  >
+                    {checkingAccountIndex === index
+                      ? "Проверяем Avito..."
+                      : "Проверить подключение Avito"}
+                  </button>
+
+                  {accountCheckMessages[index] ? (
+                    <div className="text-sm text-white/55">
+                      {accountCheckMessages[index]}
+                    </div>
+                  ) : null}
+                </div>
+
                 <label className="mt-4 flex cursor-pointer items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75">
                   <span>Аккаунт активен</span>
                   <input
@@ -822,7 +976,7 @@ setIntegrations(integrationsData.integrations ?? []);
           ) : null}
         </div>
 
-        <div className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div id="connected-projects" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
   <div>
     <h2 className="text-lg font-semibold text-white">Подключённые проекты</h2>
     <div className="mt-1 text-sm text-white/45">
@@ -975,6 +1129,17 @@ setIntegrations(integrationsData.integrations ?? []);
                     ? "Выключить weekly"
                     : "Включить weekly"}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => sendTestReport(integration)}
+                  disabled={sendingTestReportId === integration.id}
+                  className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50"
+                >
+                  {sendingTestReportId === integration.id
+                    ? "Отправляем..."
+                    : "Отправить тест"}
+                </button>
                   </>
                 ) : null}
               </div>
@@ -1019,7 +1184,7 @@ setIntegrations(integrationsData.integrations ?? []);
   </div>
 </div>
 
-        <div className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div id="project-analytics" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">Аналитика проекта</h2>
@@ -1159,7 +1324,7 @@ setIntegrations(integrationsData.integrations ?? []);
           </div>
         </div>
 
-        <div className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div id="metrics-dynamics" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">Динамика</h2>
@@ -1175,17 +1340,29 @@ setIntegrations(integrationsData.integrations ?? []);
             </div>
           ) : data.length === 0 ? (
             <div className="flex h-[320px] flex-col items-center justify-center rounded-[24px] border border-white/10 bg-white/[0.03] text-center">
-              <div className="text-lg font-medium text-white">Данных пока нет</div>
+              <div className="text-lg font-medium text-white">Метрик пока нет</div>
               <div className="mt-2 max-w-md text-sm text-white/45">
-                Запусти daily-report за период или проверь, что записи появились в avito_report_metrics.
+                Данные появятся после первого ежедневного отчёта. Для быстрой проверки можно отправить тестовый отчёт в Telegram.
               </div>
+              {selectedAnalyticsIntegration ? (
+                <button
+                  type="button"
+                  onClick={() => sendTestReport(selectedAnalyticsIntegration)}
+                  disabled={sendingTestReportId === selectedAnalyticsIntegration.id}
+                  className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-5 py-3 text-sm text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50"
+                >
+                  {sendingTestReportId === selectedAnalyticsIntegration.id
+                    ? "Отправляем..."
+                    : "Отправить тестовый отчёт"}
+                </button>
+              ) : null}
             </div>
           ) : (
             <AvitoChart data={data} />
           )}
         </div>
 
-        <div className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div id="reports-history" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
           <h2 className="text-lg font-semibold text-white">История отчётов</h2>
 
           <div className="mt-5 overflow-hidden rounded-[24px] border border-white/10">
@@ -1224,6 +1401,8 @@ setIntegrations(integrationsData.integrations ?? []);
             </table>
           </div>
         </div>
+      </div>
+      </div>
       </div>
 
       {isInstructionOpen ? (
