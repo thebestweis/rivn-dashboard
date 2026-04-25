@@ -26,7 +26,7 @@ export function useExpensesQuery(enabled = true) {
     gcTime: GC_TIME,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
     placeholderData: (previousData) => previousData,
   });
 }
@@ -39,10 +39,17 @@ export function useCreateExpenseMutation() {
   return useMutation({
     mutationFn: createExpenseInSupabase,
     onSuccess: (createdExpense) => {
+      if (!workspaceId) return;
+
       queryClient.setQueryData<Expense[]>(
         queryKeys.expensesByWorkspace(workspaceId),
         (prev = []) => [createdExpense, ...prev]
       );
+
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.expensesByWorkspace(workspaceId),
+        refetchType: "all",
+      });
     },
   });
 }
@@ -61,6 +68,8 @@ export function useUpdateExpenseMutation() {
       values: ExpenseFormData;
     }) => updateExpenseInSupabase(expenseId, values),
     onSuccess: (updatedExpense) => {
+      if (!workspaceId) return;
+
       queryClient.setQueryData<Expense[]>(
         queryKeys.expensesByWorkspace(workspaceId),
         (prev = []) =>
@@ -68,6 +77,11 @@ export function useUpdateExpenseMutation() {
             expense.id === updatedExpense.id ? updatedExpense : expense
           )
       );
+
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.expensesByWorkspace(workspaceId),
+        refetchType: "all",
+      });
     },
   });
 }
@@ -80,11 +94,18 @@ export function useDeleteExpenseMutation() {
   return useMutation({
     mutationFn: deleteExpenseFromSupabase,
     onSuccess: (_, deletedExpenseId) => {
+      if (!workspaceId) return;
+
       queryClient.setQueryData<Expense[]>(
         queryKeys.expensesByWorkspace(workspaceId),
         (prev = []) =>
           prev.filter((expense) => expense.id !== deletedExpenseId)
       );
+
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.expensesByWorkspace(workspaceId),
+        refetchType: "all",
+      });
     },
   });
 }

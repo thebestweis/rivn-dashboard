@@ -16,6 +16,7 @@ const appRoutes = [
   "/expenses",
   "/analytics",
   "/avito-reports",
+  "/crm",
   "/billing",
   "/settings",
   "/admin",
@@ -55,7 +56,7 @@ export function RootAppShell({
 
   if (!isAppContextReady && appContextErrorMessage) {
     return (
-      <div className="min-h-screen bg-[#0B0F1A] text-white">
+      <div className="min-h-screen bg-slate-50 text-slate-950 dark:bg-[#0B0F1A] dark:text-white">
         <div className="flex min-h-screen">
           <AppSidebar />
 
@@ -90,7 +91,7 @@ export function RootAppShell({
 
   if (!isLoading && !hasAccess) {
     return (
-      <div className="min-h-screen bg-[#0B0F1A] text-white">
+      <div className="min-h-screen bg-slate-50 text-slate-950 dark:bg-[#0B0F1A] dark:text-white">
         <div className="flex min-h-screen">
           <AppSidebar />
 
@@ -108,7 +109,7 @@ export function RootAppShell({
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0F1A] text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-950 dark:bg-[#0B0F1A] dark:text-white">
       <div className="flex min-h-screen">
         <AppSidebar />
 

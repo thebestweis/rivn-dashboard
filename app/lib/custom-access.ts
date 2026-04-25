@@ -1,5 +1,6 @@
 import {
   canAccessSection,
+  canManageCrmSettings,
   canManageFinance,
   canEditClients,
   canEditProjectDetails,
@@ -73,6 +74,9 @@ export function canManageSectionWithCustomPermissions(params: {
 
     case "tasks":
       return canEditTasks(role);
+
+    case "crm":
+      return canManageCrmSettings(role);
 
     case "dashboard":
     case "analytics":

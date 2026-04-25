@@ -1,4 +1,11 @@
-export type AppRole = "owner" | "admin" | "manager" | "analyst" | "employee";
+export type AppRole =
+  | "owner"
+  | "admin"
+  | "manager"
+  | "analyst"
+  | "employee"
+  | "sales_head"
+  | "sales_manager";
 
 export type AppSection =
   | "dashboard"
@@ -9,6 +16,7 @@ export type AppSection =
   | "payroll"
   | "expenses"
   | "analytics"
+  | "crm"
   | "billing"
   | "settings";
 
@@ -21,6 +29,7 @@ type PermissionMatrix = {
   canViewPayroll: boolean;
   canViewExpenses: boolean;
   canViewAnalytics: boolean;
+  canViewCrm: boolean;
   canViewBilling: boolean;
   canViewSettings: boolean;
 
@@ -48,6 +57,7 @@ const permissionsByRole: Record<AppRole, PermissionMatrix> = {
     canViewPayroll: true,
     canViewExpenses: true,
     canViewAnalytics: true,
+    canViewCrm: true,
     canViewBilling: true,
     canViewSettings: true,
 
@@ -74,6 +84,7 @@ const permissionsByRole: Record<AppRole, PermissionMatrix> = {
     canViewPayroll: true,
     canViewExpenses: true,
     canViewAnalytics: true,
+    canViewCrm: true,
     canViewBilling: true,
     canViewSettings: true,
 
@@ -100,6 +111,7 @@ const permissionsByRole: Record<AppRole, PermissionMatrix> = {
     canViewPayroll: false,
     canViewExpenses: true,
     canViewAnalytics: false,
+    canViewCrm: true,
     canViewBilling: false,
     canViewSettings: false,
 
@@ -126,6 +138,7 @@ const permissionsByRole: Record<AppRole, PermissionMatrix> = {
     canViewPayroll: true,
     canViewExpenses: true,
     canViewAnalytics: true,
+    canViewCrm: false,
     canViewBilling: false,
     canViewSettings: false,
 
@@ -152,6 +165,7 @@ const permissionsByRole: Record<AppRole, PermissionMatrix> = {
     canViewPayroll: false,
     canViewExpenses: false,
     canViewAnalytics: false,
+    canViewCrm: false,
     canViewBilling: false,
     canViewSettings: false,
 
@@ -168,6 +182,60 @@ const permissionsByRole: Record<AppRole, PermissionMatrix> = {
 
     canEditTasks: true,
   },
+
+  sales_head: {
+    canViewDashboard: false,
+    canViewClients: true,
+    canViewProjects: false,
+    canViewTasks: true,
+    canViewPayments: false,
+    canViewPayroll: false,
+    canViewExpenses: false,
+    canViewAnalytics: false,
+    canViewCrm: true,
+    canViewBilling: false,
+    canViewSettings: false,
+
+    canManageWorkspace: false,
+    canManageUsers: false,
+    canManageSystemSettings: false,
+    canManageEmployees: false,
+    canManageFinance: false,
+
+    canEditClients: true,
+
+    canManageProjects: false,
+    canEditProjectDetails: false,
+
+    canEditTasks: true,
+  },
+
+  sales_manager: {
+    canViewDashboard: false,
+    canViewClients: true,
+    canViewProjects: false,
+    canViewTasks: true,
+    canViewPayments: false,
+    canViewPayroll: false,
+    canViewExpenses: false,
+    canViewAnalytics: false,
+    canViewCrm: true,
+    canViewBilling: false,
+    canViewSettings: false,
+
+    canManageWorkspace: false,
+    canManageUsers: false,
+    canManageSystemSettings: false,
+    canManageEmployees: false,
+    canManageFinance: false,
+
+    canEditClients: true,
+
+    canManageProjects: false,
+    canEditProjectDetails: false,
+
+    canEditTasks: true,
+  },
 };
 
 export function isAppRole(value: string | null | undefined): value is AppRole {
@@ -176,7 +244,9 @@ export function isAppRole(value: string | null | undefined): value is AppRole {
     value === "admin" ||
     value === "manager" ||
     value === "analyst" ||
-    value === "employee"
+    value === "employee" ||
+    value === "sales_head" ||
+    value === "sales_manager"
   );
 }
 
@@ -204,6 +274,8 @@ export function canAccessSection(role: AppRole, section: AppSection): boolean {
       return permissions.canViewExpenses;
     case "analytics":
       return permissions.canViewAnalytics;
+    case "crm":
+      return permissions.canViewCrm;
     case "billing":
       return permissions.canViewBilling;
     case "settings":
@@ -244,6 +316,10 @@ export function getSectionByPathname(pathname: string): AppSection | null {
 
   if (pathname === "/analytics" || pathname.startsWith("/analytics/")) {
     return "analytics";
+  }
+
+  if (pathname === "/crm" || pathname.startsWith("/crm/")) {
+    return "crm";
   }
 
   if (pathname === "/billing" || pathname.startsWith("/billing/")) {
@@ -336,5 +412,38 @@ export function canManageSystem(role: AppRole) {
 }
 
 export function canViewAllTasks(role: AppRole) {
-  return role === "owner" || role === "admin" || role === "manager";
+  return (
+    role === "owner" ||
+    role === "admin" ||
+    role === "manager" ||
+    role === "sales_head"
+  );
+}
+
+export function canAccessCrm(role: AppRole) {
+  return (
+    role === "owner" ||
+    role === "admin" ||
+    role === "manager" ||
+    role === "sales_head" ||
+    role === "sales_manager"
+  );
+}
+
+export function canManageCrmSettings(role: AppRole) {
+  return (
+    role === "owner" ||
+    role === "admin" ||
+    role === "manager" ||
+    role === "sales_head"
+  );
+}
+
+export function canViewAllCrmDeals(role: AppRole) {
+  return (
+    role === "owner" ||
+    role === "admin" ||
+    role === "manager" ||
+    role === "sales_head"
+  );
 }

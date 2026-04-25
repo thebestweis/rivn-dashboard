@@ -22,22 +22,22 @@ export function AppTopbar({
   customActions,
 }: AppTopbarProps) {
   return (
-    <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0B0F1A]/85 backdrop-blur-xl">
-  <div className="relative overflow-hidden border-b border-white/5 bg-[radial-gradient(circle_at_top,rgba(111,90,255,0.16),transparent_34%),radial-gradient(circle_at_82%_16%,rgba(16,185,129,0.12),transparent_18%),linear-gradient(180deg,rgba(11,15,26,0.98),rgba(9,13,24,0.96))] px-5 py-6 lg:px-8">
+    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/85 backdrop-blur-xl dark:border-white/10 dark:bg-[#0B0F1A]/85">
+  <div className="relative overflow-hidden border-b border-slate-200 bg-white px-5 py-6 dark:border-white/5 dark:bg-[radial-gradient(circle_at_top,rgba(111,90,255,0.16),transparent_34%),radial-gradient(circle_at_82%_16%,rgba(16,185,129,0.12),transparent_18%),linear-gradient(180deg,rgba(11,15,26,0.98),rgba(9,13,24,0.96))] lg:px-8">
         <div className="pointer-events-none absolute inset-0 opacity-[0.04] [background-image:linear-gradient(rgba(255,255,255,0.8)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.8)_1px,transparent_1px)] [background-size:72px_72px]" />
 
         <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             {eyebrow ? (
-              <div className="text-sm text-white/45">{eyebrow}</div>
+              <div className="text-sm text-slate-500 dark:text-white/45">{eyebrow}</div>
             ) : null}
 
-            <h1 className={`${eyebrow ? "mt-2" : ""} text-[30px] font-bold tracking-[-0.03em] text-white`}>
+            <h1 className={`${eyebrow ? "mt-2" : ""} text-[30px] font-bold tracking-[-0.03em] text-slate-950 dark:text-white`}>
   {title}
 </h1>
 
 {description ? (
-  <p className="mt-2 max-w-[720px] text-sm leading-6 text-white/50">{description}</p>
+  <p className="mt-2 max-w-[720px] text-sm leading-6 text-slate-500 dark:text-white/50">{description}</p>
 ) : null}
           </div>
 

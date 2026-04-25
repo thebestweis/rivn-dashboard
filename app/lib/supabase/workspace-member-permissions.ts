@@ -9,6 +9,7 @@ export type WorkspacePermissionSection =
   | "expenses"
   | "payroll"
   | "analytics"
+  | "crm"
   | "settings";
 
 export type WorkspaceMemberPermissionItem = {

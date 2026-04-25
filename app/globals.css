@@ -164,3 +164,153 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
+
+html:not(.dark) {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html:not(.dark) body {
+  background: #eef3f8;
+  color: #0f172a;
+}
+
+html:not(.dark) [class*="bg-[#0B0F1A]"],
+html:not(.dark) [class*="bg-[#0F1524]"] {
+  background: #f8fafc !important;
+}
+
+html:not(.dark) [class*="bg-[#0F1724]"],
+html:not(.dark) [class*="bg-[#111C2B]"],
+html:not(.dark) [class*="bg-[#121826]"],
+html:not(.dark) [class*="bg-[#121827]"],
+html:not(.dark) [class*="bg-[#0D1420]"],
+html:not(.dark) [class*="bg-[linear-gradient"],
+html:not(.dark) [class*="bg-[radial-gradient"] {
+  background: #ffffff !important;
+}
+
+html:not(.dark) [class*="bg-white/"],
+html:not(.dark) [class*="bg-white\\["] {
+  background: rgba(15, 23, 42, 0.055) !important;
+}
+
+html:not(.dark) [class*="bg-black/"] {
+  background: rgba(15, 23, 42, 0.08) !important;
+}
+
+html:not(.dark) [class~="text-white"] {
+  color: #0f172a !important;
+}
+
+html:not(.dark) [class*="text-white/"],
+html:not(.dark) [class*="text-slate-300"],
+html:not(.dark) [class*="text-slate-400"] {
+  color: rgba(15, 23, 42, 0.72) !important;
+}
+
+html:not(.dark) [class*="text-slate-500"],
+html:not(.dark) [class*="text-slate-600"] {
+  color: rgba(15, 23, 42, 0.76) !important;
+}
+
+html:not(.dark) [class*="border-white/"] {
+  border-color: rgba(15, 23, 42, 0.16) !important;
+}
+
+html:not(.dark) [class*="border-slate-200"] {
+  border-color: rgba(15, 23, 42, 0.14) !important;
+}
+
+html:not(.dark) [class*="shadow-[0_10px_40px"],
+html:not(.dark) [class*="shadow-[0_20px_80px"],
+html:not(.dark) [class*="shadow-[0_24px_100px"],
+html:not(.dark) [class*="shadow-[0_24px_70px"] {
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.11) !important;
+}
+
+html:not(.dark) input,
+html:not(.dark) textarea,
+html:not(.dark) select {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.18);
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: rgba(15, 23, 42, 0.48);
+}
+
+html:not(.dark) [class*="bg-emerald-400/"],
+html:not(.dark) [class*="bg-emerald-500/"] {
+  background: rgba(16, 185, 129, 0.18) !important;
+}
+
+html:not(.dark) [class*="text-emerald-300"],
+html:not(.dark) [class*="text-emerald-400"] {
+  color: #059669 !important;
+}
+
+html:not(.dark) [class*="bg-violet-500/"],
+html:not(.dark) [class*="bg-purple-500/"] {
+  background: rgba(124, 58, 237, 0.18) !important;
+}
+
+html:not(.dark) [class*="text-violet-300"],
+html:not(.dark) [class*="text-purple-300"] {
+  color: #6d28d9 !important;
+}
+
+html:not(.dark) [class*="bg-amber-400/"],
+html:not(.dark) [class*="bg-amber-500/"] {
+  background: rgba(245, 158, 11, 0.2) !important;
+}
+
+html:not(.dark) [class*="text-amber-200"],
+html:not(.dark) [class*="text-amber-300"] {
+  color: #b45309 !important;
+}
+
+html:not(.dark) [class*="bg-red-500/"],
+html:not(.dark) [class*="bg-rose-500/"] {
+  background: rgba(244, 63, 94, 0.15) !important;
+}
+
+html:not(.dark) [class*="text-red-200"],
+html:not(.dark) [class*="text-rose-200"],
+html:not(.dark) [class*="text-rose-300"] {
+  color: #be123c !important;
+}
+
+html:not(.dark) [class*="bg-sky-400/"],
+html:not(.dark) [class*="bg-sky-500/"] {
+  background: rgba(14, 165, 233, 0.16) !important;
+}
+
+html:not(.dark) [class*="text-sky-300"] {
+  color: #0369a1 !important;
+}
+
+html:not(.dark) [class*="bg-gradient-to-r"] {
+  background-image: linear-gradient(90deg, #6d5dfc, #7c6fff) !important;
+  color: #ffffff !important;
+}
+
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.26);
+}
+
+html:not(.dark) * {
+  scrollbar-color: rgba(15, 23, 42, 0.18) transparent;
+}

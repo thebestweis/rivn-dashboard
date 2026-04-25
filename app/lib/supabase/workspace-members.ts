@@ -7,7 +7,9 @@ export type WorkspaceMemberRole =
   | "admin"
   | "manager"
   | "analyst"
-  | "employee";
+  | "employee"
+  | "sales_head"
+  | "sales_manager";
 
 export type WorkspaceMemberStatus =
   | "active"

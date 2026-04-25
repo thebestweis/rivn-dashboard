@@ -187,7 +187,8 @@ function filterTasksByAccess(params: {
   if (
     resolvedRole === "owner" ||
     resolvedRole === "admin" ||
-    resolvedRole === "manager"
+    resolvedRole === "manager" ||
+    resolvedRole === "sales_head"
   ) {
     return tasks;
   }
@@ -196,7 +197,7 @@ function filterTasksByAccess(params: {
     return [];
   }
 
-  if (resolvedRole === "employee") {
+  if (resolvedRole === "employee" || resolvedRole === "sales_manager") {
     if (!membershipId) {
       return [];
     }

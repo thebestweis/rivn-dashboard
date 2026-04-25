@@ -52,6 +52,7 @@ import {
   sendSalaryAccruedNotification,
   sendSalaryPaidNotification,
 } from "../lib/notifications-client";
+import { queryKeys } from "../lib/query-keys";
 
 function getTodayDisplayDate() {
   const today = new Date();
@@ -179,7 +180,7 @@ function getMemberNameById(
 export default function PayrollPage() {
   const queryClient = useQueryClient();
 
-  const { role, isLoading: isAppContextLoading } = useAppContextState();
+  const { role, workspace, isLoading: isAppContextLoading } = useAppContextState();
   const { isLoading: isAccessLoading, hasAccess } = usePageAccess("payroll");
 
 const currentRole: AppRole | null = isAppRole(role) ? role : null;
@@ -467,6 +468,21 @@ setPayouts(payoutsData);
 setExtraPayments(extraData);
 setMembers(membersData);
 setSystemSettings(settingsData);
+
+    if (workspace?.id) {
+      queryClient.setQueryData(
+        queryKeys.payrollAccrualsByWorkspace(workspace.id),
+        accrualsData
+      );
+      queryClient.setQueryData(
+        queryKeys.payrollPayoutsByWorkspace(workspace.id),
+        payoutsData
+      );
+      queryClient.setQueryData(
+        queryKeys.payrollExtraPaymentsByWorkspace(workspace.id),
+        extraData
+      );
+    }
   }
 
   const visibleAccruals = useMemo(() => {
@@ -576,6 +592,7 @@ setSystemSettings(settingsData);
             typeof part === "string" &&
             part.toLowerCase().includes("payroll")
         ),
+      refetchType: "all",
     });
   }
 
