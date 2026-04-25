@@ -3,6 +3,13 @@ import { createClient } from "@supabase/supabase-js";
 import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
+import {
+  buildDialogAnalyticsBlock,
+  getDialogAnalytics,
+  getMoscowPeriodRangeUnix,
+  mergeDialogAnalytics,
+  type DialogAnalytics,
+} from "@/app/api/avito/dialog-analytics";
 
 import { verifyCronSecret } from "../verify-cron-secret";
 
@@ -287,6 +294,7 @@ function buildWeeklyReport(params: {
   accountBlocks: string[];
   totalCurrent: PeriodStats;
   totalPrevious: PeriodStats;
+  dialogAnalyticsBlock: string;
 }) {
   const hasMultipleAccounts = params.accountBlocks.length > 1;
 
@@ -300,6 +308,8 @@ function buildWeeklyReport(params: {
   if (!hasMultipleAccounts) {
     return [
       ...baseLines,
+      "",
+      params.dialogAnalyticsBlock,
       "",
       "✅ Аккаунт проверен",
     ].join("\n");
@@ -316,6 +326,8 @@ function buildWeeklyReport(params: {
     buildMetricLine("Расходы", params.totalCurrent.expenses, params.totalPrevious.expenses, "money"),
     buildMetricLine("Конверсия", params.totalCurrent.conversion, params.totalPrevious.conversion, "percent"),
     buildMetricLine("Стоимость 1 контакта", params.totalCurrent.costPerContact, params.totalPrevious.costPerContact, "money"),
+    "",
+    params.dialogAnalyticsBlock,
     "",
     "✅ Аккаунты проверены",
   ].join("\n");
@@ -432,6 +444,11 @@ export async function GET(request: Request) {
         }
 
         const accountBlocks: string[] = [];
+        const dialogAnalyticsItems: DialogAnalytics[] = [];
+        const dialogRange = getMoscowPeriodRangeUnix(
+          currentStartDate,
+          currentEndDate
+        );
 
         const totalCurrentRaw = {
           views: 0,
@@ -486,6 +503,7 @@ export async function GET(request: Request) {
           });
 
           const rawAvitoSpendings = await fetchAvitoSpendings({
+            accountId: account.id,
             accessToken,
             userId: account.avito_user_id,
             dateFrom: prevStartDate,
@@ -513,6 +531,22 @@ export async function GET(request: Request) {
             expenses: previousAvitoSpendings.total,
           });
 
+          try {
+            const dialogAnalytics = await getDialogAnalytics({
+              accessToken,
+              avitoUserId: account.avito_user_id,
+              start: dialogRange.start,
+              end: dialogRange.end,
+            });
+
+            dialogAnalyticsItems.push(dialogAnalytics);
+          } catch (error) {
+            console.error("Weekly dialog analytics failed", {
+              accountId: account.id,
+              error,
+            });
+          }
+
           totalCurrentRaw.views += currentStats.views;
           totalCurrentRaw.contacts += currentStats.contacts;
           totalCurrentRaw.favorites += currentStats.favorites;
@@ -534,6 +568,9 @@ export async function GET(request: Request) {
 
         const totalCurrent = buildStats(totalCurrentRaw);
         const totalPrevious = buildStats(totalPreviousRaw);
+        const dialogAnalyticsBlock = buildDialogAnalyticsBlock(
+          mergeDialogAnalytics(dialogAnalyticsItems)
+        );
 
         const reportText = buildWeeklyReport({
           clientName: client.name,
@@ -541,6 +578,7 @@ export async function GET(request: Request) {
           accountBlocks,
           totalCurrent,
           totalPrevious,
+          dialogAnalyticsBlock,
         });
 
         await sendTelegramMessage(client.telegram_chat_id, reportText);

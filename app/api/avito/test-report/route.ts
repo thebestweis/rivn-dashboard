@@ -474,6 +474,7 @@ export async function GET(request: Request) {
       });
 
       const rawAvitoSpendings = await fetchAvitoSpendings({
+        accountId: account.id,
         accessToken,
         userId: account.avito_user_id,
         dateFrom: beforeYesterday,

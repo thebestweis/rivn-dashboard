@@ -41,6 +41,7 @@ type AvitoIntegration = {
     id: string;
     name: string;
     avito_user_id: string | null;
+    avito_client_id?: string | null;
     is_active: boolean;
   }[];
 };
@@ -50,6 +51,13 @@ type TelegramChat = {
   title: string;
   username: string | null;
   type: string;
+};
+
+type EditingAccountForm = {
+  accountName: string;
+  avitoUserId: string;
+  avitoClientId: string;
+  avitoClientSecret: string;
 };
 
 const TELEGRAM_BOT_USERNAME = "stat_rivnos_bot";
@@ -153,6 +161,9 @@ const [expandedIntegrationId, setExpandedIntegrationId] = useState("");
 const [checkingAccountIndex, setCheckingAccountIndex] = useState<number | null>(null);
 const [accountCheckMessages, setAccountCheckMessages] = useState<Record<number, string>>({});
 const [sendingTestReportId, setSendingTestReportId] = useState("");
+const [editingIntegrationId, setEditingIntegrationId] = useState("");
+const [editingTelegramChatId, setEditingTelegramChatId] = useState("");
+const [editingAccounts, setEditingAccounts] = useState<Record<string, EditingAccountForm>>({});
 
   const { workspace } = useAppContextState();
 
@@ -270,6 +281,43 @@ setIntegrations(integrationsData.integrations ?? []);
 
   function removeAccount(index: number) {
     setAccounts((prev) => prev.filter((_, accountIndex) => accountIndex !== index));
+  }
+
+  function startEditingIntegration(integration: AvitoIntegration) {
+    setEditingIntegrationId(integration.id);
+    setEditingTelegramChatId(integration.telegram_chat_id ?? "");
+    setEditingAccounts(
+      Object.fromEntries(
+        (integration.avito_report_accounts ?? []).map((account) => [
+          account.id,
+          {
+            accountName: account.name,
+            avitoUserId: account.avito_user_id ?? "",
+            avitoClientId: account.avito_client_id ?? "",
+            avitoClientSecret: "",
+          },
+        ])
+      )
+    );
+  }
+
+  function stopEditingIntegration() {
+    setEditingIntegrationId("");
+    setEditingTelegramChatId("");
+    setEditingAccounts({});
+  }
+
+  function updateEditingAccount(
+    accountId: string,
+    patch: Partial<EditingAccountForm>
+  ) {
+    setEditingAccounts((current) => ({
+      ...current,
+      [accountId]: {
+        ...current[accountId],
+        ...patch,
+      },
+    }));
   }
 
   async function checkAvitoConnection(index: number) {
@@ -519,6 +567,22 @@ setIntegrations(integrationsData.integrations ?? []);
     }
   }
 
+  async function archiveIntegration(integration: AvitoIntegration) {
+    const confirmed = window.confirm(
+      `Отправка отчётов по проекту "${integration.name}" будет выключена. История и настройки останутся в системе. Архивировать проект?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await updateIntegration(integration.id, {
+      isActive: false,
+      dailyEnabled: false,
+      weeklyEnabled: false,
+    });
+  }
+
   async function updateIntegrationAccount(accountId: string, isActive: boolean) {
     try {
       setIntegrationMessage("");
@@ -551,6 +615,78 @@ setIntegrations(integrationsData.integrations ?? []);
         error instanceof Error
           ? error.message
           : "Ошибка обновления Avito-аккаунта"
+      );
+    } finally {
+      setUpdatingIntegrationId("");
+    }
+  }
+
+  async function saveIntegrationDetails(integration: AvitoIntegration) {
+    try {
+      setIntegrationMessage("");
+      setUpdatingIntegrationId(integration.id);
+
+      const response = await fetch("/api/avito/integrations", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace?.id,
+          integrationId: integration.id,
+          patch: {
+            telegramChatId: editingTelegramChatId,
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Не удалось обновить проект");
+      }
+
+      for (const account of integration.avito_report_accounts ?? []) {
+        const form = editingAccounts[account.id];
+
+        if (!form) {
+          continue;
+        }
+
+        const accountResponse = await fetch("/api/avito/integrations", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            workspaceId: workspace?.id,
+            accountId: account.id,
+            patch: {
+              accountName: form.accountName,
+              avitoUserId: form.avitoUserId,
+              avitoClientId: form.avitoClientId,
+              avitoClientSecret: form.avitoClientSecret,
+            },
+          }),
+        });
+
+        const accountResult = await accountResponse.json();
+
+        if (!accountResponse.ok || !accountResult.ok) {
+          throw new Error(
+            accountResult.error || `Не удалось обновить аккаунт ${account.name}`
+          );
+        }
+      }
+
+      await refreshIntegrations();
+      stopEditingIntegration();
+      setIntegrationMessage("Настройки проекта сохранены");
+    } catch (error) {
+      setIntegrationMessage(
+        error instanceof Error
+          ? error.message
+          : "Ошибка сохранения настроек проекта"
       );
     } finally {
       setUpdatingIntegrationId("");
@@ -598,6 +734,19 @@ setIntegrations(integrationsData.integrations ?? []);
       setSendingTestReportId("");
     }
   }
+
+  const archivedIntegrations = integrations.filter(
+    (integration) =>
+      !integration.is_active &&
+      !integration.daily_reports_enabled &&
+      !integration.weekly_reports_enabled
+  );
+  const activeIntegrations = integrations.filter(
+    (integration) =>
+      integration.is_active ||
+      integration.daily_reports_enabled ||
+      integration.weekly_reports_enabled
+  );
 
   return (
     
@@ -980,10 +1129,11 @@ setIntegrations(integrationsData.integrations ?? []);
   </div>
 
   <div className="mt-5 space-y-3">
-    {integrations.length > 0 ? (
-      integrations.map((integration) => {
+    {activeIntegrations.length > 0 ? (
+      activeIntegrations.map((integration) => {
         const integrationAccounts = integration.avito_report_accounts ?? [];
         const isExpanded = expandedIntegrationId === integration.id;
+        const isEditing = editingIntegrationId === integration.id;
 
         return (
           <div
@@ -1130,37 +1280,196 @@ setIntegrations(integrationsData.integrations ?? []);
                     ? "Отправляем..."
                     : "Отправить тест"}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    isEditing
+                      ? stopEditingIntegration()
+                      : startEditingIntegration(integration)
+                  }
+                  disabled={updatingIntegrationId === integration.id}
+                  className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
+                >
+                  {isEditing ? "Отменить правки" : "Редактировать"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => archiveIntegration(integration)}
+                  disabled={
+                    updatingIntegrationId === integration.id ||
+                    (!integration.is_active &&
+                      !integration.daily_reports_enabled &&
+                      !integration.weekly_reports_enabled)
+                  }
+                  className="rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-1 text-rose-200 transition hover:bg-rose-400/15 disabled:opacity-40"
+                >
+                  В архив
+                </button>
                   </>
                 ) : null}
               </div>
             </div>
 
+            {isExpanded && isEditing ? (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-[#0F1524] p-4">
+                <label className="text-sm text-white/60">Telegram chat_id</label>
+                <input
+                  value={editingTelegramChatId}
+                  onChange={(event) =>
+                    setEditingTelegramChatId(event.target.value)
+                  }
+                  placeholder="Например: -1001234567890"
+                  className="mt-2 h-[44px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/25"
+                />
+                <div className="mt-2 text-xs text-white/40">
+                  Это чат, куда бот отправляет отчёты. Для беседы обычно начинается с -100. Если оставить пустым, отчёты не будут отправляться, пока беседа не привяжется через бота.
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => saveIntegrationDetails(integration)}
+                    disabled={updatingIntegrationId === integration.id}
+                    className="rounded-2xl bg-emerald-500/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-50"
+                  >
+                    {updatingIntegrationId === integration.id
+                      ? "Сохраняем..."
+                      : "Сохранить правки"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopEditingIntegration}
+                    disabled={updatingIntegrationId === integration.id}
+                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {isExpanded && integrationAccounts.length > 0 ? (
               <div className="mt-4 grid gap-2 md:grid-cols-2">
-                {integrationAccounts.map((account) => (
-                  <div
-                    key={account.id}
-                    className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white/65"
-                  >
-                    <div className="font-medium text-white">{account.name}</div>
-                    <div className="mt-1 text-xs text-white/40">
-                      Avito user_id: {account.avito_user_id || "не указан"}
-                    </div>
-                    <div className="mt-1 text-xs text-white/40">
-                      {account.is_active ? "Аккаунт активен" : "Аккаунт выключен"}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateIntegrationAccount(account.id, !account.is_active)
-                      }
-                      disabled={updatingIntegrationId === account.id}
-                      className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
+                {integrationAccounts.map((account) => {
+                  const editingAccount = editingAccounts[account.id] ?? {
+                    accountName: account.name,
+                    avitoUserId: account.avito_user_id ?? "",
+                    avitoClientId: account.avito_client_id ?? "",
+                    avitoClientSecret: "",
+                  };
+                  const maskedClientId = account.avito_client_id
+                    ? `${account.avito_client_id.slice(0, 6)}...`
+                    : "не указан";
+
+                  return (
+                    <div
+                      key={account.id}
+                      className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white/65"
                     >
-                      {account.is_active ? "Выключить аккаунт" : "Включить аккаунт"}
-                    </button>
-                  </div>
-                ))}
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-xs text-white/50">
+                              Название аккаунта
+                            </label>
+                            <input
+                              value={editingAccount.accountName}
+                              onChange={(event) =>
+                                updateEditingAccount(account.id, {
+                                  accountName: event.target.value,
+                                })
+                              }
+                              className="mt-1 h-[42px] w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs text-white/50">
+                              Avito user_id
+                            </label>
+                            <input
+                              value={editingAccount.avitoUserId}
+                              onChange={(event) =>
+                                updateEditingAccount(account.id, {
+                                  avitoUserId: event.target.value,
+                                })
+                              }
+                              className="mt-1 h-[42px] w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs text-white/50">
+                              Avito client_id
+                            </label>
+                            <input
+                              value={editingAccount.avitoClientId}
+                              onChange={(event) =>
+                                updateEditingAccount(account.id, {
+                                  avitoClientId: event.target.value,
+                                })
+                              }
+                              className="mt-1 h-[42px] w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs text-white/50">
+                              Новый client_secret
+                            </label>
+                            <input
+                              value={editingAccount.avitoClientSecret}
+                              onChange={(event) =>
+                                updateEditingAccount(account.id, {
+                                  avitoClientSecret: event.target.value,
+                                })
+                              }
+                              placeholder="Оставь пустым, если секрет не меняется"
+                              type="password"
+                              className="mt-1 h-[42px] w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none placeholder:text-white/25"
+                            />
+                            <div className="mt-1 text-xs text-white/35">
+                              Старый client_secret не показываем ради безопасности.
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="font-medium text-white">
+                            {account.name}
+                          </div>
+                          <div className="mt-1 text-xs text-white/40">
+                            Avito user_id:{" "}
+                            {account.avito_user_id || "не указан"}
+                          </div>
+                          <div className="mt-1 text-xs text-white/40">
+                            Avito client_id: {maskedClientId}
+                          </div>
+                          <div className="mt-1 text-xs text-white/40">
+                            {account.is_active
+                              ? "Аккаунт активен"
+                              : "Аккаунт выключен"}
+                          </div>
+                        </>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateIntegrationAccount(account.id, !account.is_active)
+                        }
+                        disabled={updatingIntegrationId === account.id}
+                        className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
+                      >
+                        {account.is_active
+                          ? "Выключить аккаунт"
+                          : "Включить аккаунт"}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
           </div>
@@ -1168,10 +1477,63 @@ setIntegrations(integrationsData.integrations ?? []);
       })
     ) : (
       <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/45">
-        Пока нет подключённых Avito-проектов.
+        {archivedIntegrations.length > 0
+          ? "Все подключённые Avito-проекты сейчас в архиве."
+          : "Пока нет подключённых Avito-проектов."}
       </div>
     )}
   </div>
+
+  {archivedIntegrations.length > 0 ? (
+    <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.02] p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-white/80">
+            Архивные проекты
+          </div>
+          <div className="text-xs text-white/40">
+            Здесь лежат проекты, по которым отчёты выключены. История и настройки сохранены.
+          </div>
+        </div>
+        <div className="text-xs text-white/35">
+          {archivedIntegrations.length} в архиве
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {archivedIntegrations.map((integration) => (
+          <div
+            key={integration.id}
+            className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <div className="text-sm font-medium text-white/75">
+                {integration.name}
+              </div>
+              <div className="mt-1 text-xs text-white/35">
+                Аккаунтов: {integration.avito_report_accounts?.length ?? 0}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                updateIntegration(integration.id, {
+                  isActive: true,
+                  dailyEnabled: true,
+                  weeklyEnabled: true,
+                })
+              }
+              disabled={updatingIntegrationId === integration.id}
+              className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50"
+            >
+              Вернуть в работу
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : null}
 </div>
 
         <div id="project-analytics" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">

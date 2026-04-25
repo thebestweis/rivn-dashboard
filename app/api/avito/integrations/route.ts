@@ -1,4 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/app/lib/supabase/server";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -8,7 +9,51 @@ function getServiceSupabase() {
     throw new Error("Не найдены переменные Supabase");
   }
 
-  return createClient(supabaseUrl, supabaseKey);
+  return createServiceClient(supabaseUrl, supabaseKey);
+}
+
+class HttpError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function requireWorkspaceAccess(
+  supabase: ReturnType<typeof getServiceSupabase>,
+  workspaceId: string
+) {
+  const authSupabase = await createServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await authSupabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new HttpError("Пользователь не авторизован", 401);
+  }
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("workspace_members")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (membershipError) {
+    throw new Error(`Ошибка проверки доступа: ${membershipError.message}`);
+  }
+
+  if (!membership) {
+    throw new HttpError("Нет доступа к этому кабинету", 403);
+  }
+}
+
+function getErrorStatus(error: unknown) {
+  return error instanceof HttpError ? error.status : 500;
 }
 
 function buildTelegramPrivateLink(clientCode: string) {
@@ -59,6 +104,7 @@ export async function GET(request: Request) {
     }
 
     const supabase = getServiceSupabase();
+    await requireWorkspaceAccess(supabase, workspaceId);
 
     const [
       { data: projects, error: projectsError },
@@ -85,6 +131,7 @@ export async function GET(request: Request) {
             id,
             name,
             avito_user_id,
+            avito_client_id,
             is_active
           )
         `)
@@ -118,7 +165,7 @@ export async function GET(request: Request) {
             ? error.message
             : "Ошибка загрузки проектов",
       },
-      { status: 500 }
+      { status: getErrorStatus(error) }
     );
   }
 }
@@ -134,6 +181,7 @@ export async function POST(request: Request) {
     }
 
     const supabase = getServiceSupabase();
+    await requireWorkspaceAccess(supabase, workspaceId);
 
     if (!body.projectId) {
       throw new Error("Выбери проект");
@@ -226,7 +274,7 @@ export async function POST(request: Request) {
             ? error.message
             : "Ошибка создания интеграции",
       },
-      { status: 500 }
+      { status: getErrorStatus(error) }
     );
   }
 }
@@ -248,6 +296,7 @@ export async function PATCH(request: Request) {
     }
 
     const supabase = getServiceSupabase();
+    await requireWorkspaceAccess(supabase, workspaceId);
 
     if (integrationId) {
       const { data: integration, error: integrationError } = await supabase
@@ -267,7 +316,7 @@ export async function PATCH(request: Request) {
         throw new Error("Проект не найден в текущем кабинете");
       }
 
-      const updatePayload: Record<string, boolean> = {};
+      const updatePayload: Record<string, boolean | string | null> = {};
 
       if (typeof patch.isActive === "boolean") {
         updatePayload.is_active = patch.isActive;
@@ -279,6 +328,10 @@ export async function PATCH(request: Request) {
 
       if (typeof patch.weeklyEnabled === "boolean") {
         updatePayload.weekly_reports_enabled = patch.weeklyEnabled;
+      }
+
+      if (typeof patch.telegramChatId === "string") {
+        updatePayload.telegram_chat_id = patch.telegramChatId.trim() || null;
       }
 
       if (Object.keys(updatePayload).length === 0) {
@@ -327,13 +380,39 @@ export async function PATCH(request: Request) {
       throw new Error("Avito-аккаунт не относится к текущему кабинету");
     }
 
-    if (typeof patch.isActive !== "boolean") {
+    const accountUpdatePayload: Record<string, boolean | string> = {};
+
+    if (typeof patch.isActive === "boolean") {
+      accountUpdatePayload.is_active = patch.isActive;
+    }
+
+    if (typeof patch.accountName === "string" && patch.accountName.trim()) {
+      accountUpdatePayload.name = patch.accountName.trim();
+    }
+
+    if (typeof patch.avitoUserId === "string" && patch.avitoUserId.trim()) {
+      accountUpdatePayload.avito_user_id = patch.avitoUserId.trim();
+    }
+
+    if (typeof patch.avitoClientId === "string" && patch.avitoClientId.trim()) {
+      accountUpdatePayload.avito_client_id = patch.avitoClientId.trim();
+    }
+
+    if (
+      typeof patch.avitoClientSecret === "string" &&
+      patch.avitoClientSecret.trim()
+    ) {
+      accountUpdatePayload.avito_client_secret =
+        patch.avitoClientSecret.trim();
+    }
+
+    if (Object.keys(accountUpdatePayload).length === 0) {
       throw new Error("Нет разрешённых полей для обновления аккаунта");
     }
 
     const { error: updateError } = await supabase
       .from("avito_report_accounts")
-      .update({ is_active: patch.isActive })
+      .update(accountUpdatePayload)
       .eq("id", accountId);
 
     if (updateError) {
@@ -350,7 +429,7 @@ export async function PATCH(request: Request) {
             ? error.message
             : "Ошибка обновления Avito-интеграции",
       },
-      { status: 500 }
+      { status: getErrorStatus(error) }
     );
   }
 }
