@@ -91,6 +91,9 @@ export type CrmDeal = {
   phone: string | null;
   telegram: string | null;
   source_id: string | null;
+  source_item_id: string | null;
+  source_item_title: string | null;
+  source_item_url: string | null;
   service_amount: number | null;
   budget: number | null;
   next_contact_at: string | null;
@@ -234,6 +237,9 @@ export type CreateCrmDealInput = {
   phone?: string | null;
   telegram?: string | null;
   source_id?: string | null;
+  source_item_id?: string | null;
+  source_item_title?: string | null;
+  source_item_url?: string | null;
   service_amount?: number | null;
   budget?: number | null;
   next_contact_at?: string | null;
@@ -1049,6 +1055,9 @@ export async function updateCrmDeal(
     "phone",
     "telegram",
     "source_id",
+    "source_item_id",
+    "source_item_title",
+    "source_item_url",
     "service_amount",
     "budget",
     "next_contact_at",

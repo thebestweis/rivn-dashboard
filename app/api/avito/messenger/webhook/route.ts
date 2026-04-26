@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,52 @@ function getLinkedClient(account: any) {
     : account?.avito_report_clients;
 }
 
+async function getAvitoChatItem(params: {
+  account: any;
+  avitoUserId: string;
+  chatId: string;
+}) {
+  if (!params.account?.avito_client_id || !params.account?.avito_client_secret) {
+    return null;
+  }
+
+  try {
+    const accessToken = await getAvitoAccessToken({
+      clientId: params.account.avito_client_id,
+      clientSecret: params.account.avito_client_secret,
+    });
+
+    const response = await fetch(
+      `https://api.avito.ru/messenger/v2/accounts/${params.avitoUserId}/chats/${params.chatId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+        },
+        cache: "no-store",
+      }
+    );
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      console.warn("Avito chat details were not loaded:", data);
+      return null;
+    }
+
+    const contextValue = data?.context?.value;
+
+    return {
+      id: contextValue?.id ? String(contextValue.id) : null,
+      title: contextValue?.title ? String(contextValue.title) : null,
+      url: contextValue?.url ? String(contextValue.url) : null,
+    };
+  } catch (error) {
+    console.warn("Avito chat item lookup failed:", error);
+    return null;
+  }
+}
+
 async function findAvitoAccount(params: {
   supabase: ServiceSupabase;
   avitoUserId: string;
@@ -92,6 +139,8 @@ async function findAvitoAccount(params: {
         id,
         name,
         avito_user_id,
+        avito_client_id,
+        avito_client_secret,
         avito_report_clients!inner (
           workspace_id,
           name
@@ -135,6 +184,11 @@ export async function POST(request: Request) {
     const supabase = getSupabase();
     const account = await findAvitoAccount({ supabase, avitoUserId });
     const linkedClient = getLinkedClient(account);
+    const chatItem = await getAvitoChatItem({
+      account,
+      avitoUserId,
+      chatId: value.chat_id,
+    });
 
     if (!linkedClient?.workspace_id) {
       return Response.json({ ok: true, skipped: "account_not_connected" });
@@ -152,6 +206,12 @@ export async function POST(request: Request) {
       ? `Avito: объявление ${value.item_id}`
       : `Avito: ${clientName}`;
 
+    const sourceItemId = String(value.item_id ?? chatItem?.id ?? "");
+    const sourceItemTitle =
+      chatItem?.title || value.content?.item?.title || null;
+    const sourceItemUrl =
+      chatItem?.url || value.content?.item?.item_url || null;
+
     const crmResponse = await fetch(new URL("/api/crm/dialogs", request.url), {
       method: "POST",
       headers: {
@@ -168,6 +228,9 @@ export async function POST(request: Request) {
         sourceName: "Avito",
         title,
         clientName,
+        sourceItemId,
+        sourceItemTitle,
+        sourceItemUrl,
         body: text,
         senderType: "client",
         createdAt: value.published_at

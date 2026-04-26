@@ -14,6 +14,9 @@ type DialogPayload = {
   clientName?: string;
   phone?: string;
   telegram?: string;
+  sourceItemId?: string | number | null;
+  sourceItemTitle?: string | null;
+  sourceItemUrl?: string | null;
   body?: string;
   senderType?: "client" | "manager" | "system";
   createdAt?: string;
@@ -65,6 +68,10 @@ function verifyWebhookSecret(request: Request) {
 }
 
 function normalizeText(value: unknown) {
+  if (typeof value === "number" || typeof value === "bigint") {
+    return String(value).trim();
+  }
+
   return typeof value === "string" ? value.trim() : "";
 }
 
@@ -212,6 +219,9 @@ async function createDealForDialog(params: {
   clientName: string;
   phone: string | null;
   telegram: string | null;
+  sourceItemId: string | null;
+  sourceItemTitle: string | null;
+  sourceItemUrl: string | null;
 }) {
   const [source, pipelineContext, assigneeIds] = await Promise.all([
     resolveSource({
@@ -244,6 +254,9 @@ async function createDealForDialog(params: {
       phone: params.phone,
       telegram: params.telegram,
       source_id: source.id,
+      source_item_id: params.sourceItemId,
+      source_item_title: params.sourceItemTitle,
+      source_item_url: params.sourceItemUrl,
       description: "Создано автоматически из входящего диалога.",
       status: "open",
       position: Date.now(),
@@ -360,6 +373,9 @@ export async function POST(request: Request) {
         clientName,
         phone: normalizeText(payload.phone) || null,
         telegram: normalizeText(payload.telegram) || null,
+        sourceItemId: normalizeText(payload.sourceItemId) || null,
+        sourceItemTitle: normalizeText(payload.sourceItemTitle) || null,
+        sourceItemUrl: normalizeText(payload.sourceItemUrl) || null,
       });
 
       dealId = deal.id;

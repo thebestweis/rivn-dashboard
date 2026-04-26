@@ -213,6 +213,11 @@ function DealCard({
             <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200">
               {sourceName}
             </span>
+            {deal.source_item_url || deal.source_item_title ? (
+              <span className="max-w-full truncate rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-500/15 dark:text-sky-200">
+                {deal.source_item_title || "Объявление"}
+              </span>
+            ) : null}
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-slate-500 dark:text-slate-400">
@@ -1860,6 +1865,29 @@ export default function CrmPage() {
                     {selectedDeal.description || "Описание пока не заполнено."}
                   </p>
                 </div>
+
+                {selectedDeal.source_item_url || selectedDeal.source_item_title ? (
+                  <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm dark:border-sky-400/20 dark:bg-sky-500/10">
+                    <p className="font-semibold text-sky-900 dark:text-sky-100">
+                      Объявление Avito
+                    </p>
+                    <p className="mt-1 text-sky-700 dark:text-sky-200">
+                      {selectedDeal.source_item_title ||
+                        selectedDeal.source_item_id ||
+                        "Источник заявки"}
+                    </p>
+                    {selectedDeal.source_item_url ? (
+                      <a
+                        href={selectedDeal.source_item_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 inline-flex rounded-xl bg-sky-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-sky-500"
+                      >
+                        Открыть объявление
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {selectedDeal.status === "lost" ? (
                   <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-100">

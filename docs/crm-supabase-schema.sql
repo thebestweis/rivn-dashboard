@@ -57,6 +57,9 @@ create table if not exists public.crm_deals (
   phone text,
   telegram text,
   source_id uuid references public.crm_sources(id) on delete set null,
+  source_item_id text,
+  source_item_title text,
+  source_item_url text,
   service_amount numeric,
   budget numeric,
   next_contact_at timestamptz,
@@ -152,6 +155,7 @@ create index if not exists crm_sources_workspace_idx on public.crm_sources(works
 create index if not exists crm_loss_reasons_workspace_idx on public.crm_loss_reasons(workspace_id, sort_order);
 create index if not exists crm_deals_workspace_stage_idx on public.crm_deals(workspace_id, pipeline_id, stage_id, position);
 create index if not exists crm_deals_next_contact_idx on public.crm_deals(workspace_id, next_contact_at);
+create index if not exists crm_deals_source_item_idx on public.crm_deals(workspace_id, source_item_id);
 create index if not exists crm_deal_assignees_member_idx on public.crm_deal_assignees(workspace_id, workspace_member_id);
 create index if not exists crm_activities_deal_idx on public.crm_deal_activities(deal_id, created_at desc);
 create index if not exists crm_comments_deal_idx on public.crm_deal_comments(deal_id, created_at desc);
