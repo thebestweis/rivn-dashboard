@@ -35,12 +35,45 @@ function getErrorStatus(error: unknown) {
   return error instanceof HttpError ? error.status : 500;
 }
 
+function isLocalUrl(value: string) {
+  return (
+    value.includes("localhost") ||
+    value.includes("127.0.0.1") ||
+    value.includes("0.0.0.0")
+  );
+}
+
 function normalizeAppUrl(request: Request) {
-  const envUrl =
-    process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL;
-  const baseUrl = envUrl || new URL(request.url).origin;
+  const candidates = [
+    process.env.AVITO_MESSENGER_WEBHOOK_BASE_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXT_PUBLIC_BASE_URL,
+    new URL(request.url).origin,
+    "https://rivn-dashboard.vercel.app",
+  ].filter((value): value is string => Boolean(value));
+
+  const baseUrl =
+    candidates.find(
+      (value) => value.startsWith("https://") && !isLocalUrl(value)
+    ) ??
+    candidates.find((value) => !isLocalUrl(value)) ??
+    candidates[candidates.length - 1];
 
   return baseUrl.replace(/\/$/, "");
+}
+
+async function readAvitoResponse(response: Response) {
+  const text = await response.text();
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 }
 
 async function requireWorkspaceAccess(
@@ -157,9 +190,17 @@ export async function POST(request: Request) {
       cache: "no-store",
     });
 
-    const result = await response.json().catch(() => null);
+    const result = await readAvitoResponse(response);
 
     if (!response.ok) {
+      const resultText =
+        typeof result === "string" ? result : JSON.stringify(result);
+      throw new HttpError(
+        `Avito не подключил webhook. Статус: ${response.status} ${response.statusText}. Ответ: ${
+          resultText || "пустой ответ"
+        }. URL: ${webhookUrl}`,
+        400
+      );
       throw new HttpError(
         `Avito не подключил webhook: ${JSON.stringify(result)}`,
         400
