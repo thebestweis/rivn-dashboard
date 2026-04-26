@@ -208,6 +208,38 @@ async function sendTelegramMessage(chatId: string, text: string) {
   return data;
 }
 
+async function resolveAvitoAccessToken(account: AvitoAccount) {
+  if (account.avito_client_id && account.avito_client_secret) {
+    return getAvitoAccessToken({
+      clientId: account.avito_client_id,
+      clientSecret: account.avito_client_secret,
+    });
+  }
+
+  if (account.access_token) {
+    return account.access_token;
+  }
+
+  return getAvitoAccessToken();
+}
+
+function buildAccountErrorBlock(accountName: string, error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "Неизвестная ошибка Avito";
+  const safeMessage = message
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  return [
+    "━━━━━━━━━━━━",
+    `Аккаунт: <b>${accountName}</b>`,
+    "",
+    "⚠️ Аккаунт не проверен.",
+    `Причина: ${safeMessage}`,
+  ].join("\n");
+}
+
 async function getAllItemIds(accessToken: string) {
   const allItems: { id: number }[] = [];
   let page = 1;
@@ -464,6 +496,7 @@ export async function GET(request: Request) {
         };
 
         for (const account of accounts as AvitoAccount[]) {
+          try {
           if (!account.avito_user_id) {
             accountBlocks.push(
               [
@@ -477,12 +510,7 @@ export async function GET(request: Request) {
             continue;
           }
 
-          const accessToken =
-  account.access_token ||
-  (await getAvitoAccessToken({
-    clientId: account.avito_client_id,
-    clientSecret: account.avito_client_secret,
-  }));
+          const accessToken = await resolveAvitoAccessToken(account);
           const itemIds = await getAllItemIds(accessToken);
 
           const currentStatsRaw = await getStatsForPeriod({
@@ -567,6 +595,22 @@ export async function GET(request: Request) {
               previous: previousStats,
             })
           );
+          } catch (accountError) {
+            accountBlocks.push(buildAccountErrorBlock(account.name, accountError));
+
+            await supabase.from("avito_report_logs").insert({
+              client_id: client.id,
+              telegram_chat_id: client.telegram_chat_id,
+              report_type: "daily",
+              period_start: yesterday,
+              period_end: yesterday,
+              status: "failed",
+              message:
+                accountError instanceof Error
+                  ? accountError.message
+                  : "Неизвестная ошибка Avito-аккаунта",
+            });
+          }
         }
 
         const totalCurrent = buildStats(totalCurrentRaw);

@@ -1,5 +1,5 @@
 import { sendCronErrorNotification } from "../send-cron-error-notification";
-import { verifyCronSecret } from "../verify-cron-secret";
+import { getCronSecret, verifyCronSecret } from "../verify-cron-secret";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +10,16 @@ export async function GET(request: Request) {
 
   try {
     const baseUrl = new URL(request.url).origin;
-    const secret = process.env.CRON_SECRET;
+    const secret = getCronSecret();
 
     const response = await fetch(
-      `${baseUrl}/api/avito/daily-report?t=cron&secret=${secret}`,
-      { cache: "no-store" }
+      `${baseUrl}/api/avito/daily-report?t=cron`,
+      {
+        cache: "no-store",
+        headers: {
+          authorization: `Bearer ${secret}`,
+        },
+      }
     );
 
     const data = await response.json().catch(() => null);

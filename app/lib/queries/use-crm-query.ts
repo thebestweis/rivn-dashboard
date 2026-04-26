@@ -4,24 +4,31 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppContextState } from "../../providers/app-context-provider";
 import { queryKeys } from "../query-keys";
 import {
+  createCrmPipeline,
   createCrmStage,
   createCrmDeal,
   createCrmDealComment,
+  createCrmMessage,
   createCrmDealTask,
   getCrmBootstrap,
   getCrmDealDetails,
   moveCrmDeal,
   updateCrmDeal,
   updateCrmDealTask,
+  updateCrmPipeline,
   updateCrmStage,
   updateCrmStageOrder,
+  upsertCrmAssignmentRule,
+  type CrmAssignmentRule,
   type CrmBootstrap,
   type CrmDeal,
   type CrmDealActivity,
   type CrmDealComment,
   type CrmDealDetails,
+  type CrmMessage,
   type CrmDealTask,
   type CrmBootstrapFilters,
+  type CrmPipeline,
   type CrmStage,
 } from "../supabase/crm";
 
@@ -35,6 +42,24 @@ function buildCrmFiltersKey(filters: CrmBootstrapFilters) {
     assigneeId: filters.assigneeId ?? "",
     status: filters.status ?? "all",
   });
+}
+
+function upsertAssignmentRuleInBootstrap(
+  rule: CrmAssignmentRule,
+  current?: CrmBootstrap
+) {
+  if (!current) return current;
+
+  const exists = current.assignmentRules.some((item) => item.id === rule.id);
+
+  return {
+    ...current,
+    assignmentRules: exists
+      ? current.assignmentRules
+          .map((item) => (item.id === rule.id ? rule : item))
+          .filter((item) => item.is_active)
+      : [...current.assignmentRules, rule],
+  };
 }
 
 export function useCrmBootstrapQuery(
@@ -112,6 +137,27 @@ function upsertStageInBootstrap(stage: CrmStage, current?: CrmBootstrap) {
   };
 }
 
+function upsertPipelineInBootstrap(
+  pipeline: CrmPipeline,
+  current?: CrmBootstrap
+) {
+  if (!current) return current;
+
+  const exists = current.pipelines.some((item) => item.id === pipeline.id);
+
+  return {
+    ...current,
+    pipelines: exists
+      ? current.pipelines
+          .map((item) => (item.id === pipeline.id ? pipeline : item))
+          .filter((item) => item.is_active)
+          .sort((a, b) => a.sort_order - b.sort_order)
+      : [...current.pipelines, pipeline].sort(
+          (a, b) => a.sort_order - b.sort_order
+        ),
+  };
+}
+
 function upsertDealTaskInBootstrap(
   task: CrmDealTask,
   current?: CrmDealDetails
@@ -143,6 +189,22 @@ function upsertDealCommentInBootstrap(
           item.id === comment.id ? comment : item
         )
       : [comment, ...current.dealComments],
+  };
+}
+
+function upsertMessageInBootstrap(
+  message: CrmMessage,
+  current?: CrmDealDetails
+) {
+  if (!current) return current;
+
+  const exists = current.messages.some((item) => item.id === message.id);
+
+  return {
+    ...current,
+    messages: exists
+      ? current.messages.map((item) => (item.id === message.id ? message : item))
+      : [...current.messages, message],
   };
 }
 
@@ -401,6 +463,78 @@ export function useUpdateCrmStageOrderMutation() {
   });
 }
 
+export function useCreateCrmPipelineMutation() {
+  const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useMutation({
+    mutationFn: createCrmPipeline,
+    onSuccess: (pipeline) => {
+      if (!workspaceId) return;
+
+      queryClient.setQueryData<CrmBootstrap>(
+        queryKeys.crmBootstrap(workspaceId),
+        (current) => upsertPipelineInBootstrap(pipeline, current)
+      );
+
+      void queryClient.invalidateQueries({
+        queryKey: ["crm", "bootstrap", workspaceId],
+      });
+    },
+  });
+}
+
+export function useUpdateCrmPipelineMutation() {
+  const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useMutation({
+    mutationFn: ({
+      pipelineId,
+      values,
+    }: {
+      pipelineId: string;
+      values: Parameters<typeof updateCrmPipeline>[1];
+    }) => updateCrmPipeline(pipelineId, values),
+    onSuccess: (pipeline) => {
+      if (!workspaceId) return;
+
+      queryClient.setQueryData<CrmBootstrap>(
+        queryKeys.crmBootstrap(workspaceId),
+        (current) => upsertPipelineInBootstrap(pipeline, current)
+      );
+
+      void queryClient.invalidateQueries({
+        queryKey: ["crm", "bootstrap", workspaceId],
+      });
+    },
+  });
+}
+
+export function useUpsertCrmAssignmentRuleMutation() {
+  const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useMutation({
+    mutationFn: upsertCrmAssignmentRule,
+    onSuccess: (rule) => {
+      if (!workspaceId) return;
+
+      queryClient.setQueryData<CrmBootstrap>(
+        queryKeys.crmBootstrap(workspaceId),
+        (current) => upsertAssignmentRuleInBootstrap(rule, current)
+      );
+
+      void queryClient.invalidateQueries({
+        queryKey: ["crm", "bootstrap", workspaceId],
+      });
+    },
+  });
+}
+
 export function useCreateCrmDealTaskMutation() {
   const queryClient = useQueryClient();
   const { workspace } = useAppContextState();
@@ -491,6 +625,39 @@ export function useCreateCrmDealCommentMutation() {
               created_at: new Date().toISOString(),
             },
             upsertDealCommentInBootstrap(comment, current)
+          )
+      );
+    },
+  });
+}
+
+export function useCreateCrmMessageMutation() {
+  const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useMutation({
+    mutationFn: createCrmMessage,
+    onSuccess: (message) => {
+      if (!workspaceId || !message.deal_id) return;
+
+      queryClient.setQueryData<CrmDealDetails>(
+        queryKeys.crmDealDetails(workspaceId, message.deal_id),
+        (current) =>
+          prependActivityPlaceholder(
+            {
+              id: `local-message-${message.id}`,
+              workspace_id: message.workspace_id,
+              deal_id: message.deal_id ?? "",
+              actor_member_id: message.sender_member_id,
+              action: "message_created",
+              payload: {
+                conversation_id: message.conversation_id,
+                message_id: message.id,
+              },
+              created_at: new Date().toISOString(),
+            },
+            upsertMessageInBootstrap(message, current)
           )
       );
     },

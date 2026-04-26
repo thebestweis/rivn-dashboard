@@ -14,6 +14,11 @@ export type CrmStageKind =
   | "lost"
   | "delivery";
 export type CrmDealStatus = "open" | "won" | "lost";
+export type CrmAssignmentMode =
+  | "manual"
+  | "round_robin"
+  | "least_loaded"
+  | "fixed_manager";
 
 export type CrmPipeline = {
   id: string;
@@ -55,6 +60,17 @@ export type CrmLossReason = {
   is_active: boolean;
   sort_order: number;
   created_at: string;
+};
+
+export type CrmAssignmentRule = {
+  id: string;
+  workspace_id: string;
+  source_kind: string | null;
+  mode: CrmAssignmentMode;
+  target_member_ids: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
 export type CrmDealAssignee = {
@@ -123,6 +139,39 @@ export type CrmDealActivity = {
   created_at: string;
 };
 
+export type CrmConversationChannel =
+  | "avito"
+  | "telegram"
+  | "tilda"
+  | "yandex_direct"
+  | "manual";
+
+export type CrmConversation = {
+  id: string;
+  workspace_id: string;
+  deal_id: string | null;
+  channel: CrmConversationChannel;
+  external_id: string | null;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CrmMessageSenderType = "client" | "manager" | "system";
+
+export type CrmMessage = {
+  id: string;
+  workspace_id: string;
+  conversation_id: string;
+  deal_id: string | null;
+  sender_type: CrmMessageSenderType;
+  sender_member_id: string | null;
+  body: string | null;
+  attachment_url: string | null;
+  external_id: string | null;
+  created_at: string;
+};
+
 export type CreateCrmDealTaskInput = {
   deal_id: string;
   title: string;
@@ -134,6 +183,14 @@ export type CreateCrmDealCommentInput = {
   deal_id: string;
   body: string;
   file_url?: string | null;
+};
+
+export type CreateCrmMessageInput = {
+  conversation_id: string;
+  deal_id?: string | null;
+  body: string;
+  attachment_url?: string | null;
+  external_id?: string | null;
 };
 
 export type UpdateCrmDealTaskInput = {
@@ -148,6 +205,7 @@ export type CrmBootstrap = {
   stages: CrmStage[];
   sources: CrmSource[];
   lossReasons: CrmLossReason[];
+  assignmentRules: CrmAssignmentRule[];
   deals: CrmDeal[];
   stageDealCounts: Record<string, number>;
 };
@@ -163,6 +221,8 @@ export type CrmDealDetails = {
   dealTasks: CrmDealTask[];
   dealComments: CrmDealComment[];
   dealActivities: CrmDealActivity[];
+  conversations: CrmConversation[];
+  messages: CrmMessage[];
 };
 
 export type CreateCrmDealInput = {
@@ -179,6 +239,25 @@ export type CreateCrmDealInput = {
   next_contact_at?: string | null;
   description?: string | null;
   assignee_ids?: string[];
+};
+
+export type CreateCrmPipelineInput = {
+  name: string;
+  kind: CrmPipelineKind;
+};
+
+export type UpsertCrmAssignmentRuleInput = {
+  source_kind?: string | null;
+  mode: CrmAssignmentMode;
+  target_member_ids?: string[];
+  is_active?: boolean;
+};
+
+export type UpdateCrmPipelineInput = {
+  name?: string;
+  kind?: CrmPipelineKind;
+  sort_order?: number;
+  is_active?: boolean;
 };
 
 export type UpdateCrmDealInput = Partial<CreateCrmDealInput> & {
@@ -234,6 +313,13 @@ type DbCrmDealRow = Omit<CrmDeal, "assignees" | "position" | "service_amount" | 
   position: number | string | null;
   service_amount: number | string | null;
   budget: number | string | null;
+};
+
+type DbCrmAssignmentRuleRow = Omit<
+  CrmAssignmentRule,
+  "target_member_ids"
+> & {
+  target_member_ids: string[] | null;
 };
 
 const CRM_STAGE_DEAL_LIMIT = 80;
@@ -317,6 +403,16 @@ function mapDeal(row: DbCrmDealRow, assignees: CrmDealAssignee[]): CrmDeal {
       row.service_amount === null ? null : Number(row.service_amount ?? 0),
     budget: row.budget === null ? null : Number(row.budget ?? 0),
     assignees,
+  };
+}
+
+function mapAssignmentRule(row: DbCrmAssignmentRuleRow): CrmAssignmentRule {
+  return {
+    ...row,
+    target_member_ids: Array.isArray(row.target_member_ids)
+      ? row.target_member_ids
+      : [],
+    is_active: row.is_active ?? true,
   };
 }
 
@@ -464,7 +560,13 @@ export async function getCrmBootstrap(
 
   await ensureCrmDefaults(workspace.id);
 
-  const [pipelinesResult, stagesResult, sourcesResult, lossReasonsResult] =
+  const [
+    pipelinesResult,
+    stagesResult,
+    sourcesResult,
+    lossReasonsResult,
+    assignmentRulesResult,
+  ] =
     await Promise.all([
       supabase
         .from("crm_pipelines")
@@ -490,6 +592,12 @@ export async function getCrmBootstrap(
         .eq("workspace_id", workspace.id)
         .eq("is_active", true)
         .order("sort_order", { ascending: true }),
+      supabase
+        .from("crm_assignment_rules")
+        .select("*")
+        .eq("workspace_id", workspace.id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true }),
     ]);
 
   if (pipelinesResult.error) {
@@ -507,6 +615,12 @@ export async function getCrmBootstrap(
   if (lossReasonsResult.error) {
     throw new Error(
       `Не удалось загрузить причины отказа CRM: ${lossReasonsResult.error.message}`
+    );
+  }
+
+  if (assignmentRulesResult.error) {
+    throw new Error(
+      `Не удалось загрузить правила распределения CRM: ${assignmentRulesResult.error.message}`
     );
   }
 
@@ -548,6 +662,9 @@ export async function getCrmBootstrap(
       lossReasons: ((lossReasonsResult.data ?? []) as DbCrmLossReasonRow[]).map(
         mapLossReason
       ),
+      assignmentRules: (
+        (assignmentRulesResult.data ?? []) as DbCrmAssignmentRuleRow[]
+      ).map(mapAssignmentRule),
       deals: [],
       stageDealCounts: {},
     };
@@ -677,6 +794,9 @@ export async function getCrmBootstrap(
     lossReasons: ((lossReasonsResult.data ?? []) as DbCrmLossReasonRow[]).map(
       mapLossReason
     ),
+    assignmentRules: (
+      (assignmentRulesResult.data ?? []) as DbCrmAssignmentRuleRow[]
+    ).map(mapAssignmentRule),
     deals: limitedDealsData.map((deal) =>
       mapDeal(deal, assigneesByDeal.get(deal.id) ?? [])
     ),
@@ -689,7 +809,13 @@ export async function getCrmDealDetails(
 ): Promise<CrmDealDetails> {
   const { supabase, workspace } = await getAppContext();
 
-  const [tasksResult, commentsResult, activitiesResult] = await Promise.all([
+  const [
+    tasksResult,
+    commentsResult,
+    activitiesResult,
+    conversationsResult,
+    messagesResult,
+  ] = await Promise.all([
     supabase
       .from("crm_deal_tasks")
       .select("*")
@@ -708,6 +834,18 @@ export async function getCrmDealDetails(
       .eq("workspace_id", workspace.id)
       .eq("deal_id", dealId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("crm_conversations")
+      .select("*")
+      .eq("workspace_id", workspace.id)
+      .eq("deal_id", dealId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("crm_messages")
+      .select("*")
+      .eq("workspace_id", workspace.id)
+      .eq("deal_id", dealId)
+      .order("created_at", { ascending: true }),
   ]);
 
   if (tasksResult.error) {
@@ -726,11 +864,94 @@ export async function getCrmDealDetails(
     );
   }
 
+  if (conversationsResult.error) {
+    throw new Error(
+      `Не удалось загрузить диалоги сделки: ${conversationsResult.error.message}`
+    );
+  }
+
+  if (messagesResult.error) {
+    throw new Error(
+      `Не удалось загрузить сообщения сделки: ${messagesResult.error.message}`
+    );
+  }
+
   return {
     dealTasks: (tasksResult.data ?? []) as CrmDealTask[],
     dealComments: (commentsResult.data ?? []) as CrmDealComment[],
     dealActivities: (activitiesResult.data ?? []) as CrmDealActivity[],
+    conversations: (conversationsResult.data ?? []) as CrmConversation[],
+    messages: (messagesResult.data ?? []) as CrmMessage[],
   };
+}
+
+async function resolveAutoAssigneeIds(params: {
+  sourceId?: string | null;
+}) {
+  if (!params.sourceId) {
+    return [];
+  }
+
+  const { supabase, workspace } = await getAppContext();
+
+  const { data: source } = await supabase
+    .from("crm_sources")
+    .select("kind")
+    .eq("id", params.sourceId)
+    .eq("workspace_id", workspace.id)
+    .maybeSingle();
+
+  const sourceKind = String(source?.kind || "");
+
+  if (!sourceKind) {
+    return [];
+  }
+
+  const { data: rule } = await supabase
+    .from("crm_assignment_rules")
+    .select("*")
+    .eq("workspace_id", workspace.id)
+    .eq("source_kind", sourceKind)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  const mappedRule = rule
+    ? mapAssignmentRule(rule as DbCrmAssignmentRuleRow)
+    : null;
+
+  if (
+    !mappedRule ||
+    mappedRule.mode === "manual" ||
+    mappedRule.target_member_ids.length === 0
+  ) {
+    return [];
+  }
+
+  if (mappedRule.mode === "fixed_manager") {
+    return mappedRule.target_member_ids;
+  }
+
+  const { data: assignees } = await supabase
+    .from("crm_deal_assignees")
+    .select("workspace_member_id, crm_deals!inner(status)")
+    .eq("workspace_id", workspace.id)
+    .in("workspace_member_id", mappedRule.target_member_ids)
+    .eq("crm_deals.status", "open");
+
+  const loadByMemberId = new Map(
+    mappedRule.target_member_ids.map((memberId) => [memberId, 0])
+  );
+
+  for (const assignee of assignees ?? []) {
+    const memberId = String(assignee.workspace_member_id);
+    loadByMemberId.set(memberId, (loadByMemberId.get(memberId) ?? 0) + 1);
+  }
+
+  const [selectedMemberId] = [...loadByMemberId.entries()].sort(
+    (a, b) => a[1] - b[1]
+  )[0] ?? [mappedRule.target_member_ids[0]];
+
+  return selectedMemberId ? [selectedMemberId] : [];
 }
 
 export async function createCrmDeal(input: CreateCrmDealInput): Promise<CrmDeal> {
@@ -738,6 +959,10 @@ export async function createCrmDeal(input: CreateCrmDealInput): Promise<CrmDeal>
 
   const { supabase, workspace, user } = await getAppContext();
   const assigneeIds = normalizeIds(input.assignee_ids);
+  const resolvedAssigneeIds =
+    assigneeIds.length > 0
+      ? assigneeIds
+      : await resolveAutoAssigneeIds({ sourceId: input.source_id });
 
   const { data, error } = await supabase
     .from("crm_deals")
@@ -768,11 +993,11 @@ export async function createCrmDeal(input: CreateCrmDealInput): Promise<CrmDeal>
 
   let assignees: CrmDealAssignee[] = [];
 
-  if (assigneeIds.length > 0) {
+  if (resolvedAssigneeIds.length > 0) {
     const { data: assigneeData, error: assigneeError } = await supabase
       .from("crm_deal_assignees")
       .insert(
-        assigneeIds.map((workspaceMemberId) => ({
+        resolvedAssigneeIds.map((workspaceMemberId) => ({
           workspace_id: workspace.id,
           deal_id: data.id,
           workspace_member_id: workspaceMemberId,
@@ -923,6 +1148,177 @@ export async function moveCrmDeal(input: MoveCrmDealInput): Promise<CrmDeal> {
   });
 
   return deal;
+}
+
+export async function createCrmPipeline(
+  input: CreateCrmPipelineInput
+): Promise<CrmPipeline> {
+  await requireBillingAccess();
+
+  const { supabase, workspace } = await getAppContext();
+  const name = input.name.trim();
+
+  if (!name) {
+    throw new Error("Укажи название CRM-воронки");
+  }
+
+  const { count, error: countError } = await supabase
+    .from("crm_pipelines")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspace.id)
+    .eq("is_active", true);
+
+  if (countError) {
+    throw new Error(`Не удалось проверить CRM-воронки: ${countError.message}`);
+  }
+
+  const { data, error } = await supabase
+    .from("crm_pipelines")
+    .insert({
+      workspace_id: workspace.id,
+      name,
+      kind: input.kind,
+      sort_order: ((count ?? 0) + 1) * 10,
+      is_active: true,
+    })
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw new Error(
+      `Не удалось создать CRM-воронку: ${error?.message ?? "нет данных"}`
+    );
+  }
+
+  const pipeline = mapPipeline(data as DbCrmPipelineRow);
+  const stagePayload =
+    input.kind === "delivery"
+      ? DEFAULT_DELIVERY_STAGES.map((stageName, index) => ({
+          workspace_id: workspace.id,
+          pipeline_id: pipeline.id,
+          name: stageName,
+          kind: "delivery",
+          sort_order: (index + 1) * 10,
+          is_active: true,
+        }))
+      : DEFAULT_SALES_STAGES.map((stage, index) => ({
+          workspace_id: workspace.id,
+          pipeline_id: pipeline.id,
+          name: stage.name,
+          kind: stage.kind,
+          sort_order: (index + 1) * 10,
+          is_active: true,
+        }));
+
+  const { error: stagesError } = await supabase
+    .from("crm_pipeline_stages")
+    .insert(stagePayload);
+
+  if (stagesError) {
+    await supabase
+      .from("crm_pipelines")
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq("id", pipeline.id)
+      .eq("workspace_id", workspace.id);
+
+    throw new Error(`Не удалось создать этапы CRM: ${stagesError.message}`);
+  }
+
+  return pipeline;
+}
+
+export async function updateCrmPipeline(
+  pipelineId: string,
+  input: UpdateCrmPipelineInput
+): Promise<CrmPipeline> {
+  await requireBillingAccess();
+
+  const { supabase, workspace } = await getAppContext();
+  const payload: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error("Укажи название CRM-воронки");
+    }
+    payload.name = name;
+  }
+
+  for (const key of ["kind", "sort_order", "is_active"] as const) {
+    if (input[key] !== undefined) {
+      payload[key] = input[key];
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("crm_pipelines")
+    .update(payload)
+    .eq("id", pipelineId)
+    .eq("workspace_id", workspace.id)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw new Error(
+      `Не удалось обновить CRM-воронку: ${error?.message ?? "нет данных"}`
+    );
+  }
+
+  return mapPipeline(data as DbCrmPipelineRow);
+}
+
+export async function upsertCrmAssignmentRule(
+  input: UpsertCrmAssignmentRuleInput
+): Promise<CrmAssignmentRule> {
+  await requireBillingAccess();
+
+  const { supabase, workspace } = await getAppContext();
+  const sourceKind = input.source_kind?.trim() || null;
+  const targetMemberIds = normalizeIds(input.target_member_ids);
+
+  const { data: existing, error: existingError } = await supabase
+    .from("crm_assignment_rules")
+    .select("id")
+    .eq("workspace_id", workspace.id)
+    .eq("source_kind", sourceKind)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(
+      `Не удалось проверить правило распределения CRM: ${existingError.message}`
+    );
+  }
+
+  const payload = {
+    workspace_id: workspace.id,
+    source_kind: sourceKind,
+    mode: input.mode,
+    target_member_ids: targetMemberIds,
+    is_active: input.is_active ?? true,
+    updated_at: new Date().toISOString(),
+  };
+
+  const query = existing?.id
+    ? supabase
+        .from("crm_assignment_rules")
+        .update(payload)
+        .eq("id", existing.id)
+        .eq("workspace_id", workspace.id)
+    : supabase.from("crm_assignment_rules").insert(payload);
+
+  const { data, error } = await query.select("*").single();
+
+  if (error || !data) {
+    throw new Error(
+      `Не удалось сохранить правило распределения CRM: ${
+        error?.message ?? "нет данных"
+      }`
+    );
+  }
+
+  return mapAssignmentRule(data as DbCrmAssignmentRuleRow);
 }
 
 export async function createCrmStage(
@@ -1152,4 +1548,24 @@ export async function createCrmDealComment(
   });
 
   return data as CrmDealComment;
+}
+
+export async function createCrmMessage(
+  input: CreateCrmMessageInput
+): Promise<CrmMessage> {
+  const response = await fetch("/api/crm/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error || "Не удалось отправить сообщение CRM");
+  }
+
+  return data.message as CrmMessage;
 }

@@ -5,18 +5,35 @@ export function verifyCronSecret(request: Request) {
   const bearerSecret = authorization?.startsWith("Bearer ")
     ? authorization.slice("Bearer ".length)
     : null;
-  const expectedSecret =
-    process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET;
+  const expectedSecrets = [
+    process.env.CRON_SECRET,
+    process.env.VERCEL_CRON_SECRET,
+  ].filter((value): value is string => Boolean(value));
 
-  if (!expectedSecret) {
+  if (expectedSecrets.length === 0) {
     throw new Error(
       "CRON_SECRET is not available in this Vercel function. Check the Vercel project and Production environment variables, then redeploy."
     );
   }
 
-  if (secret !== expectedSecret && bearerSecret !== expectedSecret) {
+  if (
+    !expectedSecrets.includes(secret ?? "") &&
+    !expectedSecrets.includes(bearerSecret ?? "")
+  ) {
     return false;
   }
 
   return true;
+}
+
+export function getCronSecret() {
+  const secret = process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET;
+
+  if (!secret) {
+    throw new Error(
+      "CRON_SECRET is not available in this Vercel function. Check the Vercel project and Production environment variables, then redeploy."
+    );
+  }
+
+  return secret;
 }

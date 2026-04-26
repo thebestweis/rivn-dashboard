@@ -164,6 +164,7 @@ const [sendingTestReportId, setSendingTestReportId] = useState("");
 const [editingIntegrationId, setEditingIntegrationId] = useState("");
 const [editingTelegramChatId, setEditingTelegramChatId] = useState("");
 const [editingAccounts, setEditingAccounts] = useState<Record<string, EditingAccountForm>>({});
+const [connectingMessengerAccountId, setConnectingMessengerAccountId] = useState("");
 
   const { workspace } = useAppContextState();
 
@@ -618,6 +619,42 @@ setIntegrations(integrationsData.integrations ?? []);
       );
     } finally {
       setUpdatingIntegrationId("");
+    }
+  }
+
+  async function connectAvitoMessenger(accountId: string) {
+    try {
+      setIntegrationMessage("");
+      setConnectingMessengerAccountId(accountId);
+
+      const response = await fetch("/api/avito/messenger/connect-webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace?.id,
+          accountId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Не удалось подключить Avito-диалоги");
+      }
+
+      setIntegrationMessage(
+        "Avito-диалоги подключены. Новые сообщения будут попадать в CRM."
+      );
+    } catch (error) {
+      setIntegrationMessage(
+        error instanceof Error
+          ? error.message
+          : "Не удалось подключить Avito-диалоги"
+      );
+    } finally {
+      setConnectingMessengerAccountId("");
     }
   }
 
@@ -1460,13 +1497,32 @@ setIntegrations(integrationsData.integrations ?? []);
                         onClick={() =>
                           updateIntegrationAccount(account.id, !account.is_active)
                         }
-                        disabled={updatingIntegrationId === account.id}
+                        disabled={
+                          updatingIntegrationId === account.id ||
+                          connectingMessengerAccountId === account.id
+                        }
                         className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
                       >
                         {account.is_active
                           ? "Выключить аккаунт"
                           : "Включить аккаунт"}
                       </button>
+                      {!isEditing ? (
+                        <button
+                          type="button"
+                          onClick={() => connectAvitoMessenger(account.id)}
+                          disabled={
+                            !account.is_active ||
+                            connectingMessengerAccountId === account.id ||
+                            updatingIntegrationId === account.id
+                          }
+                          className="ml-2 mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50"
+                        >
+                          {connectingMessengerAccountId === account.id
+                            ? "Подключаем..."
+                            : "Подключить диалоги"}
+                        </button>
+                      ) : null}
                     </div>
                   );
                 })}

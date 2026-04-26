@@ -19,6 +19,7 @@ import {
   Settings2,
   SquareCheckBig,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import {
@@ -28,16 +29,20 @@ import {
 } from "../lib/permissions";
 import {
   useCreateCrmDealCommentMutation,
+  useCreateCrmMessageMutation,
   useCreateCrmDealTaskMutation,
+  useCreateCrmPipelineMutation,
   useCreateCrmStageMutation,
   useCreateCrmDealMutation,
   useCrmBootstrapQuery,
   useCrmDealDetailsQuery,
   useMoveCrmDealMutation,
   useUpdateCrmDealTaskMutation,
+  useUpdateCrmPipelineMutation,
   useUpdateCrmStageMutation,
   useUpdateCrmStageOrderMutation,
   useUpdateCrmDealMutation,
+  useUpsertCrmAssignmentRuleMutation,
 } from "../lib/queries/use-crm-query";
 import { useClientsQuery } from "../lib/queries/use-clients-query";
 import { useActiveWorkspaceMembers } from "../lib/queries/use-workspace-members-query";
@@ -46,9 +51,15 @@ import type {
   CrmDeal,
   CrmDealTask,
   CrmDealStatus,
+  CrmAssignmentMode,
   CrmPipeline,
   CrmStage,
 } from "../lib/supabase/crm";
+
+type AssignmentRuleDraft = {
+  mode: CrmAssignmentMode;
+  target_member_ids: string[];
+};
 
 type DealFormState = {
   title: string;
@@ -247,6 +258,12 @@ export default function CrmPage() {
     return () => window.clearTimeout(timeoutId);
   }, [search]);
 
+  useEffect(() => {
+    if (selectedPipelineId === "all") {
+      setViewMode("list");
+    }
+  }, [selectedPipelineId]);
+
   const crmFilters = useMemo(
     () => ({
       search: debouncedSearch,
@@ -266,19 +283,25 @@ export default function CrmPage() {
   const createDealMutation = useCreateCrmDealMutation();
   const updateDealMutation = useUpdateCrmDealMutation();
   const moveDealMutation = useMoveCrmDealMutation();
+  const createPipelineMutation = useCreateCrmPipelineMutation();
+  const updatePipelineMutation = useUpdateCrmPipelineMutation();
   const createStageMutation = useCreateCrmStageMutation();
   const updateStageMutation = useUpdateCrmStageMutation();
   const updateStageOrderMutation = useUpdateCrmStageOrderMutation();
+  const upsertAssignmentRuleMutation = useUpsertCrmAssignmentRuleMutation();
   const createDealTaskMutation = useCreateCrmDealTaskMutation();
   const updateDealTaskMutation = useUpdateCrmDealTaskMutation();
   const createDealCommentMutation = useCreateCrmDealCommentMutation();
+  const createMessageMutation = useCreateCrmMessageMutation();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isPipelineSettingsOpen, setIsPipelineSettingsOpen] = useState(false);
+  const [isAssignmentSettingsOpen, setIsAssignmentSettingsOpen] = useState(false);
   const [isStageSettingsOpen, setIsStageSettingsOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<CrmDeal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [dealPanelTab, setDealPanelTab] = useState<
-    "info" | "tasks" | "comments" | "history"
+    "info" | "dialogs" | "tasks" | "comments" | "history"
   >("info");
   const [form, setForm] = useState<DealFormState>(emptyDealForm);
   const [paidDeal, setPaidDeal] = useState<CrmDeal | null>(null);
@@ -289,12 +312,23 @@ export default function CrmPage() {
   const [selectedLossReasonId, setSelectedLossReasonId] = useState("");
   const [lossComment, setLossComment] = useState("");
   const [newStageName, setNewStageName] = useState("");
+  const [newPipelineName, setNewPipelineName] = useState("");
+  const [newPipelineKind, setNewPipelineKind] = useState<"sales" | "delivery">(
+    "sales"
+  );
   const [newDealTaskTitle, setNewDealTaskTitle] = useState("");
   const [newDealTaskDueAt, setNewDealTaskDueAt] = useState("");
   const [newDealComment, setNewDealComment] = useState("");
+  const [newClientReply, setNewClientReply] = useState("");
   const [stageNameDrafts, setStageNameDrafts] = useState<Record<string, string>>(
     {}
   );
+  const [pipelineNameDrafts, setPipelineNameDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [assignmentRuleDrafts, setAssignmentRuleDrafts] = useState<
+    Record<string, AssignmentRuleDraft>
+  >({});
 
   const {
     data: selectedDealDetails,
@@ -306,15 +340,24 @@ export default function CrmPage() {
   const deals = data?.deals ?? [];
   const sources = data?.sources ?? [];
   const lossReasons = data?.lossReasons ?? [];
+  const assignmentRules = data?.assignmentRules ?? [];
   const stageDealCounts = data?.stageDealCounts ?? {};
   const dealTasks = selectedDealDetails?.dealTasks ?? [];
   const dealComments = selectedDealDetails?.dealComments ?? [];
   const dealActivities = selectedDealDetails?.dealActivities ?? [];
+  const conversations = selectedDealDetails?.conversations ?? [];
+  const messages = selectedDealDetails?.messages ?? [];
 
+  const isAllPipelinesSelected = selectedPipelineId === "all";
+  const defaultPipeline =
+    pipelines.find((pipeline) => pipeline.kind === "sales") ?? pipelines[0];
   const activePipeline: CrmPipeline | undefined =
-    pipelines.find((pipeline) => pipeline.id === selectedPipelineId) ??
+    (isAllPipelinesSelected
+      ? defaultPipeline
+      : pipelines.find((pipeline) => pipeline.id === selectedPipelineId)) ??
     pipelines.find((pipeline) => pipeline.kind === "sales") ??
     pipelines[0];
+  const displayMode = isAllPipelinesSelected ? "list" : viewMode;
 
   const activeStages = useMemo(
     () =>
@@ -325,8 +368,12 @@ export default function CrmPage() {
   );
 
   const activeDeals = useMemo(() => {
+    if (isAllPipelinesSelected) {
+      return deals;
+    }
+
     return deals.filter((deal) => deal.pipeline_id === activePipeline?.id);
-  }, [activePipeline?.id, deals]);
+  }, [activePipeline?.id, deals, isAllPipelinesSelected]);
 
   const selectedDeal =
     deals.find((deal) => deal.id === selectedDealId) ?? null;
@@ -369,6 +416,28 @@ export default function CrmPage() {
     [dealActivities, selectedDealId]
   );
 
+  const selectedDealConversations = useMemo(
+    () =>
+      conversations
+        .filter((conversation) => conversation.deal_id === selectedDealId)
+        .sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        ),
+    [conversations, selectedDealId]
+  );
+
+  const selectedDealMessages = useMemo(
+    () =>
+      messages
+        .filter((message) => message.deal_id === selectedDealId)
+        .sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        ),
+    [messages, selectedDealId]
+  );
+
   const dealsByStage = useMemo(() => {
     const grouped = new Map<string, CrmDeal[]>();
 
@@ -409,6 +478,11 @@ export default function CrmPage() {
     [stages]
   );
 
+  const pipelineNameById = useMemo(
+    () => new Map(pipelines.map((pipeline) => [pipeline.id, pipeline.name])),
+    [pipelines]
+  );
+
   const listDeals = useMemo(
     () =>
       [...activeDeals].sort(
@@ -416,6 +490,30 @@ export default function CrmPage() {
           new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       ),
     [activeDeals]
+  );
+
+  const sourceOverview = useMemo(
+    () =>
+      sources
+        .map((source) => {
+          const sourceDeals = activeDeals.filter(
+            (deal) => deal.source_id === source.id
+          );
+
+          return {
+            id: source.id,
+            name: source.name,
+            count: sourceDeals.length,
+            open: sourceDeals.filter((deal) => deal.status === "open").length,
+            value: sourceDeals.reduce(
+              (sum, deal) => sum + (deal.service_amount ?? 0),
+              0
+            ),
+          };
+        })
+        .filter((item) => item.count > 0)
+        .sort((a, b) => b.value - a.value),
+    [activeDeals, sources]
   );
 
   function openCreateForm() {
@@ -430,6 +528,38 @@ export default function CrmPage() {
     );
     setNewStageName("");
     setIsStageSettingsOpen(true);
+  }
+
+  function openPipelineSettings() {
+    setPipelineNameDrafts(
+      Object.fromEntries(pipelines.map((pipeline) => [pipeline.id, pipeline.name]))
+    );
+    setNewPipelineName("");
+    setNewPipelineKind("sales");
+    setIsPipelineSettingsOpen(true);
+  }
+
+  function openAssignmentSettings() {
+    const ruleBySourceKind = new Map(
+      assignmentRules.map((rule) => [rule.source_kind ?? "", rule])
+    );
+
+    setAssignmentRuleDrafts(
+      Object.fromEntries(
+        sources.map((source) => {
+          const rule = ruleBySourceKind.get(source.kind);
+
+          return [
+            source.kind,
+            {
+              mode: rule?.mode ?? "manual",
+              target_member_ids: rule?.target_member_ids ?? [],
+            },
+          ];
+        })
+      )
+    );
+    setIsAssignmentSettingsOpen(true);
   }
 
   function openDealPanel(deal: CrmDeal) {
@@ -584,6 +714,19 @@ export default function CrmPage() {
     setNewDealComment("");
   }
 
+  async function sendClientReply() {
+    const conversation = selectedDealConversations[0];
+    if (!selectedDeal || !conversation || !newClientReply.trim()) return;
+
+    await createMessageMutation.mutateAsync({
+      conversation_id: conversation.id,
+      deal_id: selectedDeal.id,
+      body: newClientReply,
+    });
+
+    setNewClientReply("");
+  }
+
   async function toggleDealTask(task: CrmDealTask) {
     await updateDealTaskMutation.mutateAsync({
       taskId: task.id,
@@ -611,6 +754,8 @@ export default function CrmPage() {
         return "Задача обновлена";
       case "comment_created":
         return "Добавлен комментарий";
+      case "message_created":
+        return "Сообщение добавлено в диалог";
       default:
         return "Действие по сделке";
     }
@@ -623,6 +768,92 @@ export default function CrmPage() {
     await updateStageMutation.mutateAsync({
       stageId: stage.id,
       values: { name },
+    });
+  }
+
+  async function createPipeline() {
+    const name = newPipelineName.trim();
+    if (!name) return;
+
+    const pipeline = await createPipelineMutation.mutateAsync({
+      name,
+      kind: newPipelineKind,
+    });
+
+    setNewPipelineName("");
+    setNewPipelineKind("sales");
+    setSelectedPipelineId(pipeline.id);
+  }
+
+  async function savePipelineName(pipeline: CrmPipeline) {
+    const name = (pipelineNameDrafts[pipeline.id] ?? pipeline.name).trim();
+    if (!name || name === pipeline.name) return;
+
+    await updatePipelineMutation.mutateAsync({
+      pipelineId: pipeline.id,
+      values: { name },
+    });
+  }
+
+  async function hidePipeline(pipeline: CrmPipeline) {
+    const pipelineDeals = deals.filter((deal) => deal.pipeline_id === pipeline.id);
+
+    if (pipelineDeals.length > 0) {
+      window.alert("Сначала перенеси или закрой сделки из этой воронки. После этого её можно будет скрыть.");
+      return;
+    }
+
+    if (pipelines.length <= 1) {
+      window.alert("Нельзя скрыть последнюю CRM-воронку.");
+      return;
+    }
+
+    await updatePipelineMutation.mutateAsync({
+      pipelineId: pipeline.id,
+      values: { is_active: false },
+    });
+
+    if (selectedPipelineId === pipeline.id) {
+      setSelectedPipelineId("");
+    }
+  }
+
+  function updateAssignmentRuleDraft(
+    sourceKind: string,
+    patch: Partial<AssignmentRuleDraft>
+  ) {
+    setAssignmentRuleDrafts((current) => ({
+      ...current,
+      [sourceKind]: {
+        mode: current[sourceKind]?.mode ?? "manual",
+        target_member_ids: current[sourceKind]?.target_member_ids ?? [],
+        ...patch,
+      },
+    }));
+  }
+
+  function toggleAssignmentTarget(sourceKind: string, memberId: string) {
+    const currentTargets =
+      assignmentRuleDrafts[sourceKind]?.target_member_ids ?? [];
+    const nextTargets = currentTargets.includes(memberId)
+      ? currentTargets.filter((id) => id !== memberId)
+      : [...currentTargets, memberId];
+
+    updateAssignmentRuleDraft(sourceKind, {
+      target_member_ids: nextTargets,
+    });
+  }
+
+  async function saveAssignmentRule(sourceKind: string) {
+    const draft = assignmentRuleDrafts[sourceKind];
+    if (!draft) return;
+
+    await upsertAssignmentRuleMutation.mutateAsync({
+      source_kind: sourceKind,
+      mode: draft.mode,
+      target_member_ids:
+        draft.mode === "manual" ? [] : draft.target_member_ids,
+      is_active: true,
     });
   }
 
@@ -761,6 +992,26 @@ export default function CrmPage() {
             {canManageStages ? (
               <button
                 type="button"
+                onClick={openPipelineSettings}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+              >
+                <Settings2 className="h-4 w-4" />
+                Воронки
+              </button>
+            ) : null}
+            {canManageStages ? (
+              <button
+                type="button"
+                onClick={openAssignmentSettings}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+              >
+                <Users className="h-4 w-4" />
+                Распределение
+              </button>
+            ) : null}
+            {canManageStages && !isAllPipelinesSelected ? (
+              <button
+                type="button"
                 onClick={openStageSettings}
                 className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
               >
@@ -822,8 +1073,20 @@ export default function CrmPage() {
 
           <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedPipelineId("all")}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  isAllPipelinesSelected
+                    ? "bg-violet-600 text-white shadow-lg shadow-violet-500/20"
+                    : "border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                }`}
+              >
+                Все сделки
+              </button>
               {pipelines.map((pipeline) => {
-                const isActive = pipeline.id === activePipeline?.id;
+                const isActive =
+                  !isAllPipelinesSelected && pipeline.id === activePipeline?.id;
 
                 return (
                   <button
@@ -846,10 +1109,11 @@ export default function CrmPage() {
               <button
                 type="button"
                 onClick={() => setViewMode("board")}
+                disabled={isAllPipelinesSelected}
                 className={`pb-2 font-semibold transition ${
-                  viewMode === "board"
+                  displayMode === "board"
                     ? "border-b-2 border-violet-600 text-violet-700 dark:text-violet-300"
-                    : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                    : "text-slate-500 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:text-white"
                 }`}
               >
                 Доска
@@ -858,7 +1122,7 @@ export default function CrmPage() {
                 type="button"
                 onClick={() => setViewMode("list")}
                 className={`pb-2 font-semibold transition ${
-                  viewMode === "list"
+                  displayMode === "list"
                     ? "border-b-2 border-violet-600 text-violet-700 dark:text-violet-300"
                     : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                 }`}
@@ -873,9 +1137,36 @@ export default function CrmPage() {
               {error instanceof Error ? error.message : "CRM пока не загрузилась"}
             </div>
           ) : null}
+
+          {isAllPipelinesSelected ? (
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {sourceOverview.length > 0 ? (
+                sourceOverview.slice(0, 4).map((source) => (
+                  <div
+                    key={source.id}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-white/10 dark:bg-[#121827]"
+                  >
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      {source.name}
+                    </p>
+                    <p className="mt-2 text-xl font-semibold">
+                      {source.count} сделок
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      В работе: {source.open} · Потенциал: {money(source.value)}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm dark:border-white/10 dark:bg-[#121827] dark:text-slate-400">
+                  По выбранным фильтрам пока нет сделок по источникам.
+                </div>
+              )}
+            </div>
+          ) : null}
         </section>
 
-        {viewMode === "board" ? (
+        {displayMode === "board" ? (
         <section className="overflow-x-auto pb-4">
           <div className="grid min-h-[calc(100vh-290px)] gap-4 lg:grid-flow-col lg:auto-cols-[minmax(280px,320px)]">
             {activeStages.map((stage, index) => {
@@ -964,6 +1255,7 @@ export default function CrmPage() {
                 <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500 dark:bg-white/[0.03] dark:text-slate-400">
                   <tr>
                     <th className="px-5 py-4 font-semibold">Сделка</th>
+                    <th className="px-5 py-4 font-semibold">Воронка</th>
                     <th className="px-5 py-4 font-semibold">Этап</th>
                     <th className="px-5 py-4 font-semibold">Источник</th>
                     <th className="px-5 py-4 font-semibold">Ответственные</th>
@@ -994,6 +1286,10 @@ export default function CrmPage() {
                             {deal.client_name || "Клиент пока не создан"}
                             {deal.phone ? ` · ${deal.phone}` : ""}
                           </div>
+                        </td>
+                        <td className="px-5 py-4 text-slate-600 dark:text-slate-300">
+                          {pipelineNameById.get(deal.pipeline_id) ??
+                            "Воронка не найдена"}
                         </td>
                         <td className="px-5 py-4 text-slate-600 dark:text-slate-300">
                           {stageNameById.get(deal.stage_id) ?? "Этап не найден"}
@@ -1059,6 +1355,239 @@ export default function CrmPage() {
           </section>
         )}
       </div>
+
+      {isAssignmentSettingsOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#121827]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
+                  CRM
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold">
+                  Распределение заявок
+                </h2>
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                  Настрой, кому будут назначаться новые сделки из Авито, Tilda, Яндекс Директа и других каналов.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAssignmentSettingsOpen(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+              >
+                Закрыть
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4">
+              {sources.map((source) => {
+                const draft = assignmentRuleDrafts[source.kind] ?? {
+                  mode: "manual" as CrmAssignmentMode,
+                  target_member_ids: [],
+                };
+                const needsTargets = draft.mode !== "manual";
+
+                return (
+                  <div
+                    key={source.id}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-[#0B0F1A]"
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <h3 className="text-base font-semibold">{source.name}</h3>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          Канал: {source.kind}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <select
+                          value={draft.mode}
+                          onChange={(event) =>
+                            updateAssignmentRuleDraft(source.kind, {
+                              mode: event.target.value as CrmAssignmentMode,
+                            })
+                          }
+                          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-violet-400 dark:border-white/10 dark:bg-[#121827]"
+                        >
+                          <option value="manual">Ручное назначение</option>
+                          <option value="round_robin">По очереди</option>
+                          <option value="least_loaded">Кто свободнее</option>
+                          <option value="fixed_manager">Фиксированные</option>
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => void saveAssignmentRule(source.kind)}
+                          disabled={
+                            upsertAssignmentRuleMutation.isPending ||
+                            (needsTargets && draft.target_member_ids.length === 0)
+                          }
+                          className="h-10 rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Сохранить
+                        </button>
+                      </div>
+                    </div>
+
+                    {needsTargets ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {activeMembers.map((member) => {
+                          const isSelected = draft.target_member_ids.includes(
+                            member.id
+                          );
+
+                          return (
+                            <button
+                              key={member.id}
+                              type="button"
+                              onClick={() =>
+                                toggleAssignmentTarget(source.kind, member.id)
+                              }
+                              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                isSelected
+                                  ? "border-violet-500 bg-violet-600 text-white"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                              }`}
+                            >
+                              {member.display_name?.trim() ||
+                                member.email ||
+                                "Без имени"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
+                        Новые сделки из этого канала будут создаваться без автоматического ответственного.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isPipelineSettingsOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#121827]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
+                  CRM
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold">
+                  Управление воронками
+                </h2>
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                  Создавай отдельные воронки под источники, менеджеров или запуск проектов. Общая воронка при этом остаётся главным обзором продаж.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPipelineSettingsOpen(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+              >
+                Закрыть
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {pipelines.map((pipeline) => {
+                const pipelineDealsCount = deals.filter(
+                  (deal) => deal.pipeline_id === pipeline.id
+                ).length;
+
+                return (
+                  <div
+                    key={pipeline.id}
+                    className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#0B0F1A] md:grid-cols-[1fr_auto_auto] md:items-center"
+                  >
+                    <div>
+                      <input
+                        value={pipelineNameDrafts[pipeline.id] ?? pipeline.name}
+                        onChange={(event) =>
+                          setPipelineNameDrafts((current) => ({
+                            ...current,
+                            [pipeline.id]: event.target.value,
+                          }))
+                        }
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-violet-400 dark:border-white/10 dark:bg-[#121827]"
+                      />
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="rounded-full bg-white px-2 py-1 dark:bg-white/10">
+                          {pipeline.kind === "delivery"
+                            ? "Запуск проекта"
+                            : "Продажи"}
+                        </span>
+                        <span>{pipelineDealsCount} сделок</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void savePipelineName(pipeline)}
+                      disabled={updatePipelineMutation.isPending}
+                      className="h-11 rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50"
+                    >
+                      Сохранить
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void hidePipeline(pipeline)}
+                      disabled={
+                        updatePipelineMutation.isPending ||
+                        pipelineDealsCount > 0 ||
+                        pipelines.length <= 1
+                      }
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-semibold text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Скрыть
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-violet-100 bg-violet-50 p-4 dark:border-violet-500/20 dark:bg-violet-500/10">
+              <p className="text-sm font-semibold text-violet-800 dark:text-violet-100">
+                Новая воронка
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-[1fr_220px_auto]">
+                <input
+                  value={newPipelineName}
+                  onChange={(event) => setNewPipelineName(event.target.value)}
+                  placeholder="Например: Авито — менеджер Анна"
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-violet-400 dark:border-white/10 dark:bg-[#121827]"
+                />
+                <select
+                  value={newPipelineKind}
+                  onChange={(event) =>
+                    setNewPipelineKind(event.target.value as "sales" | "delivery")
+                  }
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-violet-400 dark:border-white/10 dark:bg-[#121827]"
+                >
+                  <option value="sales">Продажи</option>
+                  <option value="delivery">Запуск проекта</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void createPipeline()}
+                  disabled={createPipelineMutation.isPending || !newPipelineName.trim()}
+                  className="h-11 rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Создать
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isStageSettingsOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
@@ -1277,6 +1806,7 @@ export default function CrmPage() {
 
             <div className="mt-5 flex gap-2 overflow-x-auto">
               {[
+                ["dialogs", `Диалог (${selectedDealMessages.length})`],
                 ["info", "Информация"],
                 ["tasks", `Задачи (${selectedDealTasks.length})`],
                 ["comments", "Комментарии"],
@@ -1355,6 +1885,93 @@ export default function CrmPage() {
                   <Edit3 className="h-4 w-4" />
                   Редактировать сделку
                 </button>
+              </div>
+            ) : null}
+
+            {dealPanelTab === "dialogs" ? (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="flex items-center gap-2 text-sm font-semibold">
+                      <MessageSquareText className="h-4 w-4 text-emerald-500" />
+                      Диалог с клиентом
+                    </p>
+                    {selectedDealConversations[0] ? (
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
+                        {selectedDealConversations[0].channel}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 max-h-80 space-y-3 overflow-y-auto pr-1">
+                    {selectedDealMessages.map((message) => {
+                      const isManager = message.sender_type === "manager";
+                      const author =
+                        message.sender_member_id &&
+                        memberNameById.get(message.sender_member_id);
+
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${isManager ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                              isManager
+                                ? "bg-violet-600 text-white"
+                                : "border border-slate-200 bg-white text-slate-700 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-200"
+                            }`}
+                          >
+                            <p className="whitespace-pre-line leading-6">
+                              {message.body || "Вложение"}
+                            </p>
+                            <p
+                              className={`mt-2 text-[11px] ${
+                                isManager
+                                  ? "text-violet-100"
+                                  : "text-slate-400 dark:text-slate-500"
+                              }`}
+                            >
+                              {isManager ? author || "Менеджер" : "Клиент"} •{" "}
+                              {new Date(message.created_at).toLocaleString(
+                                "ru-RU"
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {selectedDealMessages.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400 dark:border-white/10">
+                        Диалогов пока нет. Когда придёт первое сообщение, оно появится здесь.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                  <textarea
+                    value={newClientReply}
+                    onChange={(event) => setNewClientReply(event.target.value)}
+                    rows={4}
+                    disabled={!selectedDealConversations[0]}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
+                    placeholder="Напиши ответ клиенту..."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void sendClientReply()}
+                    disabled={
+                      !selectedDealConversations[0] ||
+                      !newClientReply.trim() ||
+                      createMessageMutation.isPending
+                    }
+                    className="mt-3 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-50"
+                  >
+                    Ответить
+                  </button>
+                </div>
               </div>
             ) : null}
 
