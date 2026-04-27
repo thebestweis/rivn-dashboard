@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -415,6 +416,7 @@ function DealCard({
 }
 
 export default function CrmPage() {
+  const searchParams = useSearchParams();
   const { role, isReady, membership } = useAppContextState();
   const currentRole = isAppRole(role) ? role : null;
   const hasAccess = currentRole ? canAccessCrm(currentRole) : false;
@@ -673,6 +675,17 @@ export default function CrmPage() {
 
     return grouped;
   }, [activeDeals]);
+
+  useEffect(() => {
+    const dealId = searchParams.get("dealId");
+    if (!dealId || selectedDealId === dealId) return;
+
+    const deal = deals.find((item) => item.id === dealId);
+    if (!deal) return;
+
+    setSelectedDealId(deal.id);
+    setDealPanelTab("info");
+  }, [deals, searchParams, selectedDealId]);
 
   const memberNameById = useMemo(
     () =>

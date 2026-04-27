@@ -167,6 +167,15 @@ function formatMinutes(value: number) {
   return minutes > 0 ? `${hours} ч ${minutes} мин` : `${hours} ч`;
 }
 
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function getInitials(value: string) {
   return value
     .split(" ")
@@ -402,6 +411,47 @@ export default function CrmAnalyticsPage() {
       .filter((item) => item.deals > 0);
 
     const stageById = new Map(stages.map((stage) => [stage.id, stage]));
+    const pipelineNameById = new Map(
+      pipelines.map((pipeline) => [pipeline.id, pipeline.name])
+    );
+    const latestStageMoveByDeal = new Map<string, string>();
+
+    for (const movement of stageHistory) {
+      const current = latestStageMoveByDeal.get(movement.deal_id);
+
+      if (
+        !current ||
+        new Date(movement.moved_at).getTime() > new Date(current).getTime()
+      ) {
+        latestStageMoveByDeal.set(movement.deal_id, movement.moved_at);
+      }
+    }
+
+    const stuckDeals = filteredDeals
+      .filter((deal) => deal.status === "open")
+      .map((deal) => {
+        const stage = stageById.get(deal.stage_id);
+        const lastMoveAt =
+          latestStageMoveByDeal.get(deal.id) ?? deal.updated_at ?? deal.created_at;
+        const daysInStage = Math.max(
+          0,
+          Math.floor((now - new Date(lastMoveAt).getTime()) / 86_400_000)
+        );
+
+        return {
+          id: deal.id,
+          title: deal.title,
+          clientName: deal.client_name,
+          value: deal.service_amount ?? 0,
+          stageName: stage?.name ?? "Этап не найден",
+          pipelineName: pipelineNameById.get(deal.pipeline_id) ?? "CRM",
+          daysInStage,
+          lastMoveAt,
+        };
+      })
+      .filter((deal) => deal.daysInStage >= 3)
+      .sort((a, b) => b.daysInStage - a.daysInStage)
+      .slice(0, 8);
     const stageConversions = pipelines
       .map((pipeline) => {
         const pipelineStages = stages
@@ -495,6 +545,7 @@ export default function CrmAnalyticsPage() {
       byManager,
       dailyDynamics,
       byStage,
+      stuckDeals,
       stageConversions,
     };
   }, [
@@ -718,6 +769,58 @@ export default function CrmAnalyticsPage() {
       0
     ),
   };
+  const stageMovementAnalytics = useMemo(() => {
+    const stageNameById = new Map(stages.map((stage) => [stage.id, stage.name]));
+    const pipelineNameById = new Map(
+      pipelines.map((pipeline) => [pipeline.id, pipeline.name])
+    );
+    const movements = stageHistory
+      .map((item) => ({
+        id: item.id,
+        dealId: item.deal_id,
+        pipelineName: pipelineNameById.get(item.to_pipeline_id) ?? "CRM",
+        fromName: item.from_stage_id
+          ? stageNameById.get(item.from_stage_id) ?? "Предыдущий этап"
+          : "Создание сделки",
+        toName: stageNameById.get(item.to_stage_id) ?? "Новый этап",
+        movedAt: item.moved_at,
+      }))
+      .sort(
+        (a, b) => new Date(b.movedAt).getTime() - new Date(a.movedAt).getTime()
+      );
+    const transitionMap = new Map<
+      string,
+      {
+        id: string;
+        fromName: string;
+        toName: string;
+        pipelineName: string;
+        count: number;
+      }
+    >();
+
+    for (const movement of movements) {
+      const key = `${movement.pipelineName}:${movement.fromName}:${movement.toName}`;
+      const current = transitionMap.get(key);
+
+      transitionMap.set(key, {
+        id: key,
+        fromName: movement.fromName,
+        toName: movement.toName,
+        pipelineName: movement.pipelineName,
+        count: (current?.count ?? 0) + 1,
+      });
+    }
+
+    return {
+      total: movements.length,
+      uniqueDeals: new Set(movements.map((movement) => movement.dealId)).size,
+      recent: movements.slice(0, 6),
+      topTransitions: Array.from(transitionMap.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5),
+    };
+  }, [pipelines, stageHistory, stages]);
   const pipelineOptions = [
     { value: "all", label: "Все воронки" },
     ...pipelines.map((pipeline) => ({
@@ -1419,6 +1522,176 @@ export default function CrmAnalyticsPage() {
               </div>
             ) : null}
           </div>
+        </div>
+      </section>
+
+      <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+              Активность
+            </p>
+            <h2 className="mt-1 text-xl font-semibold">Движение сделок</h2>
+            <p className="mt-2 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
+              Показывает, как сделки реально двигались между этапами за выбранный
+              период. Это помогает понять, работает ли команда с заявками или
+              карточки просто стоят на месте.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-[#0B0F1A]">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Переходов
+              </p>
+              <p className="mt-1 text-xl font-semibold">
+                {stageMovementAnalytics.total}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-[#0B0F1A]">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Сделок
+              </p>
+              <p className="mt-1 text-xl font-semibold">
+                {stageMovementAnalytics.uniqueDeals}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-[#0B0F1A]">
+            <p className="text-sm font-semibold">Самые частые переходы</p>
+            <div className="mt-4 space-y-3">
+              {stageMovementAnalytics.topTransitions.map((transition) => (
+                <div
+                  key={transition.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {transition.fromName} → {transition.toName}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        {transition.pipelineName}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
+                      {transition.count}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {stageMovementAnalytics.topTransitions.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+                  За выбранный период переходов между этапами пока нет.
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-[#0B0F1A]">
+            <p className="text-sm font-semibold">Последние движения</p>
+            <div className="mt-4 space-y-3">
+              {stageMovementAnalytics.recent.map((movement) => (
+                <div
+                  key={movement.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {movement.fromName} → {movement.toName}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        {movement.pipelineName}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                      {formatDateTime(movement.movedAt)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {stageMovementAnalytics.recent.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+                  Когда менеджеры начнут двигать сделки, здесь появится свежая
+                  история переходов.
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+              Контроль
+            </p>
+            <h2 className="mt-1 text-xl font-semibold">Застрявшие сделки</h2>
+            <p className="mt-2 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
+              Здесь попадают открытые сделки, которые не двигались по этапам
+              минимум 3 дня. Это помогает быстро найти лиды, где клиент может
+              остыть или менеджер забыл сделать следующий шаг.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+            {analytics.stuckDeals.length} в зоне внимания
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {analytics.stuckDeals.map((deal) => (
+            <div
+              key={deal.id}
+              className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-[#0B0F1A]"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{deal.title}</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {deal.clientName || "Клиент не указан"} · {deal.pipelineName}
+                  </p>
+                </div>
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">
+                  {deal.daysInStage} дн.
+                </span>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl bg-white px-3 py-2 text-xs dark:bg-white/5">
+                  <p className="text-slate-500 dark:text-slate-400">Этап</p>
+                  <p className="mt-1 truncate font-semibold">{deal.stageName}</p>
+                </div>
+                <div className="rounded-xl bg-white px-3 py-2 text-xs dark:bg-white/5">
+                  <p className="text-slate-500 dark:text-slate-400">Потенциал</p>
+                  <p className="mt-1 font-semibold">{money(deal.value)}</p>
+                </div>
+                <div className="rounded-xl bg-white px-3 py-2 text-xs dark:bg-white/5">
+                  <p className="text-slate-500 dark:text-slate-400">Движение</p>
+                  <p className="mt-1 font-semibold">
+                    {formatDateTime(deal.lastMoveAt)}
+                  </p>
+                </div>
+              </div>
+              <Link
+                href={`/crm?dealId=${deal.id}`}
+                className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500"
+              >
+                Открыть сделку
+              </Link>
+            </div>
+          ))}
+
+          {analytics.stuckDeals.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400 lg:col-span-2">
+              Отлично: по выбранным фильтрам нет открытых сделок, которые стоят
+              на одном этапе 3 дня и дольше.
+            </div>
+          ) : null}
         </div>
       </section>
 

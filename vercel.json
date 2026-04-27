@@ -11,7 +11,7 @@
 
     {
       "path": "/api/cron/daily",
-      "schedule": "15 7 * * *"
+      "schedule": "40 7 * * *"
     },
     {
       "path": "/api/cron/weekly",
