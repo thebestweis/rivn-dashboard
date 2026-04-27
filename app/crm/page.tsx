@@ -542,6 +542,7 @@ export default function CrmPage() {
   const dealTasks = selectedDealDetails?.dealTasks ?? [];
   const dealComments = selectedDealDetails?.dealComments ?? [];
   const dealActivities = selectedDealDetails?.dealActivities ?? [];
+  const dealStageHistory = selectedDealDetails?.stageHistory ?? [];
   const conversations = selectedDealDetails?.conversations ?? [];
   const messages = selectedDealDetails?.messages ?? [];
   const inboxNeedsReplyCount = inboxItems.filter((item) => item.needsReply).length;
@@ -633,6 +634,17 @@ export default function CrmPage() {
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         ),
     [dealActivities, selectedDealId]
+  );
+
+  const selectedDealStageHistory = useMemo(
+    () =>
+      dealStageHistory
+        .filter((movement) => movement.deal_id === selectedDealId)
+        .sort(
+          (a, b) =>
+            new Date(b.moved_at).getTime() - new Date(a.moved_at).getTime()
+        ),
+    [dealStageHistory, selectedDealId]
   );
 
   const selectedDealConversations = useMemo(
@@ -3039,6 +3051,64 @@ export default function CrmPage() {
 
             {dealPanelTab === "history" ? (
               <div className="space-y-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">Путь по воронке</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Создание сделки и переходы между этапами.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">
+                      {selectedDealStageHistory.length}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {selectedDealStageHistory.map((movement) => {
+                      const actor =
+                        movement.actor_member_id &&
+                        memberNameById.get(movement.actor_member_id);
+                      const fromStage = movement.from_stage_id
+                        ? stageNameById.get(movement.from_stage_id) ||
+                          "Предыдущий этап"
+                        : "Создание сделки";
+                      const toStage =
+                        stageNameById.get(movement.to_stage_id) || "Новый этап";
+                      const pipelineName =
+                        pipelineNameById.get(movement.to_pipeline_id) || "CRM";
+
+                      return (
+                        <div
+                          key={movement.id}
+                          className="flex gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#0B0F1A]"
+                        >
+                          <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-200">
+                            <ArrowRight className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold">
+                              {fromStage} → {toStage}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                              {pipelineName} · {actor || "Система"} ·{" "}
+                              {new Date(movement.moved_at).toLocaleString(
+                                "ru-RU"
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {selectedDealStageHistory.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-400 dark:border-white/10">
+                        Переходов по этапам пока нет.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
                 {selectedDealActivities.map((activity) => {
                   const actor =
                     activity.actor_member_id &&

@@ -769,6 +769,32 @@ export default function CrmAnalyticsPage() {
       0
     ),
   };
+  const attentionItems = [
+    ...analytics.waitingDialogs.slice(0, 3).map((item) => ({
+      id: `dialog-${item.conversation.id}`,
+      dealId: item.deal.id,
+      title: item.deal.title,
+      label: "Клиент ждёт ответа",
+      meta: `${formatMinutes(item.minutesWaiting)} без ответа · ${item.deal.client_name || "Клиент не указан"}`,
+      tone: "amber",
+    })),
+    ...analytics.overdueDeals.slice(0, 3).map((deal) => ({
+      id: `overdue-${deal.id}`,
+      dealId: deal.id,
+      title: deal.title,
+      label: "Просрочен контакт",
+      meta: `${deal.next_contact_at ? formatDateTime(deal.next_contact_at) : "Дата не указана"} · ${deal.client_name || "Клиент не указан"}`,
+      tone: "rose",
+    })),
+    ...analytics.withoutNextContact.slice(0, 3).map((deal) => ({
+      id: `next-contact-${deal.id}`,
+      dealId: deal.id,
+      title: deal.title,
+      label: "Нет следующего шага",
+      meta: `${money(deal.service_amount ?? 0)} · ${deal.client_name || "Клиент не указан"}`,
+      tone: "violet",
+    })),
+  ].slice(0, 6);
   const stageMovementAnalytics = useMemo(() => {
     const stageNameById = new Map(stages.map((stage) => [stage.id, stage.name]));
     const pipelineNameById = new Map(
@@ -1098,6 +1124,53 @@ export default function CrmAnalyticsPage() {
         </p>
       </section>
       )
+      ) : null}
+
+      {activeTab === "overview" && attentionItems.length > 0 ? (
+        <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                Контроль
+              </p>
+              <h2 className="mt-1 text-xl font-semibold">Что требует внимания</h2>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Быстрый список сделок, где можно потерять продажу.
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-3 lg:grid-cols-3">
+            {attentionItems.map((item) => (
+              <Link
+                key={item.id}
+                href={`/crm?dealId=${item.dealId}`}
+                className={`group rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-lg ${
+                  item.tone === "rose"
+                    ? "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-100"
+                    : item.tone === "amber"
+                      ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100"
+                      : "border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-100"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] opacity-70">
+                      {item.label}
+                    </p>
+                    <h3 className="mt-2 truncate text-base font-semibold">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 line-clamp-2 text-sm opacity-75">
+                      {item.meta}
+                    </p>
+                  </div>
+                  <ArrowLeft className="mt-1 h-4 w-4 shrink-0 rotate-180 opacity-50 transition group-hover:translate-x-1 group-hover:opacity-100" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       {activeTab === "overview" ? (

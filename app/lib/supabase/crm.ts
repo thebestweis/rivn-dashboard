@@ -260,6 +260,7 @@ export type CrmDealDetails = {
   dealTasks: CrmDealTask[];
   dealComments: CrmDealComment[];
   dealActivities: CrmDealActivity[];
+  stageHistory: CrmDealStageHistory[];
   conversations: CrmConversation[];
   messages: CrmMessage[];
 };
@@ -1124,6 +1125,7 @@ export async function getCrmDealDetails(
     tasksResult,
     commentsResult,
     activitiesResult,
+    stageHistoryResult,
     conversationsResult,
     messagesResult,
   ] = await Promise.all([
@@ -1145,6 +1147,12 @@ export async function getCrmDealDetails(
       .eq("workspace_id", workspace.id)
       .eq("deal_id", dealId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("crm_deal_stage_history")
+      .select("*")
+      .eq("workspace_id", workspace.id)
+      .eq("deal_id", dealId)
+      .order("moved_at", { ascending: false }),
     supabase
       .from("crm_conversations")
       .select("*")
@@ -1175,6 +1183,16 @@ export async function getCrmDealDetails(
     );
   }
 
+  if (
+    stageHistoryResult.error &&
+    stageHistoryResult.error.code !== "42P01" &&
+    stageHistoryResult.error.code !== "PGRST205"
+  ) {
+    throw new Error(
+      `Не удалось загрузить путь сделки по этапам: ${stageHistoryResult.error.message}`
+    );
+  }
+
   if (conversationsResult.error) {
     throw new Error(
       `Не удалось загрузить диалоги сделки: ${conversationsResult.error.message}`
@@ -1191,6 +1209,7 @@ export async function getCrmDealDetails(
     dealTasks: (tasksResult.data ?? []) as CrmDealTask[],
     dealComments: (commentsResult.data ?? []) as CrmDealComment[],
     dealActivities: (activitiesResult.data ?? []) as CrmDealActivity[],
+    stageHistory: (stageHistoryResult.data ?? []) as CrmDealStageHistory[],
     conversations: (conversationsResult.data ?? []) as CrmConversation[],
     messages: (messagesResult.data ?? []) as CrmMessage[],
   };
