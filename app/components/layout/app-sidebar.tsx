@@ -30,6 +30,7 @@ import {
 import { useAppContextState } from "../../providers/app-context-provider";
 import { getWorkspaceMemberPermissions } from "../../lib/supabase/workspace-member-permissions";
 import { canAccessSectionWithCustomPermissions } from "../../lib/custom-access";
+import { useCrmInboxQuery } from "../../lib/queries/use-crm-query";
 import { ThemeToggle } from "../ui/theme-toggle";
 
 const navItems: Array<{
@@ -282,6 +283,11 @@ export function AppSidebar() {
       })
     );
   }, [activeRole, memberPermissions]);
+  const canLoadCrmInbox = filteredNavItems.some((item) => item.href === "/crm");
+  const { data: sidebarInboxItems = [] } = useCrmInboxQuery(
+    showResolvedMenu && canLoadCrmInbox
+  );
+  const crmUnreadCount = sidebarInboxItems.filter((item) => item.isUnread).length;
 
   useEffect(() => {
     if (!isMounted || permissionsLoading) return;
@@ -439,7 +445,7 @@ export function AppSidebar() {
                       <Link
                         key={item.label}
                         href={item.href}
-                        className={`flex w-full items-center rounded-2xl py-3 text-left transition ${
+                        className={`relative flex w-full items-center rounded-2xl py-3 text-left transition ${
                           isCollapsed
                             ? "justify-center px-0"
                             : "justify-between px-4"
@@ -457,7 +463,15 @@ export function AppSidebar() {
                             {item.label}
                           </span>
                         </span>
-                        {isActive && !isCollapsed ? (
+                        {item.href === "/crm" && crmUnreadCount > 0 ? (
+                          <span
+                            className={`flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold text-white ${
+                              isCollapsed ? "absolute ml-7 -mt-6" : ""
+                            }`}
+                          >
+                            {crmUnreadCount > 99 ? "99+" : crmUnreadCount}
+                          </span>
+                        ) : isActive && !isCollapsed ? (
                           <span className="h-2 w-2 rounded-full bg-emerald-400" />
                         ) : null}
                       </Link>

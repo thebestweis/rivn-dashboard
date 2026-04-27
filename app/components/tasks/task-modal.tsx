@@ -22,6 +22,7 @@ import {
   type TaskComment,
 } from "../../lib/supabase/task-comments";
 import {
+  getWorkspaceMemberDisplayName,
   type WorkspaceMemberItem,
 } from "../../lib/supabase/workspace-members";
 import { canEditTasks, isAppRole, type AppRole } from "../../lib/permissions";
@@ -159,7 +160,7 @@ function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
 }
 
 function getMemberLabel(member: WorkspaceMemberItem) {
-  return member.email || "Без имени";
+  return getWorkspaceMemberDisplayName(member);
 }
 
 export function TaskModal({

@@ -24,6 +24,7 @@ import {
   useUpdateTaskStatusMutation,
 } from "../lib/queries/use-tasks-query";
 import { useActiveWorkspaceMembers } from "../lib/queries/use-workspace-members-query";
+import { getWorkspaceMemberDisplayName } from "../lib/supabase/workspace-members";
 
 import { queryKeys } from "../lib/query-keys";
 import { getProjectById } from "../lib/supabase/projects";
@@ -463,12 +464,12 @@ export default function TasksPage() {
   function getMemberLabel(memberId: string, fallbackEmail?: string | null) {
     const member = workspaceMembers.find((item) => item.id === memberId);
 
-    if (member?.email) {
-      return member.email;
+    if (member) {
+      return getWorkspaceMemberDisplayName(member);
     }
 
     if (fallbackEmail) {
-      return fallbackEmail;
+      return getWorkspaceMemberDisplayName({ email: fallbackEmail });
     }
 
     return "Неизвестный участник";
@@ -498,7 +499,7 @@ export default function TasksPage() {
     { value: "unassigned", label: "Без исполнителя" },
     ...workspaceMembers.map((member) => ({
       value: member.id,
-      label: member.email || "Без email",
+      label: getWorkspaceMemberDisplayName(member),
     })),
   ];
 

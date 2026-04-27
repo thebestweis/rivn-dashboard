@@ -66,6 +66,10 @@ export const queryKeys = {
 
   crmBootstrap: (workspaceId: string, filtersKey = "all") =>
     ["crm", "bootstrap", workspaceId, filtersKey] as const,
+  crmPlans: (workspaceId: string) => ["crm", "plans", workspaceId] as const,
+  crmStageHistory: (workspaceId: string, filtersKey = "all") =>
+    ["crm", "stage-history", workspaceId, filtersKey] as const,
   crmDealDetails: (workspaceId: string, dealId: string) =>
     ["crm", "deal-details", workspaceId, dealId] as const,
+  crmInbox: (workspaceId: string) => ["crm", "inbox", workspaceId] as const,
 };

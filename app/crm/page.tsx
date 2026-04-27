@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -10,6 +10,8 @@ import {
   Clock3,
   Edit3,
   History,
+  Inbox,
+  LineChart,
   Mail,
   MessageSquareText,
   MoreVertical,
@@ -25,6 +27,7 @@ import {
 import {
   canAccessCrm,
   canManageCrmSettings,
+  canViewAllCrmDeals,
   isAppRole,
 } from "../lib/permissions";
 import {
@@ -36,6 +39,8 @@ import {
   useCreateCrmDealMutation,
   useCrmBootstrapQuery,
   useCrmDealDetailsQuery,
+  useCrmInboxQuery,
+  useMarkCrmConversationReadMutation,
   useMoveCrmDealMutation,
   useUpdateCrmDealTaskMutation,
   useUpdateCrmPipelineMutation,
@@ -46,7 +51,9 @@ import {
 } from "../lib/queries/use-crm-query";
 import { useClientsQuery } from "../lib/queries/use-clients-query";
 import { useActiveWorkspaceMembers } from "../lib/queries/use-workspace-members-query";
+import { CustomSelect } from "../components/ui/custom-select";
 import { useAppContextState } from "../providers/app-context-provider";
+import { getWorkspaceMemberDisplayName } from "../lib/supabase/workspace-members";
 import type {
   CrmDeal,
   CrmDealTask,
@@ -73,6 +80,13 @@ type DealFormState = {
   next_contact_at: string;
   description: string;
   assignee_ids: string[];
+};
+
+type MemberProfilePreview = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  title: string | null;
 };
 
 const emptyDealForm: DealFormState = {
@@ -110,6 +124,16 @@ function money(value: number | null) {
   }).format(value);
 }
 
+function formatWaitTime(minutes: number) {
+  if (minutes < 1) return "только что";
+  if (minutes < 60) return `${minutes} мин`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ч`;
+
+  return `${Math.floor(hours / 24)} д`;
+}
+
 function toNumberOrNull(value: string) {
   const normalized = value.replace(/\s/g, "").replace(",", ".");
   if (!normalized) return null;
@@ -123,6 +147,96 @@ function getStageStatus(stage: CrmStage): CrmDealStatus {
   if (stage.kind === "lost") return "lost";
 
   return "open";
+}
+
+function getDealSignal(deal: CrmDeal) {
+  if (deal.status === "won") {
+    return {
+      label: "Оплачено",
+      className:
+        "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200",
+    };
+  }
+
+  if (deal.status === "lost") {
+    return {
+      label: "Потеряно",
+      className:
+        "bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-200",
+    };
+  }
+
+  if (!deal.next_contact_at) {
+    return {
+      label: "Нет следующего контакта",
+      className:
+        "bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-200",
+    };
+  }
+
+  const nextContactTime = new Date(deal.next_contact_at).getTime();
+
+  if (Number.isFinite(nextContactTime) && nextContactTime < Date.now()) {
+    return {
+      label: "Контакт просрочен",
+      className:
+        "bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-200",
+    };
+  }
+
+  return {
+    label: "Следующий шаг назначен",
+    className:
+      "bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-200",
+  };
+}
+
+function getDealTaskTiming(task: CrmDealTask) {
+  if (task.status === "done") {
+    return {
+      label: "Выполнено",
+      className:
+        "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200",
+    };
+  }
+
+  if (!task.due_at) {
+    return {
+      label: "Без срока",
+      className:
+        "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300",
+    };
+  }
+
+  const dueTime = new Date(task.due_at).getTime();
+  const now = Date.now();
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+
+  if (Number.isFinite(dueTime) && dueTime < now) {
+    return {
+      label: "Просрочено",
+      className:
+        "bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-200",
+    };
+  }
+
+  if (Number.isFinite(dueTime) && dueTime <= endOfToday.getTime()) {
+    return {
+      label: "Сегодня",
+      className:
+        "bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-200",
+    };
+  }
+
+  return {
+    label: new Date(task.due_at).toLocaleDateString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+    }),
+    className:
+      "bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-200",
+  };
 }
 
 function buildFormFromDeal(deal: CrmDeal): DealFormState {
@@ -152,19 +266,71 @@ function getInitials(value: string) {
     .join("");
 }
 
+function MemberAvatar({
+  member,
+  size = "sm",
+}: {
+  member: MemberProfilePreview;
+  size?: "xs" | "sm";
+}) {
+  const sizeClass = size === "xs" ? "h-6 w-6 text-[10px]" : "h-8 w-8 text-xs";
+
+  if (member.avatarUrl) {
+    return (
+      <img
+        src={member.avatarUrl}
+        alt={member.name}
+        className={`${sizeClass} rounded-full object-cover ring-2 ring-white dark:ring-[#111827]`}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={`${sizeClass} flex items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-emerald-400 font-bold text-white ring-2 ring-white dark:ring-[#111827]`}
+    >
+      {getInitials(member.name) || "R"}
+    </span>
+  );
+}
+
+function AssigneePreview({ members }: { members: MemberProfilePreview[] }) {
+  if (members.length === 0) {
+    return <span className="truncate">Без ответственного</span>;
+  }
+
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="flex -space-x-2">
+        {members.slice(0, 3).map((member) => (
+          <MemberAvatar key={member.id} member={member} size="xs" />
+        ))}
+      </span>
+      <span className="truncate">
+        {members.map((member) => member.name).join(", ")}
+      </span>
+    </span>
+  );
+}
+
 function DealCard({
   deal,
-  assigneeNames,
+  assigneeProfiles,
   sourceName,
   onEdit,
 }: {
   deal: CrmDeal;
-  assigneeNames: string[];
+  assigneeProfiles: MemberProfilePreview[];
   sourceName: string;
   onEdit: () => void;
 }) {
   const clientName = deal.client_name || "Клиент пока не создан";
   const initials = getInitials(clientName || deal.title) || "R";
+  const signal = getDealSignal(deal);
+  const isNextContactOverdue =
+    deal.status === "open" &&
+    Boolean(deal.next_contact_at) &&
+    new Date(deal.next_contact_at ?? "").getTime() < Date.now();
 
   return (
     <button
@@ -207,6 +373,11 @@ function DealCard({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${signal.className}`}
+            >
+              {signal.label}
+            </span>
             <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">
               {money(deal.service_amount)}
             </span>
@@ -221,11 +392,15 @@ function DealCard({
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-slate-500 dark:text-slate-400">
-            <span className="truncate">
-              {assigneeNames.length ? assigneeNames.join(", ") : "Без ответственного"}
-            </span>
+            <AssigneePreview members={assigneeProfiles} />
             {deal.next_contact_at ? (
-              <span className="shrink-0 text-amber-600 dark:text-amber-300">
+              <span
+                className={`shrink-0 ${
+                  isNextContactOverdue
+                    ? "text-rose-600 dark:text-rose-300"
+                    : "text-amber-600 dark:text-amber-300"
+                }`}
+              >
                 {new Date(deal.next_contact_at).toLocaleDateString("ru-RU", {
                   day: "2-digit",
                   month: "2-digit",
@@ -240,10 +415,11 @@ function DealCard({
 }
 
 export default function CrmPage() {
-  const { role, isReady } = useAppContextState();
+  const { role, isReady, membership } = useAppContextState();
   const currentRole = isAppRole(role) ? role : null;
   const hasAccess = currentRole ? canAccessCrm(currentRole) : false;
   const canManageStages = currentRole ? canManageCrmSettings(currentRole) : false;
+  const canViewAllDeals = currentRole ? canViewAllCrmDeals(currentRole) : false;
 
   const [selectedPipelineId, setSelectedPipelineId] = useState("");
   const [search, setSearch] = useState("");
@@ -252,6 +428,15 @@ export default function CrmPage() {
   const [assigneeFilter, setAssigneeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<
     "all" | "open" | "won" | "lost"
+  >("all");
+  const [qualityFilter, setQualityFilter] = useState<
+    "all" | "overdue" | "without_next_contact"
+  >("all");
+  const [workspaceView, setWorkspaceView] = useState<"pipeline" | "inbox">(
+    "pipeline"
+  );
+  const [inboxFilter, setInboxFilter] = useState<
+    "all" | "needs_reply" | "unread" | "avito" | "without_assignee"
   >("all");
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
 
@@ -283,6 +468,7 @@ export default function CrmPage() {
     isReady && hasAccess,
     crmFilters
   );
+  const { data: inboxItems = [] } = useCrmInboxQuery(isReady && hasAccess);
   const { data: clients = [] } = useClientsQuery(isReady && hasAccess);
   const { activeMembers = [] } = useActiveWorkspaceMembers(isReady && hasAccess);
   const createDealMutation = useCreateCrmDealMutation();
@@ -298,6 +484,8 @@ export default function CrmPage() {
   const updateDealTaskMutation = useUpdateCrmDealTaskMutation();
   const createDealCommentMutation = useCreateCrmDealCommentMutation();
   const createMessageMutation = useCreateCrmMessageMutation();
+  const markConversationReadMutation = useMarkCrmConversationReadMutation();
+  const markingReadConversationIdsRef = useRef(new Set<string>());
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPipelineSettingsOpen, setIsPipelineSettingsOpen] = useState(false);
@@ -325,6 +513,8 @@ export default function CrmPage() {
   const [newDealTaskDueAt, setNewDealTaskDueAt] = useState("");
   const [newDealComment, setNewDealComment] = useState("");
   const [newClientReply, setNewClientReply] = useState("");
+  const [newClientReplyAttachmentUrl, setNewClientReplyAttachmentUrl] =
+    useState("");
   const [stageNameDrafts, setStageNameDrafts] = useState<Record<string, string>>(
     {}
   );
@@ -352,6 +542,28 @@ export default function CrmPage() {
   const dealActivities = selectedDealDetails?.dealActivities ?? [];
   const conversations = selectedDealDetails?.conversations ?? [];
   const messages = selectedDealDetails?.messages ?? [];
+  const inboxNeedsReplyCount = inboxItems.filter((item) => item.needsReply).length;
+  const inboxUnreadCount = inboxItems.filter((item) => item.isUnread).length;
+  const inboxAvitoCount = inboxItems.filter(
+    (item) => item.conversation.channel === "avito"
+  ).length;
+  const inboxWithoutAssigneeCount = inboxItems.filter(
+    (item) => item.deal.assignees.length === 0
+  ).length;
+  const filteredInboxItems = useMemo(() => {
+    switch (inboxFilter) {
+      case "needs_reply":
+        return inboxItems.filter((item) => item.needsReply);
+      case "unread":
+        return inboxItems.filter((item) => item.isUnread);
+      case "avito":
+        return inboxItems.filter((item) => item.conversation.channel === "avito");
+      case "without_assignee":
+        return inboxItems.filter((item) => item.deal.assignees.length === 0);
+      default:
+        return inboxItems;
+    }
+  }, [inboxFilter, inboxItems]);
 
   const isAllPipelinesSelected = selectedPipelineId === "all";
   const defaultPipeline =
@@ -467,11 +679,39 @@ export default function CrmPage() {
       new Map(
         activeMembers.map((member) => [
           member.id,
-          member.display_name?.trim() || member.email || "Без имени",
+          getWorkspaceMemberDisplayName(member),
         ])
       ),
     [activeMembers]
   );
+  const memberProfileById = useMemo(
+    () =>
+      new Map(
+        activeMembers.map((member) => [
+          member.id,
+          {
+            id: member.id,
+            name: getWorkspaceMemberDisplayName(member),
+            avatarUrl: member.avatar_url,
+            title: member.profile_title,
+          },
+        ])
+      ),
+    [activeMembers]
+  );
+  const assignableMembers = useMemo(
+    () =>
+      canViewAllDeals
+        ? activeMembers
+        : activeMembers.filter((member) => member.id === membership?.id),
+    [activeMembers, canViewAllDeals, membership?.id]
+  );
+
+  function getDealAssigneeProfiles(deal: CrmDeal) {
+    return deal.assignees
+      .map((assignee) => memberProfileById.get(assignee.workspace_member_id))
+      .filter((member): member is MemberProfilePreview => Boolean(member));
+  }
 
   const sourceNameById = useMemo(
     () => new Map(sources.map((source) => [source.id, source.name])),
@@ -489,12 +729,30 @@ export default function CrmPage() {
   );
 
   const listDeals = useMemo(
-    () =>
-      [...activeDeals].sort(
+    () => {
+      const now = Date.now();
+      const filteredDeals = activeDeals.filter((deal) => {
+        if (qualityFilter === "overdue") {
+          return (
+            deal.status === "open" &&
+            Boolean(deal.next_contact_at) &&
+            new Date(deal.next_contact_at ?? "").getTime() < now
+          );
+        }
+
+        if (qualityFilter === "without_next_contact") {
+          return deal.status === "open" && !deal.next_contact_at;
+        }
+
+        return true;
+      });
+
+      return filteredDeals.sort(
         (a, b) =>
           new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-      ),
-    [activeDeals]
+      );
+    },
+    [activeDeals, qualityFilter]
   );
 
   const sourceOverview = useMemo(
@@ -521,9 +779,55 @@ export default function CrmPage() {
     [activeDeals, sources]
   );
 
+  const qualitySignals = useMemo(() => {
+    const now = Date.now();
+    const openDeals = activeDeals.filter((deal) => deal.status === "open");
+    const overdueContacts = openDeals.filter(
+      (deal) =>
+        deal.next_contact_at &&
+        new Date(deal.next_contact_at).getTime() < now
+    );
+    const withoutNextContact = openDeals.filter((deal) => !deal.next_contact_at);
+    const waitingDialogs = inboxItems.filter(
+      (item) => item.needsReply && item.minutesWaiting >= 30
+    );
+
+    return {
+      overdueContacts,
+      withoutNextContact,
+      waitingDialogs,
+      total:
+        overdueContacts.length + withoutNextContact.length + waitingDialogs.length,
+    };
+  }, [activeDeals, inboxItems]);
+
+  useEffect(() => {
+    if (dealPanelTab !== "dialogs" || !selectedDealId) return;
+
+    const inboxItem = inboxItems.find(
+      (item) => item.deal.id === selectedDealId && item.isUnread
+    );
+
+    if (
+      inboxItem &&
+      !markingReadConversationIdsRef.current.has(inboxItem.conversation.id)
+    ) {
+      markingReadConversationIdsRef.current.add(inboxItem.conversation.id);
+      markConversationReadMutation.mutate(inboxItem.conversation.id, {
+        onSettled: () => {
+          markingReadConversationIdsRef.current.delete(inboxItem.conversation.id);
+        },
+      });
+    }
+  }, [dealPanelTab, inboxItems, markConversationReadMutation, selectedDealId]);
+
   function openCreateForm() {
     setEditingDeal(null);
-    setForm(emptyDealForm);
+    setForm({
+      ...emptyDealForm,
+      assignee_ids:
+        canViewAllDeals || !membership?.id ? [] : [membership.id],
+    });
     setIsFormOpen(true);
   }
 
@@ -570,6 +874,11 @@ export default function CrmPage() {
   function openDealPanel(deal: CrmDeal) {
     setSelectedDealId(deal.id);
     setDealPanelTab("info");
+  }
+
+  function openDealDialogPanel(deal: CrmDeal) {
+    setSelectedDealId(deal.id);
+    setDealPanelTab("dialogs");
   }
 
   function openEditForm(deal: CrmDeal) {
@@ -697,15 +1006,73 @@ export default function CrmPage() {
   async function addDealTask() {
     if (!selectedDeal || !newDealTaskTitle.trim()) return;
 
+    const dueAt = newDealTaskDueAt || null;
+
     await createDealTaskMutation.mutateAsync({
       deal_id: selectedDeal.id,
       title: newDealTaskTitle,
-      due_at: newDealTaskDueAt || null,
+      due_at: dueAt,
       assignee_member_id: selectedDeal.assignees[0]?.workspace_member_id ?? null,
     });
 
+    if (dueAt) {
+      await updateDealMutation.mutateAsync({
+        dealId: selectedDeal.id,
+        values: {
+          next_contact_at: dueAt,
+        },
+      });
+    }
+
     setNewDealTaskTitle("");
     setNewDealTaskDueAt("");
+  }
+
+  async function addQuickDealTask(title: string, dueDate: Date) {
+    if (!selectedDeal) return;
+
+    await createDealTaskMutation.mutateAsync({
+      deal_id: selectedDeal.id,
+      title,
+      due_at: dueDate.toISOString(),
+      assignee_member_id: selectedDeal.assignees[0]?.workspace_member_id ?? null,
+    });
+
+    await updateDealMutation.mutateAsync({
+      dealId: selectedDeal.id,
+      values: {
+        next_contact_at: dueDate.toISOString(),
+      },
+    });
+  }
+
+  async function updateSelectedDealNextContact(date: Date) {
+    if (!selectedDeal) return;
+
+    await updateDealMutation.mutateAsync({
+      dealId: selectedDeal.id,
+      values: {
+        next_contact_at: date.toISOString(),
+      },
+    });
+  }
+
+  async function assignInboxDeal(deal: CrmDeal, memberId: string) {
+    await updateDealMutation.mutateAsync({
+      dealId: deal.id,
+      values: {
+        assignee_ids: memberId ? [memberId] : [],
+      },
+    });
+  }
+
+  async function updateInboxDealNextContact(deal: CrmDeal, value: string) {
+    await updateDealMutation.mutateAsync({
+      dealId: deal.id,
+      values: {
+        next_contact_at: value || null,
+      },
+    });
   }
 
   async function addDealComment() {
@@ -721,15 +1088,20 @@ export default function CrmPage() {
 
   async function sendClientReply() {
     const conversation = selectedDealConversations[0];
-    if (!selectedDeal || !conversation || !newClientReply.trim()) return;
+    const replyBody = newClientReply.trim();
+    const attachmentUrl = newClientReplyAttachmentUrl.trim();
+
+    if (!selectedDeal || !conversation || (!replyBody && !attachmentUrl)) return;
 
     await createMessageMutation.mutateAsync({
       conversation_id: conversation.id,
       deal_id: selectedDeal.id,
-      body: newClientReply,
+      body: replyBody || "Вложение",
+      attachment_url: attachmentUrl || null,
     });
 
     setNewClientReply("");
+    setNewClientReplyAttachmentUrl("");
   }
 
   async function toggleDealTask(task: CrmDealTask) {
@@ -896,6 +1268,19 @@ export default function CrmPage() {
     );
   }
 
+  const selectedDealSignal = selectedDeal ? getDealSignal(selectedDeal) : null;
+  const selectedDealAssigneeProfiles = selectedDeal
+    ? getDealAssigneeProfiles(selectedDeal)
+    : [];
+  const selectedDealTaskStats = {
+    active: selectedDealTasks.filter((task) => task.status !== "done").length,
+    overdue: selectedDealTasks.filter((task) => {
+      if (task.status === "done" || !task.due_at) return false;
+      return new Date(task.due_at).getTime() < Date.now();
+    }).length,
+    done: selectedDealTasks.filter((task) => task.status === "done").length,
+  };
+
   if (!isReady || isLoading) {
     return (
       <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
@@ -944,43 +1329,49 @@ export default function CrmPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <CustomSelect
               value={sourceFilter}
-              onChange={(event) => setSourceFilter(event.target.value)}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 outline-none transition hover:border-violet-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
-            >
-              <option value="">Все источники</option>
-              {sources.map((source) => (
-                <option key={source.id} value={source.id}>
-                  {source.name}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setSourceFilter}
+              options={[
+                { value: "", label: "Все источники" },
+                ...sources.map((source) => ({
+                  value: source.id,
+                  label: source.name,
+                })),
+              ]}
+              className="min-w-[160px]"
+              buttonClassName="h-10 rounded-xl font-semibold"
+            />
+            <CustomSelect
               value={assigneeFilter}
-              onChange={(event) => setAssigneeFilter(event.target.value)}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 outline-none transition hover:border-violet-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
-            >
-              <option value="">Все ответственные</option>
-              {activeMembers.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.display_name?.trim() || member.email || "Без имени"}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setAssigneeFilter}
+              options={[
+                { value: "", label: "Все ответственные" },
+                ...(canViewAllDeals ? activeMembers : assignableMembers).map((member) => ({
+                  value: member.id,
+                  label: getWorkspaceMemberDisplayName(member),
+                })),
+              ]}
+              className="min-w-[180px]"
+              buttonClassName="h-10 rounded-xl font-semibold"
+            />
+            <CustomSelect
               value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as typeof statusFilter)
-              }
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 outline-none transition hover:border-violet-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
-            >
-              <option value="all">Все статусы</option>
-              <option value="open">В работе</option>
-              <option value="won">Оплачено</option>
-              <option value="lost">Потеряно</option>
-            </select>
-            {search || sourceFilter || assigneeFilter || statusFilter !== "all" ? (
+              onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+              options={[
+                { value: "all", label: "Все статусы" },
+                { value: "open", label: "В работе" },
+                { value: "won", label: "Оплачено" },
+                { value: "lost", label: "Потеряно" },
+              ]}
+              className="min-w-[150px]"
+              buttonClassName="h-10 rounded-xl font-semibold"
+            />
+            {search ||
+            sourceFilter ||
+            assigneeFilter ||
+            statusFilter !== "all" ||
+            qualityFilter !== "all" ? (
               <button
                 type="button"
                 onClick={() => {
@@ -988,6 +1379,7 @@ export default function CrmPage() {
                   setSourceFilter("");
                   setAssigneeFilter("");
                   setStatusFilter("all");
+                  setQualityFilter("all");
                 }}
                 className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
               >
@@ -1024,6 +1416,13 @@ export default function CrmPage() {
                 Этапы
               </button>
             ) : null}
+            <Link
+              href="/crm/analytics"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+            >
+              <LineChart className="h-4 w-4" />
+              Аналитика CRM
+            </Link>
             <button
               type="button"
               onClick={openCreateForm}
@@ -1067,16 +1466,119 @@ export default function CrmPage() {
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-white/10 dark:bg-[#121827]">
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Команда
+                  Сигналы
                 </p>
                 <p className="mt-1 text-xl font-semibold">
-                  {activeMembers.length}
+                  {qualitySignals.total}
                 </p>
               </div>
             </div>
           </div>
 
+          {workspaceView === "pipeline" ? (
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setQualityFilter("overdue");
+                  setStatusFilter("open");
+                  setViewMode("list");
+                  setSelectedPipelineId("all");
+                }}
+                className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-left shadow-sm transition hover:border-rose-300 dark:border-rose-500/20 dark:bg-rose-500/10"
+              >
+                <p className="text-xs font-semibold text-rose-600 dark:text-rose-200">
+                  Просрочен контакт
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-rose-700 dark:text-rose-100">
+                  {qualitySignals.overdueContacts.length}
+                </p>
+                <p className="mt-1 text-xs text-rose-600/80 dark:text-rose-200/80">
+                  Нужно срочно вернуться к клиентам
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setQualityFilter("without_next_contact");
+                  setStatusFilter("open");
+                  setViewMode("list");
+                  setSelectedPipelineId("all");
+                }}
+                className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left shadow-sm transition hover:border-amber-300 dark:border-amber-500/20 dark:bg-amber-500/10"
+              >
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-200">
+                  Нет следующего шага
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-amber-800 dark:text-amber-100">
+                  {qualitySignals.withoutNextContact.length}
+                </p>
+                <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-200/80">
+                  Риск потерять сделку без плана
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkspaceView("inbox");
+                  setInboxFilter("needs_reply");
+                }}
+                className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left shadow-sm transition hover:border-emerald-300 dark:border-emerald-500/20 dark:bg-emerald-500/10"
+              >
+                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">
+                  Клиент ждёт 30+ минут
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-emerald-800 dark:text-emerald-100">
+                  {qualitySignals.waitingDialogs.length}
+                </p>
+                <p className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-200/80">
+                  Быстрый ответ повышает конверсию
+                </p>
+              </button>
+            </div>
+          ) : null}
+
           <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setWorkspaceView("pipeline")}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  workspaceView === "pipeline"
+                    ? "bg-violet-600 text-white shadow-lg shadow-violet-500/20"
+                    : "border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                }`}
+              >
+                <SquareCheckBig className="h-4 w-4" />
+                Сделки
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkspaceView("inbox");
+                  setInboxFilter("all");
+                }}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  workspaceView === "inbox"
+                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                    : "border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                }`}
+              >
+                <Inbox className="h-4 w-4" />
+                Входящие
+                {inboxUnreadCount > 0 ? (
+                  <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
+                    {inboxUnreadCount}
+                  </span>
+                ) : null}
+              </button>
+            </div>
+          </div>
+
+          {workspaceView === "pipeline" ? (
+          <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -1136,6 +1638,7 @@ export default function CrmPage() {
               </button>
             </div>
           </div>
+          ) : null}
 
           {error ? (
             <div className="mt-5 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
@@ -1143,7 +1646,7 @@ export default function CrmPage() {
             </div>
           ) : null}
 
-          {isAllPipelinesSelected ? (
+          {workspaceView === "pipeline" && isAllPipelinesSelected ? (
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {sourceOverview.length > 0 ? (
                 sourceOverview.slice(0, 4).map((source) => (
@@ -1171,7 +1674,212 @@ export default function CrmPage() {
           ) : null}
         </section>
 
-        {displayMode === "board" ? (
+        {workspaceView === "inbox" ? (
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#121827]">
+            <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 dark:border-white/10 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  Центр сообщений
+                </p>
+                <h2 className="mt-1 text-xl font-semibold">
+                  Входящие из Авито и других каналов
+                </h2>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
+                Непрочитано: {inboxUnreadCount} · Нужно ответить: {inboxNeedsReplyCount}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                { id: "all" as const, label: "Все", count: inboxItems.length },
+                {
+                  id: "needs_reply" as const,
+                  label: "Требуют ответа",
+                  count: inboxNeedsReplyCount,
+                },
+                {
+                  id: "unread" as const,
+                  label: "Непрочитанные",
+                  count: inboxUnreadCount,
+                },
+                { id: "avito" as const, label: "Авито", count: inboxAvitoCount },
+                {
+                  id: "without_assignee" as const,
+                  label: "Без ответственного",
+                  count: inboxWithoutAssigneeCount,
+                },
+              ].map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setInboxFilter(filter.id)}
+                  className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                    inboxFilter === filter.id
+                      ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                      : "border border-slate-200 bg-slate-50 text-slate-600 hover:border-emerald-200 hover:text-emerald-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                  }`}
+                >
+                  {filter.label}
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs ${
+                      inboxFilter === filter.id
+                        ? "bg-white/20 text-white"
+                        : "bg-white text-slate-500 dark:bg-white/10 dark:text-slate-300"
+                    }`}
+                  >
+                    {filter.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {filteredInboxItems.map((item) => {
+                const sourceName = item.deal.source_id
+                  ? sourceNameById.get(item.deal.source_id) ?? "Источник"
+                  : "Источник не указан";
+                const assigneeProfiles = getDealAssigneeProfiles(item.deal);
+
+                return (
+                  <div
+                    key={item.conversation.id}
+                    className={`group rounded-2xl border px-4 py-4 transition hover:-translate-y-0.5 hover:shadow-lg ${
+                      item.needsReply
+                        ? "border-emerald-200 bg-emerald-50/80 hover:border-emerald-300 dark:border-emerald-500/30 dark:bg-emerald-500/10"
+                        : "border-slate-200 bg-slate-50 hover:border-violet-200 dark:border-white/10 dark:bg-white/[0.03]"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openDealDialogPanel(item.deal)}
+                      className="w-full text-left"
+                    >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-sm dark:bg-white/10 dark:text-slate-200">
+                            {item.conversation.channel}
+                          </span>
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              item.needsReply
+                                ? "bg-emerald-500 text-white"
+                                : "bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-slate-300"
+                            }`}
+                          >
+                            {item.needsReply ? "Ждет ответа" : "Ответ отправлен"}
+                          </span>
+                          {item.isUnread ? (
+                            <span className="rounded-full bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white">
+                              Новое
+                            </span>
+                          ) : null}
+                          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                            {formatWaitTime(item.minutesWaiting)}
+                          </span>
+                        </div>
+
+                        <h3 className="mt-3 truncate text-base font-semibold text-slate-950 dark:text-white">
+                          {item.deal.title}
+                        </h3>
+                        <p className="mt-1 truncate text-sm text-slate-500 dark:text-slate-400">
+                          {item.deal.client_name || "Клиент пока не создан"} · {sourceName}
+                        </p>
+
+                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
+                          {item.lastMessage.body || "Вложение без текста"}
+                        </p>
+
+                        {item.deal.source_item_url || item.deal.source_item_title ? (
+                          <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-200">
+                            <span className="truncate">
+                              {item.deal.source_item_title || "Объявление Avito"}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="flex shrink-0 flex-col gap-2 text-sm text-slate-500 dark:text-slate-400 lg:min-w-[220px] lg:text-right">
+                        <span>
+                          {new Date(item.lastMessage.created_at).toLocaleString(
+                            "ru-RU"
+                          )}
+                        </span>
+                        <span>
+                          Сообщений: {item.messageCount}
+                        </span>
+                        <span className="flex justify-start lg:justify-end">
+                          <AssigneePreview members={assigneeProfiles} />
+                        </span>
+                        <span className="font-semibold text-violet-700 opacity-0 transition group-hover:opacity-100 dark:text-violet-300">
+                          Открыть диалог →
+                        </span>
+                      </div>
+                    </div>
+                    </button>
+
+                    <div className="mt-4 grid gap-3 border-t border-slate-200 pt-4 dark:border-white/10 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Ответственный
+                        <CustomSelect
+                          value={item.deal.assignees[0]?.workspace_member_id ?? ""}
+                          onChange={(value) => void assignInboxDeal(item.deal, value)}
+                          disabled={updateDealMutation.isPending}
+                          options={[
+                            ...(canViewAllDeals
+                              ? [{ value: "", label: "Без ответственного" }]
+                              : []),
+                            ...assignableMembers.map((member) => ({
+                              value: member.id,
+                              label: `${getWorkspaceMemberDisplayName(member)}${
+                                member.profile_title ? ` - ${member.profile_title}` : ""
+                              }`,
+                            })),
+                          ]}
+                          className="mt-2 w-full"
+                          buttonClassName="h-10 rounded-xl"
+                        />
+                      </label>
+
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Следующий контакт
+                        <input
+                          type="datetime-local"
+                          value={item.deal.next_contact_at?.slice(0, 16) ?? ""}
+                          onChange={(event) =>
+                            void updateInboxDealNextContact(
+                              item.deal,
+                              event.target.value
+                            )
+                          }
+                          disabled={updateDealMutation.isPending}
+                          className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-emerald-300 disabled:opacity-60 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-200"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => openEditForm(item.deal)}
+                        className="inline-flex h-10 items-center justify-center rounded-xl border border-violet-200 bg-white px-4 text-sm font-semibold text-violet-700 transition hover:border-violet-300 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-200"
+                      >
+                        Открыть сделку
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {filteredInboxItems.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 px-5 py-12 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+                  {inboxItems.length === 0
+                    ? "Входящих сообщений пока нет. Когда клиент напишет с Авито, карточка появится здесь."
+                    : "По выбранному фильтру сообщений нет. Можно переключиться на другой фильтр выше."}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : displayMode === "board" ? (
         <section className="overflow-x-auto pb-4">
           <div className="grid min-h-[calc(100vh-290px)] gap-4 lg:grid-flow-col lg:auto-cols-[minmax(280px,320px)]">
             {activeStages.map((stage, index) => {
@@ -1233,11 +1941,7 @@ export default function CrmPage() {
                             ? sourceNameById.get(deal.source_id) ?? "Источник"
                             : "Источник не указан"
                         }
-                        assigneeNames={deal.assignees
-                          .map((assignee) =>
-                            memberNameById.get(assignee.workspace_member_id)
-                          )
-                          .filter((name): name is string => Boolean(name))}
+                        assigneeProfiles={getDealAssigneeProfiles(deal)}
                         onEdit={() => openDealPanel(deal)}
                       />
                     ))}
@@ -1271,11 +1975,7 @@ export default function CrmPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/10">
                   {listDeals.map((deal) => {
-                    const assigneeNames = deal.assignees
-                      .map((assignee) =>
-                        memberNameById.get(assignee.workspace_member_id)
-                      )
-                      .filter((name): name is string => Boolean(name));
+                    const assigneeProfiles = getDealAssigneeProfiles(deal);
 
                     return (
                       <tr
@@ -1307,11 +2007,7 @@ export default function CrmPage() {
                           </span>
                         </td>
                         <td className="max-w-[220px] px-5 py-4 text-slate-600 dark:text-slate-300">
-                          <span className="line-clamp-2">
-                            {assigneeNames.length
-                              ? assigneeNames.join(", ")
-                              : "Без ответственного"}
-                          </span>
+                          <AssigneePreview members={assigneeProfiles} />
                         </td>
                         <td className="px-5 py-4 text-slate-600 dark:text-slate-300">
                           {deal.next_contact_at
@@ -1407,20 +2103,22 @@ export default function CrmPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        <select
+                        <CustomSelect
                           value={draft.mode}
-                          onChange={(event) =>
+                          onChange={(value) =>
                             updateAssignmentRuleDraft(source.kind, {
-                              mode: event.target.value as CrmAssignmentMode,
+                              mode: value as CrmAssignmentMode,
                             })
                           }
-                          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-violet-400 dark:border-white/10 dark:bg-[#121827]"
-                        >
-                          <option value="manual">Ручное назначение</option>
-                          <option value="round_robin">По очереди</option>
-                          <option value="least_loaded">Кто свободнее</option>
-                          <option value="fixed_manager">Фиксированные</option>
-                        </select>
+                          options={[
+                            { value: "manual", label: "Ручное назначение" },
+                            { value: "round_robin", label: "По очереди" },
+                            { value: "least_loaded", label: "Кто свободнее" },
+                            { value: "fixed_manager", label: "Фиксированные" },
+                          ]}
+                          className="min-w-[180px]"
+                          buttonClassName="h-10 rounded-xl font-semibold"
+                        />
 
                         <button
                           type="button"
@@ -1456,9 +2154,7 @@ export default function CrmPage() {
                                   : "border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
                               }`}
                             >
-                              {member.display_name?.trim() ||
-                                member.email ||
-                                "Без имени"}
+                              {getWorkspaceMemberDisplayName(member)}
                             </button>
                           );
                         })}
@@ -1570,16 +2266,18 @@ export default function CrmPage() {
                   placeholder="Например: Авито — менеджер Анна"
                   className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-violet-400 dark:border-white/10 dark:bg-[#121827]"
                 />
-                <select
+                <CustomSelect
                   value={newPipelineKind}
-                  onChange={(event) =>
-                    setNewPipelineKind(event.target.value as "sales" | "delivery")
+                  onChange={(value) =>
+                    setNewPipelineKind(value as "sales" | "delivery")
                   }
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-violet-400 dark:border-white/10 dark:bg-[#121827]"
-                >
-                  <option value="sales">Продажи</option>
-                  <option value="delivery">Запуск проекта</option>
-                </select>
+                  options={[
+                    { value: "sales", label: "Продажи" },
+                    { value: "delivery", label: "Запуск проекта" },
+                  ]}
+                  className="min-w-[180px]"
+                  buttonClassName="h-11 rounded-xl font-semibold"
+                />
                 <button
                   type="button"
                   onClick={() => void createPipeline()}
@@ -1778,6 +2476,13 @@ export default function CrmPage() {
                 <p className="mt-1 truncate text-sm text-slate-500 dark:text-slate-400">
                   {selectedDeal.client_name || "Клиент пока не создан"}
                 </p>
+                {selectedDealSignal ? (
+                  <span
+                    className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${selectedDealSignal.className}`}
+                  >
+                    {selectedDealSignal.label}
+                  </span>
+                ) : null}
               </div>
 
               <button
@@ -1839,6 +2544,25 @@ export default function CrmPage() {
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.04]">
                   <div className="grid gap-4 text-sm">
                     <div className="flex items-center gap-3">
+                      <Users className="h-4 w-4 text-slate-400" />
+                      <AssigneePreview members={selectedDealAssigneeProfiles} />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <LineChart className="h-4 w-4 text-slate-400" />
+                      <span>
+                        {pipelineNameById.get(selectedDeal.pipeline_id) || "Воронка"} ·{" "}
+                        {stageNameById.get(selectedDeal.stage_id) || "Этап"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Inbox className="h-4 w-4 text-slate-400" />
+                      <span>
+                        {selectedDeal.source_id
+                          ? sourceNameById.get(selectedDeal.source_id) ?? "Источник"
+                          : "Источник не указан"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
                       <Phone className="h-4 w-4 text-slate-400" />
                       <span>{selectedDeal.phone || "Телефон не указан"}</span>
                     </div>
@@ -1857,6 +2581,30 @@ export default function CrmPage() {
                       </span>
                     </div>
                   </div>
+
+                  {selectedDeal.status === "open" ? (
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
+                      {[
+                        ["Сегодня", 3],
+                        ["Завтра", 24],
+                        ["Через 3 дня", 72],
+                      ].map(([label, hours]) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() =>
+                            void updateSelectedDealNextContact(
+                              new Date(Date.now() + Number(hours) * 60 * 60 * 1000)
+                            )
+                          }
+                          disabled={updateDealMutation.isPending}
+                          className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 transition hover:border-violet-300 disabled:opacity-50 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-200"
+                        >
+                          Контакт: {label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
@@ -1953,6 +2701,33 @@ export default function CrmPage() {
                             <p className="whitespace-pre-line leading-6">
                               {message.body || "Вложение"}
                             </p>
+                            {message.attachment_url ? (
+                              <a
+                                href={message.attachment_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className={`mt-3 block overflow-hidden rounded-xl border ${
+                                  isManager
+                                    ? "border-white/20 bg-white/10"
+                                    : "border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.04]"
+                                }`}
+                              >
+                                {/\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(
+                                  message.attachment_url
+                                ) ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={message.attachment_url}
+                                    alt="Вложение"
+                                    className="max-h-56 w-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="block px-3 py-2 text-xs font-semibold underline">
+                                    Открыть вложение
+                                  </span>
+                                )}
+                              </a>
+                            ) : null}
                             <p
                               className={`mt-2 text-[11px] ${
                                 isManager
@@ -1987,12 +2762,29 @@ export default function CrmPage() {
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
                     placeholder="Напиши ответ клиенту..."
                   />
+                  <input
+                    value={newClientReplyAttachmentUrl}
+                    onChange={(event) =>
+                      setNewClientReplyAttachmentUrl(event.target.value)
+                    }
+                    disabled={!selectedDealConversations[0]}
+                    className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
+                    placeholder="Ссылка на вложение, если нужно"
+                  />
+                  {selectedDealConversations[0]?.channel === "avito" &&
+                  newClientReplyAttachmentUrl.trim() ? (
+                    <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
+                      В CRM вложение сохранится. В Avito сейчас отправится текст
+                      ответа, а отправку файлов подключим отдельным API-шагом.
+                    </p>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => void sendClientReply()}
                     disabled={
                       !selectedDealConversations[0] ||
-                      !newClientReply.trim() ||
+                      (!newClientReply.trim() &&
+                        !newClientReplyAttachmentUrl.trim()) ||
                       createMessageMutation.isPending
                     }
                     className="mt-3 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-50"
@@ -2007,6 +2799,56 @@ export default function CrmPage() {
               <div className="space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.04]">
                   <p className="text-sm font-semibold">Следующий шаг</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0B0F1A]">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                        Активные
+                      </p>
+                      <p className="mt-1 text-lg font-semibold">
+                        {selectedDealTaskStats.active}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-500/20 dark:bg-rose-500/10">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-500">
+                        Просрочено
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-rose-700 dark:text-rose-100">
+                        {selectedDealTaskStats.overdue}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600">
+                        Готово
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-emerald-700 dark:text-emerald-100">
+                        {selectedDealTaskStats.done}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {[
+                      ["Позвонить клиенту", 2],
+                      ["Отправить КП", 4],
+                      ["Напомнить завтра", 24],
+                      ["Проверить оплату", 24],
+                      ["Передать в запуск", 48],
+                    ].map(([title, hours]) => (
+                      <button
+                        key={title}
+                        type="button"
+                        onClick={() =>
+                          void addQuickDealTask(
+                            String(title),
+                            new Date(Date.now() + Number(hours) * 60 * 60 * 1000)
+                          )
+                        }
+                        disabled={createDealTaskMutation.isPending}
+                        className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 disabled:opacity-50 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
+                      >
+                        {title}
+                      </button>
+                    ))}
+                  </div>
                   <div className="mt-3 grid gap-3">
                     <input
                       value={newDealTaskTitle}
@@ -2035,36 +2877,81 @@ export default function CrmPage() {
                 </div>
 
                 <div className="space-y-2">
-                  {selectedDealTasks.map((task) => (
-                    <button
-                      key={task.id}
-                      type="button"
-                      onClick={() => void toggleDealTask(task)}
-                      className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-violet-200 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.03]"
-                    >
-                      {task.status === "done" ? (
-                        <SquareCheckBig className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
-                      ) : (
-                        <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-300" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className={`text-sm font-semibold ${
-                            task.status === "done"
-                              ? "text-slate-400 line-through"
-                              : "text-slate-900 dark:text-white"
-                          }`}
-                        >
-                          {task.title}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                          {task.due_at
-                            ? new Date(task.due_at).toLocaleString("ru-RU")
-                            : "Без дедлайна"}
-                        </p>
+                  {selectedDealTasks.map((task) => {
+                    const timing = getDealTaskTiming(task);
+                    const assigneeName = task.assignee_member_id
+                      ? memberNameById.get(task.assignee_member_id)
+                      : null;
+
+                    return (
+                      <div
+                        key={task.id}
+                        className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-violet-200 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.03]"
+                      >
+                        <div className="flex items-start gap-3">
+                          {task.status === "done" ? (
+                            <SquareCheckBig className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+                          ) : (
+                            <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-300" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p
+                                className={`text-sm font-semibold ${
+                                  task.status === "done"
+                                    ? "text-slate-400 line-through"
+                                    : "text-slate-900 dark:text-white"
+                                }`}
+                              >
+                                {task.title}
+                              </p>
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${timing.className}`}
+                              >
+                                {timing.label}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                              {task.due_at
+                                ? new Date(task.due_at).toLocaleString("ru-RU")
+                                : "Без дедлайна"}
+                              {assigneeName ? ` · ${assigneeName}` : ""}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2 pl-8">
+                          {task.status !== "in_progress" && task.status !== "done" ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void updateDealTaskMutation.mutateAsync({
+                                  taskId: task.id,
+                                  values: { status: "in_progress" },
+                                })
+                              }
+                              disabled={updateDealTaskMutation.isPending}
+                              className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 transition hover:border-sky-300 disabled:opacity-50 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200"
+                            >
+                              В работу
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => void toggleDealTask(task)}
+                            disabled={updateDealTaskMutation.isPending}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                              task.status === "done"
+                                ? "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-300"
+                                : "bg-emerald-500 text-white hover:bg-emerald-400"
+                            }`}
+                          >
+                            {task.status === "done" ? "Вернуть в работу" : "Готово"}
+                          </button>
+                        </div>
                       </div>
-                    </button>
-                  ))}
+                    );
+                  })}
 
                   {selectedDealTasks.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400 dark:border-white/10">
@@ -2216,25 +3103,26 @@ export default function CrmPage() {
 
               <label className="space-y-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
                 Клиент из базы
-                <select
+                <CustomSelect
                   value={form.client_id}
-                  onChange={(event) => {
-                    const client = clients.find((item) => item.id === event.target.value);
+                  onChange={(value) => {
+                    const client = clients.find((item) => item.id === value);
                     setForm((current) => ({
                       ...current,
-                      client_id: event.target.value,
+                      client_id: value,
                       client_name: client?.name ?? current.client_name,
                     }));
                   }}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
-                >
-                  <option value="">Можно без клиента</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: "Можно без клиента" },
+                    ...clients.map((client) => ({
+                      value: client.id,
+                      label: client.name,
+                    })),
+                  ]}
+                  className="w-full"
+                  buttonClassName="rounded-xl bg-slate-50 py-3 dark:bg-[#0B0F1A]"
+                />
               </label>
 
               <label className="space-y-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
@@ -2254,23 +3142,24 @@ export default function CrmPage() {
 
               <label className="space-y-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
                 Источник
-                <select
+                <CustomSelect
                   value={form.source_id}
-                  onChange={(event) =>
+                  onChange={(value) =>
                     setForm((current) => ({
                       ...current,
-                      source_id: event.target.value,
+                      source_id: value,
                     }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
-                >
-                  <option value="">Не указан</option>
-                  {sources.map((source) => (
-                    <option key={source.id} value={source.id}>
-                      {source.name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: "Не указан" },
+                    ...sources.map((source) => ({
+                      value: source.id,
+                      label: source.name,
+                    })),
+                  ]}
+                  className="w-full"
+                  buttonClassName="rounded-xl bg-slate-50 py-3 dark:bg-[#0B0F1A]"
+                />
               </label>
 
               <label className="space-y-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
@@ -2345,13 +3234,13 @@ export default function CrmPage() {
               <div className="space-y-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
                 Ответственные
                 <div className="flex min-h-[48px] flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-white/10 dark:bg-[#0B0F1A]">
-                  {activeMembers.map((member) => {
+                  {assignableMembers.map((member) => {
                     const isSelected = form.assignee_ids.includes(member.id);
-                    const label = member.display_name?.trim() || member.email || "Без имени";
+                    const label = getWorkspaceMemberDisplayName(member);
 
                     return (
-                      <button
-                        key={member.id}
+                        <button
+                          key={member.id}
                         type="button"
                         onClick={() => toggleAssignee(member.id)}
                         className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
@@ -2359,10 +3248,28 @@ export default function CrmPage() {
                             ? "bg-violet-600 text-white"
                             : "bg-white text-slate-600 hover:bg-slate-100 dark:bg-white/10 dark:text-slate-300"
                         }`}
-                      >
-                        {label}
-                      </button>
-                    );
+                        >
+                          <span className="flex items-center gap-2">
+                            <MemberAvatar
+                              member={{
+                                id: member.id,
+                                name: label,
+                                avatarUrl: member.avatar_url,
+                                title: member.profile_title,
+                              }}
+                              size="xs"
+                            />
+                            <span className="flex flex-col items-start">
+                              <span>{label}</span>
+                              {member.profile_title ? (
+                                <span className="text-[10px] opacity-70">
+                                  {member.profile_title}
+                                </span>
+                              ) : null}
+                            </span>
+                          </span>
+                        </button>
+                      );
                   })}
                 </div>
               </div>

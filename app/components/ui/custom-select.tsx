@@ -74,20 +74,26 @@ export function CustomSelect({
         }}
         disabled={disabled}
         className={cn(
-          "flex h-11 w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm text-white transition",
+          "flex h-11 w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm transition dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:shadow-none",
           disabled
             ? "cursor-not-allowed opacity-60"
-            : "hover:bg-white/[0.06]",
+            : "hover:border-violet-200 hover:bg-slate-50 dark:hover:bg-white/[0.06]",
           buttonClassName
         )}
       >
-        <span className={selectedOption ? "text-white" : "text-white/35"}>
+        <span
+          className={
+            selectedOption
+              ? "text-slate-900 dark:text-white"
+              : "text-slate-400 dark:text-white/35"
+          }
+        >
           {selectedOption?.label ?? placeholder}
         </span>
 
         <span
           className={cn(
-            "text-xs text-white/40 transition",
+            "text-xs text-slate-400 transition dark:text-white/40",
             isOpen ? "rotate-180" : ""
           )}
         >
@@ -98,7 +104,7 @@ export function CustomSelect({
       {isOpen ? (
         <div
           className={cn(
-            "absolute left-0 top-[calc(100%+8px)] z-50 min-w-full overflow-hidden rounded-2xl border border-white/10 bg-[#121826] shadow-[0_16px_48px_rgba(0,0,0,0.45)]",
+            "absolute left-0 top-[calc(100%+8px)] z-50 min-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_16px_48px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[#121826] dark:shadow-[0_16px_48px_rgba(0,0,0,0.45)]",
             dropdownClassName
           )}
         >
@@ -117,8 +123,8 @@ export function CustomSelect({
                   className={cn(
                     "flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm transition",
                     isActive
-                      ? "bg-white text-black"
-                      : "text-white/80 hover:bg-white/[0.06] hover:text-white"
+                      ? "bg-violet-600 text-white dark:bg-white dark:text-black"
+                      : "text-slate-600 hover:bg-violet-50 hover:text-violet-700 dark:text-white/80 dark:hover:bg-white/[0.06] dark:hover:text-white"
                   )}
                 >
                   {option.label}

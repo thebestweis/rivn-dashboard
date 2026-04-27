@@ -8,11 +8,13 @@ alter table public.crm_loss_reasons enable row level security;
 alter table public.crm_deals enable row level security;
 alter table public.crm_deal_assignees enable row level security;
 alter table public.crm_deal_activities enable row level security;
+alter table public.crm_deal_stage_history enable row level security;
 alter table public.crm_deal_comments enable row level security;
 alter table public.crm_deal_tasks enable row level security;
 alter table public.crm_conversations enable row level security;
 alter table public.crm_messages enable row level security;
 alter table public.crm_assignment_rules enable row level security;
+alter table public.crm_sales_plans enable row level security;
 
 drop policy if exists crm_pipelines_workspace_members_all on public.crm_pipelines;
 create policy crm_pipelines_workspace_members_all
@@ -261,6 +263,54 @@ with check (
   )
 );
 
+drop policy if exists crm_deal_stage_history_workspace_members_select on public.crm_deal_stage_history;
+create policy crm_deal_stage_history_workspace_members_select
+on public.crm_deal_stage_history
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.workspace_members wm
+    where wm.workspace_id = crm_deal_stage_history.workspace_id
+      and wm.user_id = auth.uid()
+      and wm.status = 'active'
+      and (
+        wm.role in ('owner', 'admin', 'manager', 'sales_head')
+        or exists (
+          select 1
+          from public.crm_deal_assignees cda
+          where cda.deal_id = crm_deal_stage_history.deal_id
+            and cda.workspace_member_id = wm.id
+        )
+      )
+  )
+);
+
+drop policy if exists crm_deal_stage_history_workspace_members_insert on public.crm_deal_stage_history;
+create policy crm_deal_stage_history_workspace_members_insert
+on public.crm_deal_stage_history
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.workspace_members wm
+    where wm.workspace_id = crm_deal_stage_history.workspace_id
+      and wm.user_id = auth.uid()
+      and wm.status = 'active'
+      and (
+        wm.role in ('owner', 'admin', 'manager', 'sales_head')
+        or exists (
+          select 1
+          from public.crm_deal_assignees cda
+          where cda.deal_id = crm_deal_stage_history.deal_id
+            and cda.workspace_member_id = wm.id
+        )
+      )
+  )
+);
+
 drop policy if exists crm_deal_comments_workspace_members_all on public.crm_deal_comments;
 create policy crm_deal_comments_workspace_members_all
 on public.crm_deal_comments
@@ -376,6 +426,31 @@ with check (
     select 1
     from public.workspace_members wm
     where wm.workspace_id = crm_assignment_rules.workspace_id
+      and wm.user_id = auth.uid()
+      and wm.status = 'active'
+      and wm.role in ('owner', 'admin', 'manager', 'sales_head')
+  )
+);
+
+drop policy if exists crm_sales_plans_workspace_members_all on public.crm_sales_plans;
+create policy crm_sales_plans_workspace_members_all
+on public.crm_sales_plans
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.workspace_members wm
+    where wm.workspace_id = crm_sales_plans.workspace_id
+      and wm.user_id = auth.uid()
+      and wm.status = 'active'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.workspace_members wm
+    where wm.workspace_id = crm_sales_plans.workspace_id
       and wm.user_id = auth.uid()
       and wm.status = 'active'
       and wm.role in ('owner', 'admin', 'manager', 'sales_head')

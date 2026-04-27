@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   getWorkspaceMembers,
+  getWorkspaceMemberDisplayName,
   type WorkspaceMemberItem,
 } from "../../lib/supabase/workspace-members";
 import {
@@ -17,6 +18,7 @@ import { AppToast } from "../ui/app-toast";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../lib/query-keys";
+import { CustomSelect } from "../ui/custom-select";
 
 const sectionPermissions: Array<{
   key: WorkspacePermissionSection;
@@ -91,12 +93,7 @@ function getDefaultPermissionByRole(
 }
 
 function getMemberLabel(member: WorkspaceMemberItem) {
-  const displayName = member.display_name?.trim();
-  if (displayName && displayName !== "Без имени") {
-    return `${displayName} — ${member.email}`;
-  }
-
-  return member.email;
+  return getWorkspaceMemberDisplayName(member);
 }
 
 export function AccessSettingsTab() {
@@ -310,17 +307,15 @@ export function AccessSettingsTab() {
                 <label className="mb-2 block text-sm text-white/55">
                   Участник кабинета
                 </label>
-                <select
+                <CustomSelect
                   value={selectedMember?.id ?? ""}
-                  onChange={(e) => setSelectedMemberId(e.target.value)}
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-                >
-                  {activeMembers.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {getMemberLabel(member)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedMemberId}
+                  options={activeMembers.map((member) => ({
+                    value: member.id,
+                    label: getMemberLabel(member),
+                  }))}
+                  buttonClassName="h-[48px] bg-[#0F1524] dark:bg-[#0F1524]"
+                />
               </div>
 
               <div>

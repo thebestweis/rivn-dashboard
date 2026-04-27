@@ -25,6 +25,7 @@ import { useClientsQuery } from "../../lib/queries/use-clients-query";
 import { useActiveWorkspaceMembers } from "../../lib/queries/use-workspace-members-query";
 import { useUpdateProjectMutation } from "../../lib/queries/use-projects-query";
 import { syncTaskAcrossCaches } from "../../lib/queries/use-tasks-query";
+import { getWorkspaceMemberDisplayName } from "../../lib/supabase/workspace-members";
 
 import { Skeleton } from "../../components/ui/skeleton";
 
@@ -201,7 +202,7 @@ const [mounted, setMounted] = useState(false);
     () =>
       workspaceMembersData.map((member) => ({
         id: member.id,
-        name: member.display_name || member.email || "Без имени",
+        name: getWorkspaceMemberDisplayName(member),
       })),
     [workspaceMembersData]
   );

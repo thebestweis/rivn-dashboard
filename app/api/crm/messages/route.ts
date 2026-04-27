@@ -1,6 +1,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/app/lib/supabase/server";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
+import { canViewAllCrmDeals, isAppRole } from "@/app/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +71,7 @@ async function requireWorkspaceMembership(
 
   const { data: membership, error: membershipError } = await supabase
     .from("workspace_members")
-    .select("id")
+    .select("id, role")
     .eq("workspace_id", workspaceId)
     .eq("user_id", user.id)
     .eq("status", "active")
@@ -85,6 +86,39 @@ async function requireWorkspaceMembership(
   }
 
   return membership;
+}
+
+async function requireDealAccess(params: {
+  supabase: ServiceSupabase;
+  workspaceId: string;
+  dealId: string | null;
+  membership: { id: string; role?: string | null };
+}) {
+  if (!params.dealId) {
+    return;
+  }
+
+  const role = isAppRole(params.membership.role) ? params.membership.role : null;
+
+  if (role && canViewAllCrmDeals(role)) {
+    return;
+  }
+
+  const { data, error } = await params.supabase
+    .from("crm_deal_assignees")
+    .select("id")
+    .eq("workspace_id", params.workspaceId)
+    .eq("deal_id", params.dealId)
+    .eq("workspace_member_id", params.membership.id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Не удалось проверить доступ к сделке CRM: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new HttpError("Нет доступа к этой сделке CRM", 403);
+  }
 }
 
 async function sendAvitoTextMessage(params: {
@@ -188,6 +222,13 @@ export async function POST(request: Request) {
     );
 
     const dealId = payload.deal_id ?? conversation.deal_id ?? null;
+    await requireDealAccess({
+      supabase,
+      workspaceId: conversation.workspace_id,
+      dealId,
+      membership,
+    });
+
     let externalMessageId = payload.external_id ?? null;
     let createdAt = new Date().toISOString();
 
@@ -195,13 +236,16 @@ export async function POST(request: Request) {
       const { avitoUserId, chatId } = parseAvitoConversationExternalId(
         conversation.external_id
       );
+      const avitoText = payload.attachment_url
+        ? `${body}\n\nВложение: ${payload.attachment_url}`
+        : body;
 
       const avitoMessage = await sendAvitoTextMessage({
         supabase,
         workspaceId: conversation.workspace_id,
         avitoUserId,
         chatId,
-        text: body,
+        text: avitoText,
       });
 
       externalMessageId = avitoMessage.id ?? externalMessageId;
@@ -234,7 +278,11 @@ export async function POST(request: Request) {
 
     await supabase
       .from("crm_conversations")
-      .update({ updated_at: new Date().toISOString() })
+      .update({
+        updated_at: createdAt,
+        last_manager_message_at: createdAt,
+        read_at: createdAt,
+      })
       .eq("id", conversation.id)
       .eq("workspace_id", conversation.workspace_id);
 

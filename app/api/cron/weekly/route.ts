@@ -1,5 +1,6 @@
 import { sendCronErrorNotification } from "../send-cron-error-notification";
 import { getCronSecret, verifyCronSecret } from "../verify-cron-secret";
+import { GET as runAvitoWeeklyReport } from "../weekly-report/route";
 
 export const dynamic = "force-dynamic";
 
@@ -11,17 +12,16 @@ export async function GET(request: Request) {
   try {
     const baseUrl = new URL(request.url).origin;
     const secret = getCronSecret();
-
-    const response = await fetch(
+    const internalRequest = new Request(
       `${baseUrl}/api/cron/weekly-report?t=cron`,
       {
-        cache: "no-store",
         headers: {
           authorization: `Bearer ${secret}`,
         },
       }
     );
 
+    const response = await runAvitoWeeklyReport(internalRequest);
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {

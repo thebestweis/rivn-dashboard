@@ -302,7 +302,7 @@ export function CreateProjectModal({
             </label>
 
             <label className="block">
-              <div className="mb-2 text-sm text-white/65">Доход</div>
+              <div className="mb-2 text-sm text-white/65">Потенциальный доход</div>
               <input
                 type="text"
                 inputMode="numeric"
@@ -316,7 +316,7 @@ export function CreateProjectModal({
             </label>
 
             <label className="block">
-              <div className="mb-2 text-sm text-white/65">Прибыль</div>
+              <div className="mb-2 text-sm text-white/65">Потенциальная прибыль</div>
               <input
                 type="text"
                 inputMode="numeric"

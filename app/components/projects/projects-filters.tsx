@@ -1,3 +1,5 @@
+import { CustomSelect } from "../ui/custom-select";
+
 type StatusFilter = "all" | "active" | "paused" | "completed";
 
 type ProjectsFiltersProps = {
@@ -32,16 +34,18 @@ export function ProjectsFilters({
           className="h-11 flex-1 rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/35"
         />
 
-        <select
-          className="h-11 rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none md:w-[220px]"
+        <CustomSelect
           value={statusFilter}
-          onChange={(event) => onStatusChange(event.target.value as StatusFilter)}
-        >
-          <option value="all">Все статусы</option>
-          <option value="active">Активный</option>
-          <option value="paused">На паузе</option>
-          <option value="completed">Завершён</option>
-        </select>
+          onChange={(value) => onStatusChange(value as StatusFilter)}
+          options={[
+            { value: "all", label: "Все статусы" },
+            { value: "active", label: "Активный" },
+            { value: "paused", label: "На паузе" },
+            { value: "completed", label: "Завершён" },
+          ]}
+          className="md:w-[220px]"
+          buttonClassName="bg-[#0F1724] dark:bg-[#0F1724]"
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">

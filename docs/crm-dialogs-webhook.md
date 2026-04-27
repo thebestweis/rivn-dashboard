@@ -36,6 +36,7 @@ Auth: pass one of these secrets as `Authorization: Bearer <secret>`, `x-rivn-sec
 - If `externalMessageId` was already saved, the endpoint returns `duplicate: true` and does not create a second message.
 - Assignment rules are applied by `sourceKind`.
 - For Avito, the saved conversation key becomes `avito_user_id:chat_id`, so CRM can send replies back to the correct Avito account.
+- Optional `attachmentUrl` is stored on the CRM message and rendered in the deal dialog.
 
 ## Avito webhook
 
@@ -65,3 +66,19 @@ CRM replies are sent back to Avito through:
 ```http
 POST https://api.avito.ru/messenger/v1/accounts/{user_id}/chats/{chat_id}/messages
 ```
+
+## Initial sync
+
+The UI button "Загрузить последние диалоги" calls:
+
+```text
+POST /api/avito/messenger/sync-dialogs
+```
+
+It loads recent Avito chats, imports messages into CRM, keeps duplicates out by
+Avito message id and stores the Avito ad id/title/url when the chat contains an
+item context.
+
+Avito voice notes are imported as CRM messages with a voice marker. Public Avito
+Messenger API currently describes sending text and images, but not sending voice
+notes back through API.

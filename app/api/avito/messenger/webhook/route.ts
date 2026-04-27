@@ -19,6 +19,7 @@ type AvitoWebhookBody = {
         text?: string | null;
         link?: { text?: string | null; url?: string | null } | null;
         item?: { title?: string | null; item_url?: string | null } | null;
+        image?: { sizes?: Record<string, string> | null } | null;
       };
       created?: number;
       published_at?: string;
@@ -74,6 +75,19 @@ function getMessageText(value: NonNullable<AvitoWebhookBody["payload"]>["value"]
   }
 
   return value?.type ? `Новое сообщение Avito: ${value.type}` : "";
+}
+
+function getImageUrl(value: NonNullable<AvitoWebhookBody["payload"]>["value"]) {
+  const sizes = value?.content?.image?.sizes;
+  if (!sizes) return null;
+
+  return (
+    sizes["1280x960"] ||
+    sizes["640x480"] ||
+    sizes["320x240"] ||
+    Object.values(sizes).find(Boolean) ||
+    null
+  );
 }
 
 function getLinkedClient(account: any) {
@@ -232,6 +246,7 @@ export async function POST(request: Request) {
         sourceItemTitle,
         sourceItemUrl,
         body: text,
+        attachmentUrl: getImageUrl(value),
         senderType: "client",
         createdAt: value.published_at
           ? value.published_at

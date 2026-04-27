@@ -36,7 +36,7 @@ export function SettingsPageHeader({
             Настройки
           </h1>
           <p className="mt-2 text-sm text-white/55">
-            Пользователи, доступы, реферальная система, Telegram, системные
+            Профиль, пользователи, доступы, реферальная система, Telegram, системные
             параметры и кабинеты.
           </p>
         </div>
@@ -50,6 +50,14 @@ export function SettingsPageHeader({
         <div className="mt-5 h-[46px] rounded-2xl border border-white/10 bg-white/[0.04]" />
       ) : (
         <div className="mt-5 flex w-fit flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab("profile")}
+            className={getTabClass("profile")}
+          >
+            Профиль
+          </button>
+
           {role && canManageUsers(role) ? (
             <>
               <button

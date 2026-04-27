@@ -1,3 +1,5 @@
+import { CustomSelect } from "../ui/custom-select";
+
 interface EmployeeItem {
   id: string;
   name: string;
@@ -68,9 +70,22 @@ export function EditClientModal({
 }: EditClientModalProps) {
   if (!isOpen) return null;
 
-   const availableEmployees = employees.filter(
+  const availableEmployees = employees.filter(
     (employee) => employee.isActive !== false || employee.id === ownerId
   );
+  const ownerOptions = [
+    { value: "", label: "Ответственный сотрудник" },
+    ...availableEmployees.map((employee) => ({
+      value: employee.id,
+      label: `${employee.name} - ${employee.role}`,
+    })),
+  ];
+  const statusOptions = [
+    { value: "active", label: CLIENT_STATUS_LABELS.active },
+    { value: "paused", label: CLIENT_STATUS_LABELS.paused },
+    { value: "problem", label: CLIENT_STATUS_LABELS.problem },
+    { value: "completed", label: CLIENT_STATUS_LABELS.completed },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -99,10 +114,9 @@ export function EditClientModal({
             className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
           />
 
-          <select
+          <CustomSelect
             value={ownerId}
-            onChange={(e) => {
-              const nextOwnerId = e.target.value;
+            onChange={(nextOwnerId) => {
               const selectedEmployee = availableEmployees.find(
                 (employee) => employee.id === nextOwnerId
               );
@@ -110,15 +124,10 @@ export function EditClientModal({
               setOwnerId(nextOwnerId);
               setOwner(selectedEmployee?.name ?? "");
             }}
-            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
-          >
-            <option value="">Ответственный сотрудник</option>
-            {availableEmployees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.name} — {employee.role}
-              </option>
-            ))}
-          </select>
+            options={ownerOptions}
+            className="w-full"
+            buttonClassName="bg-white/[0.04] dark:bg-white/[0.04]"
+          />
 
           <input
             value={model}
@@ -127,20 +136,15 @@ export function EditClientModal({
             className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
           />
 
-          <select
+          <CustomSelect
             value={status}
-            onChange={(e) =>
-              setStatus(
-                e.target.value as "active" | "paused" | "problem" | "completed"
-              )
+            onChange={(value) =>
+              setStatus(value as "active" | "paused" | "problem" | "completed")
             }
-            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none"
-          >
-            <option value="active">{CLIENT_STATUS_LABELS.active}</option>
-            <option value="paused">{CLIENT_STATUS_LABELS.paused}</option>
-            <option value="problem">{CLIENT_STATUS_LABELS.problem}</option>
-            <option value="completed">{CLIENT_STATUS_LABELS.completed}</option>
-          </select>
+            options={statusOptions}
+            className="w-full"
+            buttonClassName="bg-white/[0.04] dark:bg-white/[0.04]"
+          />
 
           <input
             value={nextInvoice}
@@ -152,14 +156,14 @@ export function EditClientModal({
           <input
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="Сумма"
+            placeholder="Потенциальный доход"
             className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
           />
 
           <input
             value={profit}
             onChange={(e) => setProfit(e.target.value)}
-            placeholder="Прибыль"
+            placeholder="Потенциальная прибыль"
             className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 md:col-span-2"
           />
         </div>

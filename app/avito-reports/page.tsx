@@ -165,6 +165,7 @@ const [editingIntegrationId, setEditingIntegrationId] = useState("");
 const [editingTelegramChatId, setEditingTelegramChatId] = useState("");
 const [editingAccounts, setEditingAccounts] = useState<Record<string, EditingAccountForm>>({});
 const [connectingMessengerAccountId, setConnectingMessengerAccountId] = useState("");
+const [syncingDialogsAccountId, setSyncingDialogsAccountId] = useState("");
 
   const { workspace } = useAppContextState();
 
@@ -655,6 +656,44 @@ setIntegrations(integrationsData.integrations ?? []);
       );
     } finally {
       setConnectingMessengerAccountId("");
+    }
+  }
+
+  async function syncAvitoDialogs(accountId: string) {
+    try {
+      setIntegrationMessage("");
+      setSyncingDialogsAccountId(accountId);
+
+      const response = await fetch("/api/avito/messenger/sync-dialogs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace?.id,
+          accountId,
+          days: 14,
+          maxChats: 30,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Не удалось загрузить Avito-диалоги");
+      }
+
+      setIntegrationMessage(
+        `Диалоги загружены: чатов проверено ${result.chatsChecked}, новых сообщений ${result.messagesSynced}.`
+      );
+    } catch (error) {
+      setIntegrationMessage(
+        error instanceof Error
+          ? error.message
+          : "Не удалось загрузить Avito-диалоги"
+      );
+    } finally {
+      setSyncingDialogsAccountId("");
     }
   }
 
@@ -1499,7 +1538,8 @@ setIntegrations(integrationsData.integrations ?? []);
                         }
                         disabled={
                           updatingIntegrationId === account.id ||
-                          connectingMessengerAccountId === account.id
+                          connectingMessengerAccountId === account.id ||
+                          syncingDialogsAccountId === account.id
                         }
                         className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
                       >
@@ -1508,12 +1548,14 @@ setIntegrations(integrationsData.integrations ?? []);
                           : "Включить аккаунт"}
                       </button>
                       {!isEditing ? (
+                        <>
                         <button
                           type="button"
                           onClick={() => connectAvitoMessenger(account.id)}
                           disabled={
                             !account.is_active ||
                             connectingMessengerAccountId === account.id ||
+                            syncingDialogsAccountId === account.id ||
                             updatingIntegrationId === account.id
                           }
                           className="ml-2 mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50"
@@ -1522,6 +1564,22 @@ setIntegrations(integrationsData.integrations ?? []);
                             ? "Подключаем..."
                             : "Подключить диалоги"}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => syncAvitoDialogs(account.id)}
+                          disabled={
+                            !account.is_active ||
+                            syncingDialogsAccountId === account.id ||
+                            connectingMessengerAccountId === account.id ||
+                            updatingIntegrationId === account.id
+                          }
+                          className="ml-2 mt-3 rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-300 transition hover:bg-sky-400/15 disabled:opacity-50"
+                        >
+                          {syncingDialogsAccountId === account.id
+                            ? "Загружаем..."
+                            : "Загрузить последние диалоги"}
+                        </button>
+                        </>
                       ) : null}
                     </div>
                   );

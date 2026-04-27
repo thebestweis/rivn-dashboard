@@ -28,6 +28,11 @@ export type WorkspaceMemberItem = {
   user_id: string;
   email: string;
   display_name: string | null;
+  avatar_url: string | null;
+  profile_title: string | null;
+  profile_description: string | null;
+  phone: string | null;
+  telegram: string | null;
   role: WorkspaceMemberRole;
   status: WorkspaceMemberStatus;
   created_at: string;
@@ -60,6 +65,11 @@ type DbWorkspaceMemberRow = {
   updated_at: string;
 
   display_name: string | null;
+  avatar_url: string | null;
+  profile_title: string | null;
+  profile_description: string | null;
+  phone: string | null;
+  telegram: string | null;
   pay_type: WorkspaceMemberPayType | null;
   pay_value: string | null;
   fixed_salary: string | null;
@@ -122,6 +132,11 @@ function mapWorkspaceMember(row: DbWorkspaceMemberRow): WorkspaceMemberItem {
     user_id: row.user_id,
     email,
     display_name: row.display_name ?? null,
+    avatar_url: row.avatar_url ?? null,
+    profile_title: row.profile_title ?? null,
+    profile_description: row.profile_description ?? null,
+    phone: row.phone ?? null,
+    telegram: row.telegram ?? null,
     role: row.role,
     status: row.status,
     created_at: row.created_at,
@@ -150,6 +165,11 @@ export async function getWorkspaceMembers(): Promise<WorkspaceMemberItem[]> {
       created_at,
       updated_at,
       display_name,
+      avatar_url,
+      profile_title,
+      profile_description,
+      phone,
+      telegram,
       pay_type,
       pay_value,
       fixed_salary,
@@ -169,6 +189,39 @@ export async function getWorkspaceMembers(): Promise<WorkspaceMemberItem[]> {
   }
 
   return ((data ?? []) as DbWorkspaceMemberRow[]).map(mapWorkspaceMember);
+}
+
+export async function updateMyWorkspaceMemberProfile(params: {
+  displayName: string;
+  avatarUrl: string;
+  profileTitle: string;
+  profileDescription: string;
+  phone: string;
+  telegram: string;
+}): Promise<void> {
+  const { supabase, workspace, membership } = await getAppContext();
+
+  if (!membership?.id) {
+    throw new Error("Не удалось определить текущего пользователя");
+  }
+
+  const { error } = await supabase
+    .from("workspace_members")
+    .update({
+      display_name: params.displayName.trim() || null,
+      avatar_url: params.avatarUrl.trim() || null,
+      profile_title: params.profileTitle.trim() || null,
+      profile_description: params.profileDescription.trim() || null,
+      phone: params.phone.trim() || null,
+      telegram: params.telegram.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", membership.id)
+    .eq("workspace_id", workspace.id);
+
+  if (error) {
+    throw new Error(`Не удалось сохранить профиль: ${error.message}`);
+  }
 }
 
 export async function getWorkspaceMemberLimitState(): Promise<WorkspaceMemberLimitState> {

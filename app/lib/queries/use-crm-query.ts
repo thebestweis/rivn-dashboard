@@ -12,12 +12,17 @@ import {
   createCrmDealTask,
   getCrmBootstrap,
   getCrmDealDetails,
+  getCrmInbox,
+  getCrmSalesPlans,
+  getCrmStageHistory,
+  markCrmConversationRead,
   moveCrmDeal,
   updateCrmDeal,
   updateCrmDealTask,
   updateCrmPipeline,
   updateCrmStage,
   updateCrmStageOrder,
+  upsertCrmSalesPlan,
   upsertCrmAssignmentRule,
   type CrmAssignmentRule,
   type CrmBootstrap,
@@ -29,7 +34,9 @@ import {
   type CrmDealTask,
   type CrmBootstrapFilters,
   type CrmPipeline,
+  type CrmSalesPlan,
   type CrmStage,
+  type CrmStageHistoryFilters,
 } from "../supabase/crm";
 
 const STALE_TIME = 1000 * 60 * 5;
@@ -41,6 +48,16 @@ function buildCrmFiltersKey(filters: CrmBootstrapFilters) {
     sourceId: filters.sourceId ?? "",
     assigneeId: filters.assigneeId ?? "",
     status: filters.status ?? "all",
+  });
+}
+
+function buildCrmStageHistoryFiltersKey(filters: CrmStageHistoryFilters) {
+  return JSON.stringify({
+    from: filters.from ?? "",
+    to: filters.to ?? "",
+    pipelineId: filters.pipelineId ?? "",
+    sourceId: filters.sourceId ?? "",
+    assigneeId: filters.assigneeId ?? "",
   });
 }
 
@@ -105,6 +122,150 @@ export function useCrmDealDetailsQuery(
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
+  });
+}
+
+export function useCrmInboxQuery(enabled = true) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useQuery({
+    queryKey: workspaceId ? queryKeys.crmInbox(workspaceId) : ["crm", "inbox"],
+    queryFn: getCrmInbox,
+    enabled: enabled && Boolean(workspaceId),
+    staleTime: 1000 * 30,
+    gcTime: GC_TIME,
+    placeholderData: (previousData) => previousData,
+    refetchInterval: 1000 * 30,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
+}
+
+export function useCrmSalesPlansQuery(enabled = true) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useQuery({
+    queryKey: workspaceId ? queryKeys.crmPlans(workspaceId) : ["crm", "plans"],
+    queryFn: getCrmSalesPlans,
+    enabled: enabled && Boolean(workspaceId),
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
+    placeholderData: (previousData) => previousData,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
+}
+
+export function useCrmStageHistoryQuery(
+  enabled = true,
+  filters: CrmStageHistoryFilters = {}
+) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+  const filtersKey = buildCrmStageHistoryFiltersKey(filters);
+
+  return useQuery({
+    queryKey: workspaceId
+      ? queryKeys.crmStageHistory(workspaceId, filtersKey)
+      : ["crm", "stage-history"],
+    queryFn: () => getCrmStageHistory(filters),
+    enabled: enabled && Boolean(workspaceId),
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
+    placeholderData: (previousData) => previousData,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
+}
+
+export function useUpsertCrmSalesPlanMutation() {
+  const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useMutation({
+    mutationFn: upsertCrmSalesPlan,
+    onMutate: async (input) => {
+      if (!workspaceId) return;
+
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.crmPlans(workspaceId),
+      });
+
+      const previous = queryClient.getQueryData<CrmSalesPlan[]>(
+        queryKeys.crmPlans(workspaceId)
+      );
+
+      queryClient.setQueryData<CrmSalesPlan[]>(
+        queryKeys.crmPlans(workspaceId),
+        (current = []) => {
+          const existing = current.find((item) => item.month === input.month);
+          const optimisticPlan: CrmSalesPlan = {
+            id: existing?.id ?? `local-${input.month}`,
+            workspace_id: existing?.workspace_id ?? workspaceId,
+            user_id: existing?.user_id ?? null,
+            month: input.month,
+            revenue_plan: input.revenue_plan,
+            won_deals_plan: input.won_deals_plan,
+            leads_plan: input.leads_plan,
+            created_at: existing?.created_at ?? new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+
+          return [
+            ...current.filter((item) => item.month !== input.month),
+            optimisticPlan,
+          ].sort((a, b) => a.month.localeCompare(b.month));
+        }
+      );
+
+      return { previous };
+    },
+    onError: (_error, _input, context) => {
+      if (!workspaceId || !context?.previous) return;
+
+      queryClient.setQueryData(
+        queryKeys.crmPlans(workspaceId),
+        context.previous
+      );
+    },
+    onSuccess: (plan) => {
+      if (!workspaceId) return;
+
+      queryClient.setQueryData<CrmSalesPlan[]>(
+        queryKeys.crmPlans(workspaceId),
+        (current = []) => {
+          const exists = current.some((item) => item.id === plan.id);
+          const next = exists
+            ? current.map((item) => (item.id === plan.id ? plan : item))
+            : [...current.filter((item) => item.month !== plan.month), plan];
+
+          return next.sort((a, b) => a.month.localeCompare(b.month));
+        }
+      );
+    },
+  });
+}
+
+export function useMarkCrmConversationReadMutation() {
+  const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useMutation({
+    mutationFn: markCrmConversationRead,
+    onSuccess: () => {
+      if (!workspaceId) return;
+
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.crmInbox(workspaceId),
+      });
+    },
   });
 }
 
@@ -660,6 +821,10 @@ export function useCreateCrmMessageMutation() {
             upsertMessageInBootstrap(message, current)
           )
       );
+
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.crmInbox(workspaceId),
+      });
     },
   });
 }

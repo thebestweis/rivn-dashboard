@@ -92,6 +92,18 @@ create table if not exists public.crm_deal_activities (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.crm_deal_stage_history (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  deal_id uuid not null references public.crm_deals(id) on delete cascade,
+  from_pipeline_id uuid references public.crm_pipelines(id) on delete set null,
+  from_stage_id uuid references public.crm_pipeline_stages(id) on delete set null,
+  to_pipeline_id uuid not null references public.crm_pipelines(id) on delete restrict,
+  to_stage_id uuid not null references public.crm_pipeline_stages(id) on delete restrict,
+  actor_member_id uuid references public.workspace_members(id) on delete set null,
+  moved_at timestamptz not null default now()
+);
+
 create table if not exists public.crm_deal_comments (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
@@ -121,6 +133,9 @@ create table if not exists public.crm_conversations (
   channel text not null check (channel in ('avito', 'telegram', 'tilda', 'yandex_direct', 'manual')),
   external_id text,
   title text,
+  last_client_message_at timestamptz,
+  last_manager_message_at timestamptz,
+  read_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -149,6 +164,19 @@ create table if not exists public.crm_assignment_rules (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.crm_sales_plans (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete set null,
+  month text not null,
+  revenue_plan numeric not null default 0,
+  won_deals_plan integer not null default 0,
+  leads_plan integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (workspace_id, month)
+);
+
 create index if not exists crm_pipelines_workspace_idx on public.crm_pipelines(workspace_id, sort_order);
 create index if not exists crm_stages_pipeline_idx on public.crm_pipeline_stages(pipeline_id, sort_order);
 create index if not exists crm_sources_workspace_idx on public.crm_sources(workspace_id);
@@ -158,10 +186,15 @@ create index if not exists crm_deals_next_contact_idx on public.crm_deals(worksp
 create index if not exists crm_deals_source_item_idx on public.crm_deals(workspace_id, source_item_id);
 create index if not exists crm_deal_assignees_member_idx on public.crm_deal_assignees(workspace_id, workspace_member_id);
 create index if not exists crm_activities_deal_idx on public.crm_deal_activities(deal_id, created_at desc);
+create index if not exists crm_stage_history_workspace_idx on public.crm_deal_stage_history(workspace_id, moved_at desc);
+create index if not exists crm_stage_history_deal_idx on public.crm_deal_stage_history(deal_id, moved_at);
+create index if not exists crm_stage_history_transition_idx on public.crm_deal_stage_history(workspace_id, from_stage_id, to_stage_id, moved_at desc);
 create index if not exists crm_comments_deal_idx on public.crm_deal_comments(deal_id, created_at desc);
 create index if not exists crm_tasks_deal_idx on public.crm_deal_tasks(deal_id, status, due_at);
 create index if not exists crm_conversations_deal_idx on public.crm_conversations(deal_id, channel);
+create index if not exists crm_conversations_inbox_idx on public.crm_conversations(workspace_id, updated_at desc);
 create index if not exists crm_messages_conversation_idx on public.crm_messages(conversation_id, created_at);
+create index if not exists crm_sales_plans_workspace_month_idx on public.crm_sales_plans(workspace_id, month);
 
 -- Optional if workspace_members.role is a text column with a check constraint.
 -- If your database uses an enum instead, do not run this block and add enum values separately.

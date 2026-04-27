@@ -26,6 +26,7 @@ import {
 import { useActiveTaskCountsByProjectQuery } from "../lib/queries/use-tasks-query";
 import { useClientsQuery } from "../lib/queries/use-clients-query";
 import { useActiveWorkspaceMembers } from "../lib/queries/use-workspace-members-query";
+import { getWorkspaceMemberDisplayName } from "../lib/supabase/workspace-members";
 
 type StatusFilter = "all" | ProjectStatus;
 
@@ -131,7 +132,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
     () =>
       workspaceMembersData.map((member) => ({
         id: member.id,
-        name: member.display_name || member.email || "Без имени",
+        name: getWorkspaceMemberDisplayName(member),
       })),
     [workspaceMembersData]
   );

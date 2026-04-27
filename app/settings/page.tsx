@@ -9,10 +9,12 @@ import { TelegramSettingsTab } from "../components/settings/telegram-settings-ta
 import { SystemSettingsTab } from "../components/settings/system-settings-tab";
 import { WorkspaceSettingsTab } from "../components/settings/workspace-settings-tab";
 import { ReferralSettingsTab } from "../components/settings/referral-settings-tab";
+import { ProfileSettingsTab } from "../components/settings/profile-settings-tab";
 import { AccessDenied } from "../components/access/access-denied";
 import { usePageAccess } from "../lib/use-page-access";
 
 export type SettingsTab =
+  | "profile"
   | "users"
   | "access"
   | "referrals"
@@ -20,11 +22,12 @@ export type SettingsTab =
   | "system"
   | "workspace";
 
-const DEFAULT_TAB: SettingsTab = "users";
+const DEFAULT_TAB: SettingsTab = "profile";
 
 function isSettingsTab(value: string | null): value is SettingsTab {
   return (
     value === "users" ||
+    value === "profile" ||
     value === "access" ||
     value === "referrals" ||
     value === "telegram" ||
@@ -66,6 +69,7 @@ function SettingsPageContent() {
   }
 
   const tabContent = useMemo(() => {
+    if (activeTab === "profile") return <ProfileSettingsTab />;
     if (activeTab === "users") return <UsersSettingsTab />;
     if (activeTab === "access") return <AccessSettingsTab />;
     if (activeTab === "referrals") return <ReferralSettingsTab />;
@@ -78,7 +82,7 @@ function SettingsPageContent() {
   return (
     <main className="flex-1">
       <div className="space-y-6 px-5 py-6 lg:px-8">
-        {!hasAccess && !isLoading ? (
+        {!hasAccess && activeTab !== "profile" && !isLoading ? (
           <AccessDenied
             title="Нет доступа к настройкам"
             description="Этот раздел доступен только владельцу кабинета и администраторам с соответствующими правами."

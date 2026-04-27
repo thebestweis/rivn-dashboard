@@ -18,6 +18,7 @@ type DialogPayload = {
   sourceItemTitle?: string | null;
   sourceItemUrl?: string | null;
   body?: string;
+  attachmentUrl?: string | null;
   senderType?: "client" | "manager" | "system";
   createdAt?: string;
 };
@@ -438,7 +439,7 @@ export async function POST(request: Request) {
         sender_type: payload.senderType || "client",
         sender_member_id: null,
         body,
-        attachment_url: null,
+        attachment_url: normalizeText(payload.attachmentUrl) || null,
         external_id: externalMessageId || null,
         created_at: payload.createdAt || new Date().toISOString(),
       })
@@ -453,7 +454,21 @@ export async function POST(request: Request) {
 
     await supabase
       .from("crm_conversations")
-      .update({ updated_at: new Date().toISOString() })
+      .update({
+        updated_at: message.created_at,
+        last_client_message_at:
+          (payload.senderType || "client") === "client"
+            ? message.created_at
+            : conversation.last_client_message_at ?? null,
+        last_manager_message_at:
+          payload.senderType === "manager"
+            ? message.created_at
+            : conversation.last_manager_message_at ?? null,
+        read_at:
+          payload.senderType === "manager"
+            ? message.created_at
+            : conversation.read_at ?? null,
+      })
       .eq("id", conversation.id)
       .eq("workspace_id", workspaceId);
 

@@ -20,4 +20,6 @@
 - Deal cards now have a client dialog tab with CRM-side replies.
 - Avito Messenger webhook endpoint is available: `POST /api/avito/messenger/webhook`.
 - CRM replies in Avito conversations are sent back to Avito Messenger API.
-- Next priority: add UI for connecting Avito webhook per account and connector presets for Tilda and Telegram lead sources.
+- Avito initial dialog sync is available from `/avito-reports`.
+- Voice-message architecture note: incoming Avito voice messages are imported as CRM messages; outbound voice sending waits for channel APIs that support it.
+- Next priority: connector presets for Tilda and Telegram lead sources.
