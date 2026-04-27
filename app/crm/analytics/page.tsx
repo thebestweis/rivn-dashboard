@@ -773,6 +773,7 @@ export default function CrmAnalyticsPage() {
     ...analytics.waitingDialogs.slice(0, 3).map((item) => ({
       id: `dialog-${item.conversation.id}`,
       dealId: item.deal.id,
+      tab: "dialogs",
       title: item.deal.title,
       label: "Клиент ждёт ответа",
       meta: `${formatMinutes(item.minutesWaiting)} без ответа · ${item.deal.client_name || "Клиент не указан"}`,
@@ -781,6 +782,7 @@ export default function CrmAnalyticsPage() {
     ...analytics.overdueDeals.slice(0, 3).map((deal) => ({
       id: `overdue-${deal.id}`,
       dealId: deal.id,
+      tab: "tasks",
       title: deal.title,
       label: "Просрочен контакт",
       meta: `${deal.next_contact_at ? formatDateTime(deal.next_contact_at) : "Дата не указана"} · ${deal.client_name || "Клиент не указан"}`,
@@ -789,6 +791,7 @@ export default function CrmAnalyticsPage() {
     ...analytics.withoutNextContact.slice(0, 3).map((deal) => ({
       id: `next-contact-${deal.id}`,
       dealId: deal.id,
+      tab: "tasks",
       title: deal.title,
       label: "Нет следующего шага",
       meta: `${money(deal.service_amount ?? 0)} · ${deal.client_name || "Клиент не указан"}`,
@@ -1144,7 +1147,7 @@ export default function CrmAnalyticsPage() {
             {attentionItems.map((item) => (
               <Link
                 key={item.id}
-                href={`/crm?dealId=${item.dealId}`}
+                href={`/crm?dealId=${item.dealId}&tab=${item.tab}`}
                 className={`group rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-lg ${
                   item.tone === "rose"
                     ? "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-100"

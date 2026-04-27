@@ -24,6 +24,11 @@ type DialogPayload = {
 };
 
 type ServiceSupabase = any;
+type AssignmentRuleRow = {
+  source_kind: string | null;
+  mode: "manual" | "round_robin" | "least_loaded" | "fixed_manager";
+  target_member_ids: string[] | null;
+};
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -164,18 +169,21 @@ async function resolveAssigneeIds(params: {
   workspaceId: string;
   sourceKind: string;
 }) {
-  const { data: rule, error: ruleError } = await params.supabase
+  const { data: rules, error: ruleError } = await params.supabase
     .from("crm_assignment_rules")
     .select("*")
     .eq("workspace_id", params.workspaceId)
-    .eq("source_kind", params.sourceKind)
     .eq("is_active", true)
-    .maybeSingle();
+    .or(`source_kind.eq.${params.sourceKind},source_kind.is.null`);
 
   if (ruleError) {
     throw new Error(`CRM assignment rule lookup failed: ${ruleError.message}`);
   }
 
+  const typedRules = (rules ?? []) as AssignmentRuleRow[];
+  const rule =
+    typedRules.find((item) => item.source_kind === params.sourceKind) ??
+    typedRules.find((item) => !item.source_kind);
   const targetMemberIds = Array.isArray(rule?.target_member_ids)
     ? rule.target_member_ids.filter(Boolean)
     : [];
@@ -188,12 +196,17 @@ async function resolveAssigneeIds(params: {
     return targetMemberIds;
   }
 
-  const { data: assignees } = await params.supabase
+  let assigneesQuery = params.supabase
     .from("crm_deal_assignees")
     .select("workspace_member_id, crm_deals!inner(status)")
     .eq("workspace_id", params.workspaceId)
-    .in("workspace_member_id", targetMemberIds)
-    .eq("crm_deals.status", "open");
+    .in("workspace_member_id", targetMemberIds);
+
+  if (rule.mode === "least_loaded") {
+    assigneesQuery = assigneesQuery.eq("crm_deals.status", "open");
+  }
+
+  const { data: assignees } = await assigneesQuery;
 
   const loadByMemberId = new Map<string, number>(
     targetMemberIds.map((memberId: string) => [memberId, 0])

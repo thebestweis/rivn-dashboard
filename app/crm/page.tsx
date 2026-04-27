@@ -90,6 +90,8 @@ type MemberProfilePreview = {
   title: string | null;
 };
 
+type DealPanelTab = "info" | "dialogs" | "tasks" | "comments" | "history";
+
 const emptyDealForm: DealFormState = {
   title: "",
   client_id: "",
@@ -148,6 +150,16 @@ function getStageStatus(stage: CrmStage): CrmDealStatus {
   if (stage.kind === "lost") return "lost";
 
   return "open";
+}
+
+function isDealPanelTab(value: string | null): value is DealPanelTab {
+  return (
+    value === "info" ||
+    value === "dialogs" ||
+    value === "tasks" ||
+    value === "comments" ||
+    value === "history"
+  );
 }
 
 function getDealSignal(deal: CrmDeal) {
@@ -503,9 +515,7 @@ function CrmPageContent() {
   const [isStageSettingsOpen, setIsStageSettingsOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<CrmDeal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
-  const [dealPanelTab, setDealPanelTab] = useState<
-    "info" | "dialogs" | "tasks" | "comments" | "history"
-  >("info");
+  const [dealPanelTab, setDealPanelTab] = useState<DealPanelTab>("info");
   const [form, setForm] = useState<DealFormState>(emptyDealForm);
   const [paidDeal, setPaidDeal] = useState<CrmDeal | null>(null);
   const [pendingLostMove, setPendingLostMove] = useState<{
@@ -698,13 +708,14 @@ function CrmPageContent() {
 
   useEffect(() => {
     const dealId = searchParams.get("dealId");
+    const tab = searchParams.get("tab");
     if (!dealId || selectedDealId === dealId) return;
 
     const deal = deals.find((item) => item.id === dealId);
     if (!deal) return;
 
     setSelectedDealId(deal.id);
-    setDealPanelTab("info");
+    setDealPanelTab(isDealPanelTab(tab) ? tab : "info");
   }, [deals, searchParams, selectedDealId]);
 
   const memberNameById = useMemo(
@@ -1449,6 +1460,13 @@ function CrmPageContent() {
                 Этапы
               </button>
             ) : null}
+            <Link
+              href="/crm/settings"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+            >
+              <Settings2 className="h-4 w-4" />
+              Настройки CRM
+            </Link>
             <Link
               href="/crm/analytics"
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"

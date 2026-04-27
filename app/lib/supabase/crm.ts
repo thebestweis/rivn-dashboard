@@ -1426,17 +1426,20 @@ async function resolveAutoAssigneeIds(params: {
     return [];
   }
 
-  const { data: rule } = await supabase
+  const { data: rules } = await supabase
     .from("crm_assignment_rules")
     .select("*")
     .eq("workspace_id", workspace.id)
-    .eq("source_kind", sourceKind)
     .eq("is_active", true)
-    .maybeSingle();
+    .or(`source_kind.eq.${sourceKind},source_kind.is.null`);
 
-  const mappedRule = rule
-    ? mapAssignmentRule(rule as DbCrmAssignmentRuleRow)
-    : null;
+  const mappedRules = ((rules ?? []) as DbCrmAssignmentRuleRow[]).map(
+    mapAssignmentRule
+  );
+  const mappedRule =
+    mappedRules.find((rule) => rule.source_kind === sourceKind) ??
+    mappedRules.find((rule) => !rule.source_kind) ??
+    null;
 
   if (
     !mappedRule ||
@@ -1450,12 +1453,17 @@ async function resolveAutoAssigneeIds(params: {
     return mappedRule.target_member_ids;
   }
 
-  const { data: assignees } = await supabase
+  let assigneesQuery = supabase
     .from("crm_deal_assignees")
     .select("workspace_member_id, crm_deals!inner(status)")
     .eq("workspace_id", workspace.id)
-    .in("workspace_member_id", mappedRule.target_member_ids)
-    .eq("crm_deals.status", "open");
+    .in("workspace_member_id", mappedRule.target_member_ids);
+
+  if (mappedRule.mode === "least_loaded") {
+    assigneesQuery = assigneesQuery.eq("crm_deals.status", "open");
+  }
+
+  const { data: assignees } = await assigneesQuery;
 
   const loadByMemberId = new Map(
     mappedRule.target_member_ids.map((memberId) => [memberId, 0])
@@ -1854,12 +1862,16 @@ export async function upsertCrmAssignmentRule(
   const sourceKind = input.source_kind?.trim() || null;
   const targetMemberIds = normalizeIds(input.target_member_ids);
 
-  const { data: existing, error: existingError } = await supabase
+  let existingQuery = supabase
     .from("crm_assignment_rules")
     .select("id")
-    .eq("workspace_id", workspace.id)
-    .eq("source_kind", sourceKind)
-    .maybeSingle();
+    .eq("workspace_id", workspace.id);
+
+  existingQuery = sourceKind
+    ? existingQuery.eq("source_kind", sourceKind)
+    : existingQuery.is("source_kind", null);
+
+  const { data: existing, error: existingError } = await existingQuery.maybeSingle();
 
   if (existingError) {
     throw new Error(
