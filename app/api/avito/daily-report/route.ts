@@ -393,6 +393,12 @@ export async function GET(request: Request) {
   }
 
   try {
+    const requestUrl = new URL(request.url);
+    const forceSend = requestUrl.searchParams.get("force") === "1";
+    console.log("[avito:daily-report] started", {
+      forceSend,
+      triggeredAt: new Date().toISOString(),
+    });
     const supabase = getSupabase();
 
     const { data: clients, error: clientsError } = await supabase
@@ -413,6 +419,7 @@ export async function GET(request: Request) {
     }
 
     if (!clients || clients.length === 0) {
+      console.log("[avito:daily-report] no active clients with telegram chat");
       return Response.json(
         {
           ok: false,
@@ -421,6 +428,11 @@ export async function GET(request: Request) {
         { status: 404 }
       );
     }
+
+    console.log("[avito:daily-report] clients loaded", {
+      clientsCount: clients.length,
+      forceSend,
+    });
 
     const yesterday = getMoscowDate(1);
     const beforeYesterday = getMoscowDate(2);
@@ -445,7 +457,12 @@ export async function GET(request: Request) {
           .eq("status", "success")
           .maybeSingle();
 
-        if (existingLog) {
+        if (existingLog && !forceSend) {
+          console.log("[avito:daily-report] skipped duplicate", {
+            clientId: client.id,
+            clientName: client.name,
+            period: yesterday,
+          });
           results.push({
             clientId: client.id,
             clientName: client.name,
@@ -642,6 +659,11 @@ export async function GET(request: Request) {
         });
 
         await sendTelegramMessage(client.telegram_chat_id, reportText);
+        console.log("[avito:daily-report] telegram sent", {
+          clientId: client.id,
+          clientName: client.name,
+          accountsCount: accounts.length,
+        });
 
         await supabase.from("avito_report_logs").insert({
           client_id: client.id,
@@ -688,6 +710,7 @@ export async function GET(request: Request) {
     return Response.json({
       ok: true,
       message: "Daily отчёты обработаны по всем активным клиентам",
+      forceSend,
       yesterday,
       beforeYesterday,
       totalClients: clients.length,
