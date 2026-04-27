@@ -11,7 +11,15 @@
 
     {
       "path": "/api/cron/daily",
-      "schedule": "0 9 * * *"
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/daily-retry-15",
+      "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/cron/daily-retry-30",
+      "schedule": "30 6 * * *"
     },
     {
       "path": "/api/cron/weekly",
