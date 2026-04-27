@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -295,6 +295,14 @@ function MemberAvatar({
   );
 }
 
+export default function CrmPage() {
+  return (
+    <Suspense fallback={null}>
+      <CrmPageContent />
+    </Suspense>
+  );
+}
+
 function AssigneePreview({ members }: { members: MemberProfilePreview[] }) {
   if (members.length === 0) {
     return <span className="truncate">Без ответственного</span>;
@@ -415,7 +423,7 @@ function DealCard({
   );
 }
 
-export default function CrmPage() {
+function CrmPageContent() {
   const searchParams = useSearchParams();
   const { role, isReady, membership } = useAppContextState();
   const currentRole = isAppRole(role) ? role : null;
