@@ -1,46 +1,48 @@
 # CRM integrations
 
+Этот документ описывает, как заявки попадают в CRM. Основной принцип: все внешние каналы создают сделки через единый CRM-вход, поэтому источник заявки и правила распределения менеджерам работают одинаково.
+
 ## Tilda
 
-Use this URL in Tilda form webhook settings:
+Ссылку для Tilda нужно брать в интерфейсе:
 
 ```text
-https://rivn-dashboard.vercel.app/api/crm/tilda?workspaceId=WORKSPACE_ID&secret=CRM_WEBHOOK_SECRET
+/crm/integrations -> блок Tilda -> Скопировать webhook
 ```
 
-The endpoint accepts JSON, `multipart/form-data` and `application/x-www-form-urlencoded`.
+Форма может отправлять `JSON`, `multipart/form-data` или `application/x-www-form-urlencoded`.
 
-Common fields are mapped automatically:
+Основные поля определяются автоматически:
 
-- `name`, `Name`, `Имя` -> client name
-- `phone`, `Phone`, `Телефон` -> phone
+- `name`, `Name`, `Имя` -> имя клиента
+- `phone`, `Phone`, `Телефон` -> телефон
 - `telegram`, `Telegram`, `tg` -> Telegram
-- `serviceAmount`, `Стоимость услуги` -> service amount
-- `budget`, `Бюджет` -> budget
+- `serviceAmount`, `Стоимость услуги` -> стоимость услуги
+- `budget`, `Бюджет`, `Рекламный бюджет` -> бюджет
 
-All extra fields are added to the deal description.
+Все дополнительные поля попадают в описание сделки.
 
 ## Telegram CRM
 
-Use a separate sales bot or test bot with this webhook:
+Отдельный CRM webhook для Telegram также нужно брать в интерфейсе:
 
 ```text
-https://rivn-dashboard.vercel.app/api/crm/telegram?workspaceId=WORKSPACE_ID&secret=CRM_WEBHOOK_SECRET
+/crm/integrations -> блок Telegram -> Скопировать webhook
 ```
 
-This endpoint creates or updates a CRM conversation by Telegram chat id and creates a CRM deal when the dialog is new.
+Этот endpoint создаёт или обновляет CRM-диалог по Telegram chat id. Если диалог новый, RIVN OS создаёт сделку и применяет правила распределения менеджерам.
 
-Important: do not replace the existing Avito Reports bot webhook with this URL. The reports bot is used for chat linking and daily/weekly reports.
+Важно: не заменять этим URL webhook бота Avito-отчётов. Бот отчётов используется для привязки бесед и daily/weekly отчётов.
 
 ## Yandex Direct: generic webhook
 
-Use this URL for advertising lead forwarding from forms, quizzes, Roistat/Albato/Make, or another connector:
+Webhook для внешних форм, квизов, Roistat, Albato, Make и похожих сервисов берётся здесь:
 
 ```text
-https://rivn-dashboard.vercel.app/api/crm/yandex-direct?workspaceId=WORKSPACE_ID&secret=CRM_WEBHOOK_SECRET
+/crm/integrations -> блок Яндекс Директ -> Скопировать webhook
 ```
 
-Recommended fields:
+Рекомендуемые поля:
 
 - `name` / `clientName` / `Имя`
 - `phone` / `tel` / `Телефон`
@@ -50,51 +52,44 @@ Recommended fields:
 - `budget`
 - `serviceAmount`
 
-The endpoint creates a CRM deal with `sourceKind = yandex_direct`, so assignment rules can route these leads separately from Avito, Tilda, or Telegram.
+Сделка создаётся с `sourceKind = yandex_direct`, поэтому правила распределения могут направлять такие заявки отдельно от Avito, Tilda или Telegram.
 
 ## Yandex Direct: Leads API auto sync
 
-Yandex Direct Leads API is a pull integration: RIVN OS regularly asks Yandex Direct for new leads and creates CRM deals. The route is:
+Подключение больше не нужно делать SQL-запросом вручную.
+
+Нормальный путь:
+
+1. Открыть `/crm/integrations`.
+2. В блоке Яндекс Директ вставить OAuth-токен.
+3. Если аккаунт агентский, указать `Client-Login`.
+4. Нажать `Найти турбо-страницы`.
+5. Выбрать нужные страницы.
+6. Нажать `Сохранить подключение`.
+7. Нажать `Проверить подключение`.
+
+RIVN OS сам сохранит `workspace_id`, токен, логин клиента и выбранные турбо-страницы в `crm_yandex_direct_integrations`.
+
+Маршрут синхронизации:
 
 ```text
 https://rivn-dashboard.vercel.app/api/cron/yandex-direct-leads?secret=CRON_SECRET
 ```
 
-What it does:
+Что делает синхронизация:
 
-- checks every active row in `crm_yandex_direct_integrations`;
-- requests new leads from Yandex Direct `Leads.get`;
-- creates a CRM deal with `sourceKind = yandex_direct`;
-- saves the imported lead in `crm_yandex_direct_imports`;
-- skips duplicates by `integration_id + external_lead_id`;
-- updates `last_synced_at` for the integration.
+- берёт активные строки из `crm_yandex_direct_integrations`;
+- запрашивает новые заявки через Yandex Direct `Leads.get`;
+- создаёт сделку в CRM с источником `yandex_direct`;
+- применяет правила распределения менеджерам;
+- сохраняет импорт в `crm_yandex_direct_imports`;
+- пропускает дубли по `integration_id + external_lead_id`;
+- обновляет `last_synced_at`.
 
-Required SQL:
+SQL-схема лежит здесь:
 
 ```text
 docs/yandex-direct-leads-sync.sql
 ```
 
-Example integration row:
-
-```sql
-insert into public.crm_yandex_direct_integrations (
-  workspace_id,
-  name,
-  oauth_token,
-  client_login,
-  turbo_page_ids,
-  is_active
-) values (
-  'WORKSPACE_ID',
-  'Яндекс Директ',
-  'YANDEX_OAUTH_TOKEN',
-  null,
-  array[123456789]::bigint[],
-  true
-);
-```
-
-Use `client_login` only when the token belongs to an agency account and requests must be made for a specific advertiser.
-
-Deployment note: this document is safe to update when a new Vercel deployment needs to be triggered without changing runtime code.
+Ручной SQL insert нужен только для аварийной настройки, когда интерфейс недоступен.

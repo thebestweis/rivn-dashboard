@@ -971,6 +971,12 @@ export default function CrmAnalyticsPage() {
               {tab.label}
             </button>
           ))}
+          <Link
+            href="/crm/team"
+            className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
+          >
+            Команда
+          </Link>
         </div>
 
         {error ? (

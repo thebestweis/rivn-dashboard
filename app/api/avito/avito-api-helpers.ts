@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { createHash } from "crypto";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -13,6 +14,24 @@ const itemIdsMemoryCache = new Map<
 >();
 
 const pendingItemRequests = new Map<string, Promise<number[]>>();
+const pendingStatsRequests = new Map<string, Promise<AvitoPeriodStats>>();
+
+type AvitoStatPoint = {
+  uniqViews?: number;
+  uniqContacts?: number;
+  uniqFavorites?: number;
+};
+
+type AvitoStatsItem = {
+  itemId: number;
+  stats?: AvitoStatPoint[];
+};
+
+type AvitoPeriodStats = {
+  views: number;
+  contacts: number;
+  favorites: number;
+};
 
 export class AvitoApiError extends Error {
   status: number;
@@ -36,6 +55,16 @@ function getServiceSupabase() {
 
 export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function chunkArray<T>(array: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < array.length; index += size) {
+    chunks.push(array.slice(index, index + size));
+  }
+
+  return chunks;
 }
 
 export async function readJsonResponse(response: Response) {
@@ -118,7 +147,7 @@ async function loadCachedItemIds(accountId?: string) {
 
   const { data, error } = await supabase
     .from("avito_report_item_cache")
-    .select("item_ids, fetched_at")
+    .select("item_ids, fetched_at, next_page, is_complete")
     .eq("account_id", accountId)
     .maybeSingle();
 
@@ -128,7 +157,8 @@ async function loadCachedItemIds(accountId?: string) {
 
   const itemIds = data.item_ids.map(Number).filter(Number.isFinite);
   const fetchedAt = new Date(String(data.fetched_at)).getTime();
-  const isFresh = Number.isFinite(fetchedAt)
+  const isComplete = data.is_complete !== false;
+  const isFresh = isComplete && Number.isFinite(fetchedAt)
     ? Date.now() - fetchedAt < ITEMS_CACHE_TTL_MS
     : false;
 
@@ -142,6 +172,8 @@ async function loadCachedItemIds(accountId?: string) {
   return {
     itemIds,
     isFresh,
+    isComplete,
+    nextPage: Number(data.next_page || 1),
   };
 }
 
@@ -149,6 +181,8 @@ async function saveCachedItemIds(params: {
   accountId?: string;
   avitoUserId?: string | null;
   itemIds: number[];
+  nextPage?: number;
+  isComplete?: boolean;
 }) {
   if (!params.accountId) {
     return;
@@ -179,7 +213,10 @@ async function saveCachedItemIds(params: {
     account_id: params.accountId,
     avito_user_id: params.avitoUserId,
     item_ids: params.itemIds,
+    next_page: params.nextPage ?? 1,
+    is_complete: params.isComplete ?? true,
     fetched_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 
   if (existing?.id) {
@@ -193,9 +230,15 @@ async function saveCachedItemIds(params: {
   await supabase.from("avito_report_item_cache").insert(payload);
 }
 
-async function fetchAllItemIdsFromAvito(accessToken: string) {
-  const allItems: { id: number }[] = [];
-  let page = 1;
+async function fetchAllItemIdsFromAvito(params: {
+  accountId?: string;
+  avitoUserId?: string | null;
+  accessToken: string;
+  cachedItemIds?: number[];
+  startPage?: number;
+}) {
+  const allItemIds = [...(params.cachedItemIds ?? [])];
+  let page = Math.max(1, params.startPage ?? 1);
   const perPage = 100;
 
   while (true) {
@@ -204,7 +247,7 @@ async function fetchAllItemIdsFromAvito(accessToken: string) {
       {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${params.accessToken}`,
           Accept: "application/json",
         },
       },
@@ -212,18 +255,38 @@ async function fetchAllItemIdsFromAvito(accessToken: string) {
     );
 
     const resources = Array.isArray(data?.resources) ? data.resources : [];
-    allItems.push(...resources);
+    allItemIds.push(
+      ...resources.map((item: { id?: number }) => Number(item.id)).filter(Boolean)
+    );
 
-    if (resources.length < perPage) break;
+    if (resources.length < perPage) {
+      await saveCachedItemIds({
+        accountId: params.accountId,
+        avitoUserId: params.avitoUserId,
+        itemIds: allItemIds,
+        nextPage: 1,
+        isComplete: true,
+      });
+
+      break;
+    }
 
     page += 1;
 
-    if (page > 50) break;
+    await saveCachedItemIds({
+      accountId: params.accountId,
+      avitoUserId: params.avitoUserId,
+      itemIds: allItemIds,
+      nextPage: page,
+      isComplete: false,
+    });
 
-    await sleep(250);
+    if (page > 100) break;
+
+    await sleep(500);
   }
 
-  return allItems.map((item) => item.id).filter(Boolean);
+  return allItemIds;
 }
 
 export async function getCachedAvitoItemIds(params: {
@@ -246,7 +309,13 @@ export async function getCachedAvitoItemIds(params: {
     }
 
     try {
-      const itemIds = await fetchAllItemIdsFromAvito(params.accessToken);
+      const itemIds = await fetchAllItemIdsFromAvito({
+        accountId: params.accountId,
+        avitoUserId: params.avitoUserId,
+        accessToken: params.accessToken,
+        cachedItemIds: cached?.isComplete ? [] : cached?.itemIds,
+        startPage: cached?.isComplete ? 1 : cached?.nextPage,
+      });
 
       await saveCachedItemIds({
         accountId: params.accountId,
@@ -267,6 +336,234 @@ export async function getCachedAvitoItemIds(params: {
   });
 
   pendingItemRequests.set(cacheKey, request);
+
+  return request;
+}
+
+function buildStatsCacheKey(params: {
+  accountId?: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+  itemIdsHash: string;
+}) {
+  return JSON.stringify({
+    accountId: params.accountId,
+    avitoUserId: params.avitoUserId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    itemIdsHash: params.itemIdsHash,
+  });
+}
+
+function hashItemIds(itemIds: number[]) {
+  return createHash("sha1").update(itemIds.join(",")).digest("hex");
+}
+
+async function loadStatsCache(params: {
+  accountId?: string;
+  dateFrom: string;
+  dateTo: string;
+}) {
+  if (!params.accountId) {
+    return null;
+  }
+
+  const supabase = getServiceSupabase();
+
+  if (!supabase) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("avito_report_stats_cache")
+    .select(
+      "id, views, contacts, favorites, processed_chunks, total_chunks, item_ids_hash, is_complete"
+    )
+    .eq("account_id", params.accountId)
+    .eq("date_from", params.dateFrom)
+    .eq("date_to", params.dateTo)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return {
+    id: String(data.id),
+    views: Number(data.views || 0),
+    contacts: Number(data.contacts || 0),
+    favorites: Number(data.favorites || 0),
+    processedChunks: Number(data.processed_chunks || 0),
+    totalChunks: Number(data.total_chunks || 0),
+    itemIdsHash: String(data.item_ids_hash || ""),
+    isComplete: data.is_complete === true,
+  };
+}
+
+async function saveStatsCache(params: {
+  id?: string;
+  accountId?: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+  itemIdsHash: string;
+  views: number;
+  contacts: number;
+  favorites: number;
+  processedChunks: number;
+  totalChunks: number;
+  isComplete: boolean;
+}) {
+  if (!params.accountId) {
+    return;
+  }
+
+  const supabase = getServiceSupabase();
+
+  if (!supabase) {
+    return;
+  }
+
+  const payload = {
+    account_id: params.accountId,
+    avito_user_id: params.avitoUserId,
+    date_from: params.dateFrom,
+    date_to: params.dateTo,
+    item_ids_hash: params.itemIdsHash,
+    views: params.views,
+    contacts: params.contacts,
+    favorites: params.favorites,
+    processed_chunks: params.processedChunks,
+    total_chunks: params.totalChunks,
+    is_complete: params.isComplete,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (params.id) {
+    await supabase
+      .from("avito_report_stats_cache")
+      .update(payload)
+      .eq("id", params.id);
+    return;
+  }
+
+  await supabase.from("avito_report_stats_cache").insert(payload);
+}
+
+export async function getCachedAvitoStatsForPeriod(params: {
+  accountId?: string;
+  accessToken: string;
+  avitoUserId: string;
+  itemIds: number[];
+  dateFrom: string;
+  dateTo: string;
+}): Promise<AvitoPeriodStats> {
+  const itemIdsHash = hashItemIds(params.itemIds);
+  const cacheKey = buildStatsCacheKey({
+    accountId: params.accountId,
+    avitoUserId: params.avitoUserId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    itemIdsHash,
+  });
+  const pending = pendingStatsRequests.get(cacheKey);
+
+  if (pending) {
+    return pending;
+  }
+
+  const request = (async () => {
+    const chunks = chunkArray(params.itemIds, 200);
+    const cached = await loadStatsCache({
+      accountId: params.accountId,
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+    });
+    const canResume = cached?.itemIdsHash === itemIdsHash;
+
+    if (canResume && cached?.isComplete) {
+      return {
+        views: cached.views,
+        contacts: cached.contacts,
+        favorites: cached.favorites,
+      };
+    }
+
+    let cacheId = canResume ? cached?.id : undefined;
+    let views = canResume ? cached?.views ?? 0 : 0;
+    let contacts = canResume ? cached?.contacts ?? 0 : 0;
+    let favorites = canResume ? cached?.favorites ?? 0 : 0;
+    const startChunk = canResume ? cached?.processedChunks ?? 0 : 0;
+
+    for (let index = startChunk; index < chunks.length; index += 1) {
+      const chunk = chunks[index];
+      const data = await fetchAvitoJson(
+        `https://api.avito.ru/stats/v1/accounts/${params.avitoUserId}/items`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${params.accessToken}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            dateFrom: params.dateFrom,
+            dateTo: params.dateTo,
+            itemIds: chunk,
+            periodGrouping: "day",
+          }),
+        },
+        "Ошибка получения статистики"
+      );
+
+      const items = (data?.result?.items || []) as AvitoStatsItem[];
+
+      for (const item of items) {
+        for (const stat of item.stats || []) {
+          views += Number(stat.uniqViews || 0);
+          contacts += Number(stat.uniqContacts || 0);
+          favorites += Number(stat.uniqFavorites || 0);
+        }
+      }
+
+      await saveStatsCache({
+        id: cacheId,
+        accountId: params.accountId,
+        avitoUserId: params.avitoUserId,
+        dateFrom: params.dateFrom,
+        dateTo: params.dateTo,
+        itemIdsHash,
+        views,
+        contacts,
+        favorites,
+        processedChunks: index + 1,
+        totalChunks: chunks.length,
+        isComplete: index + 1 === chunks.length,
+      });
+
+      if (!cacheId) {
+        const saved = await loadStatsCache({
+          accountId: params.accountId,
+          dateFrom: params.dateFrom,
+          dateTo: params.dateTo,
+        });
+        cacheId = saved?.id;
+      }
+
+      await sleep(450);
+    }
+
+    return {
+      views,
+      contacts,
+      favorites,
+    };
+  })().finally(() => {
+    pendingStatsRequests.delete(cacheKey);
+  });
+
+  pendingStatsRequests.set(cacheKey, request);
 
   return request;
 }

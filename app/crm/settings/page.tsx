@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   History,
   Route,
+  Settings2,
   SlidersHorizontal,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -356,6 +357,34 @@ export default function CrmSettingsPage() {
           >
             <Route className="h-4 w-4" />
             Аналитика CRM
+          </Link>
+        </div>
+
+        <div className="mt-6 flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/[0.04]">
+          <Link
+            href="/crm/settings"
+            className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-600/20"
+          >
+            Распределение
+          </Link>
+          <Link
+            href="/crm?settings=pipelines"
+            className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
+          >
+            Воронки
+          </Link>
+          <Link
+            href="/crm?settings=stages"
+            className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
+          >
+            Этапы
+          </Link>
+          <Link
+            href="/crm/integrations"
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
+          >
+            <Settings2 className="h-4 w-4" />
+            Интеграции
           </Link>
         </div>
 

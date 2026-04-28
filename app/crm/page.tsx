@@ -22,6 +22,7 @@ import {
   Plus,
   Search,
   Settings2,
+  SlidersHorizontal,
   SquareCheckBig,
   Trash2,
   Users,
@@ -463,6 +464,7 @@ function CrmPageContent() {
     "all" | "needs_reply" | "unread" | "avito" | "without_assignee"
   >("all");
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -510,6 +512,7 @@ function CrmPageContent() {
   const createMessageMutation = useCreateCrmMessageMutation();
   const markConversationReadMutation = useMarkCrmConversationReadMutation();
   const markingReadConversationIdsRef = useRef(new Set<string>());
+  const openedSettingsParamRef = useRef<string | null>(null);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPipelineSettingsOpen, setIsPipelineSettingsOpen] = useState(false);
@@ -917,6 +920,34 @@ function CrmPageContent() {
     );
     setIsAssignmentSettingsOpen(true);
   }
+
+  useEffect(() => {
+    const settings = searchParams.get("settings");
+
+    if (
+      !canManageStages ||
+      !settings ||
+      openedSettingsParamRef.current === settings ||
+      isLoading
+    ) {
+      return;
+    }
+
+    if (settings === "pipelines") {
+      openPipelineSettings();
+      openedSettingsParamRef.current = settings;
+    }
+
+    if (settings === "stages") {
+      openStageSettings();
+      openedSettingsParamRef.current = settings;
+    }
+
+    if (settings === "assignment") {
+      openAssignmentSettings();
+      openedSettingsParamRef.current = settings;
+    }
+  }, [canManageStages, isLoading, searchParams]);
 
   function openDealPanel(deal: CrmDeal) {
     setSelectedDealId(deal.id);
@@ -1383,6 +1414,89 @@ function CrmPageContent() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsFiltersOpen((current) => !current)}
+                className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition ${
+                  isFiltersOpen ||
+                  sourceFilter ||
+                  assigneeFilter ||
+                  statusFilter !== "all" ||
+                  qualityFilter !== "all"
+                    ? "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/15 dark:text-violet-100"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                }`}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                Фильтры
+              </button>
+
+              {isFiltersOpen ? (
+                <div className="absolute right-0 z-40 mt-3 w-[min(90vw,420px)] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-950/10 dark:border-white/10 dark:bg-[#121827]">
+                  <div className="grid gap-3">
+                    <CustomSelect
+                      value={sourceFilter}
+                      onChange={setSourceFilter}
+                      options={[
+                        { value: "", label: "Все источники" },
+                        ...sources.map((source) => ({
+                          value: source.id,
+                          label: source.name,
+                        })),
+                      ]}
+                      className="w-full"
+                      buttonClassName="h-10 rounded-xl font-semibold"
+                    />
+                    <CustomSelect
+                      value={assigneeFilter}
+                      onChange={setAssigneeFilter}
+                      options={[
+                        { value: "", label: "Все ответственные" },
+                        ...(canViewAllDeals ? activeMembers : assignableMembers).map((member) => ({
+                          value: member.id,
+                          label: getWorkspaceMemberDisplayName(member),
+                        })),
+                      ]}
+                      className="w-full"
+                      buttonClassName="h-10 rounded-xl font-semibold"
+                    />
+                    <CustomSelect
+                      value={statusFilter}
+                      onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+                      options={[
+                        { value: "all", label: "Все статусы" },
+                        { value: "open", label: "В работе" },
+                        { value: "won", label: "Оплачено" },
+                        { value: "lost", label: "Потеряно" },
+                      ]}
+                      className="w-full"
+                      buttonClassName="h-10 rounded-xl font-semibold"
+                    />
+                  </div>
+
+                  {search ||
+                  sourceFilter ||
+                  assigneeFilter ||
+                  statusFilter !== "all" ||
+                  qualityFilter !== "all" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearch("");
+                        setSourceFilter("");
+                        setAssigneeFilter("");
+                        setStatusFilter("all");
+                        setQualityFilter("all");
+                      }}
+                      className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                    >
+                      Сбросить фильтры
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
             <CustomSelect
               value={sourceFilter}
               onChange={setSourceFilter}
@@ -1393,7 +1507,7 @@ function CrmPageContent() {
                   label: source.name,
                 })),
               ]}
-              className="min-w-[160px]"
+              className="hidden"
               buttonClassName="h-10 rounded-xl font-semibold"
             />
             <CustomSelect
@@ -1406,7 +1520,7 @@ function CrmPageContent() {
                   label: getWorkspaceMemberDisplayName(member),
                 })),
               ]}
-              className="min-w-[180px]"
+              className="hidden"
               buttonClassName="h-10 rounded-xl font-semibold"
             />
             <CustomSelect
@@ -1418,7 +1532,7 @@ function CrmPageContent() {
                 { value: "won", label: "Оплачено" },
                 { value: "lost", label: "Потеряно" },
               ]}
-              className="min-w-[150px]"
+              className="hidden"
               buttonClassName="h-10 rounded-xl font-semibold"
             />
             {search ||
@@ -1435,12 +1549,12 @@ function CrmPageContent() {
                   setStatusFilter("all");
                   setQualityFilter("all");
                 }}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                className="hidden"
               >
                 Сбросить
               </button>
             ) : null}
-            {canManageStages ? (
+            {false && canManageStages ? (
               <button
                 type="button"
                 onClick={openPipelineSettings}
@@ -1450,7 +1564,7 @@ function CrmPageContent() {
                 Воронки
               </button>
             ) : null}
-            {canManageStages ? (
+            {false && canManageStages ? (
               <button
                 type="button"
                 onClick={openAssignmentSettings}
@@ -1460,7 +1574,7 @@ function CrmPageContent() {
                 Распределение
               </button>
             ) : null}
-            {canManageStages && !isAllPipelinesSelected ? (
+            {false && canManageStages && !isAllPipelinesSelected ? (
               <button
                 type="button"
                 onClick={openStageSettings}
@@ -1486,14 +1600,14 @@ function CrmPageContent() {
             </Link>
             <Link
               href="/crm/team"
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+              className="hidden"
             >
               <Users className="h-4 w-4" />
               Команда
             </Link>
             <Link
               href="/crm/integrations"
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+              className="hidden"
             >
               <MessageSquareText className="h-4 w-4" />
               Интеграции

@@ -186,6 +186,27 @@ export default function CrmTeamPage() {
           </div>
         </div>
 
+        <div className="mt-6 flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/[0.04]">
+          <Link
+            href="/crm/analytics"
+            className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
+          >
+            Обзор
+          </Link>
+          <Link
+            href="/crm/analytics"
+            className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
+          >
+            План / факт
+          </Link>
+          <Link
+            href="/crm/team"
+            className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-600/20"
+          >
+            Команда
+          </Link>
+        </div>
+
         <div className="mt-6 flex flex-wrap gap-2">
           {periodOptions.map((option) => (
             <button
