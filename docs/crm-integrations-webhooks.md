@@ -96,3 +96,5 @@ insert into public.crm_yandex_direct_integrations (
 ```
 
 Use `client_login` only when the token belongs to an agency account and requests must be made for a specific advertiser.
+
+Deployment note: this document is safe to update when a new Vercel deployment needs to be triggered without changing runtime code.
