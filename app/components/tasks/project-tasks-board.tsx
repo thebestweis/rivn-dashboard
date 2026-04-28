@@ -420,6 +420,7 @@ export function ProjectTasksBoard({
                   className="h-10 w-full rounded-xl bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
+
             </div>
 
             <div className="mt-4 space-y-3">
@@ -440,7 +441,7 @@ export function ProjectTasksBoard({
                     ? Math.round((doneSubtasks / subtasks.length) * 100)
                     : 0;
                 const assigneesLabel = getAssigneesLabel(task);
-const assigneesCount = task.assignees?.length ?? 0;
+                const assigneesCount = task.assignees?.length ?? 0;
 
                 return (
                   <article
@@ -557,6 +558,11 @@ const assigneesCount = task.assignees?.length ?? 0;
     {assigneesLabel}
   </span>
 </span>
+                          {task.recurrence_rule_id ? (
+                            <span className="inline-flex rounded-full border border-violet-400/20 bg-violet-400/10 px-2.5 py-1 text-[11px] font-medium text-violet-200">
+                              Повторяется
+                            </span>
+                          ) : null}
                         </div>
 
                         {subtasks.length > 0 ? (

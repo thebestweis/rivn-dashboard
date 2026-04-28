@@ -11,6 +11,7 @@ import {
   createCrmMessage,
   createCrmDealTask,
   getCrmBootstrap,
+  getCrmAssignmentLogs,
   getCrmDealDetails,
   getCrmInbox,
   getCrmSalesPlans,
@@ -175,6 +176,25 @@ export function useCrmStageHistoryQuery(
     queryFn: () => getCrmStageHistory(filters),
     enabled: enabled && Boolean(workspaceId),
     staleTime: STALE_TIME,
+    gcTime: GC_TIME,
+    placeholderData: (previousData) => previousData,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
+}
+
+export function useCrmAssignmentLogsQuery(enabled = true) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
+  return useQuery({
+    queryKey: workspaceId
+      ? queryKeys.crmAssignmentLogs(workspaceId)
+      : ["crm", "assignment-logs"],
+    queryFn: () => getCrmAssignmentLogs(20),
+    enabled: enabled && Boolean(workspaceId),
+    staleTime: 1000 * 30,
     gcTime: GC_TIME,
     placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
@@ -722,6 +742,8 @@ export function useCreateCrmDealTaskMutation() {
             upsertDealTaskInBootstrap(task, current)
           )
       );
+
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
     },
   });
 }
@@ -758,6 +780,8 @@ export function useUpdateCrmDealTaskMutation() {
             upsertDealTaskInBootstrap(task, current)
           )
       );
+
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
     },
   });
 }

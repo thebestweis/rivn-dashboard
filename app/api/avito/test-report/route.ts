@@ -117,6 +117,22 @@ function formatChange(value: number) {
   return `${rounded > 0 ? "+" : ""}${rounded}%`;
 }
 
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      raw: text.slice(0, 500),
+    };
+  }
+}
+
 function getChangePercent(current: number, previous: number) {
   if (previous === 0 && current === 0) return 0;
   if (previous === 0) return 100;
@@ -197,10 +213,10 @@ async function sendTelegramMessage(chatId: string, text: string) {
     }
   );
 
-  const data = await response.json();
+  const data = await readJsonResponse(response);
 
   if (!response.ok) {
-    throw new Error(JSON.stringify(data));
+    throw new Error(JSON.stringify(data ?? { status: response.status }));
   }
 
   return data;
@@ -223,10 +239,14 @@ async function getAllItemIds(accessToken: string) {
       }
     );
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
-      throw new Error(`Ошибка получения объявлений: ${JSON.stringify(data)}`);
+      throw new Error(
+        `Ошибка получения объявлений: ${JSON.stringify(
+          data ?? { status: response.status }
+        )}`
+      );
     }
 
     const resources = Array.isArray(data.resources) ? data.resources : [];
@@ -278,10 +298,14 @@ async function getStatsForPeriod(params: {
       }
     );
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
-      throw new Error(`Ошибка получения статистики: ${JSON.stringify(data)}`);
+      throw new Error(
+        `Ошибка получения статистики: ${JSON.stringify(
+          data ?? { status: response.status }
+        )}`
+      );
     }
 
     const items = (data?.result?.items || []) as AvitoStatsItem[];
@@ -317,6 +341,23 @@ function buildAccountBlock(params: {
     buildMetricLine("Конверсия", params.current.conversion, params.previous.conversion, "percent"),
     buildMetricLine("Контакты", params.current.contacts, params.previous.contacts, "number"),
     buildMetricLine("Стоимость 1 контакта", params.current.costPerContact, params.previous.costPerContact, "money"),
+  ].join("\n");
+}
+
+function buildAccountErrorBlock(accountName: string, error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "Неизвестная ошибка Avito";
+  const safeMessage = message
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  return [
+    "━━━━━━━━━━━━",
+    `Аккаунт: <b>${accountName}</b>`,
+    "",
+    "⚠️ Аккаунт не проверен.",
+    `Причина: ${safeMessage}`,
   ].join("\n");
 }
 
@@ -436,90 +477,94 @@ export async function GET(request: Request) {
     };
 
     for (const account of accounts as AvitoAccount[]) {
-      if (!account.avito_user_id) {
+      try {
+        if (!account.avito_user_id) {
+          accountBlocks.push(
+            [
+              "━━━━━━━━━━━━",
+              `Аккаунт: <b>${account.name}</b>`,
+              "",
+              "⚠️ Аккаунт не проверен: нет avito_user_id.",
+            ].join("\n")
+          );
+
+          continue;
+        }
+
+        const accessToken =
+          account.access_token ||
+          (await getAvitoAccessToken({
+            clientId: account.avito_client_id,
+            clientSecret: account.avito_client_secret,
+          }));
+
+        const itemIds = await getAllItemIds(accessToken);
+
+        const currentStatsRaw = await getStatsForPeriod({
+          accessToken,
+          avitoUserId: account.avito_user_id,
+          itemIds,
+          dateFrom: yesterday,
+          dateTo: yesterday,
+        });
+
+        const previousStatsRaw = await getStatsForPeriod({
+          accessToken,
+          avitoUserId: account.avito_user_id,
+          itemIds,
+          dateFrom: beforeYesterday,
+          dateTo: beforeYesterday,
+        });
+
+        const rawAvitoSpendings = await fetchAvitoSpendings({
+          accountId: account.id,
+          accessToken,
+          userId: account.avito_user_id,
+          dateFrom: beforeYesterday,
+          dateTo: yesterday,
+          grouping: "day",
+        });
+
+        const currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
+          dateFrom: yesterday,
+          dateTo: yesterday,
+        });
+
+        const previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
+          dateFrom: beforeYesterday,
+          dateTo: beforeYesterday,
+        });
+
+        const currentStats = buildStats({
+          ...currentStatsRaw,
+          expenses: currentAvitoSpendings.total,
+        });
+
+        const previousStats = buildStats({
+          ...previousStatsRaw,
+          expenses: previousAvitoSpendings.total,
+        });
+
+        totalCurrentRaw.views += currentStats.views;
+        totalCurrentRaw.contacts += currentStats.contacts;
+        totalCurrentRaw.favorites += currentStats.favorites;
+        totalCurrentRaw.expenses += currentStats.expenses;
+
+        totalPreviousRaw.views += previousStats.views;
+        totalPreviousRaw.contacts += previousStats.contacts;
+        totalPreviousRaw.favorites += previousStats.favorites;
+        totalPreviousRaw.expenses += previousStats.expenses;
+
         accountBlocks.push(
-          [
-            "━━━━━━━━━━━━",
-            `Аккаунт: <b>${account.name}</b>`,
-            "",
-            "⚠️ Аккаунт не проверен: нет avito_user_id.",
-          ].join("\n")
+          buildAccountBlock({
+            accountName: account.name,
+            current: currentStats,
+            previous: previousStats,
+          })
         );
-
-        continue;
+      } catch (accountError) {
+        accountBlocks.push(buildAccountErrorBlock(account.name, accountError));
       }
-
-      const accessToken =
-        account.access_token ||
-        (await getAvitoAccessToken({
-          clientId: account.avito_client_id,
-          clientSecret: account.avito_client_secret,
-        }));
-
-      const itemIds = await getAllItemIds(accessToken);
-
-      const currentStatsRaw = await getStatsForPeriod({
-        accessToken,
-        avitoUserId: account.avito_user_id,
-        itemIds,
-        dateFrom: yesterday,
-        dateTo: yesterday,
-      });
-
-      const previousStatsRaw = await getStatsForPeriod({
-        accessToken,
-        avitoUserId: account.avito_user_id,
-        itemIds,
-        dateFrom: beforeYesterday,
-        dateTo: beforeYesterday,
-      });
-
-      const rawAvitoSpendings = await fetchAvitoSpendings({
-        accountId: account.id,
-        accessToken,
-        userId: account.avito_user_id,
-        dateFrom: beforeYesterday,
-        dateTo: yesterday,
-        grouping: "day",
-      });
-
-      const currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-        dateFrom: yesterday,
-        dateTo: yesterday,
-      });
-
-      const previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-        dateFrom: beforeYesterday,
-        dateTo: beforeYesterday,
-      });
-
-      const currentStats = buildStats({
-        ...currentStatsRaw,
-        expenses: currentAvitoSpendings.total,
-      });
-
-      const previousStats = buildStats({
-        ...previousStatsRaw,
-        expenses: previousAvitoSpendings.total,
-      });
-
-      totalCurrentRaw.views += currentStats.views;
-      totalCurrentRaw.contacts += currentStats.contacts;
-      totalCurrentRaw.favorites += currentStats.favorites;
-      totalCurrentRaw.expenses += currentStats.expenses;
-
-      totalPreviousRaw.views += previousStats.views;
-      totalPreviousRaw.contacts += previousStats.contacts;
-      totalPreviousRaw.favorites += previousStats.favorites;
-      totalPreviousRaw.expenses += previousStats.expenses;
-
-      accountBlocks.push(
-        buildAccountBlock({
-          accountName: account.name,
-          current: currentStats,
-          previous: previousStats,
-        })
-      );
     }
 
     const totalCurrent = buildStats(totalCurrentRaw);

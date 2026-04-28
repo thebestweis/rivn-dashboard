@@ -13,7 +13,6 @@ import {
   useWorkspaceBalanceQuery,
 } from "../lib/queries/use-billing-query";
 
-const TELEGRAM_CONTACT = "@thebestweis";
 const TELEGRAM_URL = "https://t.me/thebestweis";
 
 function formatMoney(value: number) {
@@ -95,7 +94,7 @@ function getPlanActionLabel(params: {
   }
 
   if (params.isCurrentPlan) {
-    return "Продление через Telegram";
+    return "Продлить через Telegram";
   }
 
   return "Подключить через Telegram";
@@ -348,8 +347,8 @@ export default function BillingPage() {
                   Выбор и продление подписки
                 </h2>
                 <p className="mt-2 text-sm text-white/55">
-                  На текущем этапе подключение и продление тарифа происходит
-                  вручную через Telegram и внутреннюю админку сервиса.
+                  Подключение и продление тарифа проходит через Telegram:
+                  напиши нам, и мы быстро поможем выбрать подходящий вариант.
                 </p>
               </div>
 
@@ -492,12 +491,14 @@ export default function BillingPage() {
                       </div>
 
                       <div className="mt-auto flex flex-col gap-4 pt-6">
-                        <button
-                          type="button"
+                        <a
+                          href={TELEGRAM_URL}
+                          target="_blank"
+                          rel="noreferrer"
                           onClick={() => {
                             setToastType("info");
                             setToastMessage(
-                              `Чтобы подключить тариф ${plan.name}, перейди в Telegram: ${TELEGRAM_CONTACT}`
+                              `Открываем Telegram для подключения тарифа ${plan.name}`
                             );
                           }}
                           className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition-all duration-300 group-hover:bg-emerald-400/20 group-hover:shadow-[0_0_30px_rgba(16,185,129,0.24)]"
@@ -506,11 +507,11 @@ export default function BillingPage() {
                             isCurrentPlan,
                             isReadOnly: !!billingAccess?.isReadOnly,
                           })}
-                        </button>
+                        </a>
 
                         <div className="text-xs text-white/40">
-                          Баланс и активация тарифа управляются только через
-                          внутреннюю админку сервиса.
+                          После обращения в Telegram мы проверим оплату и
+                          активируем тариф в кабинете.
                         </div>
                       </div>
                     </div>

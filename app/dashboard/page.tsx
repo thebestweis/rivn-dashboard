@@ -31,6 +31,7 @@ import {
   usePayrollPayoutsQuery,
 } from "../lib/queries/use-payroll-query";
 import { useMonthlyPlansQuery } from "../lib/queries/use-monthly-plans-query";
+import { useProjectsQuery } from "../lib/queries/use-projects-query";
 
 import Link from "next/link";
 
@@ -232,6 +233,96 @@ function DashboardBottomSkeleton() {
   );
 }
 
+type OnboardingStep = {
+  title: string;
+  description: string;
+  href: string;
+  isDone: boolean;
+};
+
+function OnboardingChecklist({
+  steps,
+  onDismiss,
+}: {
+  steps: OnboardingStep[];
+  onDismiss: () => void;
+}) {
+  const completedSteps = steps.filter((step) => step.isDone).length;
+  const progress = Math.round((completedSteps / steps.length) * 100);
+
+  return (
+    <section className="rounded-[28px] border border-emerald-400/15 bg-[linear-gradient(135deg,rgba(16,185,129,0.10)_0%,rgba(123,97,255,0.08)_55%,rgba(255,255,255,0.03)_100%)] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <div className="max-w-3xl">
+          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">
+            Быстрый старт
+          </div>
+          <h2 className="mt-2 text-2xl font-semibold text-white">
+            Настрой RIVN OS так, чтобы сервис сразу начал приносить пользу
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-white/55">
+            Этот чеклист помогает быстро собрать базу: клиенты, проекты,
+            деньги, расходы, команда и план. Чем больше пунктов закрыто, тем
+            точнее дашборд, аналитика и управленческие отчёты.
+          </p>
+        </div>
+
+        <div className="min-w-[220px] rounded-2xl border border-white/10 bg-black/20 p-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-white/50">Готовность</span>
+            <span className="font-semibold text-emerald-300">{progress}%</span>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-emerald-400 transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="mt-4 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+          >
+            Скрыть подсказку
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {steps.map((step, index) => (
+          <Link
+            key={step.title}
+            href={step.href}
+            className={`rounded-2xl border px-4 py-4 transition ${
+              step.isDone
+                ? "border-emerald-400/20 bg-emerald-400/10"
+                : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.04]"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                  step.isDone
+                    ? "bg-emerald-400 text-[#07131F]"
+                    : "bg-white/10 text-white/55"
+                }`}
+              >
+                {step.isDone ? "✓" : index + 1}
+              </div>
+              <div>
+                <div className="font-medium text-white">{step.title}</div>
+                <div className="mt-1 text-sm leading-5 text-white/45">
+                  {step.description}
+                </div>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   const { role, isLoading: isAppContextLoading } = useAppContextState();
   const { isLoading: isAccessLoading, hasAccess } = usePageAccess("dashboard");
@@ -246,6 +337,7 @@ export default function Home() {
   );
   const [planFactStartMonth, setPlanFactStartMonth] = useState(getCurrentMonthValue);
   const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
+  const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(false);
 
   const {
     data: clients = [],
@@ -277,6 +369,11 @@ export default function Home() {
     isLoading: isMonthlyPlansLoading,
   } = useMonthlyPlansQuery(hasAccess);
 
+  const {
+    data: projects = [],
+    isLoading: isProjectsLoading,
+  } = useProjectsQuery(hasAccess);
+
     const isLoadingDashboardShell =
     isAppContextLoading ||
     isAccessLoading;
@@ -284,6 +381,7 @@ export default function Home() {
     const isLoadingDashboardKpis =
     isLoadingDashboardShell ||
     isClientsLoading ||
+    isProjectsLoading ||
     isPaymentsLoading ||
     isExpensesLoading ||
     isPayrollPayoutsLoading ||
@@ -293,7 +391,13 @@ export default function Home() {
     isLoadingDashboardKpis || isMonthlyPlansLoading;
 
     const isLoadingDashboardBottom =
-    isLoadingDashboardShell || isClientsLoading;
+    isLoadingDashboardShell || isClientsLoading || isProjectsLoading;
+
+  useEffect(() => {
+    setIsOnboardingDismissed(
+      window.localStorage.getItem("rivn-dashboard-onboarding-dismissed") === "1"
+    );
+  }, []);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -773,6 +877,67 @@ export default function Home() {
     )}`;
   }, [planFactStartMonth, planFactEndMonth]);
 
+  const onboardingSteps = useMemo<OnboardingStep[]>(() => {
+    return [
+      {
+        title: "Добавь клиентов",
+        description: "Клиенты нужны, чтобы видеть выручку, LTV и риски.",
+        href: "/clients",
+        isDone: (clients as StoredClient[]).length > 0,
+      },
+      {
+        title: "Создай проекты",
+        description: "Проекты связывают клиентов, задачи, деньги и команду.",
+        href: "/projects",
+        isDone: projects.length > 0,
+      },
+      {
+        title: "Зафиксируй оплаты",
+        description: "После оплат дашборд начнёт показывать реальную выручку.",
+        href: "/payments",
+        isDone: paidPayments.length > 0,
+      },
+      {
+        title: "Внеси расходы",
+        description: "Расходы нужны для честной прибыли и P&L.",
+        href: "/expenses",
+        isDone: (expenses as SupabaseExpenseItem[]).length > 0,
+      },
+      {
+        title: "Настрой зарплаты",
+        description: "ФОТ покажет, сколько реально стоит команда.",
+        href: "/payroll",
+        isDone:
+          (payrollPayouts as SupabasePayrollPayoutItem[]).length > 0 ||
+          (payrollExtraPayments as SupabasePayrollExtraPaymentItem[]).length > 0,
+      },
+      {
+        title: "Заполни план",
+        description: "План / факт покажет, идёшь ли ты к цели месяца.",
+        href: "/analytics?tab=planfact",
+        isDone: monthlyPlans.length > 0,
+      },
+    ];
+  }, [
+    clients,
+    projects,
+    paidPayments,
+    expenses,
+    payrollPayouts,
+    payrollExtraPayments,
+    monthlyPlans,
+  ]);
+
+  const shouldShowOnboarding =
+    !isLoadingDashboardKpis &&
+    !isOnboardingDismissed &&
+    onboardingSteps.some((step) => !step.isDone);
+
+  function dismissOnboarding() {
+    setIsOnboardingDismissed(true);
+    window.localStorage.setItem("rivn-dashboard-onboarding-dismissed", "1");
+  }
+
     if (!isAccessLoading && !hasAccess) {
     return (
       <main className="flex-1">
@@ -837,6 +1002,13 @@ export default function Home() {
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
             У тебя ограниченный режим дашборда. Финансовые быстрые действия скрыты.
           </div>
+        ) : null}
+
+        {shouldShowOnboarding ? (
+          <OnboardingChecklist
+            steps={onboardingSteps}
+            onDismiss={dismissOnboarding}
+          />
         ) : null}
 
         {isLoadingDashboardShell ? (

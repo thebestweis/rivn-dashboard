@@ -21,6 +21,15 @@ type AssignmentRuleRow = {
   source_kind: string | null;
   mode: "manual" | "round_robin" | "least_loaded" | "fixed_manager";
   target_member_ids: string[] | null;
+  settings?: {
+    max_open_deals_per_manager?: number | null;
+    priority_member_ids?: string[];
+    disabled_member_ids?: string[];
+  } | null;
+};
+type ResolvedAssignment = {
+  assigneeIds: string[];
+  payload: Record<string, unknown>;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -75,6 +84,29 @@ function toNumberOrNull(value: unknown) {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeIds(ids?: string[] | null) {
+  return Array.from(new Set((ids ?? []).map((id) => id.trim()).filter(Boolean)));
+}
+
+function getAssignmentCandidates(rule: AssignmentRuleRow) {
+  const targetMemberIds = normalizeIds(rule.target_member_ids);
+  const disabledIds = new Set(normalizeIds(rule.settings?.disabled_member_ids));
+  const priorityIndex = new Map(
+    normalizeIds(rule.settings?.priority_member_ids).map((memberId, index) => [
+      memberId,
+      index,
+    ])
+  );
+
+  return targetMemberIds
+    .filter((memberId) => !disabledIds.has(memberId))
+    .sort((left, right) => {
+      const leftIndex = priorityIndex.get(left) ?? Number.MAX_SAFE_INTEGER;
+      const rightIndex = priorityIndex.get(right) ?? Number.MAX_SAFE_INTEGER;
+      return leftIndex - rightIndex;
+    });
 }
 
 async function resolveSource(params: {
@@ -164,7 +196,7 @@ async function resolveAssigneeIds(params: {
   supabase: ServiceSupabase;
   workspaceId: string;
   sourceKind: string;
-}) {
+}): Promise<ResolvedAssignment> {
   const { data: rules, error: ruleError } = await params.supabase
     .from("crm_assignment_rules")
     .select("*")
@@ -183,20 +215,53 @@ async function resolveAssigneeIds(params: {
   const targetMemberIds = Array.isArray(rule?.target_member_ids)
     ? rule.target_member_ids.filter(Boolean)
     : [];
+  const candidateMemberIds = rule ? getAssignmentCandidates(rule) : [];
 
-  if (!rule || rule.mode === "manual" || targetMemberIds.length === 0) {
-    return [];
+  if (
+    !rule ||
+    rule.mode === "manual" ||
+    targetMemberIds.length === 0 ||
+    candidateMemberIds.length === 0
+  ) {
+    return {
+      assigneeIds: [],
+      payload: {
+        source_kind: params.sourceKind,
+        mode: rule?.mode ?? "manual",
+        rule_source_kind: rule?.source_kind ?? null,
+        target_member_ids: targetMemberIds,
+        disabled_member_ids: rule?.settings?.disabled_member_ids ?? [],
+        reason: !rule
+          ? "rule_missing"
+          : rule.mode === "manual"
+            ? "manual_mode"
+            : targetMemberIds.length === 0
+              ? "target_members_missing"
+              : "all_managers_disabled",
+      },
+    };
   }
 
   if (rule.mode === "fixed_manager") {
-    return targetMemberIds;
+    return {
+      assigneeIds: candidateMemberIds,
+      payload: {
+        source_kind: params.sourceKind,
+        mode: rule.mode,
+        rule_source_kind: rule.source_kind,
+        target_member_ids: targetMemberIds,
+        disabled_member_ids: rule.settings?.disabled_member_ids ?? [],
+        selected_member_ids: candidateMemberIds,
+        reason: "fixed_manager",
+      },
+    };
   }
 
   let assigneesQuery = params.supabase
     .from("crm_deal_assignees")
     .select("workspace_member_id, crm_deals!inner(status)")
     .eq("workspace_id", params.workspaceId)
-    .in("workspace_member_id", targetMemberIds);
+    .in("workspace_member_id", candidateMemberIds);
 
   if (rule.mode === "least_loaded") {
     assigneesQuery = assigneesQuery.eq("crm_deals.status", "open");
@@ -205,7 +270,7 @@ async function resolveAssigneeIds(params: {
   const { data: assignees } = await assigneesQuery;
 
   const loadByMemberId = new Map<string, number>(
-    targetMemberIds.map((memberId: string) => [memberId, 0])
+    candidateMemberIds.map((memberId: string) => [memberId, 0])
   );
 
   for (const assignee of assignees ?? []) {
@@ -213,11 +278,47 @@ async function resolveAssigneeIds(params: {
     loadByMemberId.set(memberId, (loadByMemberId.get(memberId) ?? 0) + 1);
   }
 
-  const [selectedMemberId] = [...loadByMemberId.entries()].sort(
-    (a, b) => a[1] - b[1]
-  )[0] ?? [targetMemberIds[0], 0];
+  const maxOpenDeals = rule.settings?.max_open_deals_per_manager;
+  const priorityIndex = new Map(
+    normalizeIds(rule.settings?.priority_member_ids).map((memberId, index) => [
+      memberId,
+      index,
+    ])
+  );
+  const availableEntries = [...loadByMemberId.entries()].filter(
+    ([, load]) =>
+      typeof maxOpenDeals !== "number" || maxOpenDeals <= 0 || load < maxOpenDeals
+  );
+  const [selectedMemberId] = (availableEntries.length > 0
+    ? availableEntries
+    : [...loadByMemberId.entries()]
+  ).sort(
+    (a, b) =>
+      a[1] - b[1] ||
+      (priorityIndex.get(a[0]) ?? Number.MAX_SAFE_INTEGER) -
+        (priorityIndex.get(b[0]) ?? Number.MAX_SAFE_INTEGER)
+  )[0] ?? [candidateMemberIds[0], 0];
 
-  return selectedMemberId ? [selectedMemberId] : [];
+  return {
+    assigneeIds: selectedMemberId ? [selectedMemberId] : [],
+    payload: {
+      source_kind: params.sourceKind,
+      mode: rule.mode,
+      rule_source_kind: rule.source_kind,
+      target_member_ids: targetMemberIds,
+      disabled_member_ids: rule.settings?.disabled_member_ids ?? [],
+      priority_member_ids: rule.settings?.priority_member_ids ?? [],
+      max_open_deals_per_manager: maxOpenDeals ?? null,
+      selected_member_ids: selectedMemberId ? [selectedMemberId] : [],
+      load_by_member_id: Object.fromEntries(loadByMemberId),
+      reason:
+        availableEntries.length === 0 && typeof maxOpenDeals === "number"
+          ? "capacity_limit_overridden"
+          : rule.mode === "least_loaded"
+          ? "least_open_deals"
+          : "equal_distribution",
+    },
+  };
 }
 
 export async function POST(request: Request) {
@@ -248,13 +349,14 @@ export async function POST(request: Request) {
     }
 
     const supabase = getSupabase();
-    const [source, pipelineContext, assigneeIds] = await Promise.all([
+    const [source, pipelineContext, assignment] = await Promise.all([
       resolveSource({ supabase, workspaceId, sourceKind, sourceName }),
       resolveSalesPipeline({ supabase, workspaceId }),
       resolveAssigneeIds({ supabase, workspaceId, sourceKind }),
     ]);
 
     const { pipeline, stage } = pipelineContext;
+    const assigneeIds = assignment.assigneeIds;
     const { data: deal, error: dealError } = await supabase
       .from("crm_deals")
       .insert({
@@ -307,6 +409,18 @@ export async function POST(request: Request) {
         source_kind: sourceKind,
         source_name: sourceName,
         assignee_ids: assigneeIds,
+      },
+    });
+    await supabase.from("crm_deal_activities").insert({
+      workspace_id: workspaceId,
+      deal_id: deal.id,
+      actor_member_id: null,
+      action: "assignment_resolved",
+      payload: {
+        ...assignment.payload,
+        source_name: sourceName,
+        deal_title: title || clientName || "Новая заявка",
+        client_name: clientName || null,
       },
     });
 

@@ -12,6 +12,23 @@ function getServiceSupabase() {
   return createServiceClient(supabaseUrl, supabaseKey);
 }
 
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      ok: false,
+      error: text.slice(0, 500),
+    };
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -99,10 +116,13 @@ export async function POST(request: Request) {
       cache: "no-store",
     });
 
-    const result = await response.json();
+    const result = await readJsonResponse(response);
 
     if (!response.ok || !result.ok) {
-      throw new Error(result.error || "Не удалось отправить тестовый отчёт");
+      throw new Error(
+        result?.error ||
+          `Не удалось отправить тестовый отчёт. Сервер вернул пустой ответ (${response.status}).`
+      );
     }
 
     return Response.json({

@@ -82,18 +82,6 @@ function GuideProse({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ScreenshotPlaceholder({
-  text,
-}: {
-  text: string;
-}) {
-  return (
-    <div className="rounded-[24px] border border-dashed border-white/15 bg-white/[0.02] p-5 text-sm leading-6 text-white/45">
-      Скриншот: {text}
-    </div>
-  );
-}
-
 function QuickStepCard({
   step,
   title,
@@ -207,7 +195,6 @@ export default function GuidePage() {
               </p>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="главный экран инструкции или обзорный экран запуска в продукте" />
           </>
         ),
       },
@@ -272,7 +259,6 @@ export default function GuidePage() {
               </p>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="общий вид раздела настроек со списком вкладок слева" />
           </>
         ),
       },
@@ -331,11 +317,10 @@ export default function GuidePage() {
                 Пользователь — это реальный участник кабинета. Именно его данные
                 потом используются в проектах, задачах, доступах и зарплатной
                 логике. Поэтому этот раздел лучше заполнить внимательно и без
-                временных заглушек.
+                случайных данных.
               </p>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="таблица пользователей и модальное окно настройки payroll-параметров" />
           </>
         ),
       },
@@ -389,7 +374,6 @@ export default function GuidePage() {
               </p>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="экран настройки доступов по разделам и сотрудникам" />
           </>
         ),
       },
@@ -424,7 +408,6 @@ export default function GuidePage() {
               </ul>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="раздел рефералки с персональной ссылкой и условиями программы" />
           </>
         ),
       },
@@ -479,7 +462,6 @@ export default function GuidePage() {
               </p>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="экран системных настроек с налогом, валютой, днём выплаты и ставкой по умолчанию" />
           </>
         ),
       },
@@ -536,7 +518,6 @@ export default function GuidePage() {
               </p>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="экран интеграции Telegram с token, chat_id и типами уведомлений" />
           </>
         ),
       },
@@ -593,7 +574,6 @@ export default function GuidePage() {
               </p>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="список клиентов с колонками статус, ответственный, сумма и действия" />
           </>
         ),
       },
@@ -650,7 +630,6 @@ export default function GuidePage() {
               </p>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="карточки проектов и страница отдельного проекта с деталями" />
           </>
         ),
       },
@@ -700,7 +679,6 @@ export default function GuidePage() {
               </GuideInfoCard>
             </div>
 
-            <ScreenshotPlaceholder text="доска задач внутри проекта и общий раздел «Все задачи»" />
           </>
         ),
       },
@@ -758,7 +736,6 @@ export default function GuidePage() {
               </ol>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="список платежей с ожидаемыми и оплаченными оплатами" />
           </>
         ),
       },
@@ -809,7 +786,6 @@ export default function GuidePage() {
               </p>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="раздел расходов со списком трат и категориями" />
           </>
         ),
       },
@@ -864,7 +840,6 @@ export default function GuidePage() {
               </ol>
             </GuideInfoCard>
 
-            <ScreenshotPlaceholder text="экран зарплат с начислениями, выплатами и готовыми к выплате суммами" />
           </>
         ),
       },
@@ -913,7 +888,6 @@ export default function GuidePage() {
               </GuideInfoCard>
             </div>
 
-            <ScreenshotPlaceholder text="финансовая аналитика с выручкой, прибылью, структурой расходов и ФОТ" />
           </>
         ),
       },
@@ -960,7 +934,6 @@ export default function GuidePage() {
               </GuideInfoCard>
             </div>
 
-            <ScreenshotPlaceholder text="дашборд с KPI, графиками, сигналами внимания и блоком plan/fact" />
           </>
         ),
       },
@@ -985,7 +958,6 @@ export default function GuidePage() {
               </p>
             </GuideProse>
 
-            <ScreenshotPlaceholder text="раздел тарифов со статусом подписки и возможностями кабинета" />
           </>
         ),
       },
@@ -1190,8 +1162,8 @@ export default function GuidePage() {
                   Разделы
                 </div>
                 <div className="mt-2 text-sm leading-6 text-white/45">
-                  Каждый блок можно открывать отдельно. В дальнейшем сюда можно
-                  добавить полноценные статьи, изображения и расширенную документацию.
+                  Открывай нужный блок и проходи настройку по шагам. Начни с
+                  базовых разделов, а затем подключай аналитику и отчёты.
                 </div>
               </div>
 

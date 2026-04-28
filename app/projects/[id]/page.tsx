@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import { FileText, MessageCircle, Paperclip, Send, X } from "lucide-react";
 import {
   CreateProjectModal,
   type CreateProjectFormValues,
@@ -26,8 +28,20 @@ import { useActiveWorkspaceMembers } from "../../lib/queries/use-workspace-membe
 import { useUpdateProjectMutation } from "../../lib/queries/use-projects-query";
 import { syncTaskAcrossCaches } from "../../lib/queries/use-tasks-query";
 import { getWorkspaceMemberDisplayName } from "../../lib/supabase/workspace-members";
+import {
+  createProjectComment,
+  formatChatAttachmentSize,
+  getProjectComments,
+  type ProjectComment,
+} from "../../lib/supabase/project-comments";
+import {
+  getActivityLogs,
+  type ActivityLog,
+} from "../../lib/supabase/activity-logs";
+import { getBillingErrorMessage } from "../../lib/billing-errors";
 
 import { Skeleton } from "../../components/ui/skeleton";
+import { AppToast } from "../../components/ui/app-toast";
 
 type ClientOption = {
   id: string;
@@ -78,6 +92,21 @@ function formatDate(value: string | null) {
     day: "2-digit",
     month: "long",
     year: "numeric",
+  }).format(date);
+}
+
+function formatMessageDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(date);
 }
 
@@ -132,7 +161,12 @@ function PencilButton({
 }
 
 export default function ProjectPage() {
-  const { role, isLoading: isAppContextLoading } = useAppContextState();
+  const {
+    role,
+    membership,
+    billingAccess,
+    isLoading: isAppContextLoading,
+  } = useAppContextState();
   const queryClient = useQueryClient();
 
   const currentRole: AppRole | null = isAppRole(role) ? role : null;
@@ -146,12 +180,21 @@ export default function ProjectPage() {
   const projectId = params?.id as string;
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-const [isEditingOverview, setIsEditingOverview] = useState(false);
-const [isEditingLinks, setIsEditingLinks] = useState(false);
-const [overviewDraft, setOverviewDraft] = useState("");
-const [linksDraft, setLinksDraft] = useState("");
-const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
-const [mounted, setMounted] = useState(false);
+  const [isEditingOverview, setIsEditingOverview] = useState(false);
+  const [isEditingLinks, setIsEditingLinks] = useState(false);
+  const [overviewDraft, setOverviewDraft] = useState("");
+  const [linksDraft, setLinksDraft] = useState("");
+  const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
+  const [isProjectChatOpen, setIsProjectChatOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [projectCommentDraft, setProjectCommentDraft] = useState("");
+  const [projectCommentAttachment, setProjectCommentAttachment] =
+    useState<File | null>(null);
+  const projectCommentAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error" | "info">(
+    "success"
+  );
 
   const {
     data: project,
@@ -178,14 +221,66 @@ const [mounted, setMounted] = useState(false);
   } = useActiveWorkspaceMembers(!isAppContextLoading);
 
   const updateProjectMutation = useUpdateProjectMutation();
+  const isBillingReadOnly = billingAccess?.isReadOnly ?? false;
+  const canUseProjectChat =
+    Boolean(currentRole) && currentRole !== "analyst" && !isBillingReadOnly;
+
+  const projectCommentsQueryKey = useMemo(
+    () => ["project-comments", projectId],
+    [projectId]
+  );
+  const projectActivityLogsQueryKey = useMemo(
+    () => ["activity-logs", "project", projectId],
+    [projectId]
+  );
+
+  const {
+    data: projectComments = [],
+    isLoading: isProjectCommentsLoading,
+  } = useQuery({
+    queryKey: projectCommentsQueryKey,
+    queryFn: () => getProjectComments(projectId),
+    enabled: Boolean(projectId) && !isAppContextLoading,
+    staleTime: 1000 * 30,
+  });
+
+  const {
+    data: projectActivityLogs = [],
+    isLoading: isProjectActivityLogsLoading,
+  } = useQuery({
+    queryKey: projectActivityLogsQueryKey,
+    queryFn: () =>
+      getActivityLogs({
+        entityType: "project",
+        entityId: projectId,
+      }),
+    enabled: Boolean(projectId) && !isAppContextLoading,
+    staleTime: 1000 * 30,
+  });
+
+  const createProjectCommentMutation = useMutation({
+    mutationFn: (params: { text: string; attachment: File | null }) =>
+      createProjectComment({
+        projectId,
+        text: params.text,
+        attachment: params.attachment,
+      }),
+    onSuccess: (createdComment) => {
+      queryClient.setQueryData<ProjectComment[]>(
+        projectCommentsQueryKey,
+        (prev = []) => [...prev, createdComment]
+      );
+      queryClient.invalidateQueries({ queryKey: projectActivityLogsQueryKey });
+    },
+  });
 
   const isLoading =
-  !mounted ||
-  isAppContextLoading ||
-  isProjectLoading ||
-  isTasksLoading ||
-  isClientsLoading ||
-  isWorkspaceMembersLoading;
+    !mounted ||
+    isAppContextLoading ||
+    isProjectLoading ||
+    isTasksLoading ||
+    isClientsLoading ||
+    isWorkspaceMembersLoading;
   const combinedError =
     projectError || tasksError || clientsError || workspaceMembersError;
 
@@ -206,6 +301,28 @@ const [mounted, setMounted] = useState(false);
       })),
     [workspaceMembersData]
   );
+
+  const workspaceMembersById = useMemo(() => {
+    return new Map(workspaceMembersData.map((member) => [member.id, member]));
+  }, [workspaceMembersData]);
+
+  const currentMemberId = membership?.id ?? null;
+
+  function getProjectCommentAuthorLabel(comment: ProjectComment) {
+    const member = comment.author_member_id
+      ? workspaceMembersById.get(comment.author_member_id)
+      : null;
+
+    return member ? getWorkspaceMemberDisplayName(member) : "Участник команды";
+  }
+
+  function getProjectActivityAuthorLabel(log: ActivityLog) {
+    const member = log.actor_member_id
+      ? workspaceMembersById.get(log.actor_member_id)
+      : null;
+
+    return member ? getWorkspaceMemberDisplayName(member) : "Участник команды";
+  }
 
   const client = useMemo(() => {
     if (!project) return null;
@@ -253,6 +370,16 @@ const [mounted, setMounted] = useState(false);
   useEffect(() => {
   setMounted(true);
 }, []);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+
+    const timer = setTimeout(() => {
+      setToastMessage("");
+    }, 2200);
+
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
 
   const assignedEmployeeName = useMemo(() => {
     if (!project?.employee_id) return "Не назначен";
@@ -411,6 +538,32 @@ const [mounted, setMounted] = useState(false);
     }
   }
 
+  async function handleSendProjectComment() {
+    const text = projectCommentDraft.trim();
+
+    if ((!text && !projectCommentAttachment) || !canUseProjectChat) {
+      return;
+    }
+
+    try {
+      await createProjectCommentMutation.mutateAsync({
+        text,
+        attachment: projectCommentAttachment,
+      });
+      setProjectCommentDraft("");
+      setProjectCommentAttachment(null);
+      if (projectCommentAttachmentInputRef.current) {
+        projectCommentAttachmentInputRef.current.value = "";
+      }
+      setToastType("success");
+      setToastMessage("Сообщение отправлено");
+    } catch (error) {
+      console.error(error);
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
+    }
+  }
+
   const pageErrorMessage = useMemo(() => {
     if (project === null && !isLoading && !combinedError) {
       return "Проект не найден";
@@ -513,12 +666,16 @@ const [mounted, setMounted] = useState(false);
 
                       <button
                         type="button"
-                        onClick={() =>
-                          navigator.clipboard.writeText(window.location.href)
-                        }
-                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                        onClick={() => setIsProjectChatOpen(true)}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/15"
                       >
-                        Скопировать ссылку
+                        <MessageCircle className="h-4 w-4" />
+                        Чат проекта
+                        {projectComments.length > 0 ? (
+                          <span className="rounded-full bg-emerald-300 px-2 py-0.5 text-[11px] font-semibold text-[#07131F]">
+                            {projectComments.length}
+                          </span>
+                        ) : null}
                       </button>
 
                       {canManageProjectDetails ? (
@@ -699,40 +856,295 @@ const [mounted, setMounted] = useState(false);
                 />
               </section>
 
-              <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm text-white/45">Чат проекта</div>
-                    <div className="mt-2 text-sm text-white/65">
-                      Здесь позже будет общий чат проекта для обсуждения между участниками.
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/40"
-                  >
-                    Скоро
-                  </button>
-                </div>
-
-                <div className="mt-6 flex min-h-[180px] items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] px-6 text-center">
-                  <div>
-                    <div className="text-base font-medium text-white">
-                      Чат проекта появится на следующем этапе
-                    </div>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
-                      Здесь пользователи смогут обсуждать проект, договариваться по этапам,
-                      согласовывать изменения и вести общее общение вне задач.
-                    </p>
-                  </div>
-                </div>
-              </section>
             </>
           ) : null}
         </div>
       </main>
+
+      <AnimatePresence>
+        {project && isProjectChatOpen ? (
+          <motion.div
+            className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsProjectChatOpen(false)}
+          >
+            <motion.aside
+              className="absolute right-0 top-0 flex h-full w-full max-w-[540px] flex-col border-l border-white/10 bg-[#0F1724] shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 320, damping: 34 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-white/10 px-6 py-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">
+                      Чат проекта
+                    </div>
+                    <h2 className="mt-2 text-2xl font-semibold text-white">
+                      {project.name}
+                    </h2>
+                    <p className="mt-2 text-sm leading-6 text-white/50">
+                      Командная переписка по проекту: решения, вопросы и
+                      договорённости в одном месте.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsProjectChatOpen(false)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white"
+                    aria-label="Закрыть чат проекта"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin">
+                {isProjectCommentsLoading ? (
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-white/45">
+                    Загружаем чат...
+                  </div>
+                ) : projectComments.length === 0 ? (
+                  <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] px-5 py-8 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/10 text-emerald-200">
+                      <MessageCircle className="h-5 w-5" />
+                    </div>
+                    <div className="mt-4 text-sm font-medium text-white">
+                      Сообщений пока нет
+                    </div>
+                    <div className="mt-2 text-sm leading-6 text-white/45">
+                      Начни обсуждение, чтобы команда видела решения и не
+                      теряла важные договорённости.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {projectComments.map((comment) => {
+                      const isOwnMessage =
+                        Boolean(currentMemberId) &&
+                        comment.author_member_id === currentMemberId;
+
+                      return (
+                        <div
+                          key={comment.id}
+                          className={`flex ${
+                            isOwnMessage ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          <div
+                            className={`max-w-[86%] rounded-3xl border px-4 py-3 ${
+                              isOwnMessage
+                                ? "border-emerald-400/20 bg-emerald-400/10"
+                                : "border-white/10 bg-white/[0.04]"
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span
+                                className={
+                                  isOwnMessage
+                                    ? "font-medium text-emerald-200"
+                                    : "font-medium text-white/75"
+                                }
+                              >
+                                {isOwnMessage
+                                  ? "Вы"
+                                  : getProjectCommentAuthorLabel(comment)}
+                              </span>
+                              <span className="text-white/30">
+                                {formatMessageDate(comment.created_at)}
+                              </span>
+                            </div>
+                            <div className="mt-2 whitespace-pre-line text-sm leading-6 text-white/90">
+                              {comment.text}
+                            </div>
+                            {comment.attachments.length > 0 ? (
+                              <div className="mt-3 space-y-2">
+                                {comment.attachments.map((attachment) => (
+                                  <a
+                                    key={attachment.id}
+                                    href={attachment.signed_url ?? "#"}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-left transition hover:bg-white/[0.04]"
+                                  >
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white/70">
+                                      <FileText className="h-4 w-4" />
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate text-sm font-medium text-white/85">
+                                        {attachment.file_name}
+                                      </span>
+                                      <span className="text-xs text-white/35">
+                                        {formatChatAttachmentSize(
+                                          attachment.file_size
+                                        ) || "Файл"}
+                                      </span>
+                                    </span>
+                                  </a>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-white/80">
+                        История проекта
+                      </div>
+                      <div className="mt-1 text-xs text-white/35">
+                        Важные изменения, сообщения и файлы по проекту.
+                      </div>
+                    </div>
+                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/45">
+                      {projectActivityLogs.length}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {isProjectActivityLogsLoading ? (
+                      <div className="text-sm text-white/35">
+                        Загружаем историю...
+                      </div>
+                    ) : projectActivityLogs.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/35">
+                        История пока пустая. Новые изменения появятся здесь.
+                      </div>
+                    ) : (
+                      projectActivityLogs.slice(0, 8).map((log) => (
+                        <div
+                          key={log.id}
+                          className="rounded-2xl border border-white/10 bg-[#0B1220] px-4 py-3"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm font-medium text-white/85">
+                              {log.title}
+                            </div>
+                            <div className="text-xs text-white/30">
+                              {formatMessageDate(log.created_at)}
+                            </div>
+                          </div>
+                          <div className="mt-1 text-xs text-white/40">
+                            {getProjectActivityAuthorLabel(log)}
+                          </div>
+                          {log.description ? (
+                            <div className="mt-2 text-sm leading-6 text-white/60">
+                              {log.description}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-white/10 bg-[#0B1220]/95 px-6 py-5">
+                {canUseProjectChat ? (
+                  <>
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-2">
+                      <textarea
+                        value={projectCommentDraft}
+                        onChange={(event) =>
+                          setProjectCommentDraft(event.target.value)
+                        }
+                        rows={3}
+                        placeholder="Напиши сообщение по проекту"
+                        className="w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/30"
+                      />
+                      {projectCommentAttachment ? (
+                        <div className="mx-2 mb-2 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
+                          <FileText className="h-4 w-4 shrink-0 text-white/45" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium text-white/80">
+                              {projectCommentAttachment.name}
+                            </div>
+                            <div className="text-xs text-white/35">
+                              {formatChatAttachmentSize(
+                                projectCommentAttachment.size
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProjectCommentAttachment(null);
+                              if (projectCommentAttachmentInputRef.current) {
+                                projectCommentAttachmentInputRef.current.value =
+                                  "";
+                              }
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-white/45 transition hover:bg-white/10 hover:text-white"
+                            aria-label="Убрать файл"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div>
+                        <input
+                          ref={projectCommentAttachmentInputRef}
+                          type="file"
+                          className="hidden"
+                          onChange={(event) =>
+                            setProjectCommentAttachment(
+                              event.target.files?.[0] ?? null
+                            )
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            projectCommentAttachmentInputRef.current?.click()
+                          }
+                          className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/60 transition hover:bg-white/10 hover:text-white"
+                        >
+                          <Paperclip className="h-4 w-4" />
+                          Файл
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleSendProjectComment}
+                        disabled={
+                          createProjectCommentMutation.isPending ||
+                          (!projectCommentDraft.trim() &&
+                            !projectCommentAttachment)
+                        }
+                        className="inline-flex items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Send className="h-4 w-4" />
+                        {createProjectCommentMutation.isPending
+                          ? "Отправляем..."
+                          : "Отправить"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/45">
+                    Сейчас чат доступен только участникам с правами работы по
+                    проекту.
+                  </div>
+                )}
+              </div>
+            </motion.aside>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {project && canManageProjectDetails ? (
         <CreateProjectModal
@@ -763,6 +1175,8 @@ const [mounted, setMounted] = useState(false);
           onTaskOpen={handleTaskOpen}
         />
       ) : null}
+
+      {toastMessage ? <AppToast message={toastMessage} type={toastType} /> : null}
     </>
   );
 }

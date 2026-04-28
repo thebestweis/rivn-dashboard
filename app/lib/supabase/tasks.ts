@@ -1,8 +1,44 @@
 import { requireBillingAccess } from "../billing-guards";
 import { isAppRole, type AppRole } from "../permissions";
+import { createActivityLogSafely } from "./activity-logs";
 import { getAppContext } from "./app-context";
 
 export type TaskStatus = "todo" | "in_progress" | "done";
+export type TaskRecurrenceFrequency = "daily" | "weekly" | "monthly";
+
+export type TaskRecurrenceInput = {
+  frequency: TaskRecurrenceFrequency;
+  interval_value?: number;
+  weekdays?: number[];
+  month_day?: number | null;
+  starts_at: string;
+  ends_at?: string | null;
+};
+
+export type TaskRecurrenceUpdateInput =
+  | { enabled: false }
+  | ({ enabled: true } & TaskRecurrenceInput);
+
+export type TaskRecurrenceRule = {
+  id: string;
+  workspace_id: string;
+  template_task_id: string | null;
+  project_id: string | null;
+  parent_task_id: string | null;
+  title: string;
+  description: string | null;
+  assignee_ids: string[];
+  frequency: TaskRecurrenceFrequency;
+  interval_value: number;
+  weekdays: number[];
+  month_day: number | null;
+  starts_at: string;
+  ends_at: string | null;
+  next_run_at: string;
+  last_run_at: string | null;
+  deadline_time: string | null;
+  is_active: boolean;
+};
 
 export type TaskAssignee = {
   id: string;
@@ -29,6 +65,8 @@ export type Task = {
   updated_at: string;
   position: number;
   is_archived: boolean;
+  recurrence_rule_id: string | null;
+  recurrence_occurrence_date: string | null;
   assignees?: TaskAssignee[];
 };
 
@@ -44,6 +82,7 @@ export type CreateTaskInput = {
   deadline_at?: string | null;
   assignee_ids?: string[];
   description?: string | null;
+  recurrence?: TaskRecurrenceInput | null;
 };
 
 export type UpdateTaskInput = {
@@ -52,6 +91,7 @@ export type UpdateTaskInput = {
   status?: TaskStatus;
   deadline_at?: string | null;
   assignee_ids?: string[];
+  recurrence?: TaskRecurrenceUpdateInput;
 };
 
 export type UpdateTaskPositionInput = {
@@ -73,6 +113,8 @@ type DbTaskRow = {
   updated_at: string;
   position: number | string | null;
   is_archived: boolean | null;
+  recurrence_rule_id?: string | null;
+  recurrence_occurrence_date?: string | null;
 };
 
 type DbProjectTaskCountRow = {
@@ -119,6 +161,27 @@ type DbTaskAssigneeRow = {
     | null;
 };
 
+type DbTaskRecurrenceRuleRow = {
+  id: string;
+  workspace_id: string;
+  template_task_id: string | null;
+  project_id: string | null;
+  parent_task_id: string | null;
+  title: string;
+  description: string | null;
+  assignee_ids: string[] | null;
+  frequency: TaskRecurrenceFrequency;
+  interval_value: number | null;
+  weekdays: number[] | null;
+  month_day: number | null;
+  starts_at: string;
+  ends_at: string | null;
+  next_run_at: string;
+  last_run_at: string | null;
+  deadline_time: string | null;
+  is_active: boolean | null;
+};
+
 function mapTask(row: DbTaskRow): Task {
   return {
     id: row.id,
@@ -132,6 +195,8 @@ function mapTask(row: DbTaskRow): Task {
     updated_at: row.updated_at,
     position: Number(row.position ?? 0),
     is_archived: row.is_archived ?? false,
+    recurrence_rule_id: row.recurrence_rule_id ?? null,
+    recurrence_occurrence_date: row.recurrence_occurrence_date ?? null,
   };
 }
 
@@ -164,6 +229,103 @@ function normalizeAssigneeIds(assigneeIds?: string[]) {
   return Array.from(
     new Set((assigneeIds ?? []).map((item) => item.trim()).filter(Boolean))
   );
+}
+
+function mapTaskRecurrenceRule(
+  row: DbTaskRecurrenceRuleRow
+): TaskRecurrenceRule {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    template_task_id: row.template_task_id,
+    project_id: row.project_id,
+    parent_task_id: row.parent_task_id,
+    title: row.title,
+    description: row.description ?? null,
+    assignee_ids: row.assignee_ids ?? [],
+    frequency: row.frequency,
+    interval_value: Number(row.interval_value ?? 1),
+    weekdays: row.weekdays ?? [],
+    month_day: row.month_day ?? null,
+    starts_at: row.starts_at,
+    ends_at: row.ends_at ?? null,
+    next_run_at: row.next_run_at,
+    last_run_at: row.last_run_at ?? null,
+    deadline_time: row.deadline_time ?? null,
+    is_active: row.is_active ?? true,
+  };
+}
+
+function normalizeWeekdays(weekdays?: number[]) {
+  return Array.from(
+    new Set(
+      (weekdays ?? [])
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item >= 0 && item <= 6)
+    )
+  ).sort((a, b) => a - b);
+}
+
+function getDatePart(value: string | null | undefined) {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? new Date().toISOString().slice(0, 10)
+    : parsed.toISOString().slice(0, 10);
+}
+
+function getTimePart(value: string | null | undefined) {
+  const parsed = value ? new Date(value) : new Date();
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "12:00";
+  }
+
+  return `${String(parsed.getHours()).padStart(2, "0")}:${String(
+    parsed.getMinutes()
+  ).padStart(2, "0")}`;
+}
+
+function buildRecurrenceRulePayload(params: {
+  input: TaskRecurrenceInput;
+  task: Task;
+  workspaceId: string;
+  assigneeIds?: string[];
+}) {
+  const { input, task, workspaceId, assigneeIds } = params;
+  const intervalValue = Math.max(1, Number(input.interval_value ?? 1));
+  const startsAt = new Date(input.starts_at);
+  const safeStartsAt = Number.isNaN(startsAt.getTime()) ? new Date() : startsAt;
+  const monthDay =
+    input.month_day && input.month_day >= 1
+      ? Math.min(31, input.month_day)
+      : safeStartsAt.getDate();
+  const normalizedWeekdays = normalizeWeekdays(input.weekdays);
+  const weekdays =
+    input.frequency === "weekly"
+      ? normalizedWeekdays.length > 0
+        ? normalizedWeekdays
+        : [safeStartsAt.getDay()]
+      : [];
+
+  return {
+    workspace_id: workspaceId,
+    template_task_id: task.id,
+    project_id: task.project_id,
+    parent_task_id: task.parent_task_id,
+    title: task.title,
+    description: task.description,
+    assignee_ids: normalizeAssigneeIds(assigneeIds),
+    frequency: input.frequency,
+    interval_value: intervalValue,
+    weekdays,
+    month_day: monthDay,
+    starts_at: safeStartsAt.toISOString(),
+    ends_at: input.ends_at ?? null,
+    next_run_at: safeStartsAt.toISOString(),
+    deadline_time: getTimePart(task.deadline_at ?? input.starts_at),
+    updated_at: new Date().toISOString(),
+  };
 }
 
 function filterTasksByAccess(params: {
@@ -461,8 +623,80 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     input.assignee_ids ?? []
   );
 
+  let recurrenceRuleId: string | null = null;
+
+  if (input.recurrence) {
+    const intervalValue = Math.max(1, Number(input.recurrence.interval_value ?? 1));
+    const startsAt = new Date(input.recurrence.starts_at);
+    const safeStartsAt = Number.isNaN(startsAt.getTime())
+      ? new Date()
+      : startsAt;
+    const monthDay =
+      input.recurrence.month_day && input.recurrence.month_day >= 1
+        ? Math.min(31, input.recurrence.month_day)
+        : safeStartsAt.getDate();
+    const weekdays =
+      input.recurrence.frequency === "weekly"
+        ? normalizeWeekdays(input.recurrence.weekdays).length > 0
+          ? normalizeWeekdays(input.recurrence.weekdays)
+          : [safeStartsAt.getDay()]
+        : [];
+
+    const { data: ruleData, error: ruleError } = await supabase
+      .from("task_recurrence_rules")
+      .insert({
+        workspace_id: workspace.id,
+        template_task_id: mappedTask.id,
+        project_id: input.project_id ?? null,
+        parent_task_id: input.parent_task_id ?? null,
+        title: input.title,
+        description: input.description ?? null,
+        assignee_ids: normalizeAssigneeIds(input.assignee_ids),
+        frequency: input.recurrence.frequency,
+        interval_value: intervalValue,
+        weekdays,
+        month_day: monthDay,
+        starts_at: safeStartsAt.toISOString(),
+        ends_at: input.recurrence.ends_at ?? null,
+        next_run_at: safeStartsAt.toISOString(),
+        deadline_time: getTimePart(input.deadline_at ?? input.recurrence.starts_at),
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+
+    if (ruleError || !ruleData) {
+      await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", mappedTask.id)
+        .eq("workspace_id", workspace.id);
+
+      throw new Error(
+        `Задача создана, но повторение не сохранилось: ${
+          ruleError?.message ?? "нет данных"
+        }`
+      );
+    }
+
+    recurrenceRuleId = ruleData.id;
+
+    await supabase
+      .from("tasks")
+      .update({
+        recurrence_rule_id: recurrenceRuleId,
+        recurrence_occurrence_date: getDatePart(input.deadline_at),
+      })
+      .eq("id", mappedTask.id)
+      .eq("workspace_id", workspace.id);
+  }
+
   return {
     ...mappedTask,
+    recurrence_rule_id: recurrenceRuleId,
+    recurrence_occurrence_date: recurrenceRuleId
+      ? getDatePart(input.deadline_at)
+      : null,
     assignees,
   };
 }
@@ -474,6 +708,13 @@ export async function updateTaskStatus(
   await requireBillingAccess();
 
   const { supabase, workspace } = await getAppContext();
+
+  const { data: previousTask } = await supabase
+    .from("tasks")
+    .select("id, project_id, status")
+    .eq("id", taskId)
+    .eq("workspace_id", workspace.id)
+    .maybeSingle();
 
   const { error } = await supabase
     .from("tasks")
@@ -487,6 +728,23 @@ export async function updateTaskStatus(
   if (error) {
     throw new Error(`Ошибка обновления задачи: ${error.message}`);
   }
+
+  await createActivityLogSafely({
+    entityType: "task",
+    entityId: taskId,
+    projectId: (previousTask as { project_id?: string | null } | null)
+      ?.project_id ?? null,
+    taskId,
+    action: "task_status_updated",
+    title: "Статус задачи изменён",
+    description: `Статус: ${
+      (previousTask as { status?: string } | null)?.status ?? "не указан"
+    } → ${status}`,
+    metadata: {
+      previousStatus: (previousTask as { status?: string } | null)?.status ?? null,
+      nextStatus: status,
+    },
+  });
 }
 
 export async function getTaskById(taskId: string): Promise<Task | null> {
@@ -516,13 +774,43 @@ export async function getTaskById(taskId: string): Promise<Task | null> {
   };
 }
 
+export async function getTaskRecurrenceRule(
+  recurrenceRuleId: string | null
+): Promise<TaskRecurrenceRule | null> {
+  if (!recurrenceRuleId) {
+    return null;
+  }
+
+  const { supabase, workspace } = await getAppContext();
+
+  const { data, error } = await supabase
+    .from("task_recurrence_rules")
+    .select("*")
+    .eq("id", recurrenceRuleId)
+    .eq("workspace_id", workspace.id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Ошибка загрузки повторения задачи: ${error.message}`);
+  }
+
+  return data ? mapTaskRecurrenceRule(data as DbTaskRecurrenceRuleRow) : null;
+}
+
 export async function updateTask(
   taskId: string,
   input: UpdateTaskInput
 ): Promise<Task> {
   await requireBillingAccess();
 
-  const { supabase, workspace } = await getAppContext();
+  const { supabase, workspace, user } = await getAppContext();
+
+  const { data: previousTaskRow } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("id", taskId)
+    .eq("workspace_id", workspace.id)
+    .maybeSingle();
 
   const payload = {
     ...(input.title !== undefined ? { title: input.title } : {}),
@@ -548,12 +836,151 @@ export async function updateTask(
     throw new Error(`Ошибка обновления задачи: ${error.message}`);
   }
 
-  const mappedTask = mapTask(data as DbTaskRow);
+  let mappedTask = mapTask(data as DbTaskRow);
 
   const assignees =
     input.assignee_ids !== undefined
       ? await replaceTaskAssignees(taskId, input.assignee_ids)
       : await getTaskAssignees(taskId);
+
+  if (input.recurrence !== undefined) {
+    if (!input.recurrence.enabled) {
+      if (mappedTask.recurrence_rule_id) {
+        await supabase
+          .from("task_recurrence_rules")
+          .update({
+            is_active: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", mappedTask.recurrence_rule_id)
+          .eq("workspace_id", workspace.id);
+      }
+
+      const { data: taskWithoutRecurrence, error: clearRecurrenceError } =
+        await supabase
+          .from("tasks")
+          .update({
+            recurrence_rule_id: null,
+            recurrence_occurrence_date: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", taskId)
+          .eq("workspace_id", workspace.id)
+          .select("*")
+          .single();
+
+      if (clearRecurrenceError) {
+        throw new Error(
+          `Ошибка отключения повторения задачи: ${clearRecurrenceError.message}`
+        );
+      }
+
+      mappedTask = mapTask(taskWithoutRecurrence as DbTaskRow);
+    } else {
+      const recurrencePayload = buildRecurrenceRulePayload({
+        input: input.recurrence,
+        task: mappedTask,
+        workspaceId: workspace.id,
+        assigneeIds:
+          input.assignee_ids ??
+          assignees.map((assignee) => assignee.workspace_member_id),
+      });
+
+      let recurrenceRuleId = mappedTask.recurrence_rule_id;
+
+      if (recurrenceRuleId) {
+        const { error: recurrenceUpdateError } = await supabase
+          .from("task_recurrence_rules")
+          .update({
+            ...recurrencePayload,
+            is_active: true,
+          })
+          .eq("id", recurrenceRuleId)
+          .eq("workspace_id", workspace.id);
+
+        if (recurrenceUpdateError) {
+          throw new Error(
+            `Ошибка обновления повторения задачи: ${recurrenceUpdateError.message}`
+          );
+        }
+      } else {
+        const { data: recurrenceData, error: recurrenceCreateError } =
+          await supabase
+            .from("task_recurrence_rules")
+            .insert({
+              ...recurrencePayload,
+              created_by: user.id,
+            })
+            .select("id")
+            .single();
+
+        if (recurrenceCreateError || !recurrenceData) {
+          throw new Error(
+            `Ошибка сохранения повторения задачи: ${
+              recurrenceCreateError?.message ?? "нет данных"
+            }`
+          );
+        }
+
+        recurrenceRuleId = recurrenceData.id;
+      }
+
+      const { data: taskWithRecurrence, error: taskRecurrenceError } =
+        await supabase
+          .from("tasks")
+          .update({
+            recurrence_rule_id: recurrenceRuleId,
+            recurrence_occurrence_date: getDatePart(input.recurrence.starts_at),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", taskId)
+          .eq("workspace_id", workspace.id)
+          .select("*")
+          .single();
+
+      if (taskRecurrenceError) {
+        throw new Error(
+          `Ошибка привязки повторения к задаче: ${taskRecurrenceError.message}`
+        );
+      }
+
+      mappedTask = mapTask(taskWithRecurrence as DbTaskRow);
+    }
+  }
+
+  const previousTask = previousTaskRow
+    ? mapTask(previousTaskRow as DbTaskRow)
+    : null;
+  const changedFields: string[] = [];
+
+  if (previousTask) {
+    if (previousTask.title !== mappedTask.title) changedFields.push("название");
+    if (previousTask.description !== mappedTask.description) {
+      changedFields.push("описание");
+    }
+    if (previousTask.status !== mappedTask.status) changedFields.push("статус");
+    if (previousTask.deadline_at !== mappedTask.deadline_at) {
+      changedFields.push("дедлайн");
+    }
+    if (input.assignee_ids !== undefined) changedFields.push("исполнители");
+    if (input.recurrence !== undefined) changedFields.push("повторение");
+  }
+
+  await createActivityLogSafely({
+    entityType: "task",
+    entityId: taskId,
+    projectId: mappedTask.project_id,
+    taskId,
+    action: "task_updated",
+    title: "Задача обновлена",
+    description:
+      changedFields.length > 0
+        ? `Изменено: ${changedFields.join(", ")}`
+        : "Данные задачи обновлены",
+    metadata: {
+      changedFields,
+    },
+  });
 
   return {
     ...mappedTask,
@@ -687,6 +1114,13 @@ export async function updateTaskDeadline(
 
   const { supabase, workspace } = await getAppContext();
 
+  const { data: previousTask } = await supabase
+    .from("tasks")
+    .select("id, project_id, deadline_at")
+    .eq("id", taskId)
+    .eq("workspace_id", workspace.id)
+    .maybeSingle();
+
   const { data, error } = await supabase
     .from("tasks")
     .update({
@@ -704,6 +1138,22 @@ export async function updateTaskDeadline(
 
   const mappedTask = mapTask(data as DbTaskRow);
   const assignees = await getTaskAssignees(mappedTask.id);
+
+  await createActivityLogSafely({
+    entityType: "task",
+    entityId: taskId,
+    projectId: mappedTask.project_id,
+    taskId,
+    action: "task_deadline_updated",
+    title: "Дедлайн задачи изменён",
+    description: "Обновлена дата выполнения задачи",
+    metadata: {
+      previousDeadline:
+        (previousTask as { deadline_at?: string | null } | null)?.deadline_at ??
+        null,
+      nextDeadline: deadlineAt,
+    },
+  });
 
   return {
     ...mappedTask,

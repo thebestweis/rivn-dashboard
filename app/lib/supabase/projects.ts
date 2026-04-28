@@ -1,4 +1,5 @@
 import { isAppRole, type AppRole } from "../permissions";
+import { createActivityLogSafely } from "./activity-logs";
 import { getAppContext } from "./app-context";
 
 export type ProjectStatus = "active" | "paused" | "completed";
@@ -191,6 +192,13 @@ export async function updateProject(
 ): Promise<Project> {
   const { supabase, workspace } = await getAppContext();
 
+  const { data: previousRow } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("id", projectId)
+    .eq("workspace_id", workspace.id)
+    .maybeSingle();
+
   const payload = {
     name: input.name,
     client_id: input.client_id,
@@ -216,7 +224,39 @@ export async function updateProject(
     throw new Error(`Не удалось обновить проект: ${error.message}`);
   }
 
-  return mapProject(data as DbProjectRow);
+  const updatedProject = mapProject(data as DbProjectRow);
+  const previousProject = previousRow
+    ? mapProject(previousRow as DbProjectRow)
+    : null;
+  const changedFields: string[] = [];
+
+  if (previousProject) {
+    if (previousProject.name !== updatedProject.name) changedFields.push("название");
+    if (previousProject.status !== updatedProject.status) changedFields.push("статус");
+    if (previousProject.start_date !== updatedProject.start_date) changedFields.push("дата старта");
+    if (previousProject.employee_id !== updatedProject.employee_id) changedFields.push("ответственный");
+    if (previousProject.revenue !== updatedProject.revenue) changedFields.push("потенциальный доход");
+    if (previousProject.profit !== updatedProject.profit) changedFields.push("потенциальная прибыль");
+    if (previousProject.project_overview !== updatedProject.project_overview) changedFields.push("обзор проекта");
+    if (previousProject.important_links !== updatedProject.important_links) changedFields.push("важные ссылки");
+  }
+
+  await createActivityLogSafely({
+    entityType: "project",
+    entityId: projectId,
+    projectId,
+    action: "project_updated",
+    title: "Паспорт проекта обновлён",
+    description:
+      changedFields.length > 0
+        ? `Изменено: ${changedFields.join(", ")}`
+        : "Данные проекта обновлены",
+    metadata: {
+      changedFields,
+    },
+  });
+
+  return updatedProject;
 }
 
 export async function deleteProject(projectId: string): Promise<void> {

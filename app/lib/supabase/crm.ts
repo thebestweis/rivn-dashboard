@@ -6,6 +6,7 @@ import {
   type AppRole,
 } from "../permissions";
 import { getAppContext } from "./app-context";
+import { createTask, updateTask } from "./tasks";
 
 export type CrmPipelineKind = "sales" | "delivery";
 export type CrmStageKind =
@@ -20,6 +21,12 @@ export type CrmAssignmentMode =
   | "round_robin"
   | "least_loaded"
   | "fixed_manager";
+
+export type CrmAssignmentRuleSettings = {
+  max_open_deals_per_manager?: number | null;
+  priority_member_ids?: string[];
+  disabled_member_ids?: string[];
+};
 
 export type CrmPipeline = {
   id: string;
@@ -69,6 +76,7 @@ export type CrmAssignmentRule = {
   source_kind: string | null;
   mode: CrmAssignmentMode;
   target_member_ids: string[];
+  settings: CrmAssignmentRuleSettings;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -139,6 +147,7 @@ export type CrmDealTask = {
   id: string;
   workspace_id: string;
   deal_id: string;
+  task_id: string | null;
   title: string;
   assignee_member_id: string | null;
   due_at: string | null;
@@ -166,6 +175,8 @@ export type CrmDealActivity = {
   payload: Record<string, unknown>;
   created_at: string;
 };
+
+export type CrmAssignmentLog = CrmDealActivity;
 
 export type CrmConversationChannel =
   | "avito"
@@ -303,6 +314,7 @@ export type UpsertCrmAssignmentRuleInput = {
   source_kind?: string | null;
   mode: CrmAssignmentMode;
   target_member_ids?: string[];
+  settings?: CrmAssignmentRuleSettings;
   is_active?: boolean;
 };
 
@@ -370,9 +382,15 @@ type DbCrmDealRow = Omit<CrmDeal, "assignees" | "position" | "service_amount" | 
 
 type DbCrmAssignmentRuleRow = Omit<
   CrmAssignmentRule,
-  "target_member_ids"
+  "target_member_ids" | "settings"
 > & {
   target_member_ids: string[] | null;
+  settings?: CrmAssignmentRuleSettings | null;
+};
+
+type ResolvedCrmAssignment = {
+  assigneeIds: string[];
+  payload: Record<string, unknown>;
 };
 
 type DbCrmSalesPlanRow = Omit<
@@ -469,11 +487,22 @@ function mapDeal(row: DbCrmDealRow, assignees: CrmDealAssignee[]): CrmDeal {
 }
 
 function mapAssignmentRule(row: DbCrmAssignmentRuleRow): CrmAssignmentRule {
+  const settings =
+    row.settings && typeof row.settings === "object" ? row.settings : {};
+
   return {
     ...row,
     target_member_ids: Array.isArray(row.target_member_ids)
       ? row.target_member_ids
       : [],
+    settings: {
+      max_open_deals_per_manager:
+        typeof settings.max_open_deals_per_manager === "number"
+          ? settings.max_open_deals_per_manager
+          : null,
+      priority_member_ids: normalizeIds(settings.priority_member_ids),
+      disabled_member_ids: normalizeIds(settings.disabled_member_ids),
+    },
     is_active: row.is_active ?? true,
   };
 }
@@ -576,6 +605,35 @@ async function createCrmActivity(params: {
   if (error) {
     console.error("CRM activity was not saved:", error.message);
   }
+}
+
+async function createCrmAssignmentActivity(params: {
+  dealId: string;
+  payload: Record<string, unknown>;
+}) {
+  await createCrmActivity({
+    dealId: params.dealId,
+    action: "assignment_resolved",
+    payload: params.payload,
+  });
+}
+
+function getAssignmentCandidates(rule: CrmAssignmentRule) {
+  const disabledIds = new Set(rule.settings.disabled_member_ids ?? []);
+  const priorityIndex = new Map(
+    (rule.settings.priority_member_ids ?? []).map((memberId, index) => [
+      memberId,
+      index,
+    ])
+  );
+
+  return rule.target_member_ids
+    .filter((memberId) => !disabledIds.has(memberId))
+    .sort((left, right) => {
+      const leftIndex = priorityIndex.get(left) ?? Number.MAX_SAFE_INTEGER;
+      const rightIndex = priorityIndex.get(right) ?? Number.MAX_SAFE_INTEGER;
+      return leftIndex - rightIndex;
+    });
 }
 
 async function createCrmStageHistory(params: {
@@ -1076,6 +1134,28 @@ export async function getCrmStageHistory(
   return (data ?? []) as CrmDealStageHistory[];
 }
 
+export async function getCrmAssignmentLogs(
+  limit = 20
+): Promise<CrmAssignmentLog[]> {
+  const { supabase, workspace } = await getAppContext();
+
+  const { data, error } = await supabase
+    .from("crm_deal_activities")
+    .select("*")
+    .eq("workspace_id", workspace.id)
+    .eq("action", "assignment_resolved")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(
+      `Не удалось загрузить журнал распределения CRM: ${error.message}`
+    );
+  }
+
+  return (data ?? []) as CrmAssignmentLog[];
+}
+
 export async function upsertCrmSalesPlan(input: {
   month: string;
   revenue_plan: number;
@@ -1406,9 +1486,15 @@ export async function markCrmConversationRead(
 
 async function resolveAutoAssigneeIds(params: {
   sourceId?: string | null;
-}) {
+}): Promise<ResolvedCrmAssignment> {
   if (!params.sourceId) {
-    return [];
+    return {
+      assigneeIds: [],
+      payload: {
+        mode: "manual",
+        reason: "source_missing",
+      },
+    };
   }
 
   const { supabase, workspace } = await getAppContext();
@@ -1423,7 +1509,14 @@ async function resolveAutoAssigneeIds(params: {
   const sourceKind = String(source?.kind || "");
 
   if (!sourceKind) {
-    return [];
+    return {
+      assigneeIds: [],
+      payload: {
+        mode: "manual",
+        source_id: params.sourceId,
+        reason: "source_not_found",
+      },
+    };
   }
 
   const { data: rules } = await supabase
@@ -1440,24 +1533,55 @@ async function resolveAutoAssigneeIds(params: {
     mappedRules.find((rule) => rule.source_kind === sourceKind) ??
     mappedRules.find((rule) => !rule.source_kind) ??
     null;
+  const candidateMemberIds = mappedRule ? getAssignmentCandidates(mappedRule) : [];
 
   if (
     !mappedRule ||
     mappedRule.mode === "manual" ||
-    mappedRule.target_member_ids.length === 0
+    mappedRule.target_member_ids.length === 0 ||
+    candidateMemberIds.length === 0
   ) {
-    return [];
+    return {
+      assigneeIds: [],
+      payload: {
+        source_id: params.sourceId,
+        source_kind: sourceKind,
+        mode: mappedRule?.mode ?? "manual",
+        rule_source_kind: mappedRule?.source_kind ?? null,
+        target_member_ids: mappedRule?.target_member_ids ?? [],
+        disabled_member_ids: mappedRule?.settings.disabled_member_ids ?? [],
+        reason: !mappedRule
+          ? "rule_missing"
+          : mappedRule.mode === "manual"
+            ? "manual_mode"
+            : mappedRule.target_member_ids.length === 0
+              ? "target_members_missing"
+              : "all_managers_disabled",
+      },
+    };
   }
 
   if (mappedRule.mode === "fixed_manager") {
-    return mappedRule.target_member_ids;
+    return {
+      assigneeIds: candidateMemberIds,
+      payload: {
+        source_id: params.sourceId,
+        source_kind: sourceKind,
+        mode: mappedRule.mode,
+        rule_source_kind: mappedRule.source_kind,
+        target_member_ids: mappedRule.target_member_ids,
+        disabled_member_ids: mappedRule.settings.disabled_member_ids ?? [],
+        selected_member_ids: candidateMemberIds,
+        reason: "fixed_manager",
+      },
+    };
   }
 
   let assigneesQuery = supabase
     .from("crm_deal_assignees")
     .select("workspace_member_id, crm_deals!inner(status)")
     .eq("workspace_id", workspace.id)
-    .in("workspace_member_id", mappedRule.target_member_ids);
+    .in("workspace_member_id", candidateMemberIds);
 
   if (mappedRule.mode === "least_loaded") {
     assigneesQuery = assigneesQuery.eq("crm_deals.status", "open");
@@ -1466,7 +1590,7 @@ async function resolveAutoAssigneeIds(params: {
   const { data: assignees } = await assigneesQuery;
 
   const loadByMemberId = new Map(
-    mappedRule.target_member_ids.map((memberId) => [memberId, 0])
+    candidateMemberIds.map((memberId) => [memberId, 0])
   );
 
   for (const assignee of assignees ?? []) {
@@ -1474,11 +1598,48 @@ async function resolveAutoAssigneeIds(params: {
     loadByMemberId.set(memberId, (loadByMemberId.get(memberId) ?? 0) + 1);
   }
 
-  const [selectedMemberId] = [...loadByMemberId.entries()].sort(
-    (a, b) => a[1] - b[1]
-  )[0] ?? [mappedRule.target_member_ids[0]];
+  const maxOpenDeals = mappedRule.settings.max_open_deals_per_manager;
+  const priorityIndex = new Map(
+    (mappedRule.settings.priority_member_ids ?? []).map((memberId, index) => [
+      memberId,
+      index,
+    ])
+  );
+  const availableEntries = [...loadByMemberId.entries()].filter(
+    ([, load]) =>
+      typeof maxOpenDeals !== "number" || maxOpenDeals <= 0 || load < maxOpenDeals
+  );
+  const [selectedMemberId] = (availableEntries.length > 0
+    ? availableEntries
+    : [...loadByMemberId.entries()]
+  ).sort(
+    (a, b) =>
+      a[1] - b[1] ||
+      (priorityIndex.get(a[0]) ?? Number.MAX_SAFE_INTEGER) -
+        (priorityIndex.get(b[0]) ?? Number.MAX_SAFE_INTEGER)
+  )[0] ?? [candidateMemberIds[0]];
 
-  return selectedMemberId ? [selectedMemberId] : [];
+  return {
+    assigneeIds: selectedMemberId ? [selectedMemberId] : [],
+    payload: {
+      source_id: params.sourceId,
+      source_kind: sourceKind,
+      mode: mappedRule.mode,
+      rule_source_kind: mappedRule.source_kind,
+      target_member_ids: mappedRule.target_member_ids,
+      disabled_member_ids: mappedRule.settings.disabled_member_ids ?? [],
+      priority_member_ids: mappedRule.settings.priority_member_ids ?? [],
+      max_open_deals_per_manager: maxOpenDeals ?? null,
+      selected_member_ids: selectedMemberId ? [selectedMemberId] : [],
+      load_by_member_id: Object.fromEntries(loadByMemberId),
+      reason:
+        availableEntries.length === 0 && typeof maxOpenDeals === "number"
+          ? "capacity_limit_overridden"
+          : mappedRule.mode === "least_loaded"
+          ? "least_open_deals"
+          : "equal_distribution",
+    },
+  };
 }
 
 export async function createCrmDeal(input: CreateCrmDealInput): Promise<CrmDeal> {
@@ -1486,10 +1647,18 @@ export async function createCrmDeal(input: CreateCrmDealInput): Promise<CrmDeal>
 
   const { supabase, workspace, user, membership } = await getAppContext();
   const assigneeIds = normalizeIds(input.assignee_ids);
-  let resolvedAssigneeIds =
+  const autoAssignment =
     assigneeIds.length > 0
-      ? assigneeIds
+      ? {
+          assigneeIds,
+          payload: {
+            mode: "manual",
+            selected_member_ids: assigneeIds,
+            reason: "selected_in_form",
+          },
+        }
       : await resolveAutoAssigneeIds({ sourceId: input.source_id });
+  let resolvedAssigneeIds = autoAssignment.assigneeIds;
 
   if (!roleCanViewAllCrmDeals(membership?.role)) {
     if (!membership?.id) {
@@ -1497,6 +1666,11 @@ export async function createCrmDeal(input: CreateCrmDealInput): Promise<CrmDeal>
     }
 
     resolvedAssigneeIds = [membership.id];
+    autoAssignment.payload = {
+      ...autoAssignment.payload,
+      selected_member_ids: resolvedAssigneeIds,
+      reason: "limited_role_self_assignment",
+    };
   }
 
   const { data, error } = await supabase
@@ -1554,6 +1728,14 @@ export async function createCrmDeal(input: CreateCrmDealInput): Promise<CrmDeal>
     action: "deal_created",
     payload: {
       title: input.title,
+      client_name: input.client_name ?? null,
+    },
+  });
+  await createCrmAssignmentActivity({
+    dealId: data.id,
+    payload: {
+      ...autoAssignment.payload,
+      deal_title: input.title,
       client_name: input.client_name ?? null,
     },
   });
@@ -1861,6 +2043,19 @@ export async function upsertCrmAssignmentRule(
   const { supabase, workspace } = await getAppContext();
   const sourceKind = input.source_kind?.trim() || null;
   const targetMemberIds = normalizeIds(input.target_member_ids);
+  const settings: CrmAssignmentRuleSettings = {
+    max_open_deals_per_manager:
+      typeof input.settings?.max_open_deals_per_manager === "number" &&
+      input.settings.max_open_deals_per_manager > 0
+        ? input.settings.max_open_deals_per_manager
+        : null,
+    priority_member_ids: normalizeIds(input.settings?.priority_member_ids).filter(
+      (memberId) => targetMemberIds.includes(memberId)
+    ),
+    disabled_member_ids: normalizeIds(input.settings?.disabled_member_ids).filter(
+      (memberId) => targetMemberIds.includes(memberId)
+    ),
+  };
 
   let existingQuery = supabase
     .from("crm_assignment_rules")
@@ -1884,6 +2079,7 @@ export async function upsertCrmAssignmentRule(
     source_kind: sourceKind,
     mode: input.mode,
     target_member_ids: targetMemberIds,
+    settings,
     is_active: input.is_active ?? true,
     updated_at: new Date().toISOString(),
   };
@@ -2029,11 +2225,41 @@ export async function createCrmDealTask(
     dealId: input.deal_id,
   });
 
+  const { data: deal, error: dealError } = await supabase
+    .from("crm_deals")
+    .select("id, title, client_name, project_id")
+    .eq("id", input.deal_id)
+    .eq("workspace_id", workspace.id)
+    .maybeSingle();
+
+  if (dealError) {
+    throw new Error(`Не удалось проверить сделку CRM: ${dealError.message}`);
+  }
+
+  const linkedTask = await createTask({
+    project_id: (deal as { project_id?: string | null } | null)?.project_id ?? null,
+    title: input.title.trim(),
+    deadline_at: input.due_at || null,
+    assignee_ids: input.assignee_member_id ? [input.assignee_member_id] : [],
+    description: [
+      "Задача создана из CRM-сделки.",
+      (deal as { title?: string | null } | null)?.title
+        ? `Сделка: ${(deal as { title?: string | null }).title}`
+        : null,
+      (deal as { client_name?: string | null } | null)?.client_name
+        ? `Клиент: ${(deal as { client_name?: string | null }).client_name}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  });
+
   const { data, error } = await supabase
     .from("crm_deal_tasks")
     .insert({
       workspace_id: workspace.id,
       deal_id: input.deal_id,
+      task_id: linkedTask.id,
       title: input.title.trim(),
       assignee_member_id: input.assignee_member_id || null,
       due_at: input.due_at || null,
@@ -2053,6 +2279,7 @@ export async function createCrmDealTask(
     action: "task_created",
     payload: {
       task_id: data.id,
+      linked_task_id: linkedTask.id,
       title: input.title,
     },
   });
@@ -2069,7 +2296,7 @@ export async function updateCrmDealTask(
   const { supabase, workspace, membership } = await getAppContext();
   const { data: existingTask, error: existingTaskError } = await supabase
     .from("crm_deal_tasks")
-    .select("deal_id")
+    .select("deal_id, task_id, title, assignee_member_id, due_at, status")
     .eq("id", taskId)
     .eq("workspace_id", workspace.id)
     .maybeSingle();
@@ -2106,6 +2333,66 @@ export async function updateCrmDealTask(
     }
   }
 
+  let linkedTaskId =
+    (existingTask as { task_id?: string | null } | null)?.task_id ?? null;
+
+  if (linkedTaskId) {
+    await updateTask(linkedTaskId, {
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.due_at !== undefined ? { deadline_at: input.due_at } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.assignee_member_id !== undefined
+        ? {
+            assignee_ids: input.assignee_member_id
+              ? [input.assignee_member_id]
+              : [],
+          }
+        : {}),
+    });
+  } else {
+    const { data: deal } = await supabase
+      .from("crm_deals")
+      .select("id, title, client_name, project_id")
+      .eq("id", existingTask.deal_id)
+      .eq("workspace_id", workspace.id)
+      .maybeSingle();
+
+    const nextTitle =
+      input.title ??
+      (existingTask as { title?: string | null } | null)?.title ??
+      "Задача по сделке";
+    const nextDueAt =
+      input.due_at ??
+      (existingTask as { due_at?: string | null } | null)?.due_at ??
+      null;
+    const nextAssignee =
+      input.assignee_member_id ??
+      (existingTask as { assignee_member_id?: string | null } | null)
+        ?.assignee_member_id ??
+      null;
+
+    const linkedTask = await createTask({
+      project_id: (deal as { project_id?: string | null } | null)?.project_id ?? null,
+      title: nextTitle,
+      deadline_at: nextDueAt,
+      assignee_ids: nextAssignee ? [nextAssignee] : [],
+      description: [
+        "Задача создана из CRM-сделки.",
+        (deal as { title?: string | null } | null)?.title
+          ? `Сделка: ${(deal as { title?: string | null }).title}`
+          : null,
+        (deal as { client_name?: string | null } | null)?.client_name
+          ? `Клиент: ${(deal as { client_name?: string | null }).client_name}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+
+    linkedTaskId = linkedTask.id;
+    payload.task_id = linkedTask.id;
+  }
+
   const { data, error } = await supabase
     .from("crm_deal_tasks")
     .update(payload)
@@ -2125,6 +2412,7 @@ export async function updateCrmDealTask(
     action: input.status === "done" ? "task_completed" : "task_updated",
     payload: {
       task_id: data.id,
+      linked_task_id: linkedTaskId,
       changed_fields: Object.keys(payload).filter((key) => key !== "updated_at"),
     },
   });
@@ -2170,6 +2458,8 @@ export async function createCrmDealComment(
     action: "comment_created",
     payload: {
       comment_id: data.id,
+      has_file: Boolean(data.file_url),
+      file_url: data.file_url ?? null,
     },
   });
 

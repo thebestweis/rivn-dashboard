@@ -118,6 +118,7 @@ create table if not exists public.crm_deal_tasks (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   deal_id uuid not null references public.crm_deals(id) on delete cascade,
+  task_id uuid references public.tasks(id) on delete set null,
   title text not null,
   assignee_member_id uuid references public.workspace_members(id) on delete set null,
   due_at timestamptz,
@@ -191,6 +192,7 @@ create index if not exists crm_stage_history_deal_idx on public.crm_deal_stage_h
 create index if not exists crm_stage_history_transition_idx on public.crm_deal_stage_history(workspace_id, from_stage_id, to_stage_id, moved_at desc);
 create index if not exists crm_comments_deal_idx on public.crm_deal_comments(deal_id, created_at desc);
 create index if not exists crm_tasks_deal_idx on public.crm_deal_tasks(deal_id, status, due_at);
+create index if not exists crm_deal_tasks_task_id_idx on public.crm_deal_tasks(task_id);
 create index if not exists crm_conversations_deal_idx on public.crm_conversations(deal_id, channel);
 create index if not exists crm_conversations_inbox_idx on public.crm_conversations(workspace_id, updated_at desc);
 create index if not exists crm_messages_conversation_idx on public.crm_messages(conversation_id, created_at);

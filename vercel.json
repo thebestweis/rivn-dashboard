@@ -8,6 +8,14 @@
       "path": "/api/cron/daily-tasks",
       "schedule": "0 6 * * *"
     },
+    {
+      "path": "/api/cron/recurring-tasks",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/yandex-direct-leads",
+      "schedule": "*/15 * * * *"
+    },
 
     {
       "path": "/api/cron/daily",

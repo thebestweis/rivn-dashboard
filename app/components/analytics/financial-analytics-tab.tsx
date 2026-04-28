@@ -272,6 +272,7 @@ export function FinancialAnalyticsTab({
   const [period, setPeriod] = useState<
     "current_month" | "last_3_months" | "last_6_months" | "all_time"
   >("current_month");
+  const [isPnlDetailsOpen, setIsPnlDetailsOpen] = useState(false);
 
   const [expensePeriod, setExpensePeriod] = useState<"month" | "year">("month");
 
@@ -544,11 +545,20 @@ useEffect(() => {
   loadSettings();
 }, []);
 
-const totalTax = Math.round(
+  const totalTax = Math.round(
   totalRevenue * ((systemSettings?.tax_rate ?? 7) / 100)
 );
 
   const totalProfit = totalRevenue - totalExpenses - totalFot - totalTax;
+  const totalOutflow = totalExpenses + totalFot + totalTax;
+  const pnlMargin =
+    totalRevenue > 0 ? Math.round((totalProfit / totalRevenue) * 100) : 0;
+  const pnlStatus =
+    totalProfit > 0
+      ? "Бизнес в плюсе за выбранный период"
+      : totalProfit < 0
+      ? "Бизнес в минусе за выбранный период"
+      : "P&L в нуле за выбранный период";
 
   const [selectedExpenseYear, selectedExpenseMonth] = expenseSelectedMonth.split("-");
 
@@ -682,30 +692,117 @@ const taxYTD = monthlyTaxRows
     </div>
   </div>
 
-  <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="Выручка"
-            value={formatRub(totalRevenue)}
-            hint="Общая сумма всех оплат"
-          />
-          <StatCard
-            label="Прибыль"
-            value={formatRub(totalProfit)}
-            hint="После расходов, ФОТ и налога"
-            valueClassName="text-emerald-300"
-          />
-          <StatCard
-            label="Расходы"
-            value={formatRub(totalExpenses)}
-            hint="Операционные расходы"
-            valueClassName="text-rose-300"
-          />
-          <StatCard
-            label="ФОТ"
-            value={formatRub(totalFot)}
-            hint="Все выплаты команде"
-            valueClassName="text-amber-300"
-          />
+        <div className="mt-5 rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(16,185,129,0.10)_0%,rgba(123,97,255,0.08)_55%,rgba(255,255,255,0.03)_100%)] p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="text-sm text-white/50">P&L по агентству</div>
+              <div className="mt-1 text-2xl font-semibold text-white">
+                Финансовый результат
+              </div>
+              <div className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
+                P&L показывает, сколько остаётся после операционных расходов,
+                ФОТ и налога. Это главный быстрый индикатор здоровья бизнеса за
+                выбранный период.
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-right">
+              <div className="text-xs uppercase tracking-[0.14em] text-white/35">
+                Итог P&L
+              </div>
+              <div
+                className={`mt-2 text-3xl font-semibold ${
+                  totalProfit >= 0 ? "text-emerald-300" : "text-rose-300"
+                }`}
+              >
+                {formatRub(totalProfit)}
+              </div>
+              <div className="mt-1 text-xs text-white/45">{pnlStatus}</div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                Выручка
+              </div>
+              <div className="mt-2 text-xl font-semibold text-violet-300">
+                {formatRub(totalRevenue)}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                Расходы
+              </div>
+              <div className="mt-2 text-xl font-semibold text-rose-300">
+                {formatRub(totalExpenses)}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                ФОТ
+              </div>
+              <div className="mt-2 text-xl font-semibold text-amber-300">
+                {formatRub(totalFot)}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                Налог
+              </div>
+              <div className="mt-2 text-xl font-semibold text-amber-300">
+                {formatRub(totalTax)}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.12em] text-white/35">
+                Маржа P&L
+              </div>
+              <div
+                className={`mt-2 text-xl font-semibold ${
+                  pnlMargin >= 0 ? "text-emerald-300" : "text-rose-300"
+                }`}
+              >
+                {pnlMargin}%
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+            <div className="text-sm text-white/55">
+              Всего расходов за период:{" "}
+              <span className="font-medium text-white/80">
+                {formatRub(totalOutflow)}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsPnlDetailsOpen((prev) => !prev)}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-white/65 transition hover:bg-white/[0.08] hover:text-white"
+            >
+              {isPnlDetailsOpen ? "Скрыть" : "Подробнее"}
+            </button>
+          </div>
+
+          {isPnlDetailsOpen ? (
+            <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-6 text-white/55">
+              Формула: выручка {formatRub(totalRevenue)} − расходы{" "}
+              {formatRub(totalExpenses)} − ФОТ {formatRub(totalFot)} − налог{" "}
+              {formatRub(totalTax)} ={" "}
+              <span
+                className={
+                  totalProfit >= 0 ? "text-emerald-300" : "text-rose-300"
+                }
+              >
+                {formatRub(totalProfit)}
+              </span>
+            </div>
+          ) : null}
         </div>
       </SectionCard>
 

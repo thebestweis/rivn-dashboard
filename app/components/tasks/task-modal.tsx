@@ -7,13 +7,16 @@ import { format } from "date-fns";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { FileText, Paperclip, X } from "lucide-react";
 import { DayPicker } from "react-day-picker";
 import { AppToast } from "../ui/app-toast";
 import {
   createSubtask,
+  getTaskRecurrenceRule,
   updateTask,
   updateTaskStatus,
   type Task,
+  type TaskRecurrenceFrequency,
   type TaskStatus,
 } from "../../lib/supabase/tasks";
 import {
@@ -21,6 +24,11 @@ import {
   getTaskComments,
   type TaskComment,
 } from "../../lib/supabase/task-comments";
+import { formatChatAttachmentSize } from "../../lib/supabase/project-comments";
+import {
+  getActivityLogs,
+  type ActivityLog,
+} from "../../lib/supabase/activity-logs";
 import {
   getWorkspaceMemberDisplayName,
   type WorkspaceMemberItem,
@@ -29,6 +37,7 @@ import { canEditTasks, isAppRole, type AppRole } from "../../lib/permissions";
 import { useAppContextState } from "../../providers/app-context-provider";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
 import { BillingAccessBanner } from "../ui/billing-access-banner";
+import { CustomSelect } from "../ui/custom-select";
 import { useActiveWorkspaceMembers } from "../../lib/queries/use-workspace-members-query";
 import {
   patchTaskStatusInCaches,
@@ -46,6 +55,15 @@ type TaskModalProps = {
   onTaskCreated: (task: Task) => void;
   onTaskOpen: (taskId: string) => void;
 };
+
+const recurrenceOptions: Array<{
+  value: TaskRecurrenceFrequency;
+  label: string;
+}> = [
+  { value: "daily", label: "Каждый день" },
+  { value: "weekly", label: "Каждую неделю" },
+  { value: "monthly", label: "Каждый месяц" },
+];
 
 function getStatusLabel(status: TaskStatus) {
   switch (status) {
@@ -178,6 +196,7 @@ export function TaskModal({
   const {
     role,
     billingAccess,
+    membership,
     isLoading: isAppContextLoading,
   } = useAppContextState();
 
@@ -192,6 +211,10 @@ export function TaskModal({
   const [deadlineDate, setDeadlineDate] = useState<Date | undefined>(undefined);
   const [deadlineTime, setDeadlineTime] = useState("");
   const [isDeadlinePickerOpen, setIsDeadlinePickerOpen] = useState(false);
+  const [isRecurrenceEnabled, setIsRecurrenceEnabled] = useState(false);
+  const [recurrenceFrequency, setRecurrenceFrequency] =
+    useState<TaskRecurrenceFrequency>("weekly");
+  const [recurrenceEndsAt, setRecurrenceEndsAt] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
@@ -206,7 +229,9 @@ export function TaskModal({
   const [draggedSubtaskId, setDraggedSubtaskId] = useState<string | null>(null);
 
   const [commentDraft, setCommentDraft] = useState("");
+  const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
   const [isCreatingComment, setIsCreatingComment] = useState(false);
+  const commentAttachmentInputRef = useRef<HTMLInputElement | null>(null);
 
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
@@ -233,13 +258,41 @@ export function TaskModal({
     staleTime: 1000 * 30,
   });
 
+  const activityLogsQueryKey = useMemo(
+    () => ["activity-logs", "task", task?.id ?? "unknown"],
+    [task?.id]
+  );
+
+  const {
+    data: activityLogs = [],
+    isLoading: isLoadingActivityLogs,
+  } = useQuery({
+    queryKey: activityLogsQueryKey,
+    queryFn: () =>
+      getActivityLogs({
+        entityType: "task",
+        entityId: task!.id,
+      }),
+    enabled: isOpen && Boolean(task?.id),
+    staleTime: 1000 * 30,
+  });
+
+  const { data: recurrenceRule = null } = useQuery({
+    queryKey: ["task-recurrence-rule", task?.recurrence_rule_id ?? "none"],
+    queryFn: () => getTaskRecurrenceRule(task?.recurrence_rule_id ?? null),
+    enabled: isOpen && Boolean(task?.recurrence_rule_id),
+    staleTime: 1000 * 30,
+  });
+
   const createCommentMutation = useMutation({
-    mutationFn: (text: string) => createTaskComment(task!.id, text),
+    mutationFn: (params: { text: string; attachment: File | null }) =>
+      createTaskComment(task!.id, params.text, params.attachment),
     onSuccess: (createdComment) => {
       queryClient.setQueryData<TaskComment[]>(commentsQueryKey, (prev = []) => [
         ...prev,
         createdComment,
       ]);
+      queryClient.invalidateQueries({ queryKey: activityLogsQueryKey });
     },
   });
 
@@ -303,6 +356,28 @@ export function TaskModal({
       .map(getMemberLabel);
   }, [activeWorkspaceMembers, selectedAssigneeIds]);
 
+  const workspaceMembersById = useMemo(() => {
+    return new Map(activeWorkspaceMembers.map((member) => [member.id, member]));
+  }, [activeWorkspaceMembers]);
+
+  const currentMemberId = membership?.id ?? null;
+
+  function getCommentAuthorLabel(comment: TaskComment) {
+    const member = comment.author_member_id
+      ? workspaceMembersById.get(comment.author_member_id)
+      : null;
+
+    return member ? getMemberLabel(member) : "Участник команды";
+  }
+
+  function getActivityAuthorLabel(log: ActivityLog) {
+    const member = log.actor_member_id
+      ? workspaceMembersById.get(log.actor_member_id)
+      : null;
+
+    return member ? getMemberLabel(member) : "Участник команды";
+  }
+
   const assigneesFieldLabel = useMemo(() => {
     if (isLoadingMembers) {
       return "Загружаем участников...";
@@ -351,14 +426,31 @@ export function TaskModal({
     setStatus(task.status);
     setDeadlineDate(parsedDeadline.date);
     setDeadlineTime(parsedDeadline.time);
+    setIsRecurrenceEnabled(Boolean(task.recurrence_rule_id));
+    setRecurrenceFrequency("weekly");
+    setRecurrenceEndsAt("");
     setSelectedAssigneeIds(
       (task.assignees ?? []).map((assignee) => assignee.workspace_member_id)
     );
     setSubtaskDraft("");
     setCommentDraft("");
+    setCommentAttachment(null);
+    if (commentAttachmentInputRef.current) {
+      commentAttachmentInputRef.current.value = "";
+    }
     setIsDeadlinePickerOpen(false);
     setIsAssigneesDropdownOpen(false);
   }, [isOpen, task]);
+
+  useEffect(() => {
+    if (!recurrenceRule) {
+      return;
+    }
+
+    setIsRecurrenceEnabled(recurrenceRule.is_active);
+    setRecurrenceFrequency(recurrenceRule.frequency);
+    setRecurrenceEndsAt(recurrenceRule.ends_at?.slice(0, 10) ?? "");
+  }, [recurrenceRule]);
 
   useEffect(() => {
     if (canManageTasksWithBilling) return;
@@ -432,6 +524,20 @@ export function TaskModal({
       return;
     }
 
+    const nextDeadlineAt = combineDateAndTime(deadlineDate, deadlineTime);
+
+    if (isRecurrenceEnabled && !nextDeadlineAt) {
+      setToastType("error");
+      setToastMessage("Для повторяющейся задачи нужно выбрать дедлайн");
+      return;
+    }
+
+    if (task.recurrence_rule_id && isRecurrenceEnabled && !recurrenceRule) {
+      setToastType("info");
+      setToastMessage("Загружаем настройки повторения, попробуй ещё раз");
+      return;
+    }
+
     try {
       setIsSaving(true);
 
@@ -439,8 +545,18 @@ export function TaskModal({
         title: trimmedTitle,
         description: description.trim() || null,
         status,
-        deadline_at: combineDateAndTime(deadlineDate, deadlineTime),
+        deadline_at: nextDeadlineAt,
         assignee_ids: selectedAssigneeIds,
+        recurrence: isRecurrenceEnabled
+          ? {
+              enabled: true,
+              frequency: recurrenceFrequency,
+              starts_at: nextDeadlineAt!,
+              ends_at: recurrenceEndsAt
+                ? new Date(`${recurrenceEndsAt}T23:59:59`).toISOString()
+                : null,
+            }
+          : { enabled: false },
       });
 
       onTaskUpdated(updatedTask);
@@ -595,17 +711,24 @@ export function TaskModal({
 
     const nextText = commentDraft.trim();
 
-    if (!nextText) {
+    if (!nextText && !commentAttachment) {
       return;
     }
 
     try {
       setIsCreatingComment(true);
 
-      await createCommentMutation.mutateAsync(nextText);
+      await createCommentMutation.mutateAsync({
+        text: nextText,
+        attachment: commentAttachment,
+      });
       setCommentDraft("");
+      setCommentAttachment(null);
+      if (commentAttachmentInputRef.current) {
+        commentAttachmentInputRef.current.value = "";
+      }
       setToastType("success");
-      setToastMessage("Комментарий добавлен");
+      setToastMessage("Сообщение отправлено");
     } catch (error) {
       console.error(error);
       setToastType("error");
@@ -799,6 +922,12 @@ export function TaskModal({
                 </button>
               </div>
 
+              {isRecurrenceEnabled ? (
+                <div className="mt-3 inline-flex rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-xs font-medium text-violet-200">
+                  Повторяется
+                </div>
+              ) : null}
+
               {isDeadlinePickerOpen ? (
                 <div className="mt-4 rounded-[24px] border border-white/10 bg-[#121826] p-4">
                   <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0D1420] p-3">
@@ -841,12 +970,78 @@ export function TaskModal({
                     />
                   </div>
 
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold text-white/70">
+                          Повторять задачу
+                        </div>
+                        <div className="mt-1 text-[11px] text-white/35">
+                          Система создаст следующую задачу по расписанию
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setIsRecurrenceEnabled((current) => !current)
+                        }
+                        disabled={!canManageTasksWithBilling}
+                        className={`relative h-6 w-11 rounded-full transition disabled:opacity-50 ${
+                          isRecurrenceEnabled ? "bg-emerald-400" : "bg-white/15"
+                        }`}
+                        aria-pressed={isRecurrenceEnabled}
+                        aria-label="Повторять задачу"
+                      >
+                        <span
+                          className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${
+                            isRecurrenceEnabled ? "left-6" : "left-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {isRecurrenceEnabled ? (
+                      <div className="mt-3 grid gap-2">
+                        <CustomSelect
+                          value={recurrenceFrequency}
+                          onChange={(value) =>
+                            setRecurrenceFrequency(
+                              value as TaskRecurrenceFrequency
+                            )
+                          }
+                          options={recurrenceOptions}
+                          placeholder="Периодичность"
+                          disabled={!canManageTasksWithBilling}
+                          buttonClassName="h-10 rounded-xl px-3 text-sm"
+                          dropdownClassName="w-full"
+                        />
+
+                        <input
+                          type="date"
+                          value={recurrenceEndsAt}
+                          onChange={(event) =>
+                            setRecurrenceEndsAt(event.target.value)
+                          }
+                          disabled={!canManageTasksWithBilling}
+                          className="h-10 rounded-xl border border-white/10 bg-[#121826] px-3 text-sm text-white outline-none disabled:opacity-60"
+                        />
+
+                        <p className="text-[11px] leading-5 text-white/35">
+                          Дату окончания можно оставить пустой.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                     <button
                       type="button"
                       onClick={() => {
                         setDeadlineDate(undefined);
                         setDeadlineTime("");
+                        setIsRecurrenceEnabled(false);
+                        setRecurrenceEndsAt("");
                       }}
                       className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
                     >
@@ -1014,31 +1209,100 @@ export function TaskModal({
             </section>
 
             <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
-              <div className="text-sm text-white/45">Комментарии</div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm text-white/45">Чат задачи</div>
+                  <div className="mt-1 text-xs text-white/35">
+                    Обсуждай детали, правки и решения прямо внутри задачи.
+                  </div>
+                </div>
+
+                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/45">
+                  {comments.length}
+                </div>
+              </div>
 
               <div className="mt-4 space-y-3">
                 {isLoadingComments ? (
                   <div className="text-sm text-white/35">
-                    Загрузка комментариев...
+                    Загружаем чат...
                   </div>
                 ) : comments.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/35">
-                    Комментариев пока нет
+                    Сообщений пока нет. Напиши первое сообщение по задаче.
                   </div>
                 ) : (
-                  comments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"
-                    >
-                      <div className="text-sm leading-6 text-white/90">
-                        {comment.text}
-                      </div>
-                      <div className="mt-2 text-xs text-white/35">
-                        {formatCommentDate(comment.created_at)}
-                      </div>
-                    </div>
-                  ))
+                  <div className="max-h-[360px] space-y-3 overflow-y-auto pr-2 scrollbar-thin">
+                    {comments.map((comment) => {
+                      const isOwnMessage =
+                        Boolean(currentMemberId) &&
+                        comment.author_member_id === currentMemberId;
+
+                      return (
+                        <div
+                          key={comment.id}
+                          className={`flex ${
+                            isOwnMessage ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          <div
+                            className={`max-w-[86%] rounded-2xl border px-4 py-3 ${
+                              isOwnMessage
+                                ? "border-emerald-400/20 bg-emerald-400/10"
+                                : "border-white/10 bg-white/[0.03]"
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span
+                                className={
+                                  isOwnMessage
+                                    ? "font-medium text-emerald-200"
+                                    : "font-medium text-white/75"
+                                }
+                              >
+                                {isOwnMessage
+                                  ? "Вы"
+                                  : getCommentAuthorLabel(comment)}
+                              </span>
+                              <span className="text-white/30">
+                                {formatCommentDate(comment.created_at)}
+                              </span>
+                            </div>
+                            <div className="mt-2 whitespace-pre-line text-sm leading-6 text-white/90">
+                              {comment.text}
+                            </div>
+                            {comment.attachments.length > 0 ? (
+                              <div className="mt-3 space-y-2">
+                                {comment.attachments.map((attachment) => (
+                                  <a
+                                    key={attachment.id}
+                                    href={attachment.signed_url ?? "#"}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-left transition hover:bg-white/[0.04]"
+                                  >
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white/70">
+                                      <FileText className="h-4 w-4" />
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate text-sm font-medium text-white/85">
+                                        {attachment.file_name}
+                                      </span>
+                                      <span className="text-xs text-white/35">
+                                        {formatChatAttachmentSize(
+                                          attachment.file_size
+                                        ) || "Файл"}
+                                      </span>
+                                    </span>
+                                  </a>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
@@ -1049,23 +1313,124 @@ export function TaskModal({
                       value={commentDraft}
                       onChange={(event) => setCommentDraft(event.target.value)}
                       rows={3}
-                      placeholder="Напиши комментарий по задаче"
+                      placeholder="Напиши сообщение по задаче"
                       className="w-full bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/30"
                     />
+                    {commentAttachment ? (
+                      <div className="mx-2 mb-2 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
+                        <FileText className="h-4 w-4 shrink-0 text-white/45" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-white/80">
+                            {commentAttachment.name}
+                          </div>
+                          <div className="text-xs text-white/35">
+                            {formatChatAttachmentSize(commentAttachment.size)}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCommentAttachment(null);
+                            if (commentAttachmentInputRef.current) {
+                              commentAttachmentInputRef.current.value = "";
+                            }
+                          }}
+                          className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-white/45 transition hover:bg-white/10 hover:text-white"
+                          aria-label="Убрать файл"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
 
-                  <div className="mt-3 flex justify-end">
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div>
+                      <input
+                        ref={commentAttachmentInputRef}
+                        type="file"
+                        className="hidden"
+                        onChange={(event) =>
+                          setCommentAttachment(event.target.files?.[0] ?? null)
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() => commentAttachmentInputRef.current?.click()}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/60 transition hover:bg-white/10 hover:text-white"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                        Прикрепить файл
+                      </button>
+                    </div>
+
                     <button
                       type="button"
                       onClick={handleCreateComment}
-                      disabled={isCreatingComment}
-                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 disabled:opacity-60"
+                      disabled={
+                        isCreatingComment ||
+                        (!commentDraft.trim() && !commentAttachment)
+                      }
+                      className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-400/15 disabled:opacity-60"
                     >
-                      {isCreatingComment ? "Отправляем..." : "Добавить комментарий"}
+                      {isCreatingComment ? "Отправляем..." : "Отправить"}
                     </button>
                   </div>
                 </>
               ) : null}
+            </section>
+
+            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm text-white/45">История изменений</div>
+                  <div className="mt-1 text-xs text-white/35">
+                    Здесь видно, что менялось по задаче и кто это сделал.
+                  </div>
+                </div>
+
+                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/45">
+                  {activityLogs.length}
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {isLoadingActivityLogs ? (
+                  <div className="text-sm text-white/35">
+                    Загружаем историю...
+                  </div>
+                ) : activityLogs.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/35">
+                    История пока пустая. Новые изменения будут появляться здесь.
+                  </div>
+                ) : (
+                  <div className="max-h-[280px] space-y-3 overflow-y-auto pr-2 scrollbar-thin">
+                    {activityLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-medium text-white/85">
+                            {log.title}
+                          </div>
+                          <div className="text-xs text-white/30">
+                            {formatCommentDate(log.created_at)}
+                          </div>
+                        </div>
+                        <div className="mt-1 text-xs text-white/40">
+                          {getActivityAuthorLabel(log)}
+                        </div>
+                        {log.description ? (
+                          <div className="mt-2 text-sm leading-6 text-white/60">
+                            {log.description}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </section>
           </div>
         </div>

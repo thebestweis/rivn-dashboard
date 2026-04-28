@@ -253,6 +253,26 @@ export default function TasksPage() {
     return foundTask ?? null;
   }, [tasks, selectedTaskId]);
 
+  useEffect(() => {
+    if (tasks.length === 0 || selectedTaskId) {
+      return;
+    }
+
+    const taskIdFromUrl = new URLSearchParams(window.location.search).get(
+      "task"
+    );
+
+    if (!taskIdFromUrl) {
+      return;
+    }
+
+    const taskFromUrl = tasks.find((task) => task.id === taskIdFromUrl);
+
+    if (taskFromUrl) {
+      setSelectedTaskId(taskFromUrl.id);
+    }
+  }, [selectedTaskId, tasks]);
+
   const weekDays = useMemo<DayColumn[]>(() => {
     return Array.from({ length: 7 }).map((_, index) => {
       const date = addDays(weekStart, index);
@@ -355,11 +375,13 @@ export default function TasksPage() {
       return;
     }
 
+    const deadlineAt = createDeadlineForDay(day);
+
     try {
       await createTaskMutation.mutateAsync({
         project_id: quickTaskProjectId,
         title: trimmedTitle,
-        deadline_at: createDeadlineForDay(day),
+        deadline_at: deadlineAt,
       });
 
       setCreatingDayKey(null);
@@ -731,7 +753,7 @@ export default function TasksPage() {
                                   className="h-10 w-full rounded-xl bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/30"
                                 />
 
-                                <CustomSelect
+<CustomSelect
   value={quickTaskProjectId}
   onChange={setQuickTaskProjectId}
   options={quickProjectOptions}
@@ -890,6 +912,11 @@ export default function TasksPage() {
                                             ? `Исполнителей: ${task.assignees.length}`
                                             : "Без исполнителя"}
                                         </span>
+                                        {task.recurrence_rule_id ? (
+                                          <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-2.5 py-1 text-[11px] font-medium text-violet-200">
+                                            Повторяется
+                                          </span>
+                                        ) : null}
                                       </div>
 
                                       {subtasks.length > 0 ? (

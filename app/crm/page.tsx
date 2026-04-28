@@ -10,12 +10,14 @@ import {
   Circle,
   Clock3,
   Edit3,
+  ExternalLink,
   History,
   Inbox,
   LineChart,
   Mail,
   MessageSquareText,
   MoreVertical,
+  Paperclip,
   Phone,
   Plus,
   Search,
@@ -532,6 +534,7 @@ function CrmPageContent() {
   const [newDealTaskTitle, setNewDealTaskTitle] = useState("");
   const [newDealTaskDueAt, setNewDealTaskDueAt] = useState("");
   const [newDealComment, setNewDealComment] = useState("");
+  const [newDealCommentFileUrl, setNewDealCommentFileUrl] = useState("");
   const [newClientReply, setNewClientReply] = useState("");
   const [newClientReplyAttachmentUrl, setNewClientReplyAttachmentUrl] =
     useState("");
@@ -1120,14 +1123,19 @@ function CrmPageContent() {
   }
 
   async function addDealComment() {
-    if (!selectedDeal || !newDealComment.trim()) return;
+    const commentBody = newDealComment.trim();
+    const fileUrl = newDealCommentFileUrl.trim();
+
+    if (!selectedDeal || (!commentBody && !fileUrl)) return;
 
     await createDealCommentMutation.mutateAsync({
       deal_id: selectedDeal.id,
-      body: newDealComment,
+      body: commentBody || "Вложение",
+      file_url: fileUrl || null,
     });
 
     setNewDealComment("");
+    setNewDealCommentFileUrl("");
   }
 
   async function sendClientReply() {
@@ -1177,6 +1185,8 @@ function CrmPageContent() {
         return "Добавлен комментарий";
       case "message_created":
         return "Сообщение добавлено в диалог";
+      case "assignment_resolved":
+        return "Система распределила заявку";
       default:
         return "Действие по сделке";
     }
@@ -1473,6 +1483,20 @@ function CrmPageContent() {
             >
               <LineChart className="h-4 w-4" />
               Аналитика CRM
+            </Link>
+            <Link
+              href="/crm/team"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+            >
+              <Users className="h-4 w-4" />
+              Команда
+            </Link>
+            <Link
+              href="/crm/integrations"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+            >
+              <MessageSquareText className="h-4 w-4" />
+              Интеграции
             </Link>
             <button
               type="button"
@@ -2730,6 +2754,37 @@ function CrmPageContent() {
                     ) : null}
                   </div>
 
+                  {selectedDealConversations[0]?.channel === "avito" ? (
+                    <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-100">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-semibold">
+                            Диалог связан с Avito
+                          </p>
+                          <p className="mt-1 text-xs leading-5 opacity-80">
+                            Ответ из этого окна уйдёт клиенту в Avito, а история
+                            сохранится в сделке.
+                          </p>
+                        </div>
+                        {selectedDeal.source_item_url ? (
+                          <a
+                            href={selectedDeal.source_item_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex shrink-0 items-center justify-center rounded-xl bg-sky-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-sky-500"
+                          >
+                            Открыть объявление
+                          </a>
+                        ) : null}
+                      </div>
+                      {selectedDeal.source_item_title ? (
+                        <p className="mt-3 truncate text-xs font-semibold">
+                          Объявление: {selectedDeal.source_item_title}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="mt-4 max-h-80 space-y-3 overflow-y-auto pr-1">
                     {selectedDealMessages.map((message) => {
                       const isManager = message.sender_type === "manager";
@@ -2972,6 +3027,15 @@ function CrmPageContent() {
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2 pl-8">
+                          {task.task_id ? (
+                            <Link
+                              href={`/tasks?task=${task.task_id}`}
+                              className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 transition hover:border-violet-300 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-200"
+                            >
+                              Открыть задачу
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </Link>
+                          ) : null}
                           {task.status !== "in_progress" && task.status !== "done" ? (
                             <button
                               type="button"
@@ -3027,11 +3091,20 @@ function CrmPageContent() {
                     className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
                     placeholder="Напиши договорённость, важную мысль или что нужно проверить"
                   />
+                  <input
+                    value={newDealCommentFileUrl}
+                    onChange={(event) =>
+                      setNewDealCommentFileUrl(event.target.value)
+                    }
+                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
+                    placeholder="Ссылка на файл или вложение, если нужно"
+                  />
                   <button
                     type="button"
                     onClick={() => void addDealComment()}
                     disabled={
-                      !newDealComment.trim() ||
+                      (!newDealComment.trim() &&
+                        !newDealCommentFileUrl.trim()) ||
                       createDealCommentMutation.isPending
                     }
                     className="mt-3 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50"
@@ -3062,6 +3135,17 @@ function CrmPageContent() {
                         <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">
                           {comment.body}
                         </p>
+                        {comment.file_url ? (
+                          <a
+                            href={comment.file_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-3 inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 transition hover:border-violet-300 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-200"
+                          >
+                            <Paperclip className="h-3.5 w-3.5" />
+                            Открыть вложение
+                          </a>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -3441,7 +3525,7 @@ function CrmPageContent() {
                 onClick={() => setPaidDeal(null)}
                 className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
               >
-                Позже
+                Не сейчас
               </button>
               <Link
                 href="/projects"
