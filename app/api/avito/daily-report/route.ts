@@ -2,6 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
+import {
+  getCachedAvitoItemIds,
+  getFriendlyAvitoErrorMessage,
+  sleep,
+} from "@/app/api/avito/avito-api-helpers";
 
 import { verifyCronSecret } from "../../cron/verify-cron-secret";
 
@@ -224,8 +229,7 @@ async function resolveAvitoAccessToken(account: AvitoAccount) {
 }
 
 function buildAccountErrorBlock(accountName: string, error: unknown) {
-  const message =
-    error instanceof Error ? error.message : "Неизвестная ошибка Avito";
+  const message = getFriendlyAvitoErrorMessage(error);
   const safeMessage = message
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -355,6 +359,7 @@ function buildDailyReport(params: {
   accountBlocks: string[];
   totalCurrent: PeriodStats;
   totalPrevious: PeriodStats;
+  failedAccountsCount?: number;
 }) {
   const wish = getDailyWish(params.date);
   const hasMultipleAccounts = params.accountBlocks.length > 1;
@@ -368,7 +373,13 @@ function buildDailyReport(params: {
   ];
 
   if (!hasMultipleAccounts) {
-    return [...baseLines, "", "✅ Аккаунт проверен"].join("\n");
+    return [
+      ...baseLines,
+      "",
+      params.failedAccountsCount
+        ? "✅ Отчёт сформирован. Аккаунт требует повторной проверки."
+        : "✅ Аккаунт проверен",
+    ].join("\n");
   }
 
   return [
@@ -383,7 +394,9 @@ function buildDailyReport(params: {
     buildMetricLine("Контакты", params.totalCurrent.contacts, params.totalPrevious.contacts, "number"),
     buildMetricLine("Стоимость 1 контакта", params.totalCurrent.costPerContact, params.totalPrevious.costPerContact, "money"),
     "",
-    "✅ Аккаунты проверены",
+    params.failedAccountsCount
+      ? "✅ Отчёт сформирован. Часть аккаунтов требует повторной проверки."
+      : "✅ Аккаунты проверены",
   ].join("\n");
 }
 
@@ -511,6 +524,7 @@ export async function GET(request: Request) {
           favorites: 0,
           expenses: 0,
         };
+        let failedAccountsCount = 0;
 
         for (const account of accounts as AvitoAccount[]) {
           try {
@@ -528,7 +542,11 @@ export async function GET(request: Request) {
           }
 
           const accessToken = await resolveAvitoAccessToken(account);
-          const itemIds = await getAllItemIds(accessToken);
+          const itemIds = await getCachedAvitoItemIds({
+            accountId: account.id,
+            avitoUserId: account.avito_user_id,
+            accessToken,
+          });
 
           const currentStatsRaw = await getStatsForPeriod({
             accessToken,
@@ -613,6 +631,7 @@ export async function GET(request: Request) {
             })
           );
           } catch (accountError) {
+            failedAccountsCount += 1;
             accountBlocks.push(buildAccountErrorBlock(account.name, accountError));
 
             await supabase.from("avito_report_logs").insert({
@@ -628,6 +647,8 @@ export async function GET(request: Request) {
                   : "Неизвестная ошибка Avito-аккаунта",
             });
           }
+
+          await sleep(800);
         }
 
         const totalCurrent = buildStats(totalCurrentRaw);
@@ -656,6 +677,7 @@ export async function GET(request: Request) {
           accountBlocks,
           totalCurrent,
           totalPrevious,
+          failedAccountsCount,
         });
 
         await sendTelegramMessage(client.telegram_chat_id, reportText);

@@ -1,4 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import {
+  getCachedAvitoItemIds,
+  getFriendlyAvitoErrorMessage,
+  sleep,
+} from "@/app/api/avito/avito-api-helpers";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -749,12 +754,29 @@ function buildAccountBlock(params: {
   ].join("\n");
 }
 
+function buildAccountErrorBlock(accountName: string, error: unknown) {
+  const message = getFriendlyAvitoErrorMessage(error);
+  const safeMessage = message
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  return [
+    "━━━━━━━━━━━━",
+    `Аккаунт: <b>${accountName}</b>`,
+    "",
+    "⚠️ Аккаунт не проверен.",
+    `Причина: ${safeMessage}`,
+  ].join("\n");
+}
+
 function buildWeeklyReport(params: {
   date: string;
   accountBlocks: string[];
   totalCurrent: PeriodStats;
   totalPrevious: PeriodStats;
   dialogAnalyticsBlock: string;
+  failedAccountsCount?: number;
 }) {
   const hasMultipleAccounts = params.accountBlocks.length > 1;
 
@@ -770,7 +792,9 @@ function buildWeeklyReport(params: {
       "",
       params.dialogAnalyticsBlock,
       "",
-      "✅ Аккаунт проверен",
+      params.failedAccountsCount
+        ? "✅ Отчёт сформирован. Аккаунт требует повторной проверки."
+        : "✅ Аккаунт проверен",
     ].join("\n");
   }
 
@@ -813,7 +837,9 @@ function buildWeeklyReport(params: {
     "",
     params.dialogAnalyticsBlock,
     "",
-    "✅ Аккаунты проверены",
+    params.failedAccountsCount
+      ? "✅ Отчёт сформирован. Часть аккаунтов требует повторной проверки."
+      : "✅ Аккаунты проверены",
   ].join("\n");
 }
 
@@ -901,24 +927,30 @@ export async function GET() {
           favorites: 0,
           expenses: 0,
         };
+        let failedAccountsCount = 0;
 
         for (const account of accounts as AvitoAccount[]) {
-          if (!account.access_token || !account.avito_user_id) {
-            accountBlocks.push(
-              [
-                "━━━━━━━━━━━━",
-                `Аккаунт: <b>${account.name}</b>`,
-                "",
-                "⚠️ Аккаунт не проверен: нет access_token или avito_user_id.",
-              ].join("\n")
-            );
+          try {
+            if (!account.access_token || !account.avito_user_id) {
+              accountBlocks.push(
+                [
+                  "━━━━━━━━━━━━",
+                  `Аккаунт: <b>${account.name}</b>`,
+                  "",
+                  "⚠️ Аккаунт не проверен: нет access_token или avito_user_id.",
+                ].join("\n")
+              );
 
-            continue;
-          }
+              continue;
+            }
 
-          const itemIds = await getAllItemIds(account.access_token);
+            const itemIds = await getCachedAvitoItemIds({
+              accountId: account.id,
+              avitoUserId: account.avito_user_id,
+              accessToken: account.access_token,
+            });
 
-          const currentStatsRaw = await getStatsForPeriod({
+            const currentStatsRaw = await getStatsForPeriod({
   accessToken: account.access_token,
   avitoUserId: account.avito_user_id,
   itemIds,
@@ -982,6 +1014,12 @@ const previousStats = buildStats({
               previous: previousStats,
             })
           );
+          } catch (accountError) {
+            failedAccountsCount += 1;
+            accountBlocks.push(buildAccountErrorBlock(account.name, accountError));
+          }
+
+          await sleep(800);
         }
 
         const totalCurrent = buildStats(totalCurrentRaw);
@@ -997,6 +1035,7 @@ const previousStats = buildStats({
           totalCurrent,
           totalPrevious,
           dialogAnalyticsBlock,
+          failedAccountsCount,
         });
 
         await sendTelegramMessage(client.telegram_chat_id, reportText);
