@@ -6,11 +6,11 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
-  MessageSquareText,
   RefreshCcw,
   Route,
   Search,
   Settings2,
+  XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { canAccessCrm, isAppRole } from "../../lib/permissions";
@@ -20,6 +20,8 @@ type IntegrationCard = {
   name: string;
   status: string;
   description: string;
+  sourceKind: "avito" | "tilda" | "telegram" | "yandex_direct";
+  accentClassName: string;
   href?: string;
   color: string;
 };
@@ -49,6 +51,8 @@ const integrationCards: IntegrationCard[] = [
   {
     name: "Avito",
     status: "Работает",
+    sourceKind: "avito",
+    accentClassName: "bg-[#00AA4F] text-white",
     description:
       "Диалоги и заявки попадают в CRM, создают сделку и сохраняют ссылку на объявление.",
     href: "/avito-reports",
@@ -58,6 +62,8 @@ const integrationCards: IntegrationCard[] = [
   {
     name: "Tilda",
     status: "Готово к подключению",
+    sourceKind: "tilda",
+    accentClassName: "bg-[#111827] text-white",
     description:
       "Форма Tilda может отправлять заявку прямо в CRM. Сделка попадет в первую колонку продаж.",
     color:
@@ -66,6 +72,8 @@ const integrationCards: IntegrationCard[] = [
   {
     name: "Яндекс Директ",
     status: "Готово к подключению",
+    sourceKind: "yandex_direct",
+    accentClassName: "bg-[#FC3F1D] text-white",
     description:
       "Можно принимать рекламные заявки через webhook или автоматически забирать лиды из Direct Leads API.",
     color:
@@ -74,6 +82,8 @@ const integrationCards: IntegrationCard[] = [
   {
     name: "Telegram",
     status: "Готово к подключению",
+    sourceKind: "telegram",
+    accentClassName: "bg-[#229ED9] text-white",
     description:
       "Отдельный CRM webhook принимает сообщения Telegram и создает сделку с диалогом.",
     color:
@@ -81,13 +91,24 @@ const integrationCards: IntegrationCard[] = [
   },
 ];
 
-function getBaseUrl() {
-  if (typeof window !== "undefined") {
-    return window.location.origin;
-  }
+const tildaFieldMap = [
+  ["Имя клиента", "name, Name, Имя, Ваше имя, clientName"],
+  ["Телефон", "phone, Phone, tel, Телефон, Ваш телефон"],
+  ["Telegram", "telegram, Telegram, tg, username"],
+  ["Стоимость услуги", "serviceAmount, service_amount, Стоимость услуги"],
+  ["Бюджет", "budget, Бюджет, Рекламный бюджет"],
+  ["Название формы", "formname, form_name, Форма, formid"],
+];
 
-  return process.env.NEXT_PUBLIC_APP_URL || "https://rivn-dashboard.vercel.app";
-}
+const yandexFieldMap = [
+  ["Имя клиента", "name, clientName, client_name, Имя, ФИО"],
+  ["Телефон", "phone, tel, clientPhone, Телефон"],
+  ["Telegram", "telegram, tg, username"],
+  ["Кампания", "utm_campaign, campaign, campaign_name, Кампания"],
+  ["Ключевая фраза", "utm_term, keyword, phrase, Ключевая фраза"],
+  ["Стоимость услуги", "serviceAmount, service_amount, Стоимость услуги"],
+  ["Бюджет", "budget, ad_budget, Бюджет"],
+];
 
 function parseTurboPageIds(value: string) {
   return value
@@ -110,6 +131,8 @@ function formatDateTime(value?: string | null) {
 
 export default function CrmIntegrationsPage() {
   const { role, isReady, workspace } = useAppContextState();
+  const [isMounted, setIsMounted] = useState(false);
+  const [appBaseUrl, setAppBaseUrl] = useState("https://rivn-dashboard.vercel.app");
   const [copied, setCopied] = useState<string | null>(null);
   const [oauthToken, setOauthToken] = useState("");
   const [clientLogin, setClientLogin] = useState("");
@@ -122,25 +145,45 @@ export default function CrmIntegrationsPage() {
   const [isSavingYandex, setIsSavingYandex] = useState(false);
   const [isCheckingYandex, setIsCheckingYandex] = useState(false);
   const [isLoadingYandexStatus, setIsLoadingYandexStatus] = useState(false);
+  const [isRunningYandexSync, setIsRunningYandexSync] = useState(false);
+  const [isAvitoConnected, setIsAvitoConnected] = useState(false);
+  const [testingIntegration, setTestingIntegration] = useState("");
+  const [leadIngestionSettings, setLeadIngestionSettings] = useState<
+    Record<IntegrationCard["sourceKind"], boolean>
+  >({
+    avito: true,
+    tilda: true,
+    telegram: true,
+    yandex_direct: true,
+  });
+  const [updatingLeadIngestion, setUpdatingLeadIngestion] = useState("");
 
   const currentRole = isAppRole(role) ? role : null;
   const hasAccess = currentRole ? canAccessCrm(currentRole) : false;
   const tildaWebhookUrl = useMemo(() => {
     const workspaceId = workspace?.id ?? "WORKSPACE_ID";
-    return `${getBaseUrl()}/api/crm/tilda?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
-  }, [workspace?.id]);
+    return `${appBaseUrl}/api/crm/tilda?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
+  }, [appBaseUrl, workspace?.id]);
   const telegramWebhookUrl = useMemo(() => {
     const workspaceId = workspace?.id ?? "WORKSPACE_ID";
-    return `${getBaseUrl()}/api/crm/telegram?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
-  }, [workspace?.id]);
+    return `${appBaseUrl}/api/crm/telegram?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
+  }, [appBaseUrl, workspace?.id]);
   const yandexDirectWebhookUrl = useMemo(() => {
     const workspaceId = workspace?.id ?? "WORKSPACE_ID";
-    return `${getBaseUrl()}/api/crm/yandex-direct?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
-  }, [workspace?.id]);
+    return `${appBaseUrl}/api/crm/yandex-direct?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
+  }, [appBaseUrl, workspace?.id]);
   const yandexDirectSyncUrl = useMemo(
-    () => `${getBaseUrl()}/api/cron/yandex-direct-leads?secret=CRON_SECRET`,
-    []
+    () => `${appBaseUrl}/api/cron/yandex-direct-leads?secret=CRON_SECRET`,
+    [appBaseUrl]
   );
+
+  useEffect(() => {
+    setIsMounted(true);
+
+    if (typeof window !== "undefined") {
+      setAppBaseUrl(window.location.origin);
+    }
+  }, []);
 
   async function loadYandexStatus() {
     if (!workspace?.id) return;
@@ -177,8 +220,140 @@ export default function CrmIntegrationsPage() {
   useEffect(() => {
     if (isReady && hasAccess && workspace?.id) {
       void loadYandexStatus();
+      void loadIntegrationSettings();
+      void loadAvitoStatus();
     }
   }, [hasAccess, isReady, workspace?.id]);
+
+  async function loadAvitoStatus() {
+    if (!workspace?.id) return;
+
+    const response = await fetch(
+      `/api/avito/integrations?workspaceId=${workspace.id}`,
+      { cache: "no-store" }
+    );
+    const result = await response.json();
+
+    if (response.ok && result.ok) {
+      setIsAvitoConnected((result.integrations ?? []).length > 0);
+    }
+  }
+
+  async function loadIntegrationSettings() {
+    if (!workspace?.id) return;
+
+    const response = await fetch(
+      `/api/crm/integration-settings?workspaceId=${workspace.id}`,
+      { cache: "no-store" }
+    );
+    const result = await response.json();
+
+    if (response.ok && result.ok) {
+      setLeadIngestionSettings((current) => ({
+        ...current,
+        ...(result.settings ?? {}),
+      }));
+    }
+  }
+
+  async function toggleLeadIngestion(sourceKind: IntegrationCard["sourceKind"]) {
+    if (!workspace?.id) return;
+
+    const nextValue = !leadIngestionSettings[sourceKind];
+
+    try {
+      setUpdatingLeadIngestion(sourceKind);
+      const response = await fetch("/api/crm/integration-settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace.id,
+          sourceKind,
+          isLeadIngestionEnabled: nextValue,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Не удалось обновить настройку");
+      }
+
+      setLeadIngestionSettings((current) => ({
+        ...current,
+        [sourceKind]: nextValue,
+      }));
+    } catch (error) {
+      setYandexMessage(
+        error instanceof Error
+          ? error.message
+          : "Не удалось обновить настройку интеграции"
+      );
+    } finally {
+      setUpdatingLeadIngestion("");
+    }
+  }
+
+  async function sendIntegrationTest(
+    sourceKind: Exclude<IntegrationCard["sourceKind"], "avito">
+  ) {
+    if (!workspace?.id) return;
+
+    try {
+      setYandexMessage("");
+      setTestingIntegration(sourceKind);
+
+      const response = await fetch("/api/crm/integration-test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace.id,
+          sourceKind,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Тестовая заявка не дошла до CRM");
+      }
+
+      setYandexMessage(
+        `Тестовая заявка создана в CRM. Сделка: ${result.dealId ?? "создана"}.`
+      );
+
+      if (sourceKind === "yandex_direct") {
+        await loadYandexStatus();
+      }
+    } catch (error) {
+      setYandexMessage(
+        error instanceof Error ? error.message : "Ошибка проверки интеграции"
+      );
+    } finally {
+      setTestingIntegration("");
+    }
+  }
+
+  function isIntegrationConnected(integration: IntegrationCard) {
+    if (integration.sourceKind === "avito") {
+      return isAvitoConnected;
+    }
+
+    if (integration.sourceKind === "yandex_direct") {
+      return yandexStatus?.integration?.is_active === true;
+    }
+
+    return false;
+  }
+
+  function getBrandLogo(integration: IntegrationCard) {
+    if (integration.sourceKind === "avito") return "A";
+    if (integration.sourceKind === "tilda") return "T";
+    if (integration.sourceKind === "yandex_direct") return "Я";
+    return "Tg";
+  }
 
   async function copyValue(value: string, label: string) {
     await navigator.clipboard.writeText(value);
@@ -315,7 +490,34 @@ export default function CrmIntegrationsPage() {
     }
   }
 
-  if (!isReady) {
+  async function runYandexSyncNow() {
+    try {
+      setYandexMessage("");
+      setIsRunningYandexSync(true);
+
+      const response = await fetch(yandexDirectSyncUrl, { cache: "no-store" });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Синхронизация Яндекс Директа не прошла");
+      }
+
+      setYandexMessage(
+        `Синхронизация завершена. Создано сделок: ${result.createdDeals ?? 0}, дублей пропущено: ${result.skippedDuplicates ?? 0}.`
+      );
+      await loadYandexStatus();
+    } catch (error) {
+      setYandexMessage(
+        error instanceof Error
+          ? error.message
+          : "Ошибка запуска синхронизации Яндекс Директа"
+      );
+    } finally {
+      setIsRunningYandexSync(false);
+    }
+  }
+
+  if (!isMounted || !isReady) {
     return (
       <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
         <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#121827]">
@@ -414,30 +616,74 @@ export default function CrmIntegrationsPage() {
       </section>
 
       <section className="mt-5 grid gap-4 lg:grid-cols-2">
-        {integrationCards.map((integration) => (
-          <div
-            key={integration.name}
-            className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]"
-          >
+        {integrationCards.map((integration) => {
+          const isConnected = isIntegrationConnected(integration);
+
+          return (
+            <div
+              key={integration.name}
+              className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]"
+            >
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
-                <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-200">
-                  <MessageSquareText className="h-5 w-5" />
+                <span
+                  className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-black shadow-sm ${integration.accentClassName}`}
+                >
+                  {getBrandLogo(integration)}
                 </span>
                 <div>
                   <h2 className="text-xl font-semibold">{integration.name}</h2>
                   <span
-                    className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${integration.color}`}
+                    className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                      isConnected
+                        ? integration.color
+                        : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-100"
+                    }`}
                   >
-                    {integration.status}
+                    {isConnected ? "Подключено" : "Не подключено"}
                   </span>
                 </div>
               </div>
-              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              {isConnected ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              ) : (
+                <XCircle className="h-5 w-5 text-rose-500" />
+              )}
             </div>
             <p className="mt-4 text-sm leading-6 text-slate-500 dark:text-slate-400">
               {integration.description}
             </p>
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                    Принимать заявки в CRM
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                    Можно выключить заявки, не отключая отчёты и сохранённые настройки.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void toggleLeadIngestion(integration.sourceKind)}
+                  disabled={updatingLeadIngestion === integration.sourceKind}
+                  className={`h-7 w-12 rounded-full p-1 transition disabled:opacity-50 ${
+                    leadIngestionSettings[integration.sourceKind]
+                      ? "bg-emerald-500"
+                      : "bg-slate-300 dark:bg-white/15"
+                  }`}
+                  aria-label="Переключить приём заявок"
+                >
+                  <span
+                    className={`block h-5 w-5 rounded-full bg-white shadow-sm transition ${
+                      leadIngestionSettings[integration.sourceKind]
+                        ? "translate-x-5"
+                        : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
             {integration.href ? (
               <Link
                 href={integration.href}
@@ -446,9 +692,31 @@ export default function CrmIntegrationsPage() {
                 Открыть подключение
                 <ExternalLink className="h-4 w-4" />
               </Link>
-            ) : null}
+            ) : (
+              <button
+                type="button"
+                onClick={() =>
+                  void sendIntegrationTest(
+                    integration.sourceKind as Exclude<
+                      IntegrationCard["sourceKind"],
+                      "avito"
+                    >
+                  )
+                }
+                disabled={
+                  testingIntegration === integration.sourceKind ||
+                  !leadIngestionSettings[integration.sourceKind]
+                }
+                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50"
+              >
+                {testingIntegration === integration.sourceKind
+                  ? "Проверяем..."
+                  : "Создать тестовую заявку"}
+              </button>
+            )}
           </div>
-        ))}
+          );
+        })}
       </section>
 
       <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
@@ -478,6 +746,41 @@ export default function CrmIntegrationsPage() {
         <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-6 text-slate-700 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-200">
           {tildaWebhookUrl}
         </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">
+              Как подключить Tilda
+            </p>
+            <ol className="mt-3 space-y-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              <li>1. Открой форму в Tilda и перейди в приём данных.</li>
+              <li>2. Выбери Webhook и вставь ссылку выше.</li>
+              <li>3. В полях формы используй понятные названия: name, phone, telegram, budget.</li>
+              <li>4. Нажми “Создать тестовую заявку” в карточке Tilda сверху.</li>
+            </ol>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">
+              Как поля Tilda попадут в сделку
+            </p>
+            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
+              {tildaFieldMap.map(([label, fields]) => (
+                <div
+                  key={label}
+                  className="grid gap-2 border-b border-slate-200 px-3 py-2 text-xs last:border-b-0 dark:border-white/10 sm:grid-cols-[150px_1fr]"
+                >
+                  <span className="font-semibold text-slate-800 dark:text-white">
+                    {label}
+                  </span>
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {fields}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
@@ -506,6 +809,31 @@ export default function CrmIntegrationsPage() {
 
         <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-6 text-slate-700 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-200">
           {telegramWebhookUrl}
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">
+              Как работает Telegram
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              Когда внешний Telegram-бот или связка через Make/Albato отправит
+              сообщение на этот webhook, RIVN OS создаст диалог и сделку в CRM.
+              Повторные сообщения из того же чата попадут в ту же сделку.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">
+              Что передавать в Telegram webhook
+            </p>
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 font-mono text-xs leading-6 text-slate-700 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-200">
+              message.text, message.chat.id, message.message_id, message.from.username
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              Для быстрой проверки нажми “Создать тестовую заявку” в карточке Telegram сверху.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -666,6 +994,49 @@ export default function CrmIntegrationsPage() {
 
             <div className="mt-4 rounded-xl border border-amber-200 bg-white/70 p-3 font-mono text-xs leading-6 text-amber-900 dark:border-amber-500/20 dark:bg-black/10 dark:text-amber-100">
               {yandexDirectSyncUrl}
+            </div>
+
+            <div className="mt-4 grid gap-3 rounded-2xl border border-amber-200 bg-white/70 p-4 text-sm text-amber-950 dark:border-amber-500/20 dark:bg-black/10 dark:text-amber-100">
+              <p className="font-semibold">Автосинхронизация</p>
+              <p className="text-xs leading-5 opacity-70">
+                Эту ссылку можно поставить в cron-job.org, чтобы RIVN OS сам
+                забирал новые заявки из Яндекс Директа. Для активных рекламных
+                кампаний оптимально запускать каждые 10-15 минут.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void copyValue(yandexDirectSyncUrl, "yandex-sync")}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-3 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 dark:border-amber-500/20 dark:bg-white/10 dark:text-amber-100"
+                >
+                  <Copy className="h-4 w-4" />
+                  {copied === "yandex-sync" ? "Скопировано" : "Скопировать ссылку"}
+                </button>
+                <button
+                  type="button"
+                  onClick={runYandexSyncNow}
+                  disabled={isRunningYandexSync || !yandexStatus?.integration}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-amber-500 px-3 text-xs font-semibold text-white transition hover:bg-amber-400 disabled:opacity-50"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  {isRunningYandexSync ? "Запускаем..." : "Запустить сейчас"}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-white/70 p-4 text-sm text-amber-950 dark:border-amber-500/20 dark:bg-black/10 dark:text-amber-100">
+              <p className="font-semibold">Как поля Яндекса попадут в сделку</p>
+              <div className="mt-3 overflow-hidden rounded-xl border border-amber-200 dark:border-amber-500/20">
+                {yandexFieldMap.map(([label, fields]) => (
+                  <div
+                    key={label}
+                    className="grid gap-2 border-b border-amber-200 px-3 py-2 text-xs last:border-b-0 dark:border-amber-500/20 sm:grid-cols-[150px_1fr]"
+                  >
+                    <span className="font-semibold">{label}</span>
+                    <span className="opacity-75">{fields}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {yandexMessage ? (

@@ -932,10 +932,19 @@ export default function Home() {
     !isLoadingDashboardKpis &&
     !isOnboardingDismissed &&
     onboardingSteps.some((step) => !step.isDone);
+  const shouldShowOnboardingLauncher =
+    !isLoadingDashboardKpis &&
+    isOnboardingDismissed &&
+    onboardingSteps.some((step) => !step.isDone);
 
   function dismissOnboarding() {
     setIsOnboardingDismissed(true);
     window.localStorage.setItem("rivn-dashboard-onboarding-dismissed", "1");
+  }
+
+  function showOnboarding() {
+    setIsOnboardingDismissed(false);
+    window.localStorage.removeItem("rivn-dashboard-onboarding-dismissed");
   }
 
     if (!isAccessLoading && !hasAccess) {
@@ -1009,6 +1018,16 @@ export default function Home() {
             steps={onboardingSteps}
             onDismiss={dismissOnboarding}
           />
+        ) : null}
+
+        {shouldShowOnboardingLauncher ? (
+          <button
+            type="button"
+            onClick={showOnboarding}
+            className="inline-flex w-fit items-center gap-2 rounded-2xl border border-emerald-400/15 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/15"
+          >
+            Показать быстрый старт
+          </button>
         ) : null}
 
         {isLoadingDashboardShell ? (

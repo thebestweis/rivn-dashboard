@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Camera, Save } from "lucide-react";
+import { Camera, Save, Upload, X } from "lucide-react";
 import { queryKeys } from "../../lib/query-keys";
 import {
   getWorkspaceMemberDisplayName,
@@ -37,6 +37,9 @@ export function ProfileSettingsTab() {
   const [form, setForm] = useState<ProfileForm>(emptyProfileForm);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
     "success"
   );
@@ -53,6 +56,7 @@ export function ProfileSettingsTab() {
       .slice(0, 2)
       .map((part) => part.charAt(0).toUpperCase())
       .join("") || "R";
+  const avatarPreviewSrc = avatarPreviewUrl || form.avatarUrl.trim();
 
   useEffect(() => {
     if (!currentMember) return;
@@ -65,7 +69,23 @@ export function ProfileSettingsTab() {
       phone: currentMember.phone ?? "",
       telegram: currentMember.telegram ?? "",
     });
+    setAvatarFile(null);
+    if (avatarInputRef.current) {
+      avatarInputRef.current.value = "";
+    }
   }, [currentMember]);
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewUrl("");
+      return;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(nextPreviewUrl);
+
+    return () => URL.revokeObjectURL(nextPreviewUrl);
+  }, [avatarFile]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -79,15 +99,24 @@ export function ProfileSettingsTab() {
 
     try {
       setIsSaving(true);
-      await updateMyWorkspaceMemberProfile(form);
+      await updateMyWorkspaceMemberProfile({ ...form, avatarFile });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.workspaceMembers }),
+        workspace?.id
+          ? queryClient.invalidateQueries({
+              queryKey: queryKeys.workspaceMembersByWorkspace(workspace.id),
+            })
+          : Promise.resolve(),
         queryClient.invalidateQueries({
           queryKey: workspace?.id
             ? ["workspace-members-settings", "workspace", workspace.id]
             : ["workspace-members-settings"],
         }),
       ]);
+      setAvatarFile(null);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = "";
+      }
       setToastType("success");
       setToastMessage("Профиль сохранён");
     } catch (error) {
@@ -114,9 +143,9 @@ export function ProfileSettingsTab() {
         <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.24)]">
           <p className="text-sm font-semibold text-white/50">Карточка профиля</p>
           <div className="mt-5 flex items-center gap-4">
-            {form.avatarUrl.trim() ? (
+            {avatarPreviewSrc ? (
               <img
-                src={form.avatarUrl.trim()}
+                src={avatarPreviewSrc}
                 alt={previewName}
                 className="h-20 w-20 rounded-2xl object-cover"
               />
@@ -195,6 +224,67 @@ export function ProfileSettingsTab() {
             </label>
 
             <label className="text-sm font-semibold text-white/60 md:col-span-2">
+              Аватарка
+              <div className="mt-2 flex flex-col gap-3 rounded-xl border border-white/10 bg-[#0B0F1A] p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/50">
+                  {avatarPreviewSrc ? (
+                    <img
+                      src={avatarPreviewSrc}
+                      alt={previewName}
+                      className="h-full w-full rounded-xl object-cover"
+                    />
+                  ) : (
+                    <Camera className="h-5 w-5" />
+                  )}
+                </div>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(event) =>
+                    setAvatarFile(event.target.files?.[0] ?? null)
+                  }
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm text-white/80">
+                    {avatarFile?.name || "Загрузи фото профиля"}
+                  </div>
+                  <div className="mt-1 text-xs text-white/40">
+                    PNG, JPG, WebP или GIF до 5 МБ.
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/[0.08]"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Загрузить
+                  </button>
+                  {avatarPreviewSrc ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvatarFile(null);
+                        setAvatarPreviewUrl("");
+                        setForm((current) => ({ ...current, avatarUrl: "" }));
+                        if (avatarInputRef.current) {
+                          avatarInputRef.current.value = "";
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/15"
+                    >
+                      <X className="h-4 w-4" />
+                      Убрать
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </label>
+
+            <label className="hidden">
               Ссылка на аватарку
               <div className="mt-2 flex gap-2">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/50">

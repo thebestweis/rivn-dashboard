@@ -132,6 +132,7 @@ export async function GET(request: Request) {
             name,
             avito_user_id,
             avito_client_id,
+            crm_dialogs_enabled,
             is_active
           )
         `)
@@ -244,6 +245,7 @@ export async function POST(request: Request) {
         avito_user_id: account.avitoUserId,
         avito_client_id: account.avitoClientId,
         avito_client_secret: account.avitoClientSecret,
+        crm_dialogs_enabled: account.crmDialogsEnabled ?? true,
         is_active: account.isActive ?? true,
       };
     });
@@ -384,6 +386,10 @@ export async function PATCH(request: Request) {
 
     if (typeof patch.isActive === "boolean") {
       accountUpdatePayload.is_active = patch.isActive;
+    }
+
+    if (typeof patch.crmDialogsEnabled === "boolean") {
+      accountUpdatePayload.crm_dialogs_enabled = patch.crmDialogsEnabled;
     }
 
     if (typeof patch.accountName === "string" && patch.accountName.trim()) {

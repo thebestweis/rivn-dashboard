@@ -27,7 +27,7 @@ export function usePayrollAccrualsQuery(enabled = true) {
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
 
@@ -46,7 +46,7 @@ export function usePayrollPayoutsQuery(enabled = true) {
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
 
@@ -65,6 +65,6 @@ export function usePayrollExtraPaymentsQuery(enabled = true) {
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }

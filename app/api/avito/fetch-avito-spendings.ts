@@ -31,6 +31,10 @@ const spendingsCache = new Map<
 
 const pendingSpendingsRequests = new Map<string, Promise<any>>();
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function getServiceSupabase() {
   if (!supabaseUrl || !supabaseKey) {
     return null;
@@ -146,6 +150,35 @@ async function getCachedSpendingsFromDatabase(params: {
   );
 }
 
+async function getCachedSpendingsRowsFromDatabase(params: {
+  accountId?: string;
+  dateFrom: string;
+  dateTo: string;
+}) {
+  if (!params.accountId) {
+    return new Map<string, { expense_date: string; amount: number | string | null }>();
+  }
+
+  const supabase = getServiceSupabase();
+
+  if (!supabase) {
+    return new Map<string, { expense_date: string; amount: number | string | null }>();
+  }
+
+  const { data, error } = await supabase
+    .from("avito_report_expenses")
+    .select("expense_date, amount")
+    .eq("account_id", params.accountId)
+    .gte("expense_date", params.dateFrom)
+    .lte("expense_date", params.dateTo);
+
+  if (error || !data) {
+    return new Map<string, { expense_date: string; amount: number | string | null }>();
+  }
+
+  return new Map(data.map((row) => [String(row.expense_date), row]));
+}
+
 async function saveSpendingsToDatabase(params: {
   accountId?: string;
   dateFrom: string;
@@ -206,6 +239,85 @@ async function saveSpendingsToDatabase(params: {
   );
 }
 
+function mergeSpendingsResponses(responses: any[]) {
+  const groupings = responses.flatMap((response) =>
+    Array.isArray(response?.result?.groupings) ? response.result.groupings : []
+  );
+
+  return {
+    result: {
+      groupings: groupings.sort((left, right) =>
+        String(left?.date || "").localeCompare(String(right?.date || ""))
+      ),
+    },
+  };
+}
+
+async function fetchAvitoSpendingsOnce(params: FetchAvitoSpendingsParams) {
+  const response = await fetch(
+    `https://api.avito.ru/stats/v2/accounts/${params.userId}/spendings`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        dateFrom: params.dateFrom,
+        dateTo: params.dateTo,
+        filter: null,
+        grouping: params.grouping,
+        spendingTypes: params.spendingTypes,
+      }),
+      cache: "no-store",
+    }
+  );
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    const error = new Error(
+      `Avito spendings failed: ${response.status}. ${text}`
+    );
+    (error as Error & { status?: number; retryAfter?: number }).status =
+      response.status;
+
+    const retryAfter = Number(response.headers.get("retry-after"));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) {
+      (error as Error & { status?: number; retryAfter?: number }).retryAfter =
+        retryAfter * 1000;
+    }
+
+    throw error;
+  }
+
+  return JSON.parse(text);
+}
+
+async function fetchAvitoSpendingsWithRetry(params: FetchAvitoSpendingsParams) {
+  const delays = [1200, 2800, 5500, 9000];
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
+    try {
+      return await fetchAvitoSpendingsOnce(params);
+    } catch (error) {
+      lastError = error;
+      const status = (error as Error & { status?: number }).status;
+
+      if (status !== 429 || attempt === delays.length) {
+        break;
+      }
+
+      const retryAfter = (error as Error & { retryAfter?: number }).retryAfter;
+      await sleep(retryAfter ?? delays[attempt]);
+    }
+  }
+
+  throw lastError;
+}
+
 export async function fetchAvitoSpendings({
   accountId,
   accessToken,
@@ -252,33 +364,63 @@ export async function fetchAvitoSpendings({
       return databaseCached;
     }
 
-    const response = await fetch(
-      `https://api.avito.ru/stats/v2/accounts/${userId}/spendings`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          dateFrom,
-          dateTo,
-          filter: null,
+    let data: any;
+
+    try {
+      data = await fetchAvitoSpendingsWithRetry({
+        accountId,
+        accessToken,
+        userId,
+        dateFrom,
+        dateTo,
+        grouping,
+        spendingTypes,
+      });
+    } catch (error) {
+      const status = (error as Error & { status?: number }).status;
+
+      if (status !== 429 || grouping !== "day") {
+        throw error;
+      }
+
+      const cachedRows = await getCachedSpendingsRowsFromDatabase({
+        accountId,
+        dateFrom,
+        dateTo,
+      });
+      const dailyResponses = [];
+
+      for (const date of getDateRange(dateFrom, dateTo)) {
+        const cachedRow = cachedRows.get(date);
+
+        if (cachedRow) {
+          dailyResponses.push(buildSyntheticSpendings([cachedRow]));
+          continue;
+        }
+
+        const dayData = await fetchAvitoSpendingsWithRetry({
+          accountId,
+          accessToken,
+          userId,
+          dateFrom: date,
+          dateTo: date,
           grouping,
           spendingTypes,
-        }),
-        cache: "no-store",
+        });
+
+        await saveSpendingsToDatabase({
+          accountId,
+          dateFrom: date,
+          dateTo: date,
+          data: dayData,
+        });
+
+        dailyResponses.push(dayData);
+        await sleep(1200);
       }
-    );
 
-    const text = await response.text();
-
-    if (!response.ok) {
-      throw new Error(`Avito spendings failed: ${response.status}. ${text}`);
+      data = mergeSpendingsResponses(dailyResponses);
     }
-
-    const data = JSON.parse(text);
 
     await saveSpendingsToDatabase({
       accountId,

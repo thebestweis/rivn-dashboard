@@ -292,7 +292,7 @@ export function AppSidebar() {
   useEffect(() => {
     if (!isMounted || permissionsLoading) return;
 
-    for (const item of filteredNavItems.slice(0, 4)) {
+    for (const item of filteredNavItems) {
       router.prefetch(item.href);
     }
   }, [filteredNavItems, isMounted, permissionsLoading, router]);

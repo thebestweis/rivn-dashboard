@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type DragEvent } from "react";
 import { motion } from "framer-motion";
 import {
   CreateProjectModal,
@@ -67,6 +67,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
   const [isNoClientsModalOpen, setIsNoClientsModalOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [orderedProjectIds, setOrderedProjectIds] = useState<string[]>([]);
   const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
@@ -164,7 +165,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
   }, [activeTaskCounts]);
 
   const filteredProjects = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const normalizedQuery = deferredSearchQuery.trim().toLowerCase();
 
     const orderIndexByProjectId = new Map(
       orderedProjectIds.map((id, index) => [id, index])
@@ -192,7 +193,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
 
       return matchesSearch && matchesStatus;
     });
-  }, [projects, clientNamesById, orderedProjectIds, searchQuery, statusFilter]);
+  }, [projects, clientNamesById, orderedProjectIds, deferredSearchQuery, statusFilter]);
 
   const hasActiveFilters =
     searchQuery.trim().length > 0 || statusFilter !== "all";
@@ -468,6 +469,21 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
                       ? "Создайте первый проект, чтобы начать вести направления, задачи и внутреннюю информацию по клиентам."
                       : "В этом кабинете пока нет доступных проектов."}
                 </p>
+
+                {!hasActiveFilters && canManageProjects ? (
+                  <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs text-white/55">
+                    {["1. Создай клиента", "2. Добавь проект", "3. Поставь задачи"].map(
+                      (step) => (
+                        <span
+                          key={step}
+                          className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1"
+                        >
+                          {step}
+                        </span>
+                      )
+                    )}
+                  </div>
+                ) : null}
 
                 {!hasActiveFilters && showManageProjectsActions ? (
   <button

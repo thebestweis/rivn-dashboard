@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../lib/query-keys";
 import { getProjectById } from "../../lib/supabase/projects";
@@ -64,7 +64,7 @@ function formatProjectDate(value: string | null) {
   }).format(date);
 }
 
-export function ProjectCard({
+function ProjectCardComponent({
   id,
   name,
   clientName,
@@ -202,3 +202,5 @@ export function ProjectCard({
     </Link>
   );
 }
+
+export const ProjectCard = memo(ProjectCardComponent);

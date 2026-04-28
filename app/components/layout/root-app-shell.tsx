@@ -5,6 +5,7 @@ import { AppSidebar } from "./app-sidebar";
 import { AccessDenied } from "../access/access-denied";
 import { usePathAccess } from "../../lib/use-page-access";
 import { useAppContextState } from "../../providers/app-context-provider";
+import { AppDataPreloader } from "../../providers/app-data-preloader";
 
 const appRoutes = [
   "/dashboard",
@@ -110,6 +111,7 @@ export function RootAppShell({
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950 dark:bg-[#0B0F1A] dark:text-white">
+      <AppDataPreloader />
       <div className="flex min-h-screen">
         <AppSidebar />
 

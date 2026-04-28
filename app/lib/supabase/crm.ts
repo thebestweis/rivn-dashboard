@@ -6,6 +6,11 @@ import {
   type AppRole,
 } from "../permissions";
 import { getAppContext } from "./app-context";
+import {
+  CHAT_ATTACHMENTS_BUCKET,
+  assertChatAttachment,
+  uploadChatAttachment,
+} from "./project-comments";
 import { createTask, updateTask } from "./tasks";
 
 export type CrmPipelineKind = "sales" | "delivery";
@@ -163,6 +168,10 @@ export type CrmDealComment = {
   author_member_id: string | null;
   body: string;
   file_url: string | null;
+  file_name: string | null;
+  file_type: string | null;
+  file_size: number | null;
+  storage_path: string | null;
   created_at: string;
 };
 
@@ -225,6 +234,7 @@ export type CreateCrmDealCommentInput = {
   deal_id: string;
   body: string;
   file_url?: string | null;
+  file?: File | null;
 };
 
 export type CreateCrmMessageInput = {
@@ -403,6 +413,7 @@ type DbCrmSalesPlanRow = Omit<
 };
 
 const CRM_STAGE_DEAL_LIMIT = 80;
+const ensuredCrmDefaultsByWorkspace = new Set<string>();
 
 function normalizeFilterValue(value?: string | null) {
   const normalized = value?.trim();
@@ -514,6 +525,44 @@ function mapSalesPlan(row: DbCrmSalesPlanRow): CrmSalesPlan {
     won_deals_plan: Number(row.won_deals_plan ?? 0),
     leads_plan: Number(row.leads_plan ?? 0),
   };
+}
+
+async function attachDealCommentSignedUrls(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  comments: CrmDealComment[]
+) {
+  return Promise.all(
+    comments.map(async (comment) => {
+      if (!comment.storage_path) {
+        return {
+          ...comment,
+          file_name: comment.file_name ?? null,
+          file_type: comment.file_type ?? null,
+          file_size:
+            comment.file_size === null || comment.file_size === undefined
+              ? null
+              : Number(comment.file_size),
+          storage_path: comment.storage_path ?? null,
+        };
+      }
+
+      const { data } = await supabase.storage
+        .from(CHAT_ATTACHMENTS_BUCKET)
+        .createSignedUrl(comment.storage_path, 60 * 60);
+
+      return {
+        ...comment,
+        file_url: data?.signedUrl ?? comment.file_url,
+        file_name: comment.file_name ?? null,
+        file_type: comment.file_type ?? null,
+        file_size:
+          comment.file_size === null || comment.file_size === undefined
+            ? null
+            : Number(comment.file_size),
+        storage_path: comment.storage_path ?? null,
+      };
+    })
+  );
 }
 
 function normalizeIds(ids?: string[]) {
@@ -661,6 +710,10 @@ async function createCrmStageHistory(params: {
 }
 
 async function ensureCrmDefaults(workspaceId: string) {
+  if (ensuredCrmDefaultsByWorkspace.has(workspaceId)) {
+    return;
+  }
+
   const { supabase } = await getAppContext();
 
   const { data: existingPipelines, error: pipelinesError } = await supabase
@@ -674,6 +727,7 @@ async function ensureCrmDefaults(workspaceId: string) {
   }
 
   if ((existingPipelines ?? []).length > 0) {
+    ensuredCrmDefaultsByWorkspace.add(workspaceId);
     return;
   }
 
@@ -767,6 +821,8 @@ async function ensureCrmDefaults(workspaceId: string) {
       `Не удалось создать причины отказа CRM: ${lossReasonsError.message}`
     );
   }
+
+  ensuredCrmDefaultsByWorkspace.add(workspaceId);
 }
 
 export async function getCrmBootstrap(
@@ -1285,9 +1341,14 @@ export async function getCrmDealDetails(
     );
   }
 
+  const comments = await attachDealCommentSignedUrls(
+    supabase,
+    (commentsResult.data ?? []) as CrmDealComment[]
+  );
+
   return {
     dealTasks: (tasksResult.data ?? []) as CrmDealTask[],
-    dealComments: (commentsResult.data ?? []) as CrmDealComment[],
+    dealComments: comments,
     dealActivities: (activitiesResult.data ?? []) as CrmDealActivity[],
     stageHistory: (stageHistoryResult.data ?? []) as CrmDealStageHistory[],
     conversations: (conversationsResult.data ?? []) as CrmConversation[],
@@ -2433,6 +2494,20 @@ export async function createCrmDealComment(
     dealId: input.deal_id,
   });
 
+  const attachment = input.file ?? null;
+  let storagePath: string | null = null;
+
+  if (attachment) {
+    assertChatAttachment(attachment);
+    storagePath = await uploadChatAttachment({
+      supabase,
+      workspaceId: workspace.id,
+      scope: "crm-deal-comments",
+      parentId: input.deal_id,
+      file: attachment,
+    });
+  }
+
   const { data, error } = await supabase
     .from("crm_deal_comments")
     .insert({
@@ -2441,6 +2516,10 @@ export async function createCrmDealComment(
       author_member_id: membership?.id ?? null,
       body: input.body.trim(),
       file_url: input.file_url ?? null,
+      file_name: attachment?.name ?? null,
+      file_type: attachment?.type || null,
+      file_size: attachment?.size ?? null,
+      storage_path: storagePath,
     })
     .select("*")
     .single();
@@ -2458,12 +2537,19 @@ export async function createCrmDealComment(
     action: "comment_created",
     payload: {
       comment_id: data.id,
-      has_file: Boolean(data.file_url),
+      has_file: Boolean(data.file_url || data.storage_path),
       file_url: data.file_url ?? null,
+      file_name: data.file_name ?? null,
+      file_size: data.file_size ?? null,
+      storage_path: data.storage_path ?? null,
     },
   });
 
-  return data as CrmDealComment;
+  const [comment] = await attachDealCommentSignedUrls(supabase, [
+    data as CrmDealComment,
+  ]);
+
+  return comment;
 }
 
 export async function createCrmMessage(

@@ -7,6 +7,8 @@ export const queryKeys = {
     ["tasks", "project", projectId] as const,
 
   tasks: ["tasks"] as const,
+  tasksByWorkspace: (workspaceId: string) =>
+    ["tasks", "workspace", workspaceId] as const,
   activeTaskCountsByProject: (workspaceId: string) =>
     ["tasks", "active-counts-by-project", workspaceId] as const,
 
@@ -43,6 +45,8 @@ export const queryKeys = {
     ["payroll-extra-payments", "workspace", workspaceId] as const,
 
   workspaceMembers: ["workspace-members"] as const,
+  workspaceMembersByWorkspace: (workspaceId: string) =>
+    ["workspace-members", "workspace", workspaceId] as const,
   workspaceMemberLimitState: ["workspace-member-limit-state"] as const,
   workspaceMemberPermissions: (memberId: string) =>
     ["workspace-member-permissions", memberId] as const,

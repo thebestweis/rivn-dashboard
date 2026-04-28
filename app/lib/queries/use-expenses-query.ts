@@ -26,7 +26,7 @@ export function useExpensesQuery(enabled = true) {
     gcTime: GC_TIME,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: true,
+    refetchOnMount: false,
     placeholderData: (previousData) => previousData,
   });
 }

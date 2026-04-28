@@ -58,6 +58,7 @@ import { useActiveWorkspaceMembers } from "../lib/queries/use-workspace-members-
 import { CustomSelect } from "../components/ui/custom-select";
 import { useAppContextState } from "../providers/app-context-provider";
 import { getWorkspaceMemberDisplayName } from "../lib/supabase/workspace-members";
+import { formatChatAttachmentSize } from "../lib/supabase/project-comments";
 import type {
   CrmDeal,
   CrmDealTask,
@@ -537,10 +538,13 @@ function CrmPageContent() {
   const [newDealTaskTitle, setNewDealTaskTitle] = useState("");
   const [newDealTaskDueAt, setNewDealTaskDueAt] = useState("");
   const [newDealComment, setNewDealComment] = useState("");
-  const [newDealCommentFileUrl, setNewDealCommentFileUrl] = useState("");
+  const [newDealCommentFile, setNewDealCommentFile] = useState<File | null>(
+    null
+  );
   const [newClientReply, setNewClientReply] = useState("");
   const [newClientReplyAttachmentUrl, setNewClientReplyAttachmentUrl] =
     useState("");
+  const dealCommentFileInputRef = useRef<HTMLInputElement | null>(null);
   const [stageNameDrafts, setStageNameDrafts] = useState<Record<string, string>>(
     {}
   );
@@ -1155,18 +1159,19 @@ function CrmPageContent() {
 
   async function addDealComment() {
     const commentBody = newDealComment.trim();
-    const fileUrl = newDealCommentFileUrl.trim();
-
-    if (!selectedDeal || (!commentBody && !fileUrl)) return;
+    if (!selectedDeal || (!commentBody && !newDealCommentFile)) return;
 
     await createDealCommentMutation.mutateAsync({
       deal_id: selectedDeal.id,
       body: commentBody || "Вложение",
-      file_url: fileUrl || null,
+      file: newDealCommentFile,
     });
 
     setNewDealComment("");
-    setNewDealCommentFileUrl("");
+    setNewDealCommentFile(null);
+    if (dealCommentFileInputRef.current) {
+      dealCommentFileInputRef.current.value = "";
+    }
   }
 
   async function sendClientReply() {
@@ -2066,6 +2071,37 @@ function CrmPageContent() {
                     : "По выбранному фильтру сообщений нет. Можно переключиться на другой фильтр выше."}
                 </div>
               ) : null}
+            </div>
+          </section>
+        ) : displayMode === "board" && activeDeals.length === 0 ? (
+          <section className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#121827]">
+            <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200">
+                <Inbox className="h-7 w-7" />
+              </div>
+              <h2 className="mt-4 text-2xl font-semibold text-slate-950 dark:text-white">
+                Сделок пока нет
+              </h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                Создай первую сделку вручную или подключи источники заявок. Когда лиды начнут приходить, они появятся здесь и их можно будет вести по воронке.
+              </p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={openCreateForm}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
+                >
+                  <Plus className="h-4 w-4" />
+                  Создать сделку
+                </button>
+                <Link
+                  href="/crm/integrations"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-emerald-200 hover:text-emerald-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.07]"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  Подключить источники
+                </Link>
+              </div>
             </div>
           </section>
         ) : displayMode === "board" ? (
@@ -3206,19 +3242,52 @@ function CrmPageContent() {
                     placeholder="Напиши договорённость, важную мысль или что нужно проверить"
                   />
                   <input
-                    value={newDealCommentFileUrl}
+                    ref={dealCommentFileInputRef}
+                    type="file"
+                    className="hidden"
                     onChange={(event) =>
-                      setNewDealCommentFileUrl(event.target.value)
+                      setNewDealCommentFile(event.target.files?.[0] ?? null)
                     }
-                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
-                    placeholder="Ссылка на файл или вложение, если нужно"
                   />
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <button
+                      type="button"
+                      onClick={() => dealCommentFileInputRef.current?.click()}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-200 dark:hover:border-violet-400/50"
+                    >
+                      <Paperclip className="h-4 w-4" />
+                      Прикрепить файл
+                    </button>
+                    {newDealCommentFile ? (
+                      <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs font-semibold text-violet-700 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-200">
+                        <span className="min-w-0 truncate">
+                          {newDealCommentFile.name}
+                          {formatChatAttachmentSize(newDealCommentFile.size)
+                            ? ` · ${formatChatAttachmentSize(newDealCommentFile.size)}`
+                            : ""}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewDealCommentFile(null);
+                            if (dealCommentFileInputRef.current) {
+                              dealCommentFileInputRef.current.value = "";
+                            }
+                          }}
+                          className="shrink-0 text-violet-500 transition hover:text-rose-500"
+                          aria-label="Убрать файл"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   <button
                     type="button"
                     onClick={() => void addDealComment()}
                     disabled={
                       (!newDealComment.trim() &&
-                        !newDealCommentFileUrl.trim()) ||
+                        !newDealCommentFile) ||
                       createDealCommentMutation.isPending
                     }
                     className="mt-3 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50"
@@ -3257,7 +3326,12 @@ function CrmPageContent() {
                             className="mt-3 inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 transition hover:border-violet-300 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-200"
                           >
                             <Paperclip className="h-3.5 w-3.5" />
-                            Открыть вложение
+                            <span className="max-w-[240px] truncate">
+                              {comment.file_name || "Открыть вложение"}
+                              {formatChatAttachmentSize(comment.file_size)
+                                ? ` · ${formatChatAttachmentSize(comment.file_size)}`
+                                : ""}
+                            </span>
                           </a>
                         ) : null}
                       </div>

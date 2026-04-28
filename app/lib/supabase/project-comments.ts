@@ -178,7 +178,7 @@ async function getAttachmentsByProjectCommentIds(
 export async function uploadChatAttachment(params: {
   supabase: SupabaseClient;
   workspaceId: string;
-  scope: "task-comments" | "project-comments";
+  scope: "task-comments" | "project-comments" | "crm-deal-comments";
   parentId: string;
   file: File;
 }) {

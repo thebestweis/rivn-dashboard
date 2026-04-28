@@ -122,6 +122,7 @@ async function getAccount(params: {
         avito_client_id,
         avito_client_secret,
         is_active,
+        crm_dialogs_enabled,
         avito_report_clients!inner (
           workspace_id
         )
@@ -141,6 +142,13 @@ async function getAccount(params: {
 
   if (!data.is_active) {
     throw new HttpError("Сначала включи Avito-аккаунт", 400);
+  }
+
+  if (data.crm_dialogs_enabled === false) {
+    throw new HttpError(
+      "Сначала включи приём заявок и диалогов в CRM для этого Avito-аккаунта",
+      400
+    );
   }
 
   if (!data.avito_user_id || !data.avito_client_id || !data.avito_client_secret) {

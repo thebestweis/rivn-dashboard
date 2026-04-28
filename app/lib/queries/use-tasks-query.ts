@@ -19,10 +19,13 @@ const STALE_TIME = 1000 * 60 * 5;
 const GC_TIME = 1000 * 60 * 30;
 
 export function useTasksQuery(enabled = true) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
   return useQuery({
-    queryKey: queryKeys.tasks,
+    queryKey: workspaceId ? queryKeys.tasksByWorkspace(workspaceId) : queryKeys.tasks,
     queryFn: getAllTasks,
-    enabled,
+    enabled: enabled && Boolean(workspaceId),
     staleTime: STALE_TIME,
     gcTime: GC_TIME,
     placeholderData: (previousData) => previousData,
@@ -51,14 +54,18 @@ export function useActiveTaskCountsByProjectQuery(enabled = true) {
 
 export function useCreateTaskMutation() {
   const queryClient = useQueryClient();
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
 
   return useMutation({
     mutationFn: createTask,
     onSuccess: (createdTask) => {
-      queryClient.setQueryData<Task[]>(queryKeys.tasks, (prev = []) => [
-        createdTask,
-        ...prev,
-      ]);
+      if (workspaceId) {
+        queryClient.setQueryData<Task[]>(
+          queryKeys.tasksByWorkspace(workspaceId),
+          (prev = []) => [createdTask, ...prev]
+        );
+      }
 
       if (createdTask.project_id) {
         queryClient.setQueryData<Task[]>(
@@ -108,17 +115,22 @@ export function syncTaskAcrossCaches(
   queryClient: ReturnType<typeof useQueryClient>,
   updatedTask: Task
 ) {
-  queryClient.setQueryData<Task[]>(queryKeys.tasks, (prev = []) => {
-    const exists = prev.some((task) => task.id === updatedTask.id);
+  queryClient
+    .getQueryCache()
+    .findAll({ queryKey: ["tasks", "workspace"] })
+    .forEach((query) => {
+      queryClient.setQueryData<Task[]>(query.queryKey, (prev = []) => {
+        const exists = prev.some((task) => task.id === updatedTask.id);
 
-    if (!exists) {
-      return [updatedTask, ...prev];
-    }
+        if (!exists) {
+          return [updatedTask, ...prev];
+        }
 
-    return prev.map((task) =>
-      task.id === updatedTask.id ? updatedTask : task
-    );
-  });
+        return prev.map((task) =>
+          task.id === updatedTask.id ? updatedTask : task
+        );
+      });
+    });
 
   if (updatedTask.project_id) {
     queryClient.setQueryData<Task[]>(
@@ -154,7 +166,12 @@ export function patchTaskStatusInCaches(
         : item
     );
 
-  queryClient.setQueryData<Task[]>(queryKeys.tasks, patch);
+  queryClient
+    .getQueryCache()
+    .findAll({ queryKey: ["tasks", "workspace"] })
+    .forEach((query) => {
+      queryClient.setQueryData<Task[]>(query.queryKey, patch);
+    });
 
   if (task.project_id) {
     queryClient.setQueryData<Task[]>(
@@ -198,7 +215,12 @@ export function patchTaskPositionsInCaches(
       };
     });
 
-  queryClient.setQueryData<Task[]>(queryKeys.tasks, patch);
+  queryClient
+    .getQueryCache()
+    .findAll({ queryKey: ["tasks", "workspace"] })
+    .forEach((query) => {
+      queryClient.setQueryData<Task[]>(query.queryKey, patch);
+    });
 
   queryClient
     .getQueryCache()

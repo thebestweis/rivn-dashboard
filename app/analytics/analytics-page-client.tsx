@@ -152,41 +152,73 @@ function calculateClientUnitEconomics(params: {
 }): ClientUnitEconomicsRow[] {
   const { clients, payments, expenses, payrollAccruals } = params;
 
-  const paidPayments = payments.filter((p) => p.status === "paid");
+  const paymentsByClientId = new Map<
+    string,
+    { revenue: number; count: number }
+  >();
+  const expensesByClientId = new Map<
+    string,
+    { amount: number; count: number }
+  >();
+  const payrollByClientId = new Map<string, number>();
+  const payrollByClientName = new Map<string, number>();
+
+  for (const payment of payments) {
+    if (payment.status !== "paid" || !payment.clientId) continue;
+
+    const current = paymentsByClientId.get(payment.clientId) ?? {
+      revenue: 0,
+      count: 0,
+    };
+
+    current.revenue += parseRubAmount(String(payment.amount ?? ""));
+    current.count += 1;
+    paymentsByClientId.set(payment.clientId, current);
+  }
+
+  for (const expense of expenses) {
+    if (!expense.client_id) continue;
+
+    const current = expensesByClientId.get(expense.client_id) ?? {
+      amount: 0,
+      count: 0,
+    };
+
+    current.amount += parseRubAmount(expense.amount);
+    current.count += 1;
+    expensesByClientId.set(expense.client_id, current);
+  }
+
+  for (const accrual of payrollAccruals) {
+    const amount = parseRubAmount(String(accrual.amount ?? ""));
+
+    if (accrual.clientId) {
+      payrollByClientId.set(
+        accrual.clientId,
+        (payrollByClientId.get(accrual.clientId) ?? 0) + amount
+      );
+      continue;
+    }
+
+    const clientName = String(accrual.client ?? "").trim().toLowerCase();
+    if (!clientName) continue;
+
+    payrollByClientName.set(
+      clientName,
+      (payrollByClientName.get(clientName) ?? 0) + amount
+    );
+  }
 
   return clients
     .map((client) => {
-      const clientPayments = paidPayments.filter((p) => p.clientId === client.id);
-
-      const clientDirectExpenses = expenses.filter(
-        (e) => e.client_id === client.id
-      );
-
-      const clientPayroll = payrollAccruals.filter((item) => {
-        if (item.clientId) {
-          return item.clientId === client.id;
-        }
-
-        return (
-          String(item.client ?? "").trim().toLowerCase() ===
-          client.name.trim().toLowerCase()
-        );
-      });
-
-      const revenue = clientPayments.reduce(
-        (sum, p) => sum + parseRubAmount(String(p.amount ?? "")),
-        0
-      );
-
-      const directExpenses = clientDirectExpenses.reduce(
-        (sum, e) => sum + parseRubAmount(e.amount),
-        0
-      );
-
-      const fot = clientPayroll.reduce(
-        (sum, item) => sum + parseRubAmount(String(item.amount ?? "")),
-        0
-      );
+      const paymentSummary = paymentsByClientId.get(client.id);
+      const expenseSummary = expensesByClientId.get(client.id);
+      const revenue = paymentSummary?.revenue ?? 0;
+      const directExpenses = expenseSummary?.amount ?? 0;
+      const fot =
+        payrollByClientId.get(client.id) ??
+        payrollByClientName.get(client.name.trim().toLowerCase()) ??
+        0;
 
       const tax = revenue * 0.07;
       const expensesTotal = directExpenses + fot + tax;
@@ -205,8 +237,8 @@ function calculateClientUnitEconomics(params: {
         expenses: expensesTotal,
         profit,
         margin,
-        paidPaymentsCount: clientPayments.length,
-        expenseItemsCount: clientDirectExpenses.length,
+        paidPaymentsCount: paymentSummary?.count ?? 0,
+        expenseItemsCount: expenseSummary?.count ?? 0,
       };
     })
     .filter(

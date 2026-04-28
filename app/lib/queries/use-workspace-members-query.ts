@@ -7,15 +7,21 @@ import {
   getWorkspaceMembers,
   type WorkspaceMemberItem,
 } from "../supabase/workspace-members";
+import { useAppContextState } from "../../providers/app-context-provider";
 
 const STALE_TIME = 1000 * 60 * 10;
 const GC_TIME = 1000 * 60 * 30;
 
 export function useWorkspaceMembersQuery(enabled = true) {
+  const { workspace } = useAppContextState();
+  const workspaceId = workspace?.id ?? "";
+
   return useQuery({
-    queryKey: queryKeys.workspaceMembers,
+    queryKey: workspaceId
+      ? queryKeys.workspaceMembersByWorkspace(workspaceId)
+      : queryKeys.workspaceMembers,
     queryFn: getWorkspaceMembers,
-    enabled,
+    enabled: enabled && Boolean(workspaceId),
     staleTime: STALE_TIME,
     gcTime: GC_TIME,
     placeholderData: (previousData) => previousData,

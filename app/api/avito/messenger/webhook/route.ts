@@ -155,6 +155,7 @@ async function findAvitoAccount(params: {
         avito_user_id,
         avito_client_id,
         avito_client_secret,
+        crm_dialogs_enabled,
         avito_report_clients!inner (
           workspace_id,
           name
@@ -198,6 +199,11 @@ export async function POST(request: Request) {
     const supabase = getSupabase();
     const account = await findAvitoAccount({ supabase, avitoUserId });
     const linkedClient = getLinkedClient(account);
+
+    if (account?.crm_dialogs_enabled === false) {
+      return Response.json({ ok: true, skipped: "crm_dialogs_disabled" });
+    }
+
     const chatItem = await getAvitoChatItem({
       account,
       avitoUserId,

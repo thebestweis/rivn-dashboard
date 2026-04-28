@@ -2,6 +2,22 @@ import { getAppContext } from "./app-context";
 import { getWorkspaceBillingByWorkspaceId } from "./billing";
 import { buildBillingAccessState } from "../billing-core";
 
+const PROFILE_AVATARS_BUCKET = "profile-avatars";
+const MAX_PROFILE_AVATAR_SIZE = 5 * 1024 * 1024;
+
+function sanitizeStorageFileName(fileName: string) {
+  const extension = fileName.split(".").pop()?.toLowerCase() || "jpg";
+  const safeBaseName =
+    fileName
+      .replace(/\.[^/.]+$/, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "avatar";
+
+  return `${safeBaseName}.${extension}`;
+}
+
 export type WorkspaceMemberRole =
   | "owner"
   | "admin"
@@ -194,6 +210,7 @@ export async function getWorkspaceMembers(): Promise<WorkspaceMemberItem[]> {
 export async function updateMyWorkspaceMemberProfile(params: {
   displayName: string;
   avatarUrl: string;
+  avatarFile?: File | null;
   profileTitle: string;
   profileDescription: string;
   phone: string;
@@ -205,11 +222,45 @@ export async function updateMyWorkspaceMemberProfile(params: {
     throw new Error("Не удалось определить текущего пользователя");
   }
 
+  let nextAvatarUrl = params.avatarUrl.trim() || null;
+
+  if (params.avatarFile) {
+    if (!params.avatarFile.type.startsWith("image/")) {
+      throw new Error("Можно загрузить только изображение");
+    }
+
+    if (params.avatarFile.size > MAX_PROFILE_AVATAR_SIZE) {
+      throw new Error("Аватарка должна быть не больше 5 МБ");
+    }
+
+    const filePath = `${workspace.id}/${membership.id}/${crypto.randomUUID()}-${sanitizeStorageFileName(
+      params.avatarFile.name
+    )}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(PROFILE_AVATARS_BUCKET)
+      .upload(filePath, params.avatarFile, {
+        cacheControl: "3600",
+        contentType: params.avatarFile.type || "image/jpeg",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(uploadError.message);
+    }
+
+    const { data } = supabase.storage
+      .from(PROFILE_AVATARS_BUCKET)
+      .getPublicUrl(filePath);
+
+    nextAvatarUrl = data.publicUrl;
+  }
+
   const { error } = await supabase
     .from("workspace_members")
     .update({
       display_name: params.displayName.trim() || null,
-      avatar_url: params.avatarUrl.trim() || null,
+      avatar_url: nextAvatarUrl,
       profile_title: params.profileTitle.trim() || null,
       profile_description: params.profileDescription.trim() || null,
       phone: params.phone.trim() || null,

@@ -42,6 +42,7 @@ type AvitoIntegration = {
     name: string;
     avito_user_id: string | null;
     avito_client_id?: string | null;
+    crm_dialogs_enabled?: boolean | null;
     is_active: boolean;
   }[];
 };
@@ -157,7 +158,9 @@ const [selectedAnalyticsClientId, setSelectedAnalyticsClientId] = useState("");
 const [metricsMessage, setMetricsMessage] = useState("");
 const [metricsPeriod, setMetricsPeriod] = useState(() => getCurrentMonthRange());
 const [isConnectFormOpen, setIsConnectFormOpen] = useState(false);
+const [isQuickChecklistOpen, setIsQuickChecklistOpen] = useState(false);
 const [expandedIntegrationId, setExpandedIntegrationId] = useState("");
+const [expandedReportsId, setExpandedReportsId] = useState("");
 const [checkingAccountIndex, setCheckingAccountIndex] = useState<number | null>(null);
 const [accountCheckMessages, setAccountCheckMessages] = useState<Record<number, string>>({});
 const [sendingTestReportId, setSendingTestReportId] = useState("");
@@ -585,7 +588,13 @@ setIntegrations(integrationsData.integrations ?? []);
     });
   }
 
-  async function updateIntegrationAccount(accountId: string, isActive: boolean) {
+  async function updateIntegrationAccount(
+    accountId: string,
+    patch: {
+      isActive?: boolean;
+      crmDialogsEnabled?: boolean;
+    }
+  ) {
     try {
       setIntegrationMessage("");
       setUpdatingIntegrationId(accountId);
@@ -598,9 +607,7 @@ setIntegrations(integrationsData.integrations ?? []);
         body: JSON.stringify({
           workspaceId: workspace?.id,
           accountId,
-          patch: {
-            isActive,
-          },
+          patch,
         }),
       });
 
@@ -873,6 +880,90 @@ setIntegrations(integrationsData.integrations ?? []);
             </a>
           ))}
         </nav>
+
+        <section className="rounded-[28px] border border-emerald-400/15 bg-emerald-400/[0.06] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.18)]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-emerald-300">
+                Быстрый чеклист Avito
+              </div>
+              <h2 className="mt-1 text-lg font-semibold text-white">
+                Как подключить Avito-отчёты
+              </h2>
+              {!isQuickChecklistOpen ? (
+                <p className="mt-1 text-sm text-white/45">
+                  Короткая подсказка скрыта, чтобы не занимать место на экране.
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsQuickChecklistOpen((current) => !current)}
+              className="w-fit rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/15"
+            >
+              {isQuickChecklistOpen ? "Скрыть чеклист" : "Показать чеклист"}
+            </button>
+          </div>
+
+          {isQuickChecklistOpen ? (
+          <>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                title: "1. Выбери проект",
+                text: "Проект уже должен быть создан в RIVN OS. Если его нет, сначала добавь его в разделе проектов.",
+                href: "/projects",
+                label: "Открыть проекты",
+              },
+              {
+                title: "2. Добавь Avito-аккаунт",
+                text: "Вставь Avito user_id, client_id и client_secret. Если аккаунтов несколько, добавь каждый.",
+                href: "#connect-avito",
+                label: "К форме",
+              },
+              {
+                title: "3. Привяжи Telegram",
+                text: "После сохранения скопируй ссылку для беседы, добавь бота и отправь команду привязки.",
+                href: `https://t.me/${TELEGRAM_BOT_USERNAME}`,
+                label: "Открыть бота",
+              },
+              {
+                title: "4. Проверь отчёт",
+                text: "В подключённом проекте нажми «Отправить тест», чтобы убедиться, что всё приходит в нужную беседу.",
+                href: "#connected-projects",
+                label: "К проектам",
+              },
+            ].map((step) => (
+              <div
+                key={step.title}
+                className="rounded-2xl border border-white/10 bg-[#0F1524]/80 p-4"
+              >
+                <div className="text-sm font-semibold text-white">
+                  {step.title}
+                </div>
+                <p className="mt-2 min-h-[54px] text-xs leading-5 text-white/50">
+                  {step.text}
+                </p>
+                <a
+                  href={step.href}
+                  target={step.href.startsWith("http") ? "_blank" : undefined}
+                  className="mt-3 inline-flex text-xs font-semibold text-emerald-300 underline underline-offset-4 hover:text-emerald-200"
+                >
+                  {step.label}
+                </a>
+              </div>
+            ))}
+          </div>
+          <a
+            href="#connect-avito"
+            className="mt-4 inline-flex w-fit rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#07120F] transition hover:bg-emerald-300"
+          >
+            Начать подключение
+          </a>
+          </>
+          ) : null}
+        </section>
+
         <div id="connect-avito" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -1210,6 +1301,15 @@ setIntegrations(integrationsData.integrations ?? []);
         const integrationAccounts = integration.avito_report_accounts ?? [];
         const isExpanded = expandedIntegrationId === integration.id;
         const isEditing = editingIntegrationId === integration.id;
+        const isReportsExpanded = expandedReportsId === integration.id;
+        const enabledReportsCount = [
+          integration.daily_reports_enabled,
+          integration.weekly_reports_enabled,
+        ].filter(Boolean).length;
+        const isProjectEnabled =
+          integration.is_active ||
+          integration.daily_reports_enabled ||
+          integration.weekly_reports_enabled;
 
         return (
           <div
@@ -1259,35 +1359,40 @@ setIntegrations(integrationsData.integrations ?? []);
                   Аккаунтов: {integrationAccounts.length}
                 </span>
 
-                <span
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateIntegration(integration.id, {
+                      isActive: !isProjectEnabled,
+                      dailyEnabled: !isProjectEnabled,
+                      weeklyEnabled: !isProjectEnabled,
+                    })
+                  }
+                  disabled={updatingIntegrationId === integration.id}
+                  className={`rounded-full border px-3 py-1 transition disabled:opacity-50 ${
+                    isProjectEnabled
+                      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/15"
+                      : "border-rose-400/20 bg-rose-400/10 text-rose-300 hover:bg-rose-400/15"
+                  }`}
+                >
+                  {isProjectEnabled ? "Активен" : "Выключен"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedReportsId((current) =>
+                      current === integration.id ? "" : integration.id
+                    )
+                  }
                   className={`rounded-full border px-3 py-1 ${
-                    integration.daily_reports_enabled
+                    enabledReportsCount > 0
                       ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
                       : "border-white/10 bg-white/[0.04] text-white/40"
                   }`}
                 >
-                  Daily {integration.daily_reports_enabled ? "вкл" : "выкл"}
-                </span>
-
-                <span
-                  className={`rounded-full border px-3 py-1 ${
-                    integration.weekly_reports_enabled
-                      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
-                      : "border-white/10 bg-white/[0.04] text-white/40"
-                  }`}
-                >
-                  Weekly {integration.weekly_reports_enabled ? "вкл" : "выкл"}
-                </span>
-
-                <span
-                  className={`rounded-full border px-3 py-1 ${
-                    integration.is_active
-                      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
-                      : "border-rose-400/20 bg-rose-400/10 text-rose-300"
-                  }`}
-                >
-                  {integration.is_active ? "Активен" : "Выключен"}
-                </span>
+                  Отчёты: {enabledReportsCount}/2
+                </button>
 
                 <button
                   type="button"
@@ -1303,49 +1408,6 @@ setIntegrations(integrationsData.integrations ?? []);
 
                 {isExpanded ? (
                   <>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateIntegration(integration.id, {
-                      isActive: !integration.is_active,
-                    })
-                  }
-                  disabled={updatingIntegrationId === integration.id}
-                  className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
-                >
-                  {integration.is_active ? "Выключить" : "Включить"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateIntegration(integration.id, {
-                      dailyEnabled: !integration.daily_reports_enabled,
-                    })
-                  }
-                  disabled={updatingIntegrationId === integration.id}
-                  className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
-                >
-                  {integration.daily_reports_enabled
-                    ? "Выключить daily"
-                    : "Включить daily"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateIntegration(integration.id, {
-                      weeklyEnabled: !integration.weekly_reports_enabled,
-                    })
-                  }
-                  disabled={updatingIntegrationId === integration.id}
-                  className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
-                >
-                  {integration.weekly_reports_enabled
-                    ? "Выключить weekly"
-                    : "Включить weekly"}
-                </button>
-
                 <button
                   type="button"
                   onClick={() => sendTestReport(integration)}
@@ -1369,24 +1431,104 @@ setIntegrations(integrationsData.integrations ?? []);
                 >
                   {isEditing ? "Отменить правки" : "Редактировать"}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => archiveIntegration(integration)}
-                  disabled={
-                    updatingIntegrationId === integration.id ||
-                    (!integration.is_active &&
-                      !integration.daily_reports_enabled &&
-                      !integration.weekly_reports_enabled)
-                  }
-                  className="rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-1 text-rose-200 transition hover:bg-rose-400/15 disabled:opacity-40"
-                >
-                  В архив
-                </button>
                   </>
                 ) : null}
               </div>
             </div>
+
+            {isReportsExpanded ? (
+              <div className="mt-4 rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.05] p-4">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-white">
+                      Отчёты
+                    </div>
+                    <div className="text-xs text-white/45">
+                      Здесь можно включить или выключить ежедневные и еженедельные отчёты, не трогая заявки в CRM.
+                    </div>
+                  </div>
+                  <div className="text-xs text-white/45">
+                    {enabledReportsCount === 2
+                      ? "Оба отчёта включены"
+                      : enabledReportsCount === 1
+                        ? "Включён один отчёт"
+                        : "Отчёты выключены"}
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateIntegration(integration.id, {
+                        dailyEnabled: !integration.daily_reports_enabled,
+                      })
+                    }
+                    disabled={updatingIntegrationId === integration.id}
+                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-left transition hover:bg-white/[0.04] disabled:opacity-50"
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-white">
+                        Ежедневный отчёт
+                      </span>
+                      <span className="mt-1 block text-xs text-white/45">
+                        Каждый день утром в Telegram-беседу.
+                      </span>
+                    </span>
+                    <span
+                      className={`h-6 w-11 rounded-full p-1 transition ${
+                        integration.daily_reports_enabled
+                          ? "bg-emerald-400/80"
+                          : "bg-white/15"
+                      }`}
+                    >
+                      <span
+                        className={`block h-4 w-4 rounded-full bg-white transition ${
+                          integration.daily_reports_enabled
+                            ? "translate-x-5"
+                            : "translate-x-0"
+                        }`}
+                      />
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateIntegration(integration.id, {
+                        weeklyEnabled: !integration.weekly_reports_enabled,
+                      })
+                    }
+                    disabled={updatingIntegrationId === integration.id}
+                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-left transition hover:bg-white/[0.04] disabled:opacity-50"
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-white">
+                        Еженедельный отчёт
+                      </span>
+                      <span className="mt-1 block text-xs text-white/45">
+                        Раз в неделю для управленческого контроля.
+                      </span>
+                    </span>
+                    <span
+                      className={`h-6 w-11 rounded-full p-1 transition ${
+                        integration.weekly_reports_enabled
+                          ? "bg-emerald-400/80"
+                          : "bg-white/15"
+                      }`}
+                    >
+                      <span
+                        className={`block h-4 w-4 rounded-full bg-white transition ${
+                          integration.weekly_reports_enabled
+                            ? "translate-x-5"
+                            : "translate-x-0"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {isExpanded && isEditing ? (
               <div className="mt-4 rounded-2xl border border-white/10 bg-[#0F1524] p-4">
@@ -1438,6 +1580,8 @@ setIntegrations(integrationsData.integrations ?? []);
                   const maskedClientId = account.avito_client_id
                     ? `${account.avito_client_id.slice(0, 6)}...`
                     : "не указан";
+                  const isCrmDialogsEnabled =
+                    account.crm_dialogs_enabled !== false;
 
                   return (
                     <div
@@ -1524,36 +1668,104 @@ setIntegrations(integrationsData.integrations ?? []);
                             Avito client_id: {maskedClientId}
                           </div>
                           <div className="mt-1 text-xs text-white/40">
-                            {account.is_active
-                              ? "Аккаунт активен"
-                              : "Аккаунт выключен"}
+                            Отчёты по аккаунту:{" "}
+                            {account.is_active ? "включены" : "выключены"}
+                          </div>
+                          <div className="mt-1 text-xs text-white/40">
+                            Заявки в CRM:{" "}
+                            {isCrmDialogsEnabled ? "принимаются" : "выключены"}
                           </div>
                         </>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateIntegrationAccount(account.id, !account.is_active)
-                        }
-                        disabled={
-                          updatingIntegrationId === account.id ||
-                          connectingMessengerAccountId === account.id ||
-                          syncingDialogsAccountId === account.id
-                        }
-                        className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/65 transition hover:bg-white/[0.07] disabled:opacity-50"
-                      >
-                        {account.is_active
-                          ? "Выключить аккаунт"
-                          : "Включить аккаунт"}
-                      </button>
                       {!isEditing ? (
                         <>
+                        <div className="mt-4 grid gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateIntegrationAccount(account.id, {
+                                isActive: !account.is_active,
+                              })
+                            }
+                            disabled={
+                              updatingIntegrationId === account.id ||
+                              connectingMessengerAccountId === account.id ||
+                              syncingDialogsAccountId === account.id
+                            }
+                            className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition hover:bg-white/[0.07] disabled:opacity-50"
+                          >
+                            <span>
+                              <span className="block text-xs font-semibold text-white/80">
+                                Аккаунт в отчётах
+                              </span>
+                              <span className="mt-1 block text-[11px] leading-4 text-white/40">
+                                Влияет только на ежедневные и еженедельные отчёты.
+                              </span>
+                            </span>
+                            <span
+                              className={`h-6 w-11 shrink-0 rounded-full p-1 transition ${
+                                account.is_active
+                                  ? "bg-emerald-400/80"
+                                  : "bg-white/15"
+                              }`}
+                            >
+                              <span
+                                className={`block h-4 w-4 rounded-full bg-white transition ${
+                                  account.is_active
+                                    ? "translate-x-5"
+                                    : "translate-x-0"
+                                }`}
+                              />
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateIntegrationAccount(account.id, {
+                                crmDialogsEnabled: !isCrmDialogsEnabled,
+                              })
+                            }
+                            disabled={
+                              updatingIntegrationId === account.id ||
+                              connectingMessengerAccountId === account.id ||
+                              syncingDialogsAccountId === account.id
+                            }
+                            className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition hover:bg-white/[0.07] disabled:opacity-50"
+                          >
+                            <span>
+                              <span className="block text-xs font-semibold text-white/80">
+                                Заявки в CRM
+                              </span>
+                              <span className="mt-1 block text-[11px] leading-4 text-white/40">
+                                Можно выключить, не отключая отчёты по этому аккаунту.
+                              </span>
+                            </span>
+                            <span
+                              className={`h-6 w-11 shrink-0 rounded-full p-1 transition ${
+                                isCrmDialogsEnabled
+                                  ? "bg-emerald-400/80"
+                                  : "bg-white/15"
+                              }`}
+                            >
+                              <span
+                                className={`block h-4 w-4 rounded-full bg-white transition ${
+                                  isCrmDialogsEnabled
+                                    ? "translate-x-5"
+                                    : "translate-x-0"
+                                }`}
+                              />
+                            </span>
+                          </button>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => connectAvitoMessenger(account.id)}
                           disabled={
                             !account.is_active ||
+                            !isCrmDialogsEnabled ||
                             connectingMessengerAccountId === account.id ||
                             syncingDialogsAccountId === account.id ||
                             updatingIntegrationId === account.id
@@ -1569,6 +1781,7 @@ setIntegrations(integrationsData.integrations ?? []);
                           onClick={() => syncAvitoDialogs(account.id)}
                           disabled={
                             !account.is_active ||
+                            !isCrmDialogsEnabled ||
                             syncingDialogsAccountId === account.id ||
                             connectingMessengerAccountId === account.id ||
                             updatingIntegrationId === account.id
@@ -1579,6 +1792,7 @@ setIntegrations(integrationsData.integrations ?? []);
                             ? "Загружаем..."
                             : "Загрузить последние диалоги"}
                         </button>
+                        </div>
                         </>
                       ) : null}
                     </div>
@@ -1590,11 +1804,42 @@ setIntegrations(integrationsData.integrations ?? []);
         );
       })
     ) : (
-      <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/45">
+      <>
+      <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] p-6">
+        <div className="max-w-2xl">
+          <div className="text-base font-semibold text-white">
+            {archivedIntegrations.length > 0
+              ? "Все Avito-проекты сейчас выключены"
+              : "Avito-отчёты пока не подключены"}
+          </div>
+          <p className="mt-2 text-sm leading-6 text-white/50">
+            {archivedIntegrations.length > 0
+              ? "Можно вернуть проект в работу из архива ниже. История, настройки и аккаунты сохраняются."
+              : "Подключи первый проект, добавь Avito-аккаунт и привяжи Telegram-беседу. После этого ежедневные и еженедельные отчёты будут приходить автоматически."}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a
+              href="#connect-avito"
+              className="rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#07120F] transition hover:bg-emerald-300"
+            >
+              Подключить проект
+            </a>
+            <a
+              href={`https://t.me/${TELEGRAM_BOT_USERNAME}`}
+              target="_blank"
+              className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/70 transition hover:bg-white/[0.07]"
+            >
+              Открыть Telegram-бота
+            </a>
+          </div>
+        </div>
+      </div>
+      <div className="hidden">
         {archivedIntegrations.length > 0
           ? "Все подключённые Avito-проекты сейчас в архиве."
           : "Пока нет подключённых Avito-проектов."}
       </div>
+      </>
     )}
   </div>
 

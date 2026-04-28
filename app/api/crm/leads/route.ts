@@ -149,6 +149,29 @@ async function resolveSource(params: {
   return data;
 }
 
+async function isLeadIngestionEnabled(params: {
+  supabase: ServiceSupabase;
+  workspaceId: string;
+  sourceKind: string;
+}) {
+  if (params.sourceKind === "manual") {
+    return true;
+  }
+
+  const { data, error } = await params.supabase
+    .from("crm_integration_settings")
+    .select("is_lead_ingestion_enabled")
+    .eq("workspace_id", params.workspaceId)
+    .eq("source_kind", params.sourceKind)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`CRM integration setting lookup failed: ${error.message}`);
+  }
+
+  return data?.is_lead_ingestion_enabled !== false;
+}
+
 async function resolveSalesPipeline(params: {
   supabase: ServiceSupabase;
   workspaceId: string;
@@ -349,6 +372,22 @@ export async function POST(request: Request) {
     }
 
     const supabase = getSupabase();
+    const ingestionEnabled = await isLeadIngestionEnabled({
+      supabase,
+      workspaceId,
+      sourceKind,
+    });
+
+    if (!ingestionEnabled) {
+      return Response.json({
+        ok: true,
+        skipped: true,
+        reason: "lead_ingestion_disabled",
+        workspaceId,
+        sourceKind,
+      });
+    }
+
     const [source, pipelineContext, assignment] = await Promise.all([
       resolveSource({ supabase, workspaceId, sourceKind, sourceName }),
       resolveSalesPipeline({ supabase, workspaceId }),
