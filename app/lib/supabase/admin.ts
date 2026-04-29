@@ -5,6 +5,8 @@ export type AdminWorkspaceRow = {
   id: string;
   name: string;
   slug: string | null;
+  owner_user_id: string | null;
+  owner_email: string | null;
   created_at: string;
   billing: {
     plan_code: string | null;
@@ -20,6 +22,7 @@ type DbWorkspaceRow = {
   id: string;
   name: string;
   slug: string | null;
+  owner_user_id: string | null;
   created_at: string;
 };
 
@@ -37,6 +40,8 @@ type DbTransactionRow = {
 };
 
 type DbProfileRoleRow = {
+  id?: string;
+  email?: string | null;
   platform_role: string | null;
 };
 
@@ -98,14 +103,16 @@ export async function getAllWorkspaces(): Promise<AdminWorkspaceRow[]> {
     { data: workspaces, error: workspacesError },
     { data: billing, error: billingError },
     { data: transactions, error: transactionsError },
+    { data: ownerProfiles, error: ownerProfilesError },
   ] = await Promise.all([
-    (admin as any).from("workspaces").select("id, name, slug, created_at"),
+    (admin as any).from("workspaces").select("id, name, slug, owner_user_id, created_at"),
     (admin as any)
       .from("workspace_billing")
       .select("workspace_id, plan_code, subscription_status, billing_period"),
     (admin as any)
       .from("billing_transactions")
       .select("workspace_id, amount, status"),
+    (admin as any).from("profiles").select("id, email"),
   ]);
 
   if (workspacesError) {
@@ -120,8 +127,13 @@ export async function getAllWorkspaces(): Promise<AdminWorkspaceRow[]> {
     throw new Error(transactionsError.message);
   }
 
+  if (ownerProfilesError) {
+    throw new Error(ownerProfilesError.message);
+  }
+
   const billingMap = new Map<string, DbWorkspaceBillingRow>();
   const balanceMap = new Map<string, number>();
+  const profileEmailMap = new Map<string, string | null>();
 
   ((billing ?? []) as DbWorkspaceBillingRow[]).forEach((b) => {
     billingMap.set(b.workspace_id, b);
@@ -134,6 +146,11 @@ export async function getAllWorkspaces(): Promise<AdminWorkspaceRow[]> {
     balanceMap.set(t.workspace_id, current + Number(t.amount ?? 0));
   });
 
+  ((ownerProfiles ?? []) as DbProfileRoleRow[]).forEach((profile) => {
+    if (!profile.id) return;
+    profileEmailMap.set(profile.id, profile.email ?? null);
+  });
+
   return ((workspaces ?? []) as DbWorkspaceRow[]).map((ws) => {
     const b = billingMap.get(ws.id);
 
@@ -141,6 +158,10 @@ export async function getAllWorkspaces(): Promise<AdminWorkspaceRow[]> {
       id: ws.id,
       name: ws.name,
       slug: ws.slug,
+      owner_user_id: ws.owner_user_id ?? null,
+      owner_email: ws.owner_user_id
+        ? profileEmailMap.get(ws.owner_user_id) ?? null
+        : null,
       created_at: ws.created_at,
       billing: b
         ? {

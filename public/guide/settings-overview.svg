@@ -1,0 +1,34 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="44" y="44" width="1352" height="792" rx="32" fill="#121826" stroke="#273244"/>
+  <text x="88" y="106" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Настройки</text>
+  <text x="88" y="152" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Центр управления кабинетом</text>
+  <text x="88" y="190" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Профиль, команда, доступы, Telegram, системные правила и рабочие кабинеты.</text>
+  <rect x="88" y="244" width="176" height="58" rx="20" fill="#7C3AED"/>
+  <text x="132" y="280" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18" font-weight="700">Профиль</text>
+  <rect x="280" y="244" width="176" height="58" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="322" y="280" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18" font-weight="700">Пользователи</text>
+  <rect x="472" y="244" width="176" height="58" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="526" y="280" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18" font-weight="700">Доступы</text>
+  <rect x="664" y="244" width="176" height="58" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="706" y="280" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18" font-weight="700">Telegram</text>
+  <rect x="856" y="244" width="176" height="58" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="912" y="280" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18" font-weight="700">Система</text>
+  <rect x="1048" y="244" width="176" height="58" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="1102" y="280" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18" font-weight="700">Кабинеты</text>
+  <rect x="88" y="370" width="370" height="260" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="128" y="424" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">Личные данные</text>
+  <text x="128" y="468" fill="#94A3B8" font-family="Arial, sans-serif" font-size="17">Имя, аватарка, должность и контакты сотрудника.</text>
+  <circle cx="156" cy="544" r="34" fill="#34D399"/>
+  <text x="144" y="556" fill="#07120F" font-family="Arial, sans-serif" font-size="28" font-weight="700">R</text>
+  <rect x="510" y="370" width="370" height="260" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="550" y="424" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">Команда и доступы</text>
+  <text x="550" y="468" fill="#94A3B8" font-family="Arial, sans-serif" font-size="17">Кто работает в кабинете и какие разделы видит.</text>
+  <rect x="550" y="520" width="248" height="48" rx="16" fill="#172033"/>
+  <text x="574" y="552" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17">Менеджер · CRM · Задачи</text>
+  <rect x="932" y="370" width="370" height="260" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="972" y="424" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">Правила системы</text>
+  <text x="972" y="468" fill="#94A3B8" font-family="Arial, sans-serif" font-size="17">Кабинеты, системные параметры, уведомления и ограничения тарифа.</text>
+  <rect x="972" y="520" width="230" height="48" rx="16" fill="#063B2E"/>
+  <text x="996" y="552" fill="#A7F3D0" font-family="Arial, sans-serif" font-size="17">Активный кабинет</text>
+</svg>

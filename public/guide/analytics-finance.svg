@@ -1,0 +1,29 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="44" y="44" width="1352" height="792" rx="32" fill="#121826" stroke="#273244"/>
+  <text x="88" y="106" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Финансы</text>
+  <text x="88" y="152" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Финансовый результат и P&amp;L</text>
+  <rect x="88" y="220" width="294" height="126" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="122" y="266" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Выручка</text>
+  <text x="122" y="310" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="34" font-weight="700">260 000 ₽</text>
+  <rect x="412" y="220" width="294" height="126" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="446" y="266" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Всего расходов за период</text>
+  <text x="446" y="310" fill="#FB7185" font-family="Arial, sans-serif" font-size="34" font-weight="700">28 200 ₽</text>
+  <rect x="736" y="220" width="294" height="126" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="770" y="266" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">ФОТ</text>
+  <text x="770" y="310" fill="#FBBF24" font-family="Arial, sans-serif" font-size="34" font-weight="700">5 000 ₽</text>
+  <rect x="1060" y="220" width="250" height="126" rx="24" fill="#063B2E" stroke="#0F766E"/>
+  <text x="1094" y="266" fill="#A7F3D0" font-family="Arial, sans-serif" font-size="16">Прибыль</text>
+  <text x="1094" y="310" fill="#34D399" font-family="Arial, sans-serif" font-size="34" font-weight="700">231 800 ₽</text>
+  <rect x="88" y="404" width="612" height="286" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="128" y="456" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">P&amp;L по агентству</text>
+  <text x="128" y="506" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Выручка − расходы − ФОТ − налог = прибыль</text>
+  <path d="M128 590H650" stroke="#273244" stroke-width="2"/>
+  <text x="128" y="640" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">Подробнее раскрывает формулу расчёта</text>
+  <rect x="760" y="404" width="550" height="286" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="800" y="456" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">Динамика</text>
+  <path d="M812 610C890 548 942 656 1022 590C1096 530 1164 574 1264 500" stroke="#34D399" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="812" cy="610" r="10" fill="#34D399"/>
+  <circle cx="1022" cy="590" r="10" fill="#34D399"/>
+  <circle cx="1264" cy="500" r="10" fill="#34D399"/>
+</svg>

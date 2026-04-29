@@ -1,0 +1,34 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="220" y="44" width="1000" height="792" rx="34" fill="#121826" stroke="#273244"/>
+  <text x="274" y="104" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Сделка</text>
+  <text x="274" y="150" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Клиент с Avito: ремонт квартир</text>
+  <rect x="274" y="184" width="138" height="44" rx="22" fill="#062C3F" stroke="#0EA5E9"/>
+  <text x="306" y="212" fill="#7DD3FC" font-family="Arial, sans-serif" font-size="16" font-weight="700">К работе</text>
+  <rect x="424" y="184" width="156" height="44" rx="22" fill="#1F2937" stroke="#374151"/>
+  <text x="466" y="212" fill="#D1D5DB" font-family="Arial, sans-serif" font-size="16" font-weight="700">В работе</text>
+  <rect x="592" y="184" width="132" height="44" rx="22" fill="#1F2937" stroke="#374151"/>
+  <text x="638" y="212" fill="#D1D5DB" font-family="Arial, sans-serif" font-size="16" font-weight="700">Готово</text>
+  <rect x="274" y="270" width="418" height="186" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="306" y="316" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Контакты</text>
+  <text x="306" y="354" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="22" font-weight="700">Алексей Петров</text>
+  <text x="306" y="390" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">+7 999 123-45-67</text>
+  <text x="306" y="424" fill="#34D399" font-family="Arial, sans-serif" font-size="18">@client_username</text>
+  <rect x="724" y="270" width="418" height="186" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="756" y="316" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Сделка</text>
+  <text x="756" y="354" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="22" font-weight="700">120 000 ₽</text>
+  <text x="756" y="390" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">Бюджет: 80 000 ₽</text>
+  <text x="756" y="424" fill="#A78BFA" font-family="Arial, sans-serif" font-size="18">Источник: Avito</text>
+  <rect x="274" y="488" width="418" height="234" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="306" y="534" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Задачи по сделке</text>
+  <rect x="306" y="564" width="336" height="52" rx="16" fill="#172033" stroke="#2B364A"/>
+  <text x="328" y="597" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17">Созвониться с клиентом</text>
+  <rect x="306" y="630" width="336" height="52" rx="16" fill="#172033" stroke="#2B364A"/>
+  <text x="328" y="663" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17">Подготовить КП</text>
+  <rect x="724" y="488" width="418" height="234" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="756" y="534" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Переписка</text>
+  <rect x="756" y="564" width="270" height="48" rx="18" fill="#172033"/>
+  <text x="778" y="594" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="16">Клиент просит расчёт...</text>
+  <rect x="846" y="626" width="270" height="48" rx="18" fill="#064E3B"/>
+  <text x="868" y="656" fill="#D1FAE5" font-family="Arial, sans-serif" font-size="16">Отправили предложение</text>
+</svg>

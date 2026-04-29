@@ -22,6 +22,7 @@ import {
 } from "../lib/billing-core";
 import type { WorkspaceBilling } from "../lib/supabase/billing";
 import { createClient } from "../lib/supabase/client";
+import { createReferralAttributionForUser } from "../lib/supabase/referrals";
 
 type AppContextState = {
   isLoading: boolean;
@@ -273,6 +274,12 @@ export function AppContextProvider({
       setBilling(nextCache.billing);
       setBillingAccess(nextCache.billingAccess);
       setIsReady(true);
+
+      if (nextCache.user?.id) {
+        createReferralAttributionForUser(nextCache.user.id).catch((error) => {
+          console.error("Ошибка финализации реферальной привязки:", error);
+        });
+      }
     } catch (error) {
       if (!cachedRef.current) {
         setUser(null);

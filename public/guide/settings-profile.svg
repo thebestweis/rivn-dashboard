@@ -1,0 +1,22 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="220" y="64" width="1000" height="752" rx="34" fill="#121826" stroke="#273244"/>
+  <text x="276" y="126" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Профиль</text>
+  <text x="276" y="172" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Профиль сотрудника</text>
+  <circle cx="332" cy="264" r="58" fill="#34D399"/>
+  <text x="310" y="284" fill="#07120F" font-family="Arial, sans-serif" font-size="48" font-weight="700">W</text>
+  <text x="424" y="248" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="28" font-weight="700">Weis</text>
+  <text x="424" y="286" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Владелец агентства</text>
+  <rect x="276" y="376" width="408" height="58" rx="18" fill="#0F1524" stroke="#273244"/>
+  <text x="304" y="412" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="17">Имя и фамилия</text>
+  <rect x="716" y="376" width="408" height="58" rx="18" fill="#0F1524" stroke="#273244"/>
+  <text x="744" y="412" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="17">Должность</text>
+  <rect x="276" y="462" width="848" height="82" rx="20" fill="#0F1524" stroke="#273244"/>
+  <text x="304" y="512" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="17">Загрузить фото профиля</text>
+  <rect x="276" y="572" width="408" height="58" rx="18" fill="#0F1524" stroke="#273244"/>
+  <text x="304" y="608" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="17">Телефон</text>
+  <rect x="716" y="572" width="408" height="58" rx="18" fill="#0F1524" stroke="#273244"/>
+  <text x="744" y="608" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="17">Telegram</text>
+  <rect x="276" y="658" width="848" height="82" rx="20" fill="#0F1524" stroke="#273244"/>
+  <text x="304" y="708" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="17">Описание зоны ответственности</text>
+</svg>

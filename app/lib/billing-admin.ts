@@ -7,6 +7,7 @@ import {
 } from "./supabase/billing";
 import { createAdminClient } from "./supabase/admin-server";
 import { createClient as createServerClient } from "./supabase/server";
+import { createReferralRewardForBillingTransaction } from "./referral-server";
 
 type ActivatePlanParams = {
   workspaceId: string;
@@ -18,6 +19,10 @@ type ActivatePlanParams = {
 
 type DbProfileRoleRow = {
   platform_role: string | null;
+};
+
+type DbWorkspaceOwnerRow = {
+  owner_user_id: string | null;
 };
 
 function addMonths(date: Date, months: number) {
@@ -190,6 +195,24 @@ async function getWorkspaceBalanceByWorkspaceIdAdmin(
 
     return sum + Number(item.amount ?? 0);
   }, 0);
+}
+
+async function getWorkspaceOwnerUserIdAdmin(
+  workspaceId: string
+): Promise<string | null> {
+  const admin = createAdminClient();
+
+  const { data, error } = await (admin as any)
+    .from("workspaces")
+    .select("owner_user_id")
+    .eq("id", workspaceId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Не удалось загрузить владельца workspace: ${error.message}`);
+  }
+
+  return (data as DbWorkspaceOwnerRow | null)?.owner_user_id ?? null;
 }
 
 async function createBillingTransactionAdmin(params: {
@@ -389,7 +412,7 @@ export async function activatePlanFromBalance(
     );
   }
 
-  await createBillingTransactionAdmin({
+  const transaction = await createBillingTransactionAdmin({
     workspaceId,
     amount: -price.totalPrice,
     transactionType: "subscription_charge",
@@ -405,6 +428,21 @@ export async function activatePlanFromBalance(
     },
     createdByUserId: user.id,
   });
+
+  try {
+    const ownerUserId = await getWorkspaceOwnerUserIdAdmin(workspaceId);
+
+    if (ownerUserId && transaction?.id) {
+      await createReferralRewardForBillingTransaction({
+        serviceSupabase: createAdminClient(),
+        referredUserId: ownerUserId,
+        billingTransactionId: transaction.id,
+        paymentAmount: price.totalPrice,
+      });
+    }
+  } catch (referralError) {
+    console.error("Ошибка создания referral reward:", referralError);
+  }
 
   const now = new Date();
   const endDate =

@@ -1,0 +1,44 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="40" y="40" width="1360" height="800" rx="32" fill="#121826" stroke="#273244"/>
+  <text x="84" y="100" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Аналитика CRM</text>
+  <text x="84" y="146" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Продажи, план / факт и конверсии</text>
+  <rect x="84" y="194" width="170" height="54" rx="20" fill="#7C3AED"/>
+  <text x="132" y="228" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17" font-weight="700">Обзор</text>
+  <rect x="268" y="194" width="170" height="54" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="308" y="228" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="17" font-weight="700">План / факт</text>
+  <rect x="452" y="194" width="170" height="54" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="510" y="228" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="17" font-weight="700">Команда</text>
+  <rect x="84" y="296" width="292" height="132" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="116" y="340" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Новые заявки</text>
+  <text x="116" y="386" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="36" font-weight="700">148</text>
+  <text x="180" y="386" fill="#34D399" font-family="Arial, sans-serif" font-size="18">+18%</text>
+  <rect x="404" y="296" width="292" height="132" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="436" y="340" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Сделки в работе</text>
+  <text x="436" y="386" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="36" font-weight="700">62</text>
+  <rect x="724" y="296" width="292" height="132" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="756" y="340" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Потенциал</text>
+  <text x="756" y="386" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="36" font-weight="700">2,4 млн ₽</text>
+  <rect x="1044" y="296" width="292" height="132" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="1076" y="340" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Конверсия в оплату</text>
+  <text x="1076" y="386" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="36" font-weight="700">21%</text>
+  <rect x="84" y="474" width="610" height="260" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="124" y="526" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="700">План / факт продаж</text>
+  <rect x="124" y="660" width="70" height="34" rx="10" fill="#8B5CF6"/>
+  <rect x="212" y="594" width="70" height="100" rx="10" fill="#34D399"/>
+  <rect x="300" y="628" width="70" height="66" rx="10" fill="#8B5CF6"/>
+  <rect x="388" y="558" width="70" height="136" rx="10" fill="#34D399"/>
+  <rect x="476" y="610" width="70" height="84" rx="10" fill="#8B5CF6"/>
+  <rect x="564" y="532" width="70" height="162" rx="10" fill="#34D399"/>
+  <text x="124" y="716" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">План и факт по месяцам</text>
+  <rect x="730" y="474" width="606" height="260" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="770" y="526" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="700">Конверсии между этапами</text>
+  <path d="M790 646H930L1006 590H1160L1230 646H1300" stroke="#34D399" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="790" cy="646" r="14" fill="#34D399"/>
+  <circle cx="930" cy="646" r="14" fill="#34D399"/>
+  <circle cx="1006" cy="590" r="14" fill="#34D399"/>
+  <circle cx="1160" cy="590" r="14" fill="#34D399"/>
+  <circle cx="1230" cy="646" r="14" fill="#34D399"/>
+  <circle cx="1300" cy="646" r="14" fill="#34D399"/>
+  <text x="770" y="716" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">Где воронка теряет клиентов</text>
+</svg>

@@ -1,0 +1,22 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="52" y="52" width="1336" height="776" rx="34" fill="#121826" stroke="#273244"/>
+  <text x="92" y="116" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Карточка проекта</text>
+  <text x="92" y="164" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Рабочее пространство команды</text>
+  <rect x="92" y="240" width="540" height="500" rx="30" fill="#0F1524" stroke="#273244"/>
+  <text x="132" y="302" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="28" font-weight="700">Задачи проекта</text>
+  <rect x="132" y="350" width="420" height="62" rx="18" fill="#172033"/>
+  <text x="162" y="388" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">Подготовить материалы</text>
+  <rect x="132" y="434" width="420" height="62" rx="18" fill="#172033"/>
+  <text x="162" y="472" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">Согласовать запуск</text>
+  <rect x="132" y="518" width="420" height="62" rx="18" fill="#172033"/>
+  <text x="162" y="556" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">Проверить результат</text>
+  <rect x="700" y="240" width="596" height="500" rx="30" fill="#0F1524" stroke="#273244"/>
+  <text x="740" y="302" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="28" font-weight="700">Чат проекта</text>
+  <rect x="740" y="350" width="420" height="68" rx="20" fill="#172033"/>
+  <text x="770" y="390" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="17">Зафиксировали вводные по запуску</text>
+  <rect x="820" y="448" width="420" height="68" rx="20" fill="#063B2E"/>
+  <text x="850" y="488" fill="#A7F3D0" font-family="Arial, sans-serif" font-size="17">Файлы и решения лежат здесь</text>
+  <rect x="740" y="620" width="500" height="58" rx="18" fill="#0B0F1A" stroke="#273244"/>
+  <text x="770" y="656" fill="#64748B" font-family="Arial, sans-serif" font-size="17">Написать сообщение команде...</text>
+</svg>

@@ -21,7 +21,8 @@ type LogTypeFilter =
   | "all"
   | "manual_balance_adjustment"
   | "activate_plan_from_balance"
-  | "force_billing_status";
+  | "force_billing_status"
+  | "assign_referral_attribution";
 
 function formatMoney(value: number | null | undefined) {
   return new Intl.NumberFormat("ru-RU", {
@@ -82,6 +83,8 @@ function getActionLabel(actionType: string) {
       return "Активация / продление тарифа";
     case "force_billing_status":
       return "Принудительная смена статуса";
+    case "assign_referral_attribution":
+      return "Ручная реферальная привязка";
     default:
       return actionType;
   }
@@ -95,6 +98,8 @@ function getActionBadgeClass(actionType: string) {
       return "bg-violet-500/15 text-violet-300";
     case "force_billing_status":
       return "bg-amber-500/15 text-amber-300";
+    case "assign_referral_attribution":
+      return "bg-sky-500/15 text-sky-300";
     default:
       return "bg-white/10 text-white/60";
   }
@@ -153,6 +158,19 @@ function getLogSummary(log: AdminActionLogRow) {
     };
   }
 
+  if (log.action_type === "assign_referral_attribution") {
+    const referredUserId = String(payload.referredUserId ?? "");
+    const referrerUserId = String(payload.referrerUserId ?? "");
+    const rewardPercent = Number(payload.rewardPercent ?? 0);
+
+    return {
+      title: `Привязка к рефералу • ${rewardPercent}%`,
+      description: `Приглашённый: ${referredUserId || "—"} • Реферал: ${
+        referrerUserId || "—"
+      }`,
+    };
+  }
+
   return {
     title: getActionLabel(log.action_type),
     description: "Служебное действие",
@@ -207,6 +225,10 @@ export default function AdminPage() {
   const [selectedExtraMembers, setSelectedExtraMembers] = useState(0);
   const [isLoadingPlanAction, setIsLoadingPlanAction] = useState(false);
   const [isLoadingStatusAction, setIsLoadingStatusAction] = useState(false);
+  const [referrerInput, setReferrerInput] = useState("");
+  const [replaceReferralAttribution, setReplaceReferralAttribution] =
+    useState(false);
+  const [isLoadingReferralAction, setIsLoadingReferralAction] = useState(false);
 
   const [logSearch, setLogSearch] = useState("");
   const [logTypeFilter, setLogTypeFilter] = useState<LogTypeFilter>("all");
@@ -460,6 +482,61 @@ if (!result.ok) {
     }
   }
 
+  async function handleAssignReferral() {
+    if (!selectedWorkspace) return;
+
+    const normalizedReferrer = referrerInput.trim();
+
+    if (!normalizedReferrer) {
+      alert("Укажи email реферала или referral code");
+      return;
+    }
+
+    if (!selectedWorkspace.owner_user_id) {
+      alert("У выбранного кабинета не найден владелец");
+      return;
+    }
+
+    try {
+      setIsLoadingReferralAction(true);
+
+      const response = await fetch("/api/admin/referrals/assign", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          workspaceId: selectedWorkspace.id,
+          referrer: normalizedReferrer,
+          replaceExisting: replaceReferralAttribution,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Не удалось привязать реферала");
+      }
+
+      await reloadWorkspaces(selectedWorkspace.id);
+
+      setReferrerInput("");
+      setReplaceReferralAttribution(false);
+
+      alert("Реферальная привязка создана");
+    } catch (error) {
+      console.error(error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Ошибка при реферальной привязке"
+      );
+    } finally {
+      setIsLoadingReferralAction(false);
+    }
+  }
+
   if (!mounted || isLoading) {
     return <div className="p-6 text-white/60">Проверка доступа...</div>;
   }
@@ -584,6 +661,9 @@ if (!result.ok) {
                     <div className="mt-1 text-xs text-white/40">
                       Slug: {ws.slug || "—"}
                     </div>
+                    <div className="mt-1 text-xs text-white/40">
+                      Владелец: {ws.owner_email || ws.owner_user_id || "—"}
+                    </div>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[520px]">
@@ -631,7 +711,7 @@ if (!result.ok) {
       </div>
 
       {selectedWorkspace ? (
-        <div className="grid gap-6 xl:grid-cols-3">
+        <div className="grid gap-6 xl:grid-cols-4">
           <div className="rounded-2xl border border-white/10 bg-[#121826] p-5">
             <div className="text-lg font-semibold text-white">
               Управление балансом
@@ -797,6 +877,66 @@ if (!result.ok) {
               и логируются в admin logs.
             </div>
           </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#121826] p-5">
+            <div className="text-lg font-semibold text-white">
+              Реферальная привязка
+            </div>
+
+            <div className="mt-2 text-sm text-white/50">
+              Привязать владельца кабинета к рефералу вручную.
+            </div>
+
+            <div className="mt-4 rounded-xl border border-white/10 bg-[#0F1524] px-4 py-3">
+              <div className="text-xs text-white/45">Владелец кабинета</div>
+              <div className="mt-1 break-all text-sm font-medium text-white">
+                {selectedWorkspace.owner_email ||
+                  selectedWorkspace.owner_user_id ||
+                  "Не найден"}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <input
+                value={referrerInput}
+                onChange={(e) => setReferrerInput(e.target.value)}
+                placeholder="Email реферала или referral code"
+                className="h-[48px] rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none placeholder:text-white/35"
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setReplaceReferralAttribution((current) => !current)
+                }
+                className={`rounded-xl px-4 py-3 text-left text-sm transition ${
+                  replaceReferralAttribution
+                    ? "bg-amber-500/15 text-amber-300"
+                    : "bg-white/[0.04] text-white/60 hover:bg-white/[0.08] hover:text-white"
+                }`}
+              >
+                {replaceReferralAttribution
+                  ? "Замена включена"
+                  : "Не заменять существующую привязку"}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleAssignReferral}
+              disabled={isLoadingReferralAction}
+              className="mt-4 w-full rounded-xl bg-sky-500/15 px-4 py-3 text-sm text-sky-300 transition hover:bg-sky-500/20 disabled:opacity-50"
+            >
+              {isLoadingReferralAction
+                ? "Привязываем..."
+                : "Привязать к рефералу"}
+            </button>
+
+            <div className="mt-4 rounded-xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white/60">
+              Если указать email, система найдёт пользователя и создаст ему
+              стандартную ссылку 25%, если её ещё нет.
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -817,6 +957,7 @@ if (!result.ok) {
               { value: "manual_balance_adjustment", label: "Баланс" },
               { value: "activate_plan_from_balance", label: "Тарифы" },
               { value: "force_billing_status", label: "Статусы" },
+              { value: "assign_referral_attribution", label: "Рефералка" },
             ].map((item) => (
               <button
                 key={item.value}

@@ -1,0 +1,28 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="44" y="44" width="1352" height="792" rx="32" fill="#121826" stroke="#273244"/>
+  <text x="88" y="106" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Клиенты</text>
+  <text x="88" y="152" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Клиентская экономика и риски</text>
+  <rect x="88" y="220" width="390" height="132" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="122" y="266" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Средняя выручка на клиента</text>
+  <text x="122" y="312" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="34" font-weight="700">43 333 ₽</text>
+  <rect x="526" y="220" width="390" height="132" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="560" y="266" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Средняя прибыль на клиента</text>
+  <text x="560" y="312" fill="#34D399" font-family="Arial, sans-serif" font-size="34" font-weight="700">38 633 ₽</text>
+  <rect x="964" y="220" width="330" height="132" rx="24" fill="#0F1524" stroke="#273244"/>
+  <text x="998" y="266" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Клиенты с риском</text>
+  <text x="998" y="312" fill="#FB7185" font-family="Arial, sans-serif" font-size="34" font-weight="700">3</text>
+  <rect x="88" y="414" width="560" height="310" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="128" y="466" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">Топ клиентов</text>
+  <rect x="128" y="514" width="430" height="48" rx="14" fill="#172033"/><text x="154" y="545" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17">Wheels Club — 120 000 ₽</text>
+  <rect x="128" y="578" width="370" height="48" rx="14" fill="#172033"/><text x="154" y="609" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17">FOR — 90 000 ₽</text>
+  <rect x="128" y="642" width="300" height="48" rx="14" fill="#172033"/><text x="154" y="673" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17">SIBERINA — 60 000 ₽</text>
+  <rect x="704" y="414" width="590" height="310" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="744" y="466" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">Управленческие сигналы</text>
+  <circle cx="774" cy="532" r="16" fill="#34D399"/>
+  <text x="810" y="539" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Прибыльный клиент — развивать</text>
+  <circle cx="774" cy="594" r="16" fill="#FBBF24"/>
+  <text x="810" y="601" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Низкая маржа — пересобрать условия</text>
+  <circle cx="774" cy="656" r="16" fill="#FB7185"/>
+  <text x="810" y="663" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Просрочка — взять оплату на контроль</text>
+</svg>

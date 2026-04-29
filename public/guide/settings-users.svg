@@ -1,0 +1,28 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="44" y="44" width="1352" height="792" rx="32" fill="#121826" stroke="#273244"/>
+  <text x="88" y="106" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Пользователи</text>
+  <text x="88" y="152" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Участники кабинета и payroll</text>
+  <rect x="88" y="218" width="560" height="78" rx="22" fill="#0F1524" stroke="#273244"/>
+  <text x="124" y="266" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">user@gmail.com</text>
+  <rect x="676" y="218" width="240" height="78" rx="22" fill="#0F1524" stroke="#273244"/>
+  <text x="736" y="266" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">Сотрудник</text>
+  <rect x="944" y="218" width="260" height="78" rx="22" fill="#00C896"/>
+  <text x="1000" y="266" fill="#07120F" font-family="Arial, sans-serif" font-size="18" font-weight="700">Добавить</text>
+  <rect x="88" y="356" width="1230" height="360" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="128" y="410" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="700">Команда</text>
+  <path d="M128 456H1278" stroke="#273244" stroke-width="2"/>
+  <text x="128" y="506" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Пользователь</text>
+  <text x="500" y="506" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Роль</text>
+  <text x="740" y="506" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Payroll</text>
+  <text x="1030" y="506" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Статус</text>
+  <text x="128" y="570" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Иван Менеджер</text>
+  <text x="500" y="570" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Менеджер</text>
+  <text x="740" y="570" fill="#34D399" font-family="Arial, sans-serif" font-size="18">Оклад + проект</text>
+  <text x="1030" y="570" fill="#34D399" font-family="Arial, sans-serif" font-size="18">Активен</text>
+  <path d="M128 612H1278" stroke="#273244" stroke-width="2"/>
+  <text x="128" y="664" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Анна РОП</text>
+  <text x="500" y="664" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Админ</text>
+  <text x="740" y="664" fill="#34D399" font-family="Arial, sans-serif" font-size="18">Оклад</text>
+  <text x="1030" y="664" fill="#34D399" font-family="Arial, sans-serif" font-size="18">Активен</text>
+</svg>

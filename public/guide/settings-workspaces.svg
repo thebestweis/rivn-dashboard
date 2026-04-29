@@ -1,0 +1,24 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="44" y="44" width="1352" height="792" rx="32" fill="#121826" stroke="#273244"/>
+  <text x="88" y="106" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Кабинеты</text>
+  <text x="88" y="152" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Рабочие пространства бизнеса</text>
+  <text x="88" y="190" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Каждый кабинет хранит своих клиентов, проекты, задачи, CRM и аналитику.</text>
+  <rect x="88" y="260" width="1230" height="350" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="128" y="318" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Название</text>
+  <text x="420" y="318" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Адрес</text>
+  <text x="704" y="318" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Тип</text>
+  <text x="960" y="318" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Роль</text>
+  <path d="M128 348H1278" stroke="#273244" stroke-width="2"/>
+  <text x="128" y="408" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">RIVN Agency</text>
+  <text x="420" y="408" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">rivn-agency</text>
+  <text x="704" y="408" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">Агентство</text>
+  <text x="960" y="408" fill="#34D399" font-family="Arial, sans-serif" font-size="18">Владелец</text>
+  <path d="M128 452H1278" stroke="#273244" stroke-width="2"/>
+  <text x="128" y="512" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Новый отдел</text>
+  <text x="420" y="512" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">new-team</text>
+  <text x="704" y="512" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">Команда</text>
+  <text x="960" y="512" fill="#34D399" font-family="Arial, sans-serif" font-size="18">Админ</text>
+  <rect x="88" y="660" width="380" height="80" rx="24" fill="#063B2E" stroke="#0F766E"/>
+  <text x="124" y="710" fill="#A7F3D0" font-family="Arial, sans-serif" font-size="20" font-weight="700">Активный кабинет определяет данные</text>
+</svg>

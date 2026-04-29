@@ -27,7 +27,7 @@ export default async function GuideArticlePage({
     <main className="min-h-screen bg-[#0B0F1A] px-5 py-6 text-white lg:px-8">
       <div className="mx-auto grid max-w-[1680px] gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="xl:sticky xl:top-6 xl:self-start">
-          <div className="rounded-[30px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+          <div className="flex flex-col rounded-[30px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
             <Link
               href="/guide"
               className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/70 transition hover:bg-white/[0.07] hover:text-white"
@@ -36,7 +36,7 @@ export default async function GuideArticlePage({
               Все инструкции
             </Link>
 
-            <div className="mt-5 border-t border-white/10 pt-4">
+            <div className="order-2 mt-5 border-t border-white/10 pt-4">
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
                 Разделы статьи
               </div>
@@ -53,7 +53,7 @@ export default async function GuideArticlePage({
               </nav>
             </div>
 
-            <div className="mt-5 border-t border-white/10 pt-4">
+            <div className="order-1 mt-5 border-t border-white/10 pt-4">
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
                 База знаний
               </div>
@@ -119,6 +119,19 @@ export default async function GuideArticlePage({
                   <p key={paragraph}>{paragraph}</p>
                 ))}
               </div>
+
+              {section.image ? (
+                  <figure className="mt-5 overflow-hidden rounded-[26px] border border-white/10 bg-[#0B0F1A]">
+                    <img
+                      src={section.image.src}
+                      alt={section.image.alt}
+                      className="h-auto w-full"
+                    />
+                  <figcaption className="border-t border-white/10 px-5 py-3 text-sm text-white/50">
+                    {section.image.caption}
+                  </figcaption>
+                </figure>
+              ) : null}
 
               {section.checklist ? (
                 <div className="mt-5 rounded-[24px] border border-emerald-400/15 bg-emerald-400/[0.06] p-5">

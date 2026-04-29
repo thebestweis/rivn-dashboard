@@ -1,0 +1,34 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="44" y="44" width="1352" height="792" rx="32" fill="#121826" stroke="#273244"/>
+  <text x="88" y="106" fill="#A78BFA" font-family="Arial, sans-serif" font-size="18" font-weight="700">План / факт</text>
+  <text x="88" y="152" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Плановые показатели против реальности</text>
+  <rect x="88" y="220" width="280" height="72" rx="24" fill="#7C3AED"/>
+  <text x="162" y="264" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="20" font-weight="700">Выручка</text>
+  <rect x="386" y="220" width="280" height="72" rx="24" fill="#1A2232" stroke="#2B364A"/>
+  <text x="470" y="264" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="20" font-weight="700">Прибыль</text>
+  <rect x="684" y="220" width="280" height="72" rx="24" fill="#1A2232" stroke="#2B364A"/>
+  <text x="768" y="264" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="20" font-weight="700">Расходы</text>
+  <rect x="982" y="220" width="280" height="72" rx="24" fill="#1A2232" stroke="#2B364A"/>
+  <text x="1084" y="264" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="20" font-weight="700">ФОТ</text>
+  <rect x="88" y="348" width="1230" height="290" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="128" y="400" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">График выполнения</text>
+  <rect x="170" y="520" width="78" height="72" rx="12" fill="#8B5CF6"/>
+  <rect x="268" y="478" width="78" height="114" rx="12" fill="#34D399"/>
+  <rect x="410" y="492" width="78" height="100" rx="12" fill="#8B5CF6"/>
+  <rect x="508" y="450" width="78" height="142" rx="12" fill="#34D399"/>
+  <rect x="650" y="430" width="78" height="162" rx="12" fill="#8B5CF6"/>
+  <rect x="748" y="462" width="78" height="130" rx="12" fill="#34D399"/>
+  <rect x="890" y="398" width="78" height="194" rx="12" fill="#8B5CF6"/>
+  <rect x="988" y="456" width="78" height="136" rx="12" fill="#34D399"/>
+  <text x="128" y="682" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Фиолетовый — план, зелёный — факт</text>
+  <rect x="88" y="700" width="290" height="84" rx="22" fill="#0F1524" stroke="#273244"/>
+  <text x="118" y="734" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">План</text>
+  <text x="118" y="766" fill="#A78BFA" font-family="Arial, sans-serif" font-size="24" font-weight="700">500 000 ₽</text>
+  <rect x="402" y="700" width="290" height="84" rx="22" fill="#0F1524" stroke="#273244"/>
+  <text x="432" y="734" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">Факт</text>
+  <text x="432" y="766" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="700">260 000 ₽</text>
+  <rect x="716" y="700" width="290" height="84" rx="22" fill="#0F1524" stroke="#273244"/>
+  <text x="746" y="734" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">Выполнение</text>
+  <text x="746" y="766" fill="#34D399" font-family="Arial, sans-serif" font-size="24" font-weight="700">52%</text>
+</svg>

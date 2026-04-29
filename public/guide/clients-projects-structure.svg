@@ -1,0 +1,26 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="56" y="56" width="1328" height="768" rx="34" fill="#121826" stroke="#273244"/>
+  <text x="96" y="124" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Клиенты и проекты</text>
+  <text x="96" y="174" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="40" font-weight="700">Один клиент - несколько проектов</text>
+  <text x="96" y="216" fill="#94A3B8" font-family="Arial, sans-serif" font-size="19">Клиент хранит контакты и общий контекст. Проекты разделяют рабочие направления.</text>
+  <rect x="96" y="310" width="360" height="250" rx="30" fill="#0F1524" stroke="#34D399" stroke-width="2"/>
+  <circle cx="154" cy="378" r="34" fill="#34D399"/>
+  <text x="142" y="390" fill="#07120F" font-family="Arial, sans-serif" font-size="28" font-weight="700">К</text>
+  <text x="206" y="374" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="28" font-weight="700">Клиент</text>
+  <text x="206" y="412" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Компания или человек</text>
+  <rect x="130" y="478" width="292" height="48" rx="16" fill="#172033"/>
+  <text x="154" y="508" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="17">Контакты, источник, статус</text>
+  <path d="M480 435H610" stroke="#475569" stroke-width="4" stroke-linecap="round"/>
+  <path d="M610 435L590 418M610 435L590 452" stroke="#475569" stroke-width="4" stroke-linecap="round"/>
+  <rect x="650" y="260" width="300" height="150" rx="26" fill="#111827" stroke="#273244"/>
+  <text x="690" y="318" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="700">Avito</text>
+  <text x="690" y="356" fill="#94A3B8" font-family="Arial, sans-serif" font-size="17">Задачи, отчёты, расходы</text>
+  <rect x="650" y="460" width="300" height="150" rx="26" fill="#111827" stroke="#273244"/>
+  <text x="690" y="518" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="700">Контекстная реклама</text>
+  <text x="690" y="556" fill="#94A3B8" font-family="Arial, sans-serif" font-size="17">Бюджет, заявки, аналитика</text>
+  <rect x="1000" y="360" width="300" height="150" rx="26" fill="#111827" stroke="#273244"/>
+  <text x="1040" y="418" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="700">Сайт и разработка</text>
+  <text x="1040" y="456" fill="#94A3B8" font-family="Arial, sans-serif" font-size="17">Этапы, файлы, команда</text>
+  <path d="M950 335H1000M950 535H1000" stroke="#273244" stroke-width="3" stroke-linecap="round"/>
+</svg>

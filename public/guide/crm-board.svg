@@ -1,0 +1,62 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="28" y="28" width="1384" height="824" rx="28" fill="#121826" stroke="#273244"/>
+  <text x="60" y="82" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">CRM</text>
+  <text x="60" y="124" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="34" font-weight="700">Воронка продаж</text>
+  <text x="60" y="158" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Новые заявки, сделки, ответственные и этапы в одном рабочем поле</text>
+  <rect x="1128" y="74" width="220" height="56" rx="18" fill="#00C896"/>
+  <text x="1172" y="109" fill="#07120F" font-family="Arial, sans-serif" font-size="17" font-weight="700">Создать сделку</text>
+  <rect x="60" y="198" width="390" height="92" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="88" y="236" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Сделок в работе</text>
+  <text x="88" y="270" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="32" font-weight="700">24</text>
+  <rect x="474" y="198" width="390" height="92" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="502" y="236" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Потенциал услуг</text>
+  <text x="502" y="270" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="32" font-weight="700">1 840 000 ₽</text>
+  <rect x="888" y="198" width="390" height="92" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="916" y="236" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Ответственных</text>
+  <text x="916" y="270" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="32" font-weight="700">6</text>
+  <g>
+    <rect x="60" y="334" width="306" height="466" rx="24" fill="#0F1524" stroke="#273244"/>
+    <circle cx="88" cy="368" r="5" fill="#FBBF24"/>
+    <text x="104" y="374" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="19" font-weight="700">Заявка получена</text>
+    <text x="298" y="374" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">8</text>
+    <rect x="82" y="410" width="262" height="106" rx="16" fill="#172033" stroke="#2B364A"/>
+    <text x="104" y="442" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17" font-weight="700">Клиент с Avito</text>
+    <text x="104" y="470" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">Ремонт квартир</text>
+    <text x="104" y="496" fill="#34D399" font-family="Arial, sans-serif" font-size="15">120 000 ₽ · Иван</text>
+    <rect x="82" y="532" width="262" height="106" rx="16" fill="#172033" stroke="#2B364A"/>
+    <text x="104" y="564" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17" font-weight="700">Заявка с Tilda</text>
+    <text x="104" y="592" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">Маркетинг под ключ</text>
+    <text x="104" y="618" fill="#34D399" font-family="Arial, sans-serif" font-size="15">180 000 ₽ · Анна</text>
+  </g>
+  <g>
+    <rect x="390" y="334" width="306" height="466" rx="24" fill="#0F1524" stroke="#273244"/>
+    <circle cx="418" cy="368" r="5" fill="#8B5CF6"/>
+    <text x="434" y="374" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="19" font-weight="700">Квалификация</text>
+    <text x="628" y="374" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">5</text>
+    <rect x="412" y="410" width="262" height="106" rx="16" fill="#172033" stroke="#2B364A"/>
+    <text x="434" y="442" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17" font-weight="700">Wheels Club</text>
+    <text x="434" y="470" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">Avito-продвижение</text>
+    <text x="434" y="496" fill="#34D399" font-family="Arial, sans-serif" font-size="15">90 000 ₽ · Weis</text>
+  </g>
+  <g>
+    <rect x="720" y="334" width="306" height="466" rx="24" fill="#0F1524" stroke="#273244"/>
+    <circle cx="748" cy="368" r="5" fill="#FB7185"/>
+    <text x="764" y="374" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="19" font-weight="700">Переговоры</text>
+    <text x="958" y="374" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">6</text>
+    <rect x="742" y="410" width="262" height="106" rx="16" fill="#172033" stroke="#2B364A"/>
+    <text x="764" y="442" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17" font-weight="700">FOR - Авито</text>
+    <text x="764" y="470" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">КП отправлено</text>
+    <text x="764" y="496" fill="#34D399" font-family="Arial, sans-serif" font-size="15">150 000 ₽ · РОП</text>
+  </g>
+  <g>
+    <rect x="1050" y="334" width="306" height="466" rx="24" fill="#0F1524" stroke="#273244"/>
+    <circle cx="1078" cy="368" r="5" fill="#22C55E"/>
+    <text x="1094" y="374" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="19" font-weight="700">Проект оплачен</text>
+    <text x="1288" y="374" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">3</text>
+    <rect x="1072" y="410" width="262" height="106" rx="16" fill="#172033" stroke="#2B364A"/>
+    <text x="1094" y="442" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="17" font-weight="700">Новый запуск</text>
+    <text x="1094" y="470" fill="#94A3B8" font-family="Arial, sans-serif" font-size="15">Готов к созданию проекта</text>
+    <text x="1094" y="496" fill="#34D399" font-family="Arial, sans-serif" font-size="15">240 000 ₽ · Команда</text>
+  </g>
+</svg>

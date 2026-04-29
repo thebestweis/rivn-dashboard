@@ -1,0 +1,16 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="210" y="52" width="1020" height="776" rx="34" fill="#121826" stroke="#273244"/>
+  <text x="270" y="116" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18" font-weight="700">Задача</text>
+  <text x="270" y="168" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Подготовить запуск проекта</text>
+  <rect x="270" y="220" width="128" height="48" rx="24" fill="#075985" stroke="#38BDF8"/>
+  <text x="302" y="250" fill="#BAE6FD" font-family="Arial, sans-serif" font-size="17" font-weight="700">К работе</text>
+  <rect x="270" y="330" width="900" height="128" rx="26" fill="#0F1524" stroke="#273244"/>
+  <text x="310" y="382" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="23" font-weight="700">Исполнители</text>
+  <text x="310" y="424" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Можно назначить одного или нескольких сотрудников.</text>
+  <rect x="270" y="490" width="900" height="128" rx="26" fill="#0F1524" stroke="#273244"/>
+  <text x="310" y="542" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="23" font-weight="700">Дедлайн</text>
+  <text x="310" y="584" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Дата, время и повторение задачи.</text>
+  <rect x="270" y="650" width="900" height="110" rx="26" fill="#0F1524" stroke="#273244"/>
+  <text x="310" y="704" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="23" font-weight="700">Описание, чат, файлы и история</text>
+</svg>

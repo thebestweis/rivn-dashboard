@@ -119,6 +119,25 @@ function generateReferralCode() {
   return `${random}${timestamp}`.toLowerCase();
 }
 
+async function postJson(url: string, body: Record<string, unknown>) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data?.ok === false) {
+    throw new Error(data?.error || "Не удалось выполнить referral-запрос");
+  }
+
+  return data;
+}
+
 async function logReferralAdminAction(params: {
   actionType: string;
   actionPayload?: Record<string, unknown>;
@@ -422,79 +441,15 @@ export async function clearStoredReferralCodeFromBrowser() {
 export async function createReferralAttributionForUser(
   referredUserId: string
 ): Promise<void> {
-  const { supabase, user } = await getAppContext();
-
-  if (user.id !== referredUserId) {
-    throw new Error(
-      "Можно создавать реферальную привязку только для текущего пользователя"
-    );
-  }
-
   const referralCode = await getStoredReferralCodeFromBrowser();
 
   if (!referralCode) {
     return;
   }
-
-  const { data: existingAttribution, error: existingAttributionError } =
-    await supabase
-      .from("referral_attributions")
-      .select("id")
-      .eq("referred_user_id", referredUserId)
-      .maybeSingle();
-
-  if (existingAttributionError) {
-    throw new Error(
-      `Не удалось проверить существующую реферальную привязку: ${existingAttributionError.message}`
-    );
-  }
-
-  if (existingAttribution) {
-    await clearStoredReferralCodeFromBrowser();
-    return;
-  }
-
-  const { data: referralLink, error: referralLinkError } = await supabase
-    .from("referral_links")
-    .select("*")
-    .eq("code", referralCode)
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (referralLinkError) {
-    throw new Error(
-      `Не удалось загрузить реферальную ссылку: ${referralLinkError.message}`
-    );
-  }
-
-  if (!referralLink) {
-    await clearStoredReferralCodeFromBrowser();
-    return;
-  }
-
-  const typedReferralLink = mapReferralLink(referralLink as DbReferralLinkRow);
-
-  if (typedReferralLink.owner_user_id === referredUserId) {
-    await clearStoredReferralCodeFromBrowser();
-    return;
-  }
-
-  const payload = {
-    referral_link_id: typedReferralLink.id,
-    referrer_user_id: typedReferralLink.owner_user_id,
-    referred_user_id: referredUserId,
-    reward_percent: typedReferralLink.reward_percent,
-  };
-
-  const { error: insertError } = await supabase
-    .from("referral_attributions")
-    .insert(payload);
-
-  if (insertError) {
-    throw new Error(
-      `Не удалось создать реферальную привязку: ${insertError.message}`
-    );
-  }
+  await postJson("/api/referrals/attribution", {
+    referralCode,
+    referredUserId,
+  });
 
   await clearStoredReferralCodeFromBrowser();
 }

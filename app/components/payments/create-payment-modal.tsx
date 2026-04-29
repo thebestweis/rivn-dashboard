@@ -1,3 +1,5 @@
+import { CustomSelect } from "../ui/custom-select";
+
 interface ClientItem {
   id: string;
   name?: string;
@@ -72,6 +74,14 @@ export function CreatePaymentModal({
   const filteredProjects = projects.filter(
     (project) => project.client_id === clientId
   );
+  const clientOptions = clients.map((client) => ({
+    value: client.id,
+    label: getClientDisplayName(client),
+  }));
+  const projectOptions = filteredProjects.map((project) => ({
+    value: project.id,
+    label: project.name,
+  }));
 
   const isDisabled = isSubmitting || !canManage;
   const isSubmitDisabled =
@@ -130,38 +140,28 @@ export function CreatePaymentModal({
         ) : null}
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <select
+          <CustomSelect
             value={clientId}
             disabled={isDisabled}
-            onChange={(e) => {
-              setClientId(e.target.value);
+            onChange={(value) => {
+              setClientId(value);
               setProjectId("");
             }}
-            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">Выбери клиента</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {getClientDisplayName(client)}
-              </option>
-            ))}
-          </select>
+            options={clientOptions}
+            placeholder="Выбери клиента"
+            buttonClassName="h-[46px] border-white/10 bg-white/[0.04] text-white shadow-none hover:bg-white/[0.06]"
+            dropdownClassName="border-white/10 bg-[#121826] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+          />
 
-          <select
+          <CustomSelect
             value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
+            onChange={setProjectId}
             disabled={!clientId || isDisabled}
-            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">
-              {clientId ? "Выбери проект" : "Сначала выбери клиента"}
-            </option>
-            {filteredProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+            options={projectOptions}
+            placeholder={clientId ? "Выбери проект" : "Сначала выбери клиента"}
+            buttonClassName="h-[46px] border-white/10 bg-white/[0.04] text-white shadow-none hover:bg-white/[0.06]"
+            dropdownClassName="border-white/10 bg-[#121826] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+          />
 
           <input
             type="date"

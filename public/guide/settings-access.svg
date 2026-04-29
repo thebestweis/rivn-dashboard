@@ -1,0 +1,24 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="44" y="44" width="1352" height="792" rx="32" fill="#121826" stroke="#273244"/>
+  <text x="88" y="106" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Доступы</text>
+  <text x="88" y="152" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Кто что видит и чем управляет</text>
+  <rect x="88" y="220" width="500" height="64" rx="20" fill="#0F1524" stroke="#273244"/>
+  <text x="122" y="260" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">Иван Менеджер</text>
+  <rect x="620" y="220" width="260" height="64" rx="20" fill="#1A2232" stroke="#2B364A"/>
+  <text x="692" y="260" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18">Менеджер</text>
+  <rect x="88" y="348" width="1230" height="360" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="128" y="402" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Раздел</text>
+  <text x="720" y="402" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Просмотр</text>
+  <text x="980" y="402" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Управление</text>
+  <path d="M128 432H1278" stroke="#273244" stroke-width="2"/>
+  <text x="128" y="486" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">CRM</text>
+  <circle cx="760" cy="480" r="18" fill="#34D399"/><path d="M750 480L758 488L772 470" stroke="#07120F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1030" cy="480" r="18" fill="#34D399"/><path d="M1020 480L1028 488L1042 470" stroke="#07120F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="128" y="556" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Аналитика</text>
+  <circle cx="760" cy="550" r="18" fill="#34D399"/><path d="M750 550L758 558L772 540" stroke="#07120F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1030" cy="550" r="18" fill="#EF4444"/><path d="M1020 540L1040 560M1040 540L1020 560" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+  <text x="128" y="626" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Настройки</text>
+  <circle cx="760" cy="620" r="18" fill="#EF4444"/><path d="M750 610L770 630M770 610L750 630" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="1030" cy="620" r="18" fill="#EF4444"/><path d="M1020 610L1040 630M1040 610L1020 630" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+</svg>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminRoute, getErrorMessage } from "../../_utils";
+import { createReferralRewardForBillingTransaction } from "@/app/lib/referral-server";
 
 type BillingPeriod = "monthly" | "yearly";
 type PlanCode = "base" | "team" | "strategy";
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
 
     const { data: workspace, error: workspaceError } = await serviceSupabase
       .from("workspaces")
-      .select("id")
+      .select("id, owner_user_id")
       .eq("id", workspaceId)
       .single();
 
@@ -127,7 +128,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const { error: transactionError } = await serviceSupabase
+    const { data: transaction, error: transactionError } = await serviceSupabase
       .from("billing_transactions")
       .insert({
         workspace_id: workspaceId,
@@ -146,12 +147,29 @@ export async function POST(request: Request) {
           source: "manual_activation",
         },
         created_by_user_id: user.id,
-      });
+      })
+      .select("id")
+      .single();
 
-    if (transactionError) {
+    if (transactionError || !transaction) {
       throw new Error(
-        `Не удалось создать billing транзакцию: ${transactionError.message}`
+        `Не удалось создать billing транзакцию: ${
+          transactionError?.message ?? "unknown error"
+        }`
       );
+    }
+
+    try {
+      if (workspace.owner_user_id && transaction.id) {
+        await createReferralRewardForBillingTransaction({
+          serviceSupabase,
+          referredUserId: workspace.owner_user_id,
+          billingTransactionId: transaction.id,
+          paymentAmount: totalPrice,
+        });
+      }
+    } catch (referralError) {
+      console.error("Ошибка создания referral reward:", referralError);
     }
 
     const now = new Date();

@@ -79,17 +79,17 @@ export function RegisterPageContent() {
         throw error;
       }
 
-      if (data.user) {
-        try {
-          await createReferralAttributionForUser(data.user.id);
-        } catch (referralError) {
-          console.error("Ошибка создания реферальной привязки:", referralError);
-        }
-      }
-
       if (data.session) {
   await waitForSessionReady();
   await bootstrapAccountForCurrentUser();
+
+  if (data.user) {
+    try {
+      await createReferralAttributionForUser(data.user.id);
+    } catch (referralError) {
+      console.error("Ошибка создания реферальной привязки:", referralError);
+    }
+  }
 
   router.replace("/dashboard");
   return;

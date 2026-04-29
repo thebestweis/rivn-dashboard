@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { createClient } from "../lib/supabase/client";
+import { bootstrapAccountForCurrentUser } from "../lib/supabase/bootstrap-account";
+import { createReferralAttributionForUser } from "../lib/supabase/referrals";
 
 export function LoginPageClient() {
   const router = useRouter();
@@ -26,13 +28,23 @@ export function LoginPageClient() {
     try {
       const supabase = createClient();
 
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
 
       if (error) {
         throw error;
+      }
+
+      await bootstrapAccountForCurrentUser();
+
+      if (data.user?.id) {
+        try {
+          await createReferralAttributionForUser(data.user.id);
+        } catch (referralError) {
+          console.error("Ошибка создания реферальной привязки:", referralError);
+        }
       }
 
       router.replace(nextPath);

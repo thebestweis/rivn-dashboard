@@ -18,7 +18,13 @@ type WorkspaceRow = {
   id: string;
   name: string;
   slug: string | null;
+  owner_user_id: string | null;
   created_at: string;
+};
+
+type ProfileRow = {
+  id: string;
+  email: string | null;
 };
 
 export async function GET() {
@@ -30,10 +36,11 @@ export async function GET() {
       { data: billingRows, error: billingError },
       { data: transactionRows, error: transactionsError },
       { data: logsRows, error: logsError },
+      { data: profilesRows, error: profilesError },
     ] = await Promise.all([
       serviceSupabase
         .from("workspaces")
-        .select("id,name,slug,created_at")
+        .select("id,name,slug,owner_user_id,created_at")
         .order("created_at", { ascending: false }),
 
       serviceSupabase
@@ -49,6 +56,8 @@ export async function GET() {
         .select("*")
         .order("created_at", { ascending: false })
         .limit(30),
+
+      serviceSupabase.from("profiles").select("id,email"),
     ]);
 
     if (workspacesError) {
@@ -67,6 +76,10 @@ export async function GET() {
       throw new Error(`Не удалось загрузить admin logs: ${logsError.message}`);
     }
 
+    if (profilesError) {
+      throw new Error(`Не удалось загрузить profiles: ${profilesError.message}`);
+    }
+
     const billingMap = new Map<string, BillingRow>();
 
     for (const row of (billingRows ?? []) as BillingRow[]) {
@@ -74,12 +87,17 @@ export async function GET() {
     }
 
     const balanceMap = new Map<string, number>();
+    const profileEmailMap = new Map<string, string | null>();
 
     for (const row of (transactionRows ?? []) as TransactionRow[]) {
       if (row.status && row.status !== "completed") continue;
 
       const current = balanceMap.get(row.workspace_id) ?? 0;
       balanceMap.set(row.workspace_id, current + Number(row.amount ?? 0));
+    }
+
+    for (const row of (profilesRows ?? []) as ProfileRow[]) {
+      profileEmailMap.set(row.id, row.email ?? null);
     }
 
     const normalizedWorkspaces = ((workspaces ?? []) as WorkspaceRow[]).map((ws) => {
@@ -89,6 +107,10 @@ export async function GET() {
         id: ws.id,
         name: ws.name,
         slug: ws.slug,
+        owner_user_id: ws.owner_user_id ?? null,
+        owner_email: ws.owner_user_id
+          ? profileEmailMap.get(ws.owner_user_id) ?? null
+          : null,
         created_at: ws.created_at,
         billing: billing
           ? {

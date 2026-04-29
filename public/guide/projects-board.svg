@@ -1,0 +1,27 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="48" y="48" width="1344" height="784" rx="34" fill="#121826" stroke="#273244"/>
+  <text x="88" y="112" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Проекты</text>
+  <text x="88" y="160" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Рабочая сетка проектов</text>
+  <text x="88" y="202" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Карточки можно менять местами. Важные проекты удобно держать выше.</text>
+  <rect x="88" y="270" width="380" height="230" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="124" y="328" fill="#64748B" font-family="Arial, sans-serif" font-size="15" font-weight="700">ПРОЕКТ</text>
+  <text x="124" y="372" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">FOR - Авито</text>
+  <text x="124" y="420" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Клиент</text>
+  <text x="124" y="452" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18" font-weight="700">Focused on Result</text>
+  <rect x="340" y="308" width="86" height="34" rx="17" fill="#063B2E"/>
+  <text x="358" y="331" fill="#A7F3D0" font-family="Arial, sans-serif" font-size="14" font-weight="700">Активен</text>
+  <rect x="530" y="270" width="380" height="230" rx="28" fill="#0F1524" stroke="#34D399" stroke-width="2"/>
+  <text x="566" y="328" fill="#64748B" font-family="Arial, sans-serif" font-size="15" font-weight="700">ПРОЕКТ</text>
+  <text x="566" y="372" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">Запуск рекламы</text>
+  <text x="566" y="420" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Активные задачи</text>
+  <text x="566" y="452" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18" font-weight="700">7 задач</text>
+  <text x="858" y="392" fill="#34D399" font-family="Arial, sans-serif" font-size="30">↕</text>
+  <rect x="972" y="270" width="380" height="230" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="1008" y="328" fill="#64748B" font-family="Arial, sans-serif" font-size="15" font-weight="700">ПРОЕКТ</text>
+  <text x="1008" y="372" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">Разработка сайта</text>
+  <text x="1008" y="420" fill="#94A3B8" font-family="Arial, sans-serif" font-size="16">Дата старта</text>
+  <text x="1008" y="452" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18" font-weight="700">29 апреля 2026</text>
+  <rect x="88" y="560" width="1264" height="120" rx="26" fill="#0F1524" stroke="#273244" stroke-dasharray="8 8"/>
+  <text x="582" y="628" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="20" font-weight="700">Добавить проект</text>
+</svg>

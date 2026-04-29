@@ -1,0 +1,36 @@
+<svg width="1440" height="880" viewBox="0 0 1440 880" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="880" rx="32" fill="#0B0F1A"/>
+  <rect x="40" y="40" width="1360" height="800" rx="32" fill="#121826" stroke="#273244"/>
+  <text x="84" y="102" fill="#34D399" font-family="Arial, sans-serif" font-size="18" font-weight="700">Аналитика</text>
+  <text x="84" y="148" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="38" font-weight="700">Финансы, план и клиенты в одном месте</text>
+  <text x="84" y="186" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Раздел помогает владельцу быстро понять, что происходит с деньгами и где бизнес теряет результат.</text>
+  <rect x="84" y="236" width="220" height="58" rx="22" fill="#7C3AED"/>
+  <text x="150" y="272" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18" font-weight="700">Финансы</text>
+  <rect x="320" y="236" width="220" height="58" rx="22" fill="#1A2232" stroke="#2B364A"/>
+  <text x="382" y="272" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18" font-weight="700">План / факт</text>
+  <rect x="556" y="236" width="220" height="58" rx="22" fill="#1A2232" stroke="#2B364A"/>
+  <text x="630" y="272" fill="#CBD5E1" font-family="Arial, sans-serif" font-size="18" font-weight="700">Клиенты</text>
+  <rect x="84" y="348" width="390" height="308" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="126" y="402" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">Финансовый результат</text>
+  <text x="126" y="444" fill="#94A3B8" font-family="Arial, sans-serif" font-size="17">Выручка</text>
+  <text x="316" y="444" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="700">260 000 ₽</text>
+  <text x="126" y="492" fill="#94A3B8" font-family="Arial, sans-serif" font-size="17">Расходы</text>
+  <text x="316" y="492" fill="#FB7185" font-family="Arial, sans-serif" font-size="24" font-weight="700">28 200 ₽</text>
+  <text x="126" y="540" fill="#94A3B8" font-family="Arial, sans-serif" font-size="17">Прибыль</text>
+  <text x="316" y="540" fill="#34D399" font-family="Arial, sans-serif" font-size="24" font-weight="700">231 800 ₽</text>
+  <rect x="526" y="348" width="390" height="308" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="568" y="402" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">План / факт</text>
+  <rect x="568" y="556" width="70" height="46" rx="10" fill="#8B5CF6"/>
+  <rect x="662" y="494" width="70" height="108" rx="10" fill="#34D399"/>
+  <rect x="756" y="522" width="70" height="80" rx="10" fill="#8B5CF6"/>
+  <rect x="850" y="450" width="70" height="152" rx="10" fill="#34D399"/>
+  <text x="568" y="630" fill="#94A3B8" font-family="Arial, sans-serif" font-size="17">Сравнение цели и реальности</text>
+  <rect x="968" y="348" width="348" height="308" rx="28" fill="#0F1524" stroke="#273244"/>
+  <text x="1010" y="402" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="26" font-weight="700">Клиенты</text>
+  <circle cx="1050" cy="470" r="16" fill="#34D399"/>
+  <text x="1082" y="477" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Прибыльные</text>
+  <circle cx="1050" cy="526" r="16" fill="#FBBF24"/>
+  <text x="1082" y="533" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Низкая маржа</text>
+  <circle cx="1050" cy="582" r="16" fill="#FB7185"/>
+  <text x="1082" y="589" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18">Риск оплаты</text>
+</svg>
