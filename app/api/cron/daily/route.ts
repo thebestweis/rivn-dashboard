@@ -1,8 +1,35 @@
+import { after } from "next/server";
 import { sendCronErrorNotification } from "../send-cron-error-notification";
 import { getCronSecret, verifyCronSecret } from "../verify-cron-secret";
 import { GET as runAvitoDailyReport } from "../../avito/daily-report/route";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
+async function runDailyReportAndNotify(internalRequest: Request) {
+  try {
+    const response = await runAvitoDailyReport(internalRequest);
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(
+        `Avito daily report failed: ${response.status} ${JSON.stringify(data)}`
+      );
+    }
+
+    console.log("[cron:daily] background completed", data);
+    return data;
+  } catch (error) {
+    console.error("[cron:daily] background failed", error);
+    await sendCronErrorNotification({
+      title: "Daily Cron Error",
+      route: "/api/cron/daily",
+      error,
+    });
+
+    throw error;
+  }
+}
 
 export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
@@ -14,11 +41,15 @@ export async function GET(request: Request) {
     const baseUrl = new URL(request.url).origin;
     const requestUrl = new URL(request.url);
     const force = requestUrl.searchParams.get("force") === "1";
-    console.log("[cron:daily] started", {
+    const wait = requestUrl.searchParams.get("wait") === "1";
+
+    console.log("[cron:daily] accepted", {
       force,
+      wait,
       url: requestUrl.pathname,
       triggeredAt: new Date().toISOString(),
     });
+
     const secret = getCronSecret();
     const internalUrl = new URL(`${baseUrl}/api/avito/daily-report`);
     internalUrl.searchParams.set("t", "cron");
@@ -33,32 +64,37 @@ export async function GET(request: Request) {
       },
     });
 
-    const response = await runAvitoDailyReport(internalRequest);
-    const data = await response.json().catch(() => null);
+    if (wait) {
+      const data = await runDailyReportAndNotify(internalRequest);
 
-    if (!response.ok) {
-      throw new Error(
-        `Avito daily report failed: ${response.status} ${JSON.stringify(data)}`
-      );
+      return Response.json({
+        ok: true,
+        mode: "sync",
+        message: "Daily cron completed",
+        avitoDailyReport: data,
+      });
     }
 
-    console.log("[cron:daily] completed", data);
+    after(async () => {
+      await runDailyReportAndNotify(internalRequest);
+    });
 
     return Response.json({
       ok: true,
-      message: "Daily cron выполнен",
-      avitoDailyReport: data,
+      mode: "background",
+      message: "Daily cron accepted",
+      acceptedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[cron:daily] failed", error);
+    console.error("[cron:daily] failed before background start", error);
     await sendCronErrorNotification({
-      title: "Ошибка Daily Cron",
+      title: "Daily Cron Error",
       route: "/api/cron/daily",
       error,
     });
 
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : "Ошибка" },
+      { ok: false, error: error instanceof Error ? error.message : "Error" },
       { status: 500 }
     );
   }

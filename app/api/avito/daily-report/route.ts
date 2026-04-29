@@ -135,9 +135,8 @@ function getChangePercent(current: number, previous: number) {
   return ((current - previous) / previous) * 100;
 }
 
-function getDailyWish(date: string) {
-  const day = Number(date.split("-")[2]);
-  return dailyWishes[(day - 1) % dailyWishes.length];
+function getDailyWish(_date: string) {
+  return "👋 Добрый день";
 }
 
 function chunkArray<T>(array: T[], size: number) {
@@ -461,32 +460,57 @@ export async function GET(request: Request) {
 
     for (const client of clients) {
       try {
-        const { data: existingLog } = await supabase
+        const processingWindowStart = new Date(
+          Date.now() - 2 * 60 * 60 * 1000
+        ).toISOString();
+
+        const { data: existingLogs } = await supabase
           .from("avito_report_logs")
-          .select("id")
+          .select("id, status, created_at")
           .eq("client_id", client.id)
           .eq("report_type", "daily")
           .eq("period_start", yesterday)
-          .eq("period_end", yesterday)
-          .eq("status", "success")
-          .maybeSingle();
+          .eq("period_end", yesterday);
 
-        if (existingLog && !forceSend) {
+        const existingSuccessLog = (existingLogs ?? []).find(
+          (log) => log.status === "success"
+        );
+        const activeProcessingLog = (existingLogs ?? []).find(
+          (log) =>
+            log.status === "processing" &&
+            typeof log.created_at === "string" &&
+            log.created_at >= processingWindowStart
+        );
+
+        if ((existingSuccessLog || activeProcessingLog) && !forceSend) {
           console.log("[avito:daily-report] skipped duplicate", {
             clientId: client.id,
             clientName: client.name,
             period: yesterday,
+            reason: existingSuccessLog ? "success_exists" : "already_processing",
           });
           results.push({
             clientId: client.id,
             clientName: client.name,
             status: "skipped",
             accountsCount: 0,
-            error: "Daily отчёт уже был отправлен за этот период",
+            error: existingSuccessLog
+              ? "Daily отчёт уже был отправлен за этот период"
+              : "Daily отчёт уже формируется",
           });
 
           continue;
         }
+
+        await supabase.from("avito_report_logs").insert({
+          client_id: client.id,
+          telegram_chat_id: client.telegram_chat_id,
+          report_type: "daily",
+          period_start: yesterday,
+          period_end: yesterday,
+          status: "processing",
+          message: "Daily отчёт принят в обработку",
+        });
 
         const { data: accounts, error: accountsError } = await supabase
           .from("avito_report_accounts")

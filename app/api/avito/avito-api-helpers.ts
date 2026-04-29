@@ -100,29 +100,52 @@ export async function fetchAvitoJson(
   init: RequestInit,
   context: string
 ) {
-  const response = await fetch(url, {
-    ...init,
-    cache: "no-store",
-  });
-  const data = await readJsonResponse(response);
+  const retryDelays = [1500, 3500, 7000, 12000];
+  let lastData: unknown = null;
 
-  if (!response.ok) {
-    if (response.status === 429) {
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+    const response = await fetch(url, {
+      ...init,
+      cache: "no-store",
+    });
+    const data = await readJsonResponse(response);
+
+    if (response.ok) {
+      return data;
+    }
+
+    lastData = data;
+
+    if (response.status !== 429 || attempt === retryDelays.length) {
+      if (response.status === 429) {
+        throw new AvitoApiError(
+          "Avito временно ограничил запросы. Данные подтянутся в следующем отчёте.",
+          response.status,
+          data
+        );
+      }
+
       throw new AvitoApiError(
-        "Avito временно ограничил запросы. Данные подтянутся в следующем отчёте.",
+        `${context}: ${JSON.stringify(data ?? { status: response.status })}`,
         response.status,
         data
       );
     }
 
-    throw new AvitoApiError(
-      `${context}: ${JSON.stringify(data ?? { status: response.status })}`,
-      response.status,
-      data
-    );
+    const retryAfterSeconds = Number(response.headers.get("retry-after"));
+    const retryAfterMs =
+      Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds * 1000
+        : retryDelays[attempt];
+
+    await sleep(retryAfterMs);
   }
 
-  return data;
+  throw new AvitoApiError(
+    "Avito временно ограничил запросы. Данные подтянутся в следующем отчёте.",
+    429,
+    lastData
+  );
 }
 
 async function loadCachedItemIds(accountId?: string) {
@@ -551,7 +574,7 @@ export async function getCachedAvitoStatsForPeriod(params: {
         cacheId = saved?.id;
       }
 
-      await sleep(450);
+      await sleep(900);
     }
 
     return {
