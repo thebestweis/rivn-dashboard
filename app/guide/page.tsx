@@ -9,6 +9,9 @@ import {
 } from "lucide-react";
 import { guideArticles, quickStartSteps } from "./guide-content";
 
+const QUICK_START_VIDEO_EMBED_URL =
+  "https://kinescope.io/embed/8pL4G9D1LadTbgSt3srW7A";
+
 const categories = Array.from(
   new Set(guideArticles.map((article) => article.category))
 );
@@ -54,15 +57,27 @@ export default function GuidePage() {
             </div>
 
             <div className="rounded-[28px] border border-white/10 bg-[#0F1524] p-4">
-              <div className="flex aspect-video items-center justify-center rounded-[22px] border border-dashed border-white/12 bg-black/25">
-                <div className="px-6 text-center">
-                  <PlayCircle className="mx-auto h-12 w-12 text-emerald-300" />
-                  <div className="mt-4 text-lg font-semibold">
-                    Видеоинструкция
+              <div className="overflow-hidden rounded-[22px] border border-white/10 bg-black shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+                <div className="relative aspect-video w-full">
+                  <iframe
+                    src={QUICK_START_VIDEO_EMBED_URL}
+                    title="Видеоинструкция: быстрый старт в RIVN OS"
+                    allow="autoplay; fullscreen; picture-in-picture; encrypted-media; gyroscope; accelerometer; clipboard-write; screen-wake-lock;"
+                    allowFullScreen
+                    className="absolute inset-0 h-full w-full border-0"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-start gap-3 rounded-[22px] border border-emerald-400/15 bg-emerald-400/[0.06] p-4">
+                <PlayCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+                <div>
+                  <div className="text-sm font-semibold text-white">
+                    Видео быстрого старта
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-white/48">
-                    После записи сюда можно вставить видео быстрого старта:
-                    обзор сервиса, первый запуск и ключевые сценарии.
+                  <p className="mt-1 text-sm leading-6 text-white/55">
+                    Посмотри короткий обзор, чтобы быстрее понять логику сервиса:
+                    кабинеты, клиенты, проекты, задачи, финансы, CRM и отчёты.
                   </p>
                 </div>
               </div>
