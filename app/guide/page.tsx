@@ -15,7 +15,7 @@ const QUICK_START_VIDEO_EMBED_URL =
 const categories = Array.from(
   new Set(guideArticles.map((article) => article.category))
 );
-
+// тест для сейва
 export default function GuidePage() {
   return (
     <main className="min-h-screen bg-[#0B0F1A] px-5 py-6 text-white lg:px-8">
