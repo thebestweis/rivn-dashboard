@@ -21,8 +21,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RIVN Control",
-  description: "Agency operating system",
+  title: "RIVN OS",
+  description: "Операционная система для агентств и digital-команд",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({
