@@ -988,6 +988,7 @@ export default function Home() {
       <AppTopbar
         title="Дашборд"
         description="Ключевые показатели, сигналы внимания и общая картина по агентству."
+        compactMobile
         showSearch={false}
         showPeriodTabs={false}
         showThemeToggle={false}
@@ -995,7 +996,7 @@ export default function Home() {
   <>
     <Link
       href="/guide"
-      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+      className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-center text-sm leading-tight text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white sm:px-4 sm:py-3"
     >
       Инструкция
     </Link>
@@ -1004,7 +1005,7 @@ export default function Home() {
       href="https://t.me/weismakeleadgen"
       target="_blank"
       rel="noreferrer"
-      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+      className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-center text-sm leading-tight text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white sm:px-4 sm:py-3"
     >
       TG основателя
     </a>
@@ -1013,7 +1014,7 @@ export default function Home() {
       href="https://t.me/thebestweis"
       target="_blank"
       rel="noreferrer"
-      className="rounded-2xl border border-emerald-400/15 bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition hover:bg-emerald-400/18 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)]"
+      className="min-w-0 rounded-2xl border border-emerald-400/15 bg-emerald-400/12 px-3 py-2.5 text-center text-sm font-medium leading-tight text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition hover:bg-emerald-400/18 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)] sm:px-4 sm:py-3"
     >
       Техническая поддержка
     </a>
@@ -1021,7 +1022,7 @@ export default function Home() {
     <button
       type="button"
       onClick={handleLogout}
-      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+      className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-center text-sm leading-tight text-white/75 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white sm:px-4 sm:py-3"
     >
       Выйти
     </button>
