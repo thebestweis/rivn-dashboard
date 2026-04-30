@@ -9,6 +9,7 @@ export type ReferralLinkItem = {
   link_type: ReferralLinkType;
   reward_percent: number;
   label: string | null;
+  comment: string | null;
   created_by_user_id: string | null;
   is_active: boolean;
   created_at: string;
@@ -53,6 +54,7 @@ type DbReferralLinkRow = {
   link_type: ReferralLinkType;
   reward_percent: number | string;
   label: string | null;
+  comment?: string | null;
   created_by_user_id: string | null;
   is_active: boolean;
   created_at: string;
@@ -88,6 +90,7 @@ function mapReferralLink(row: DbReferralLinkRow): ReferralLinkItem {
     link_type: row.link_type,
     reward_percent: Number(row.reward_percent ?? 0),
     label: row.label ?? null,
+    comment: row.comment ?? null,
     created_by_user_id: row.created_by_user_id ?? null,
     is_active: row.is_active,
     created_at: row.created_at,
@@ -226,6 +229,7 @@ export async function ensureMyStandardReferralLink(): Promise<ReferralLinkItem> 
 export async function createPersonalReferralLink(params?: {
   rewardPercent?: number;
   label?: string;
+  comment?: string;
 }): Promise<ReferralLinkItem> {
   const { supabase, user, isSuperAdmin } = await getAppContext();
 
@@ -247,6 +251,7 @@ export async function createPersonalReferralLink(params?: {
     link_type: "personal_50" as const,
     reward_percent: rewardPercent,
     label: params?.label?.trim() || null,
+    comment: params?.comment?.trim() || null,
     created_by_user_id: user.id,
     is_active: true,
   };
@@ -272,9 +277,74 @@ export async function createPersonalReferralLink(params?: {
       code: data.code,
       reward_percent: data.reward_percent,
       label: data.label ?? "",
+      comment: data.comment ?? "",
       is_active: data.is_active,
     },
   });
+
+  return mapReferralLink(data as DbReferralLinkRow);
+}
+
+export async function updateReferralLinkDetails(params: {
+  linkId: string;
+  label?: string;
+  comment?: string;
+}): Promise<ReferralLinkItem> {
+  const { supabase, user, isSuperAdmin } = await getAppContext();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("referral_links")
+    .select("*")
+    .eq("id", params.linkId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(
+      `Не удалось загрузить реферальную ссылку: ${existingError.message}`
+    );
+  }
+
+  if (!existing) {
+    throw new Error("Реферальная ссылка не найдена");
+  }
+
+  const canManage =
+    existing.owner_user_id === user.id || Boolean(isSuperAdmin);
+
+  if (!canManage) {
+    throw new Error("Недостаточно прав для изменения реферальной ссылки");
+  }
+
+  const { data, error } = await supabase
+    .from("referral_links")
+    .update({
+      label: params.label?.trim() || null,
+      comment: params.comment?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", params.linkId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw new Error(
+      `Не удалось обновить реферальную ссылку: ${
+        error?.message ?? "unknown error"
+      }`
+    );
+  }
+
+  if (isSuperAdmin && data.link_type === "personal_50") {
+    await logReferralAdminAction({
+      actionType: "update_personal_referral_link_details",
+      actionPayload: {
+        referral_link_id: data.id,
+        code: data.code,
+        label: data.label ?? "",
+        comment: data.comment ?? "",
+      },
+    });
+  }
 
   return mapReferralLink(data as DbReferralLinkRow);
 }

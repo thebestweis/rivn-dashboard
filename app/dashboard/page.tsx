@@ -200,7 +200,7 @@ function KpiGridSkeleton() {
 
 function DashboardBottomSkeleton() {
   return (
-    <section className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+    <section className="grid gap-6 2xl:grid-cols-[1.45fr_0.95fr]">
       <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
         <Skeleton className="h-5 w-40" />
         <div className="mt-5 space-y-4">
@@ -214,7 +214,7 @@ function DashboardBottomSkeleton() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-1">
+      <div className="grid gap-6 md:grid-cols-2 2xl:grid-cols-1">
         <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
           <Skeleton className="h-5 w-40" />
           <div className="mt-5 space-y-3">
@@ -261,9 +261,20 @@ function OnboardingChecklist({
             Настрой RIVN OS так, чтобы сервис сразу начал приносить пользу
           </h2>
           <p className="mt-2 text-sm leading-6 text-white/55">
-            Этот чеклист помогает быстро собрать базу: клиенты, проекты,
-            деньги, расходы, команда и план. Чем больше пунктов закрыто, тем
+            Этот чеклист помогает быстро собрать базу: настройки, клиенты, проекты,
+            деньги, расходы и план. Чем больше пунктов закрыто, тем
             точнее дашборд, аналитика и управленческие отчёты.
+          </p>
+          <p className="mt-3 text-sm leading-6 text-white/55">
+            Полный видеогайд по быстрому старту и основным механикам сервиса можно
+            найти{" "}
+            <Link
+              href="/guide"
+              className="font-semibold text-emerald-300 underline decoration-emerald-300/35 underline-offset-4 transition hover:text-emerald-200"
+            >
+              здесь
+            </Link>
+            .
           </p>
         </div>
 
@@ -324,7 +335,14 @@ function OnboardingChecklist({
 }
 
 export default function Home() {
-  const { role, isLoading: isAppContextLoading } = useAppContextState();
+  const {
+    role,
+    isLoading: isAppContextLoading,
+    user,
+    profile,
+    workspace,
+    membership,
+  } = useAppContextState();
   const { isLoading: isAccessLoading, hasAccess } = usePageAccess("dashboard");
 
   const currentRole: AppRole | null = isAppRole(role) ? role : null;
@@ -877,8 +895,22 @@ export default function Home() {
     )}`;
   }, [planFactStartMonth, planFactEndMonth]);
 
+  const isBasicSettingsConfigured = Boolean(
+    workspace?.id &&
+      String(workspace?.name ?? "").trim() &&
+      membership?.role &&
+      (profile?.email || user?.email)
+  );
+
   const onboardingSteps = useMemo<OnboardingStep[]>(() => {
     return [
+      {
+        title: "Заполнить настройки",
+        description:
+          "Выставь свои значения по важным параметрам, добавь сотрудников и распредели роли.",
+        href: "/settings",
+        isDone: isBasicSettingsConfigured,
+      },
       {
         title: "Добавь клиентов",
         description: "Клиенты нужны, чтобы видеть выручку, LTV и риски.",
@@ -904,14 +936,6 @@ export default function Home() {
         isDone: (expenses as SupabaseExpenseItem[]).length > 0,
       },
       {
-        title: "Настрой зарплаты",
-        description: "ФОТ покажет, сколько реально стоит команда.",
-        href: "/payroll",
-        isDone:
-          (payrollPayouts as SupabasePayrollPayoutItem[]).length > 0 ||
-          (payrollExtraPayments as SupabasePayrollExtraPaymentItem[]).length > 0,
-      },
-      {
         title: "Заполни план",
         description: "План / факт покажет, идёшь ли ты к цели месяца.",
         href: "/analytics?tab=planfact",
@@ -923,9 +947,8 @@ export default function Home() {
     projects,
     paidPayments,
     expenses,
-    payrollPayouts,
-    payrollExtraPayments,
     monthlyPlans,
+    isBasicSettingsConfigured,
   ]);
 
   const shouldShowOnboarding =
@@ -1112,7 +1135,7 @@ export default function Home() {
             <FinancialOverviewChart data={financialChartData} />
           )}
 
-          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="grid gap-6 2xl:grid-cols-[1.2fr_0.8fr]">
             <AlertsPanel alerts={alerts} />
 
             <div className="space-y-4">
@@ -1189,10 +1212,10 @@ export default function Home() {
         {isLoadingDashboardBottom ? (
           <DashboardBottomSkeleton />
         ) : (
-          <section className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+          <section className="grid gap-6 2xl:grid-cols-[1.45fr_0.95fr]">
             <ClientsTable clients={dashboardClients} />
 
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-1">
+            <div className="grid gap-6 md:grid-cols-2 2xl:grid-cols-1">
               <QuickActions actions={quickActions} />
               <IncomeRatioDonut ratio={profitMarginRatio} />
             </div>

@@ -26,8 +26,8 @@ export function AppTopbar({
   <div className="relative overflow-hidden border-b border-slate-200 bg-white px-5 py-6 dark:border-white/5 dark:bg-[radial-gradient(circle_at_top,rgba(111,90,255,0.16),transparent_34%),radial-gradient(circle_at_82%_16%,rgba(16,185,129,0.12),transparent_18%),linear-gradient(180deg,rgba(11,15,26,0.98),rgba(9,13,24,0.96))] lg:px-8">
         <div className="pointer-events-none absolute inset-0 opacity-[0.04] [background-image:linear-gradient(rgba(255,255,255,0.8)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.8)_1px,transparent_1px)] [background-size:72px_72px]" />
 
-        <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
+        <div className="relative flex min-w-0 flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0">
             {eyebrow ? (
               <div className="text-sm text-slate-500 dark:text-white/45">{eyebrow}</div>
             ) : null}
@@ -41,11 +41,13 @@ export function AppTopbar({
 ) : null}
           </div>
 
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="min-w-0 shrink-0">
             {customActions ? (
-              <div className="flex items-center gap-3">{customActions}</div>
+              <div className="flex max-w-full flex-wrap items-center gap-3">
+                {customActions}
+              </div>
             ) : (
-              <div className="flex items-center gap-3">
+              <div className="flex max-w-full flex-wrap items-center gap-3">
                 <a
   href="https://t.me/weismakeleadgen"
   target="_blank"

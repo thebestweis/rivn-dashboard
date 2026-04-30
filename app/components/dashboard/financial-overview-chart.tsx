@@ -37,7 +37,7 @@ export function FinancialOverviewChart({
   data,
 }: FinancialOverviewChartProps) {
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+    <div className="grid gap-6 2xl:grid-cols-[1.45fr_0.95fr]">
       <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
         <div className="flex items-center justify-between">
           <div>

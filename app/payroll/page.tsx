@@ -11,6 +11,7 @@ import { PayrollAccrualsTable } from "../components/payroll/payroll-accruals-tab
 import { PayrollPayoutsTable } from "../components/payroll/payroll-payouts-table";
 import { PayrollExtraTable } from "../components/payroll/payroll-extra-table";
 import { AppToast } from "../components/ui/app-toast";
+import { CustomSelect } from "../components/ui/custom-select";
 
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -177,10 +178,31 @@ function getMemberNameById(
   return getWorkspaceMemberDisplayName(member);
 }
 
+function getPayrollRoleLabel(role: string | null | undefined) {
+  const labels: Record<string, string> = {
+    owner: "Владелец",
+    admin: "Администратор",
+    manager: "Менеджер",
+    analyst: "Аналитик",
+    employee: "Сотрудник",
+    sales_head: "РОП",
+    sales_manager: "Менеджер продаж",
+  };
+
+  return labels[String(role ?? "")] ?? "Сотрудник";
+}
+
 export default function PayrollPage() {
   const queryClient = useQueryClient();
 
-  const { role, workspace, isLoading: isAppContextLoading } = useAppContextState();
+  const {
+    role,
+    workspace,
+    user,
+    profile,
+    membership,
+    isLoading: isAppContextLoading,
+  } = useAppContextState();
   const { isLoading: isAccessLoading, hasAccess } = usePageAccess("payroll");
 
 const currentRole: AppRole | null = isAppRole(role) ? role : null;
@@ -345,18 +367,58 @@ setSystemSettings(settingsData);
   }, [isAppContextLoading, isAccessLoading, hasAccess]);
 
   const memberOptions = useMemo(() => {
-  return members
-    .filter(isActivePayrollMember)
-    .map((member) => ({
-      id: member.id,
-      name: getWorkspaceMemberDisplayName(member),
-      role: member.role,
-      payType: member.pay_type ?? "fixed_per_paid_project",
-      payValue: member.pay_value ?? "₽0",
-      fixedSalary: member.fixed_salary ?? "",
-      payoutDay: member.payout_day ?? null,
+    const options = members
+      .filter(isActivePayrollMember)
+      .map((member) => ({
+        id: member.id,
+        name: getWorkspaceMemberDisplayName(member),
+        role: member.role,
+        payType: member.pay_type ?? "fixed_per_paid_project",
+        payValue: member.pay_value ?? "₽0",
+        fixedSalary: member.fixed_salary ?? "",
+        payoutDay: member.payout_day ?? null,
+      }));
+
+    const currentMembershipId = membership?.id ? String(membership.id) : "";
+    const alreadyHasCurrentUser = options.some(
+      (member) => member.id === currentMembershipId
+    );
+
+    if (currentMembershipId && !alreadyHasCurrentUser) {
+      const fallbackName =
+        profile?.display_name?.trim?.() ||
+        profile?.name?.trim?.() ||
+        user?.email?.split("@")[0] ||
+        "Владелец кабинета";
+
+      options.unshift({
+        id: currentMembershipId,
+        name: fallbackName,
+        role: (membership?.role ?? role ?? "owner") as WorkspaceMemberItem["role"],
+        payType: "fixed_per_paid_project",
+        payValue: systemSettings?.default_employee_pay || "₽0",
+        fixedSalary: "",
+        payoutDay: systemSettings?.payroll_day ?? null,
+      });
+    }
+
+    return options;
+  }, [members, membership, profile, role, systemSettings, user]);
+
+  const memberSelectOptions = useMemo(() => {
+    return memberOptions.map((member) => ({
+      value: member.id,
+      label: `${member.name} — ${getPayrollRoleLabel(member.role)}`,
     }));
-}, [members]);
+  }, [memberOptions]);
+
+  const payoutStatusOptions = useMemo(
+    () => [
+      { value: "paid", label: "Выплачено" },
+      { value: "scheduled", label: "Запланировано" },
+    ],
+    []
+  );
 
   const projectOptions = useMemo(() => {
     return Array.from(
@@ -2252,37 +2314,33 @@ if (!hasAccess) {
             </div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <select
-  value={createEmployeeId}
-  onChange={(e) => {
-    const nextEmployeeId = e.target.value;
-    const selectedMember = memberOptions.find(
-  (member) => member.id === nextEmployeeId
-);
+              <CustomSelect
+                value={createEmployeeId}
+                options={memberSelectOptions}
+                onChange={(nextEmployeeId) => {
+                  const selectedMember = memberOptions.find(
+                    (member) => member.id === nextEmployeeId
+                  );
 
-    setCreateEmployeeId(nextEmployeeId);
-    setCreateEmployee(selectedMember?.name ?? "");
+                  setCreateEmployeeId(nextEmployeeId);
+                  setCreateEmployee(selectedMember?.name ?? "");
 
-    if (!createPayoutAmount.trim() && selectedMember) {
-      if (
-        selectedMember.payType === "fixed_salary" ||
-        selectedMember.payType === "fixed_salary_plus_project"
-      ) {
-        setCreatePayoutAmount(selectedMember.fixedSalary || "");
-      } else {
-        setCreatePayoutAmount(selectedMember.payValue || "");
-      }
-    }
-  }}
-  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
->
-  <option value="">Выбери пользователя</option>
-  {memberOptions.map((member) => (
-    <option key={member.id} value={member.id}>
-      {member.name} — {member.role}
-    </option>
-  ))}
-</select>
+                  if (!createPayoutAmount.trim() && selectedMember) {
+                    if (
+                      selectedMember.payType === "fixed_salary" ||
+                      selectedMember.payType === "fixed_salary_plus_project"
+                    ) {
+                      setCreatePayoutAmount(selectedMember.fixedSalary || "");
+                    } else {
+                      setCreatePayoutAmount(selectedMember.payValue || "");
+                    }
+                  }
+                }}
+                placeholder="Выбери пользователя"
+                buttonClassName="h-[48px] border-white/10 bg-[#0F1524] text-white shadow-none"
+                dropdownClassName="bg-[#121826]"
+                disabled={memberSelectOptions.length === 0}
+              />
 
               <input
                 value={createPayoutDate}
@@ -2315,18 +2373,16 @@ if (!hasAccess) {
               )}
 
               {createPayoutType === "payout" ? (
-                <select
+                <CustomSelect
                   value={createPayoutStatus}
-                  onChange={(e) =>
-                    setCreatePayoutStatus(
-                      e.target.value as "scheduled" | "paid"
-                    )
+                  options={payoutStatusOptions}
+                  onChange={(value) =>
+                    setCreatePayoutStatus(value as "scheduled" | "paid")
                   }
-                  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none md:col-span-2"
-                >
-                  <option value="paid">Выплачено</option>
-                  <option value="scheduled">Запланировано</option>
-                </select>
+                  buttonClassName="h-[48px] border-white/10 bg-[#0F1524] text-white shadow-none"
+                  dropdownClassName="bg-[#121826]"
+                  className="md:col-span-2"
+                />
               ) : null}
             </div>
 

@@ -132,7 +132,7 @@ function formatDateTime(value?: string | null) {
 export default function CrmIntegrationsPage() {
   const { role, isReady, workspace } = useAppContextState();
   const [isMounted, setIsMounted] = useState(false);
-  const [appBaseUrl, setAppBaseUrl] = useState("https://rivn-dashboard.vercel.app");
+  const [appBaseUrl, setAppBaseUrl] = useState("https://rivnos.ru");
   const [copied, setCopied] = useState<string | null>(null);
   const [oauthToken, setOauthToken] = useState("");
   const [clientLogin, setClientLogin] = useState("");

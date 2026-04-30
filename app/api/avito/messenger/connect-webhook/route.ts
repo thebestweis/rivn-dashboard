@@ -49,7 +49,7 @@ function normalizeAppUrl(request: Request) {
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.NEXT_PUBLIC_BASE_URL,
     new URL(request.url).origin,
-    "https://rivn-dashboard.vercel.app",
+    "https://rivnos.ru",
   ].filter((value): value is string => Boolean(value));
 
   const baseUrl =

@@ -3,8 +3,9 @@
 
 import { AccessDenied } from "../components/access/access-denied";
 import { usePageAccess } from "../lib/use-page-access";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
   canManageFinance,
@@ -43,8 +44,12 @@ import {
   usePayrollPayoutsQuery,
 } from "../lib/queries/use-payroll-query";
 import { useMonthlyPlansQuery } from "../lib/queries/use-monthly-plans-query";
+import { queryKeys } from "../lib/query-keys";
 
-import { upsertMonthlyPlanInSupabase } from "../lib/supabase/monthly-plans";
+import {
+  upsertMonthlyPlanInSupabase,
+  type SupabaseMonthlyPlan,
+} from "../lib/supabase/monthly-plans";
 
 type ClientUnitEconomicsRow = {
   clientId: string;
@@ -272,7 +277,12 @@ function SectionSkeleton({ text }: { text: string }) {
 }
 
 export default function AnalyticsPage() {
-  const { role, isLoading: isAppContextLoading } = useAppContextState();
+  const {
+    role,
+    workspace,
+    isLoading: isAppContextLoading,
+  } = useAppContextState();
+  const queryClient = useQueryClient();
 
   const currentRole: AppRole | null = isAppRole(role) ? role : null;
   const canEditAnalyticsPlans = currentRole
@@ -330,6 +340,21 @@ export default function AnalyticsPage() {
   });
 
   const [growthBasePeriod, setGrowthBasePeriod] = useState<1 | 3>(3);
+  const [planDrafts, setPlanDrafts] = useState<MonthlyPlanMap>({});
+  const planSaveTimersRef = useRef<
+    Record<string, ReturnType<typeof setTimeout> | undefined>
+  >({});
+  const planSaveVersionsRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    return () => {
+      Object.values(planSaveTimersRef.current).forEach((timer) => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+      });
+    };
+  }, []);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -460,7 +485,7 @@ export default function AnalyticsPage() {
   }, [paymentsRaw, clientNameMap]);
 
   const monthlyPlans = useMemo<MonthlyPlanMap>(() => {
-    return (monthlyPlansRaw as any[]).reduce<MonthlyPlanMap>((acc, item) => {
+    const plans = (monthlyPlansRaw as any[]).reduce<MonthlyPlanMap>((acc, item) => {
       acc[item.month] = {
         revenue: Number(item.revenue_plan) || 0,
         profit: Number(item.profit_plan) || 0,
@@ -469,7 +494,12 @@ export default function AnalyticsPage() {
       };
       return acc;
     }, {});
-  }, [monthlyPlansRaw]);
+
+    return {
+      ...plans,
+      ...planDrafts,
+    };
+  }, [monthlyPlansRaw, planDrafts]);
 
   const filteredPayments = useMemo(() => {
     return payments.filter((p) => {
@@ -1321,17 +1351,60 @@ export default function AnalyticsPage() {
       [key]: value,
     };
 
-    try {
-      await upsertMonthlyPlanInSupabase({
-        month: planEditorMonth,
-        revenue: nextPlan.revenue,
-        profit: nextPlan.profit,
-        expenses: nextPlan.expenses,
-        fot: nextPlan.fot,
-      });
-    } catch (error) {
-      console.error("Ошибка сохранения monthly plan:", error);
+    setPlanDrafts((prev) => ({
+      ...prev,
+      [planEditorMonth]: nextPlan,
+    }));
+
+    const saveKey = planEditorMonth;
+    planSaveVersionsRef.current[saveKey] =
+      (planSaveVersionsRef.current[saveKey] ?? 0) + 1;
+    const saveVersion = planSaveVersionsRef.current[saveKey];
+
+    if (planSaveTimersRef.current[saveKey]) {
+      clearTimeout(planSaveTimersRef.current[saveKey]);
     }
+
+    planSaveTimersRef.current[saveKey] = setTimeout(async () => {
+      try {
+        const savedPlan = await upsertMonthlyPlanInSupabase({
+          month: planEditorMonth,
+          revenue: nextPlan.revenue,
+          profit: nextPlan.profit,
+          expenses: nextPlan.expenses,
+          fot: nextPlan.fot,
+        });
+
+        if (workspace?.id) {
+          queryClient.setQueryData<SupabaseMonthlyPlan[]>(
+            queryKeys.monthlyPlansByWorkspace(workspace.id),
+            (currentPlans = []) => {
+              const exists = currentPlans.some((plan) => plan.id === savedPlan.id);
+              const nextPlans = exists
+                ? currentPlans.map((plan) =>
+                    plan.id === savedPlan.id ? savedPlan : plan
+                  )
+                : [
+                    ...currentPlans.filter((plan) => plan.month !== savedPlan.month),
+                    savedPlan,
+                  ];
+
+              return nextPlans.sort((a, b) => a.month.localeCompare(b.month));
+            }
+          );
+        }
+
+        if (planSaveVersionsRef.current[saveKey] === saveVersion) {
+          setPlanDrafts((prev) => {
+            const next = { ...prev };
+            delete next[planEditorMonth];
+            return next;
+          });
+        }
+      } catch (error) {
+        console.error("Monthly plan save failed:", error);
+      }
+    }, 450);
   }
 
   if (!isAccessLoading && !hasAnalyticsAccess) {
