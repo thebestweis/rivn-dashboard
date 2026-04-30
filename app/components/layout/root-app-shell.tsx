@@ -61,7 +61,7 @@ export function RootAppShell({
         <div className="flex min-h-screen">
           <AppSidebar />
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 pb-24 pt-20 lg:pb-0 lg:pt-0">
             <main className="flex-1 px-5 py-6 lg:px-8">
               <div className="rounded-[24px] border border-white/10 bg-[#121827] p-8 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-200/80">
@@ -96,7 +96,7 @@ export function RootAppShell({
         <div className="flex min-h-screen">
           <AppSidebar />
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 pb-24 pt-20 lg:pb-0 lg:pt-0">
             <main className="flex-1 px-5 py-6 lg:px-8">
               <AccessDenied
                 title="Нет доступа к разделу"
@@ -115,7 +115,7 @@ export function RootAppShell({
       <div className="flex min-h-screen">
         <AppSidebar />
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 pb-24 pt-20 lg:pb-0 lg:pt-0">
           <div className="relative min-h-screen">
             {isBillingReadOnly && !isBillingRoute ? (
               <div className="sticky top-0 z-20 border-b border-amber-500/20 bg-amber-500/10 px-5 py-3 text-sm text-amber-200 backdrop-blur-sm lg:px-8">

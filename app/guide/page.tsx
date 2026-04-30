@@ -18,9 +18,9 @@ const categories = Array.from(
 // тест для сейва
 export default function GuidePage() {
   return (
-    <main className="min-h-screen bg-[#0B0F1A] px-5 py-6 text-white lg:px-8">
-      <div className="mx-auto max-w-[1680px] space-y-6">
-        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.98),rgba(10,16,28,0.98))] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)] lg:p-8">
+    <main className="min-h-screen bg-[#0B0F1A] px-4 py-4 text-white sm:px-5 sm:py-6 lg:px-8">
+      <div className="mx-auto max-w-[1680px] space-y-5 lg:space-y-6">
+        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.98),rgba(10,16,28,0.98))] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6 lg:p-8">
           <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr] xl:items-center">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
@@ -28,7 +28,7 @@ export default function GuidePage() {
                 Центр помощи RIVN OS
               </div>
 
-              <h1 className="mt-5 max-w-4xl text-4xl font-semibold tracking-tight lg:text-6xl">
+              <h1 className="mt-5 max-w-4xl text-3xl font-semibold tracking-tight sm:text-4xl lg:text-6xl">
                 Простые инструкции по работе в RIVN OS
               </h1>
 
@@ -38,17 +38,17 @@ export default function GuidePage() {
                 нажимать, но и зачем это нужно бизнесу.
               </p>
 
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
                 <a
                   href="#quick-start"
-                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-[#07120F] transition hover:bg-emerald-300"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-[#07120F] transition hover:bg-emerald-300"
                 >
                   Быстрый старт
                   <ArrowRight className="h-4 w-4" />
                 </a>
                 <a
                   href="#knowledge-base"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07] hover:text-white"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07] hover:text-white"
                 >
                   База знаний
                   <Search className="h-4 w-4" />
@@ -56,7 +56,7 @@ export default function GuidePage() {
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-white/10 bg-[#0F1524] p-4">
+            <div className="rounded-[28px] border border-white/10 bg-[#0F1524] p-3 sm:p-4">
               <div className="overflow-hidden rounded-[22px] border border-white/10 bg-black shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
                 <div className="relative aspect-video w-full">
                   <iframe
@@ -87,7 +87,7 @@ export default function GuidePage() {
 
         <section
           id="quick-start"
-          className="scroll-mt-24 rounded-[34px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.28)]"
+          className="scroll-mt-24 rounded-[34px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-6"
         >
           <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -115,7 +115,7 @@ export default function GuidePage() {
               <Link
                 key={step.title}
                 href={step.href}
-                className="group rounded-[24px] border border-white/10 bg-white/[0.03] p-5 transition hover:border-emerald-400/20 hover:bg-emerald-400/[0.06]"
+                className="group rounded-[24px] border border-white/10 bg-white/[0.03] p-4 transition hover:border-emerald-400/20 hover:bg-emerald-400/[0.06] sm:p-5"
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/12 text-sm font-semibold text-emerald-300">
                   {index + 1}
@@ -137,7 +137,7 @@ export default function GuidePage() {
 
         <section
           id="knowledge-base"
-          className="scroll-mt-24 rounded-[34px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.28)]"
+          className="scroll-mt-24 rounded-[34px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-6"
         >
           <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -173,7 +173,7 @@ export default function GuidePage() {
                       <Link
                         key={article.slug}
                         href={`/guide/${article.slug}`}
-                        className="group rounded-[24px] border border-white/10 bg-white/[0.03] p-5 transition hover:border-violet-400/25 hover:bg-violet-500/[0.06]"
+                        className="group rounded-[24px] border border-white/10 bg-white/[0.03] p-4 transition hover:border-violet-400/25 hover:bg-violet-500/[0.06] sm:p-5"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/12 text-violet-200">
@@ -202,7 +202,7 @@ export default function GuidePage() {
           </div>
         </section>
 
-        <section className="rounded-[34px] border border-emerald-400/15 bg-emerald-400/[0.06] p-6">
+        <section className="rounded-[34px] border border-emerald-400/15 bg-emerald-400/[0.06] p-4 sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-300">

@@ -310,7 +310,7 @@ export default function ClientsPage() {
   return (
     <>
       <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
+        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
           <BillingAccessBanner
             isLoading={isAppContextLoading}
             isBillingReadOnly={isBillingReadOnly}
@@ -345,7 +345,7 @@ export default function ClientsPage() {
           />
 
           {isLoadingClients ? (
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <Skeleton className="h-4 w-16" />

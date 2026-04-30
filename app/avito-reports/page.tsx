@@ -834,12 +834,12 @@ setIntegrations(integrationsData.integrations ?? []);
   return (
     
     <main className="flex-1">
-      <div className="space-y-6 px-5 py-6 lg:px-8">
-        <div className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
+        <div className="rounded-[32px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="text-sm text-white/45">Авито-аналитика</div>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
                 Avito Reports
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
@@ -847,16 +847,16 @@ setIntegrations(integrationsData.integrations ?? []);
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="grid gap-3 sm:flex sm:flex-wrap">
               <button
                 type="button"
                 onClick={() => setIsInstructionOpen(true)}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:bg-white/[0.06] hover:text-white"
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm text-white/75 transition hover:bg-white/[0.06] hover:text-white"
               >
                 Инструкция
               </button>
 
-              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-300">
+              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-center text-sm text-emerald-300">
                 Реальные расходы из Avito API
               </div>
             </div>
@@ -881,7 +881,7 @@ setIntegrations(integrationsData.integrations ?? []);
           ))}
         </nav>
 
-        <section className="rounded-[28px] border border-emerald-400/15 bg-emerald-400/[0.06] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.18)]">
+        <section className="rounded-[28px] border border-emerald-400/15 bg-emerald-400/[0.06] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.18)] sm:p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="text-sm font-semibold text-emerald-300">
@@ -964,7 +964,7 @@ setIntegrations(integrationsData.integrations ?? []);
           ) : null}
         </section>
 
-        <div id="connect-avito" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div id="connect-avito" className="rounded-[32px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">Подключить проект к Avito</h2>
@@ -987,7 +987,7 @@ setIntegrations(integrationsData.integrations ?? []);
             <button
               type="button"
               onClick={() => setIsConnectFormOpen((current) => !current)}
-              className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-5 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/15"
+              className="w-full rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-5 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/15 sm:w-auto"
             >
               {isConnectFormOpen ? "Свернуть" : "Подключить проект"}
             </button>
@@ -1070,9 +1070,9 @@ setIntegrations(integrationsData.integrations ?? []);
             {accounts.map((account, index) => (
               <div
                 key={index}
-                className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5"
+                className="rounded-[28px] border border-white/10 bg-white/[0.03] p-4 sm:p-5"
               >
-                <div className="mb-5 flex items-center justify-between gap-3">
+                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 className="text-base font-semibold text-white">
                       Avito-аккаунт №{index + 1}
@@ -1160,7 +1160,7 @@ setIntegrations(integrationsData.integrations ?? []);
                     type="button"
                     onClick={() => checkAvitoConnection(index)}
                     disabled={checkingAccountIndex === index}
-                    className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50"
+                    className="w-full rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50 sm:w-auto"
                   >
                     {checkingAccountIndex === index
                       ? "Проверяем Avito..."
@@ -1188,7 +1188,7 @@ setIntegrations(integrationsData.integrations ?? []);
             <button
               type="button"
               onClick={addAccount}
-              className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm text-white/75 transition hover:bg-white/[0.06] hover:text-white"
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm text-white/75 transition hover:bg-white/[0.06] hover:text-white sm:w-auto"
             >
               Добавить ещё Avito-аккаунт
             </button>
@@ -1232,7 +1232,7 @@ setIntegrations(integrationsData.integrations ?? []);
               type="button"
               onClick={handleCreateIntegration}
               disabled={isSaving}
-              className="rounded-2xl bg-emerald-400/15 px-5 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-2xl bg-emerald-400/15 px-5 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {isSaving ? "Сохраняем..." : "Подключить проект"}
             </button>
@@ -1282,7 +1282,7 @@ setIntegrations(integrationsData.integrations ?? []);
           ) : null}
         </div>
 
-        <div id="connected-projects" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div id="connected-projects" className="rounded-[32px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6">
   <div>
     <h2 className="text-lg font-semibold text-white">Подключённые проекты</h2>
     <div className="mt-1 text-sm text-white/45">
@@ -1895,7 +1895,7 @@ setIntegrations(integrationsData.integrations ?? []);
   ) : null}
 </div>
 
-        <div id="project-analytics" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div id="project-analytics" className="rounded-[32px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">Аналитика проекта</h2>
@@ -2035,7 +2035,7 @@ setIntegrations(integrationsData.integrations ?? []);
           </div>
         </div>
 
-        <div id="metrics-dynamics" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div id="metrics-dynamics" className="rounded-[32px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6">
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">Динамика</h2>
@@ -2073,7 +2073,7 @@ setIntegrations(integrationsData.integrations ?? []);
           )}
         </div>
 
-        <div id="reports-history" className="rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div id="reports-history" className="rounded-[32px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6">
           <h2 className="text-lg font-semibold text-white">История отчётов</h2>
 
           <div className="mt-5 overflow-hidden rounded-[24px] border border-white/10">
@@ -2116,11 +2116,11 @@ setIntegrations(integrationsData.integrations ?? []);
 
       {isInstructionOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[32px] border border-white/10 bg-[#121826] p-6 shadow-[0_24px_100px_rgba(0,0,0,0.6)]">
-            <div className="flex items-start justify-between gap-4">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[32px] border border-white/10 bg-[#121826] p-4 shadow-[0_24px_100px_rgba(0,0,0,0.6)] sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="text-sm text-white/45">Инструкция</div>
-                <h2 className="mt-1 text-2xl font-semibold text-white">
+                <h2 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">
                   Как настроить Avito Reports
                 </h2>
               </div>
@@ -2128,7 +2128,7 @@ setIntegrations(integrationsData.integrations ?? []);
               <button
                 type="button"
                 onClick={() => setIsInstructionOpen(false)}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 hover:bg-white/[0.06]"
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 hover:bg-white/[0.06] sm:w-auto"
               >
                 Закрыть
               </button>

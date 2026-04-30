@@ -746,9 +746,9 @@ export function TaskModal({
     <div className="fixed inset-0 z-[120] bg-black/55">
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div className="absolute left-1/2 top-6 flex h-[calc(100vh-48px)] w-[min(720px,calc(100vw-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[#121826] shadow-[0_24px_100px_rgba(0,0,0,0.55)]">
-        <div className="border-b border-white/10 px-6 py-5">
-          <div className="flex items-start justify-between gap-4">
+      <div className="absolute bottom-0 left-0 right-0 flex h-[94vh] flex-col overflow-hidden rounded-t-[30px] border border-white/10 bg-[#121826] shadow-[0_24px_100px_rgba(0,0,0,0.55)] sm:left-1/2 sm:right-auto sm:top-6 sm:h-[calc(100vh-48px)] sm:w-[min(720px,calc(100vw-32px))] sm:-translate-x-1/2 sm:rounded-[30px]">
+        <div className="border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 flex-1">
               <div className="text-sm text-white/40">Задача</div>
 
@@ -757,7 +757,7 @@ export function TaskModal({
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 readOnly={!canManageTasksWithBilling}
-                className="mt-2 w-full bg-transparent text-3xl font-semibold tracking-tight text-white outline-none placeholder:text-white/20 read-only:cursor-default"
+                className="mt-2 w-full bg-transparent text-2xl font-semibold tracking-tight text-white outline-none placeholder:text-white/20 read-only:cursor-default sm:text-3xl"
                 placeholder="Название задачи"
               />
 
@@ -787,14 +787,14 @@ export function TaskModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+              className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white sm:w-auto"
             >
               Закрыть
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
           <div className="space-y-5">
             <BillingAccessBanner
               isLoading={isAppContextLoading}
@@ -804,7 +804,7 @@ export function TaskModal({
               roleRestrictedMessage="У тебя доступ только на просмотр задачи. Редактирование, подзадачи и комментарии недоступны."
             />
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="text-sm text-white/45">Исполнители</div>
 
               <div className="mt-4 relative" ref={assigneesDropdownRef}>
@@ -900,7 +900,7 @@ export function TaskModal({
               )}
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="text-sm text-white/45">Дедлайн</div>
 
               <div className="mt-3">
@@ -1064,7 +1064,7 @@ export function TaskModal({
               </div>
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="text-sm text-white/45">Описание</div>
 
               <textarea
@@ -1077,7 +1077,7 @@ export function TaskModal({
               />
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm text-white/45">Подзадачи</div>
                 <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/50">
@@ -1208,7 +1208,7 @@ export function TaskModal({
               ) : null}
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm text-white/45">Чат задачи</div>
@@ -1344,7 +1344,7 @@ export function TaskModal({
                     ) : null}
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="mt-3 grid gap-3 sm:flex sm:items-center sm:justify-between">
                     <div>
                       <input
                         ref={commentAttachmentInputRef}
@@ -1380,7 +1380,7 @@ export function TaskModal({
               ) : null}
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm text-white/45">История изменений</div>
@@ -1435,8 +1435,8 @@ export function TaskModal({
           </div>
         </div>
 
-        <div className="border-t border-white/10 px-6 py-4">
-          <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="border-t border-white/10 px-4 py-4 sm:px-6">
+          <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
             <button
               type="button"
               onClick={onClose}
@@ -1463,3 +1463,4 @@ export function TaskModal({
     </div>
   );
 }
+

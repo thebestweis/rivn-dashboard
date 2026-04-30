@@ -218,18 +218,18 @@ export function CreateProjectModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-        <div className="flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 px-3 py-4 sm:items-center sm:px-4 sm:py-6">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-white">{title}</h2>
+            <h2 className="text-2xl font-semibold text-white sm:text-3xl">{title}</h2>
             <p className="mt-2 text-sm text-white/55">{description}</p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+            className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white sm:w-auto"
             disabled={isSubmitting}
           >
             Закрыть
@@ -373,7 +373,7 @@ export function CreateProjectModal({
             </div>
           ) : null}
 
-          <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+          <div className="grid gap-3 pt-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
             <button
               type="button"
               onClick={onClose}

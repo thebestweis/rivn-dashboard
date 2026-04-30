@@ -146,16 +146,16 @@ function PaymentsStatsSkeleton() {
 
 function PaymentsTableSkeleton() {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-      <div className="mb-5 flex items-center justify-between gap-4">
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+      <div className="mb-5 flex items-center justify-between gap-4 overflow-x-auto">
         <div className="flex gap-2">
           <Skeleton className="h-10 w-36 rounded-full" />
           <Skeleton className="h-10 w-40 rounded-full" />
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[24px] border border-white/8">
-        <div className="grid grid-cols-6 gap-4 bg-white/[0.04] px-4 py-3">
+      <div className="overflow-x-auto rounded-[24px] border border-white/8">
+        <div className="grid min-w-[760px] grid-cols-6 gap-4 bg-white/[0.04] px-4 py-3">
           {Array.from({ length: 6 }).map((_, index) => (
             <Skeleton key={index} className="h-4 w-full" />
           ))}
@@ -164,7 +164,7 @@ function PaymentsTableSkeleton() {
         {Array.from({ length: 6 }).map((_, rowIndex) => (
           <div
             key={rowIndex}
-            className="grid grid-cols-6 gap-4 border-t border-white/6 px-4 py-4"
+            className="grid min-w-[760px] grid-cols-6 gap-4 border-t border-white/6 px-4 py-4"
           >
             <Skeleton className="h-5 w-28" />
             <Skeleton className="h-5 w-24" />
@@ -781,7 +781,7 @@ export default function PaymentsPage() {
   if (!isAccessLoading && !hasAccess) {
     return (
       <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
+        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
           <AccessDenied
             title="Нет доступа к платежам"
             description="У тебя нет прав для просмотра этого раздела."
@@ -794,7 +794,7 @@ export default function PaymentsPage() {
   return (
     <>
       <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
+        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
           <PaymentsPageHeader
             activeTab={activeTab}
             setActiveTab={setActiveTab}
@@ -806,7 +806,7 @@ export default function PaymentsPage() {
           {loadingPayments ? (
             <PaymentsStatsSkeleton />
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
               <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
                 <div className="text-xs uppercase tracking-wide text-white/40">
                   Ожидается
@@ -836,7 +836,7 @@ export default function PaymentsPage() {
             </div>
           )}
 
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
             {activeTab === "planned" ? (
               loadingPayments ? (
                 <PaymentsTableSkeleton />

@@ -15,12 +15,12 @@ export function IncomeRatioDonut({ ratio }: IncomeRatioDonutProps) {
   ];
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
       <div className="text-sm text-white/50">Рентабельность</div>
       <h2 className="mt-1 text-xl font-semibold">Доля прибыли</h2>
 
-      <div className="mt-6 flex items-center gap-6">
-        <div className="relative h-[220px] w-[220px]">
+      <div className="mt-6 flex flex-col items-center gap-5 sm:flex-row sm:gap-6">
+        <div className="relative h-[190px] w-[190px] sm:h-[220px] sm:w-[220px]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -46,7 +46,7 @@ export function IncomeRatioDonut({ ratio }: IncomeRatioDonutProps) {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="w-full space-y-4 sm:w-auto">
           <div className="rounded-2xl bg-white/[0.04] px-4 py-3">
             <div className="text-sm text-white/45">Текущий показатель</div>
             <div className="mt-1 text-lg font-medium text-emerald-300">

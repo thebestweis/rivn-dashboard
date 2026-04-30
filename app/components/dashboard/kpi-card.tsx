@@ -16,11 +16,11 @@ export function KpiCard({ label, value, delta, tone }: KpiCardProps) {
   };
 
   return (
-  <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+  <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-5">
     <div className="text-sm text-white/55">{label}</div>
     <div
   suppressHydrationWarning
-  className="mt-3 text-2xl font-semibold tracking-tight"
+  className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl"
 >
   {value}
 </div>

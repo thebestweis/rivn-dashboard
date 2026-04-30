@@ -1606,8 +1606,8 @@ async function handleAccrueSalaries() {
 if (!isMounted || isAppContextLoading || isAccessLoading) {
   return (
     <main className="flex-1">
-      <div className="space-y-6 px-5 py-6 lg:px-8">
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
+        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-8">
           Загрузка payroll...
         </div>
       </div>
@@ -1622,7 +1622,7 @@ if (!hasAccess) {
   <>
   
     <main className="flex-1">
-      <div className="space-y-6 px-5 py-6 lg:px-8">
+      <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
                 {!isAppContextLoading && !canManagePayroll ? (
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
             У тебя доступ только на просмотр зарплат. Начисление, выплаты, редактирование и удаление недоступны.
@@ -1645,7 +1645,7 @@ if (!hasAccess) {
           }}
         />
 
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <div className="text-sm text-white/50">Сводка за период</div>
@@ -1664,7 +1664,7 @@ if (!hasAccess) {
               </button>
 
               {isPeriodPickerOpen ? (
-                <div className="absolute right-0 top-[calc(100%+12px)] z-30 w-[360px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+                <div className="absolute right-0 top-[calc(100%+12px)] z-30 w-[min(86vw,360px)] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
                   <div className="text-sm text-white/50">Быстрый выбор</div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1759,22 +1759,22 @@ if (!hasAccess) {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-3">
-            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+          <div className="mt-5 grid gap-3 md:grid-cols-3 md:gap-4">
+            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-5">
               <div className="text-sm text-white/55">Начислено</div>
               <div className="mt-3 text-2xl font-semibold tracking-tight text-violet-300">
                 ₽{totalAccrued.toLocaleString("ru-RU")}
               </div>
             </div>
 
-            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-5">
               <div className="text-sm text-white/55">Выплачено</div>
               <div className="mt-3 text-2xl font-semibold tracking-tight text-emerald-300">
                 ₽{totalPaid.toLocaleString("ru-RU")}
               </div>
             </div>
 
-            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]">
+            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-5">
               <div className="text-sm text-white/55">Внеплановые</div>
               <div className="mt-3 text-2xl font-semibold tracking-tight text-amber-300">
                 ₽{totalExtra.toLocaleString("ru-RU")}
@@ -1784,14 +1784,14 @@ if (!hasAccess) {
         </div>
 
         {isLoadingPayroll ? (
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60">
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 text-white/60 sm:p-8">
             Загрузка payroll...
           </div>
         ) : (
           <>
             {activeTab === "accruals" ? (
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                <div className="flex items-center justify-between gap-4">
+              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-sm text-white/50">Готово к выплате</div>
 
                                     {canManagePayroll ? (
@@ -1814,7 +1814,7 @@ if (!hasAccess) {
                   )}
                 </div>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 xl:gap-4">
                   {pendingEmployeePayouts.length > 0 ? (
                     pendingEmployeePayouts.map((item) => (
                       <div
@@ -1868,8 +1868,8 @@ if (!hasAccess) {
               </div>
             ) : null}
 
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              <div className="flex items-center gap-3 overflow-x-auto">
+            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+              <div className="grid gap-3 xl:flex xl:items-center xl:overflow-x-auto">
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -1880,13 +1880,13 @@ if (!hasAccess) {
                       ? "Поиск по пользователю..."
                       : "Поиск по пользователю, причине..."
                   }
-                  className="h-[48px] min-w-[320px] flex-[1.4] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 xl:min-w-[320px] xl:flex-[1.4]"
                 />
 
                 <select
                   value={employeeFilter}
                   onChange={(e) => setEmployeeFilter(e.target.value)}
-                  className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none xl:min-w-[220px] xl:flex-1"
                 >
                   <option value="all">Все пользователи</option>
                   {employeeFilterOptions.map((employee) => (
@@ -1899,7 +1899,7 @@ if (!hasAccess) {
                 <select
                   value={monthFilter}
                   onChange={(e) => setMonthFilter(e.target.value)}
-                  className="h-[48px] min-w-[220px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none xl:min-w-[220px] xl:flex-1"
                 >
                   <option value="all">Все месяцы</option>
                   {monthFilterOptions.map((month) => (
@@ -1913,7 +1913,7 @@ if (!hasAccess) {
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="h-[48px] min-w-[190px] flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                    className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none xl:min-w-[190px] xl:flex-1"
                   >
                     <option value="all">Все статусы</option>
 
@@ -1939,7 +1939,7 @@ if (!hasAccess) {
                     setMonthFilter("all");
                     setStatusFilter("all");
                   }}
-                  className="h-[48px] min-w-[180px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white xl:min-w-[180px]"
                 >
                   Сбросить
                 </button>
@@ -1974,9 +1974,9 @@ if (!hasAccess) {
       </div>
 
             {canManagePayroll && isEditAccrualOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-            <div className="flex items-start justify-between gap-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-3 py-4 sm:items-center sm:px-4">
+          <div className="max-h-[92vh] w-full max-w-[640px] overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="text-sm text-white/50">Начисление</div>
                 <h3 className="mt-1 text-xl font-semibold text-white">
@@ -1997,7 +1997,7 @@ if (!hasAccess) {
   Доступно пользователей для выплаты: {memberOptions.length}
 </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-6 grid gap-3 sm:gap-4 md:grid-cols-2">
               <select
   value={editEmployeeId}
   onChange={(e) => {
@@ -2065,7 +2065,7 @@ if (!hasAccess) {
               </select>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 grid gap-3 sm:flex sm:justify-end">
               <button
                 type="button"
                 onClick={handleCloseEditAccrual}
@@ -2087,9 +2087,9 @@ if (!hasAccess) {
       ) : null}
 
             {canManagePayroll && isEditPayoutOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-            <div className="flex items-start justify-between gap-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-3 py-4 sm:items-center sm:px-4">
+          <div className="max-h-[92vh] w-full max-w-[640px] overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="text-sm text-white/50">Выплата</div>
                 <h3 className="mt-1 text-xl font-semibold text-white">
@@ -2106,7 +2106,7 @@ if (!hasAccess) {
               </button>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-6 grid gap-3 sm:gap-4 md:grid-cols-2">
               <select
   value={editPayoutEmployeeId}
   onChange={(e) => {
@@ -2161,7 +2161,7 @@ if (!hasAccess) {
               </select>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 grid gap-3 sm:flex sm:justify-end">
               <button
                 type="button"
                 onClick={handleCloseEditPayout}
@@ -2183,9 +2183,9 @@ if (!hasAccess) {
       ) : null}
 
             {canManagePayroll && isEditExtraOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-            <div className="flex items-start justify-between gap-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-3 py-4 sm:items-center sm:px-4">
+          <div className="max-h-[92vh] w-full max-w-[640px] overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="text-sm text-white/50">Внеплановая выплата</div>
                 <h3 className="mt-1 text-xl font-semibold text-white">
@@ -2202,7 +2202,7 @@ if (!hasAccess) {
               </button>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-6 grid gap-3 sm:gap-4 md:grid-cols-2">
               <select
   value={editExtraEmployeeId}
   onChange={(e) => {
@@ -2246,7 +2246,7 @@ if (!hasAccess) {
               />
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 grid gap-3 sm:flex sm:justify-end">
               <button
                 type="button"
                 onClick={handleCloseEditExtra}
@@ -2268,9 +2268,9 @@ if (!hasAccess) {
       ) : null}
 
             {canManagePayroll && isCreatePayoutOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-            <div className="flex items-start justify-between gap-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-3 py-4 sm:items-center sm:px-4">
+          <div className="max-h-[92vh] w-full max-w-[640px] overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="text-sm text-white/50">Новая выплата</div>
                 <h3 className="mt-1 text-xl font-semibold text-white">
@@ -2313,7 +2313,7 @@ if (!hasAccess) {
               </button>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-6 grid gap-3 sm:gap-4 md:grid-cols-2">
               <CustomSelect
                 value={createEmployeeId}
                 options={memberSelectOptions}
@@ -2386,7 +2386,7 @@ if (!hasAccess) {
               ) : null}
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 grid gap-3 sm:flex sm:justify-end">
               <button
                 type="button"
                 onClick={handleCloseCreatePayout}

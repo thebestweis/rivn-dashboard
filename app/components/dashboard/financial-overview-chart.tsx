@@ -38,14 +38,14 @@ export function FinancialOverviewChart({
 }: FinancialOverviewChartProps) {
   return (
     <div className="grid gap-6 2xl:grid-cols-[1.45fr_0.95fr]">
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-        <div className="flex items-center justify-between">
+      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm text-white/50">Финансовая динамика</div>
             <h2 className="mt-1 text-xl font-semibold">Выручка и прибыль</h2>
           </div>
 
-          <div className="flex gap-2 text-xs">
+          <div className="flex flex-wrap gap-2 text-xs">
             <span className="rounded-full bg-violet-500/15 px-3 py-1 text-violet-300">
               Выручка
             </span>
@@ -55,7 +55,7 @@ export function FinancialOverviewChart({
           </div>
         </div>
 
-        <div className="mt-6 h-[320px]">
+        <div className="mt-6 h-[240px] sm:h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data}>
               <defs>
@@ -81,7 +81,7 @@ export function FinancialOverviewChart({
                 tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
                 axisLine={false}
                 tickLine={false}
-                width={72}
+                width={52}
                 tickFormatter={(value) => formatCompactNumber(Number(value))}
               />
               <Tooltip
@@ -122,14 +122,14 @@ export function FinancialOverviewChart({
         </div>
       </div>
 
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-        <div className="flex items-center justify-between">
+      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm text-white/50">Структура затрат</div>
             <h2 className="mt-1 text-xl font-semibold">Расходы и ФОТ</h2>
           </div>
 
-          <div className="flex gap-2 text-xs">
+          <div className="flex flex-wrap gap-2 text-xs">
             <span className="rounded-full bg-rose-500/15 px-3 py-1 text-rose-300">
               Расходы
             </span>
@@ -139,7 +139,7 @@ export function FinancialOverviewChart({
           </div>
         </div>
 
-        <div className="mt-6 h-[320px]">
+        <div className="mt-6 h-[240px] sm:h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} barGap={10}>
               <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
@@ -153,7 +153,7 @@ export function FinancialOverviewChart({
                 tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
                 axisLine={false}
                 tickLine={false}
-                width={72}
+                width={52}
                 tickFormatter={(value) => formatCompactNumber(Number(value))}
               />
               <Tooltip

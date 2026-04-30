@@ -191,7 +191,7 @@ export default function BillingPage() {
     return (
       <main className="flex-1">
         <div className="space-y-6 px-5 py-6 lg:px-8">
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
             <Skeleton className="h-4 w-16" />
             <Skeleton className="mt-2 h-8 w-40" />
             <Skeleton className="mt-3 h-4 w-80" />
@@ -548,7 +548,7 @@ export default function BillingPage() {
               </div>
             </div>
 
-            <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
+            <div className="mt-5 overflow-x-auto rounded-[24px] border border-white/8">
               {isTransactionsLoading && transactions.length === 0 ? (
                 <div className="space-y-3 p-4">
                   {Array.from({ length: 4 }).map((_, index) => (
@@ -556,7 +556,7 @@ export default function BillingPage() {
                   ))}
                 </div>
               ) : transactions.length > 0 ? (
-                <table className="w-full text-left text-sm">
+                <table className="w-full min-w-[720px] text-left text-sm">
                   <thead className="bg-white/[0.04] text-white/45">
                     <tr>
                       <th className="px-4 py-3 font-medium">Тип</th>

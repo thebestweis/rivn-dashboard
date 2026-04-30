@@ -81,7 +81,7 @@ function SettingsPageContent() {
 
   return (
     <main className="flex-1">
-      <div className="space-y-6 px-5 py-6 lg:px-8">
+      <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
         {!hasAccess && activeTab !== "profile" && !isLoading ? (
           <AccessDenied
             title="Нет доступа к настройкам"
@@ -104,8 +104,8 @@ function SettingsPageContent() {
 function SettingsPageFallback() {
   return (
     <main className="flex-1">
-      <div className="space-y-6 px-5 py-6 lg:px-8">
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
+        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-8">
           Загружаем настройки...
         </div>
       </div>

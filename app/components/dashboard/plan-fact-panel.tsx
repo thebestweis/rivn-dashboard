@@ -67,21 +67,21 @@ export function PlanFactPanel({
     revenuePlan > 0 || profitPlan > 0 || expensesPlan > 0 || fotPlan > 0;
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-      <div className="flex items-center justify-between gap-4">
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div>
           <div className="text-sm text-white/50">{subtitle}</div>
           <h2 className="mt-1 text-xl font-semibold">{title}</h2>
         </div>
 
-        <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-white/60">
+        <div className="w-fit rounded-full bg-white/[0.04] px-3 py-1 text-xs text-white/60">
           {periodLabel}
         </div>
       </div>
 
             {!hasPlan ? (
         <div className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-5">
-          <div className="flex items-start gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-400/20 bg-violet-400/10 text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.14)]">
               <span className="text-lg font-semibold">+</span>
             </div>
@@ -135,7 +135,7 @@ export function PlanFactPanel({
                 key={row.label}
                 className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
               >
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-sm text-white/50">{row.label}</div>
                     <div className="mt-1 text-sm text-white/75">

@@ -421,11 +421,11 @@ export default function ExpensesPage() {
   if (showInitialLoading) {
     return (
       <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
             <Skeleton className="h-4 w-16" />
             <Skeleton className="mt-2 h-8 w-40" />
-            <Skeleton className="mt-3 h-4 w-80" />
+            <Skeleton className="mt-3 h-4 w-full max-w-80" />
 
             <div className="mt-5 grid gap-3 md:grid-cols-[1.2fr_220px]">
               <Skeleton className="h-12 w-full rounded-2xl" />
@@ -439,7 +439,7 @@ export default function ExpensesPage() {
             <Skeleton className="h-28 rounded-[28px]" />
           </div>
 
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
             <Skeleton className="h-5 w-32" />
 
             <div className="mt-5 space-y-3">
@@ -456,7 +456,7 @@ export default function ExpensesPage() {
   if (!hasAccess) {
     return (
       <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
+        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
           <AccessDenied
             title="Нет доступа к расходам"
             description="У тебя нет прав для просмотра этого раздела."
@@ -469,7 +469,7 @@ export default function ExpensesPage() {
   return (
     <>
       <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
+        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
           <ExpensesPageHeader
             search={search}
             setSearch={setSearch}

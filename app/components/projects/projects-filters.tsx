@@ -24,8 +24,8 @@ export function ProjectsFilters({
   onReset,
 }: ProjectsFiltersProps) {
   return (
-    <section className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-      <div className="flex flex-col gap-4 md:flex-row">
+    <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:gap-4">
         <input
           type="text"
           placeholder="Поиск по проекту или клиенту"
@@ -43,7 +43,7 @@ export function ProjectsFilters({
             { value: "paused", label: "На паузе" },
             { value: "completed", label: "Завершён" },
           ]}
-          className="md:w-[220px]"
+          className="w-full md:w-[220px]"
           buttonClassName="bg-[#0F1724] dark:bg-[#0F1724]"
         />
       </div>

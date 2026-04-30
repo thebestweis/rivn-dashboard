@@ -369,8 +369,8 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
 
   return (
     <>
-      <main className="flex-1 px-6 py-6 md:px-8">
-        <div className="flex w-full flex-col gap-6">
+      <main className="flex-1 px-4 py-4 sm:px-5 sm:py-5 md:px-8">
+        <div className="flex w-full flex-col gap-5 sm:gap-6">
           {isProjectsAccessResolved && !canManageProjects ? (
   <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
     У тебя доступ только на просмотр списка проектов. Создание,
@@ -378,10 +378,10 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
   </div>
 ) : null}
 
-          <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-white">
+                <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
                   Проекты
                 </h1>
                 <p className="mt-2 text-sm text-white/60">
@@ -389,10 +389,10 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-center">
                 <Link
                   href="/tasks"
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                  className="inline-flex justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
                 >
                   Все задачи
                 </Link>
@@ -430,9 +430,9 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
             }}
           />
 
-          <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6">
             {isLoadingProjectsList ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
                 {Array.from({ length: 10 }).map((_, index) => (
                   <div
                     key={index}
@@ -496,7 +496,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
 ) : null}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
                 {filteredProjects.map((project) => (
                   <motion.div
                     key={project.id}

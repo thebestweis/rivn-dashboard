@@ -16,10 +16,12 @@ import {
   LayoutDashboard,
   LineChart,
   ListChecks,
+  Menu,
   ReceiptText,
   Settings,
   UsersRound,
   WalletCards,
+  X,
 } from "lucide-react";
 import { setActiveWorkspace } from "../../lib/supabase/workspaces";
 import {
@@ -55,6 +57,7 @@ const navItems: Array<{
 
 const PERMISSIONS_CACHE_TTL_MS = 5 * 60 * 1000;
 const SIDEBAR_COLLAPSED_KEY = "rivn_sidebar_collapsed";
+const mobilePrimaryHrefs = ["/dashboard", "/crm", "/projects", "/tasks", "/analytics"];
 
 type MenuPosition = {
   left: number;
@@ -148,6 +151,7 @@ export function AppSidebar() {
   const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false);
   const [workspaceError, setWorkspaceError] = useState("");
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [memberPermissions, setMemberPermissions] = useState<any[]>([]);
@@ -250,6 +254,10 @@ export function AppSidebar() {
   }, [isWorkspaceMenuOpen]);
 
   useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
     if (!isWorkspaceMenuOpen) return;
 
     function closeMenu() {
@@ -283,6 +291,14 @@ export function AppSidebar() {
       })
     );
   }, [activeRole, memberPermissions]);
+
+  const mobilePrimaryItems = useMemo(() => {
+    const primaryItems = mobilePrimaryHrefs
+      .map((href) => filteredNavItems.find((item) => item.href === href))
+      .filter(Boolean) as typeof filteredNavItems;
+
+    return primaryItems.slice(0, 5);
+  }, [filteredNavItems]);
   const canLoadCrmInbox = filteredNavItems.some((item) => item.href === "/crm");
   const { data: sidebarInboxItems = [] } = useCrmInboxQuery(
     showResolvedMenu && canLoadCrmInbox
@@ -345,6 +361,36 @@ export function AppSidebar() {
 
   return (
     <>
+      <div className="fixed inset-x-0 top-0 z-[240] border-b border-slate-200 bg-white/92 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden dark:border-white/10 dark:bg-[#0B0F1A]/92">
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.18)] dark:text-emerald-300">
+              <span className="text-base font-bold">R</span>
+            </div>
+
+            <div className="min-w-0">
+              <div className="text-xs text-slate-500 dark:text-white/45">
+                RIVN OS
+              </div>
+              <div className="truncate text-sm font-semibold text-slate-950 dark:text-white">
+                {showResolvedContext && workspace?.name
+                  ? workspace.name
+                  : "Кабинет"}
+              </div>
+            </div>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 transition hover:bg-white dark:border-white/10 dark:bg-white/[0.05] dark:text-white"
+            aria-label="Открыть меню"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
       <aside
         className={`sticky top-0 hidden h-screen border-r border-slate-200 bg-white transition-[width] duration-300 ease-out lg:flex lg:flex-col dark:border-white/10 dark:bg-[#0F1524] ${
           isCollapsed ? "w-[88px]" : "w-72"
@@ -566,6 +612,128 @@ export function AppSidebar() {
           </div>
         </div>
       </aside>
+
+      <nav className="fixed inset-x-0 bottom-0 z-[240] border-t border-slate-200 bg-white/94 px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_34px_rgba(15,23,42,0.1)] backdrop-blur-xl lg:hidden dark:border-white/10 dark:bg-[#0B0F1A]/94">
+        <div className="grid grid-cols-5 gap-1">
+          {mobilePrimaryItems.map((item) => {
+            const isActive = isItemActive(pathname, item.href);
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-medium transition ${
+                  isActive
+                    ? "bg-emerald-500/12 text-emerald-600 dark:bg-emerald-400/14 dark:text-emerald-300"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-white/55 dark:hover:bg-white/[0.06] dark:hover:text-white"
+                }`}
+              >
+                <span className="relative">
+                  <Icon className="h-4 w-4" />
+                  {item.href === "/crm" && crmUnreadCount > 0 ? (
+                    <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white">
+                      {crmUnreadCount > 9 ? "9+" : crmUnreadCount}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="max-w-full truncate">{item.label}</span>
+              </Link>
+            );
+          })}
+
+          {mobilePrimaryItems.length < 5 ? (
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-white/55 dark:hover:bg-white/[0.06] dark:hover:text-white"
+            >
+              <Menu className="h-4 w-4" />
+              <span>Меню</span>
+            </button>
+          ) : null}
+        </div>
+      </nav>
+
+      {isMobileMenuOpen ? (
+        <div className="fixed inset-0 z-[280] lg:hidden">
+          <button
+            type="button"
+            aria-label="Закрыть меню"
+            className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+
+          <div className="absolute inset-x-3 bottom-3 max-h-[82vh] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24)] dark:border-white/10 dark:bg-[#121826]">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-white/10">
+              <div className="min-w-0">
+                <div className="text-xs uppercase tracking-[0.14em] text-slate-400 dark:text-white/35">
+                  Навигация
+                </div>
+                <div className="mt-1 truncate text-base font-semibold text-slate-950 dark:text-white">
+                  {showResolvedContext && workspace?.name
+                    ? workspace.name
+                    : "RIVN OS"}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-white dark:border-white/10 dark:bg-white/[0.05] dark:text-white/70"
+                aria-label="Закрыть меню"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[calc(82vh-76px)] overflow-y-auto p-3">
+              <div className="grid gap-2">
+                {filteredNavItems.map((item) => {
+                  const isActive = isItemActive(pathname, item.href);
+                  const Icon = item.icon;
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center justify-between rounded-2xl px-4 py-3 transition ${
+                        isActive
+                          ? "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/14 dark:text-emerald-300"
+                          : "bg-slate-50 text-slate-700 hover:bg-slate-100 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate text-sm font-medium">
+                          {item.label}
+                        </span>
+                      </span>
+                      {item.href === "/crm" && crmUnreadCount > 0 ? (
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold text-white">
+                          {crmUnreadCount > 99 ? "99+" : crmUnreadCount}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+
+                <Link
+                  href="/guide"
+                  className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                >
+                  <BookOpen className="h-4 w-4 shrink-0" />
+                  <span>Инструкция по использованию</span>
+                </Link>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+                  <ThemeToggle />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isMounted && isWorkspaceMenuOpen && menuPosition && !isCollapsed
         ? createPortal(

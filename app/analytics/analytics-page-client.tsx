@@ -1410,7 +1410,7 @@ export default function AnalyticsPage() {
   if (!isAccessLoading && !hasAnalyticsAccess) {
     return (
       <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
+        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
           <AccessDenied
             title="Нет доступа к аналитике"
             description="У тебя нет прав для просмотра аналитики этого кабинета."
@@ -1422,7 +1422,7 @@ export default function AnalyticsPage() {
 
   return (
     <main className="flex-1">
-      <div className="space-y-6 px-5 py-6 lg:px-8">
+      <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
         <AnalyticsPageHeader
           activeTab={activeTab}
           setActiveTab={setActiveTab}

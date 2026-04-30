@@ -1406,7 +1406,7 @@ function CrmPageContent() {
 
   return (
     <main className="min-h-screen bg-[#F5F7FB] text-slate-950 dark:bg-[#0B0F1A] dark:text-white">
-      <div className="border-b border-slate-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#101827] lg:px-8">
+      <div className="border-b border-slate-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-[#101827] sm:px-5 lg:px-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative w-full max-w-xl">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -1418,12 +1418,12 @@ function CrmPageContent() {
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setIsFiltersOpen((current) => !current)}
-                className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition ${
+                className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition ${
                   isFiltersOpen ||
                   sourceFilter ||
                   assigneeFilter ||
@@ -1591,14 +1591,14 @@ function CrmPageContent() {
             ) : null}
             <Link
               href="/crm/settings"
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
             >
               <Settings2 className="h-4 w-4" />
               Настройки CRM
             </Link>
             <Link
               href="/crm/analytics"
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
             >
               <LineChart className="h-4 w-4" />
               Аналитика CRM
@@ -1620,7 +1620,7 @@ function CrmPageContent() {
             <button
               type="button"
               onClick={openCreateForm}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition hover:bg-violet-500"
+              className="col-span-2 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition hover:bg-violet-500 sm:col-span-1"
             >
               <Plus className="h-4 w-4" />
               Создать сделку
@@ -1629,14 +1629,14 @@ function CrmPageContent() {
         </div>
       </div>
 
-      <div className="px-5 py-5 lg:px-8">
+      <div className="px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
         <section className="mb-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
                 CRM
               </p>
-              <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
                 Сделки ({activeDeals.length})
               </h1>
             </div>
@@ -1735,11 +1735,11 @@ function CrmPageContent() {
           ) : null}
 
           <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
               <button
                 type="button"
                 onClick={() => setWorkspaceView("pipeline")}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
                   workspaceView === "pipeline"
                     ? "bg-violet-600 text-white shadow-lg shadow-violet-500/20"
                     : "border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
@@ -1754,7 +1754,7 @@ function CrmPageContent() {
                   setWorkspaceView("inbox");
                   setInboxFilter("all");
                 }}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
                   workspaceView === "inbox"
                     ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
                     : "border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
@@ -1773,11 +1773,11 @@ function CrmPageContent() {
 
           {workspaceView === "pipeline" ? (
           <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
               <button
                 type="button"
                 onClick={() => setSelectedPipelineId("all")}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
                   isAllPipelinesSelected
                     ? "bg-violet-600 text-white shadow-lg shadow-violet-500/20"
                     : "border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
@@ -1794,7 +1794,7 @@ function CrmPageContent() {
                     key={pipeline.id}
                     type="button"
                     onClick={() => setSelectedPipelineId(pipeline.id)}
-                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                    className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
                       isActive
                         ? "bg-violet-600 text-white shadow-lg shadow-violet-500/20"
                         : "border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
@@ -2283,9 +2283,9 @@ function CrmPageContent() {
       </div>
 
       {isAssignmentSettingsOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#121827]">
-            <div className="flex items-start justify-between gap-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#121827] sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
                   CRM
@@ -2300,7 +2300,7 @@ function CrmPageContent() {
               <button
                 type="button"
                 onClick={() => setIsAssignmentSettingsOpen(false)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5 sm:w-auto"
               >
                 Закрыть
               </button>
@@ -2327,7 +2327,7 @@ function CrmPageContent() {
                         </p>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid gap-2 sm:flex sm:flex-wrap">
                         <CustomSelect
                           value={draft.mode}
                           onChange={(value) =>
@@ -2341,7 +2341,7 @@ function CrmPageContent() {
                             { value: "least_loaded", label: "Кто свободнее" },
                             { value: "fixed_manager", label: "Фиксированные" },
                           ]}
-                          className="min-w-[180px]"
+                          className="w-full sm:min-w-[180px]"
                           buttonClassName="h-10 rounded-xl font-semibold"
                         />
 
@@ -2398,9 +2398,9 @@ function CrmPageContent() {
       ) : null}
 
       {isPipelineSettingsOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#121827]">
-            <div className="flex items-start justify-between gap-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#121827] sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
                   CRM
@@ -2415,7 +2415,7 @@ function CrmPageContent() {
               <button
                 type="button"
                 onClick={() => setIsPipelineSettingsOpen(false)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5 sm:w-auto"
               >
                 Закрыть
               </button>
@@ -3445,30 +3445,30 @@ function CrmPageContent() {
       ) : null}
 
       {isFormOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
           <form
             onSubmit={submitDeal}
-            className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#121827]"
+            className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#121827] sm:p-6"
           >
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
                   {editingDeal ? "Редактирование" : "Новая сделка"}
                 </p>
-                <h2 className="mt-2 text-2xl font-semibold">
+                <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">
                   {editingDeal ? editingDeal.title : "Создать сделку"}
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={closeForm}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5 sm:w-auto"
               >
                 Закрыть
               </button>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-6 grid gap-3 sm:gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
                 Название сделки
                 <input

@@ -36,10 +36,10 @@ export function QuickActions({ actions }: QuickActionsProps) {
   }
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
       <div className="text-sm text-white/50">Быстрые действия</div>
 
-      <div className="mt-4 grid gap-3">
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-1">
         {actions.length > 0 ? (
           actions.map((action) => {
             const isDisabled = !action.href;
@@ -54,7 +54,7 @@ export function QuickActions({ actions }: QuickActionsProps) {
                     router.push(action.href);
                   }
                 }}
-                className={`rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${getToneClasses(
+                className={`min-h-[58px] rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${getToneClasses(
                   action.tone,
                   isDisabled
                 )}`}

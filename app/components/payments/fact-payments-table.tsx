@@ -28,11 +28,11 @@ export function FactPaymentsTable({
   canManage = false,
 }: FactPaymentsTableProps) {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
       <div className="text-sm text-white/50">Фактические оплаты</div>
 
-      <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
-        <table className="w-full text-left text-sm">
+      <div className="mt-5 overflow-x-auto rounded-[24px] border border-white/8">
+        <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="bg-white/[0.04] text-white/45">
             <tr>
               <th className="px-4 py-3 font-medium">Клиент</th>
@@ -61,7 +61,7 @@ export function FactPaymentsTable({
                 <td className="px-4 py-3 text-white/75">{item.source}</td>
                 <td className="px-4 py-3">
                   {canManage ? (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => onEdit?.(item)}
                         className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 hover:text-white"

@@ -251,13 +251,13 @@ function OnboardingChecklist({
   const progress = Math.round((completedSteps / steps.length) * 100);
 
   return (
-    <section className="rounded-[28px] border border-emerald-400/15 bg-[linear-gradient(135deg,rgba(16,185,129,0.10)_0%,rgba(123,97,255,0.08)_55%,rgba(255,255,255,0.03)_100%)] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    <section className="rounded-[28px] border border-emerald-400/15 bg-[linear-gradient(135deg,rgba(16,185,129,0.10)_0%,rgba(123,97,255,0.08)_55%,rgba(255,255,255,0.03)_100%)] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="max-w-3xl">
           <div className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">
             Быстрый старт
           </div>
-          <h2 className="mt-2 text-2xl font-semibold text-white">
+          <h2 className="mt-2 text-xl font-semibold text-white sm:text-2xl">
             Настрой RIVN OS так, чтобы сервис сразу начал приносить пользу
           </h2>
           <p className="mt-2 text-sm leading-6 text-white/55">
@@ -278,7 +278,7 @@ function OnboardingChecklist({
           </p>
         </div>
 
-        <div className="min-w-[220px] rounded-2xl border border-white/10 bg-black/20 p-4">
+        <div className="w-full rounded-2xl border border-white/10 bg-black/20 p-4 xl:min-w-[220px]">
           <div className="flex items-center justify-between text-sm">
             <span className="text-white/50">Готовность</span>
             <span className="font-semibold text-emerald-300">{progress}%</span>
@@ -1029,7 +1029,7 @@ export default function Home() {
 }
       />
 
-      <div className="space-y-6 px-5 py-5 lg:px-8">
+      <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
         {!isAppContextLoading && !canManageDashboardFinance ? (
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
             У тебя ограниченный режим дашборда. Финансовые быстрые действия скрыты.
@@ -1056,7 +1056,7 @@ export default function Home() {
         {isLoadingDashboardShell ? (
           <DashboardHeroSkeleton />
         ) : (
-          <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.96),rgba(13,18,30,0.96))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.96),rgba(13,18,30,0.96))] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="text-sm text-white/45">Период дашборда</div>
@@ -1068,11 +1068,11 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="flex w-fit items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="grid w-full grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:w-fit">
                 <button
                   type="button"
                   onClick={() => setDashboardPeriod("30d")}
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                  className={`rounded-xl px-2 py-2 text-xs transition sm:px-4 sm:text-sm ${
                     dashboardPeriod === "30d"
                       ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
                       : "text-white/60 hover:text-white"
@@ -1084,7 +1084,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setDashboardPeriod("90d")}
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                  className={`rounded-xl px-2 py-2 text-xs transition sm:px-4 sm:text-sm ${
                     dashboardPeriod === "90d"
                       ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
                       : "text-white/60 hover:text-white"
@@ -1096,7 +1096,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setDashboardPeriod("all")}
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                  className={`rounded-xl px-2 py-2 text-xs transition sm:px-4 sm:text-sm ${
                     dashboardPeriod === "all"
                       ? "bg-gradient-to-r from-[#6F5AFF] to-[#8B7BFF] text-white shadow-[0_0_24px_rgba(111,90,255,0.30)]"
                       : "text-white/60 hover:text-white"
@@ -1112,7 +1112,7 @@ export default function Home() {
         {isLoadingDashboardKpis ? (
           <KpiGridSkeleton />
         ) : (
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+          <section className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4 2xl:grid-cols-8">
             {kpis.map((item) => (
               <KpiCard
                 key={item.label}
@@ -1148,13 +1148,13 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid w-full gap-3 md:w-auto md:grid-cols-2">
                     <label className="space-y-2">
                       <div className="text-xs text-white/45">С месяца</div>
                       <select
                         value={planFactStartMonth}
                         onChange={(e) => setPlanFactStartMonth(e.target.value)}
-                        className="h-[44px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                        className="h-[44px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none md:w-auto"
                       >
                         {availablePlanMonths.map((month) => (
                           <option key={month} value={month}>
@@ -1169,7 +1169,7 @@ export default function Home() {
                       <select
                         value={planFactEndMonth}
                         onChange={(e) => setPlanFactEndMonth(e.target.value)}
-                        className="h-[44px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                        className="h-[44px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none md:w-auto"
                       >
                         {availablePlanMonths.map((month) => (
                           <option key={month} value={month}>

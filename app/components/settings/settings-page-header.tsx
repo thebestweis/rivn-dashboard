@@ -28,11 +28,11 @@ export function SettingsPageHeader({
   }
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="text-sm text-white/50">Раздел</div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
             Настройки
           </h1>
           <p className="mt-2 text-sm text-white/55">
@@ -49,7 +49,7 @@ export function SettingsPageHeader({
       {isLoading ? (
         <div className="mt-5 h-[46px] rounded-2xl border border-white/10 bg-white/[0.04]" />
       ) : (
-        <div className="mt-5 flex w-fit flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+        <div className="mt-5 grid w-full grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1 sm:flex sm:w-fit sm:flex-wrap sm:items-center">
           <button
             type="button"
             onClick={() => setActiveTab("profile")}

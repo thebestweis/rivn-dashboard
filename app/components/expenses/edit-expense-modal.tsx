@@ -73,12 +73,12 @@ export function EditExpenseModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_50px_rgba(0,0,0,0.45)]">
-        <div className="flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_50px_rgba(0,0,0,0.45)] sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-sm text-white/50">Редактирование</div>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight">
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
               Изменить расход
             </h2>
           </div>
@@ -87,7 +87,7 @@ export function EditExpenseModal({
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             Закрыть
           </button>
@@ -99,7 +99,7 @@ export function EditExpenseModal({
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-6 grid gap-3 sm:gap-4 md:grid-cols-2">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -152,7 +152,7 @@ export function EditExpenseModal({
           </select>
         </div>
 
-        <div className="mt-6 flex items-center justify-end gap-3">
+        <div className="mt-6 grid gap-3 sm:flex sm:items-center sm:justify-end">
           <button
             type="button"
             onClick={onClose}

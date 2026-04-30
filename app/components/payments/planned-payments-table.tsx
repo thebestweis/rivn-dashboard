@@ -30,7 +30,7 @@ export function PlannedPaymentsTable({
   canManagePayments,
 }: PlannedPaymentsTableProps) {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
       <div className="flex items-center justify-between gap-4">
         <div className="text-sm text-white/50">Плановые счета</div>
 
@@ -41,8 +41,8 @@ export function PlannedPaymentsTable({
         ) : null}
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
-        <table className="w-full text-left text-sm">
+      <div className="mt-5 overflow-x-auto rounded-[24px] border border-white/8">
+        <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="bg-white/[0.04] text-white/45">
             <tr>
               <th className="px-4 py-3 font-medium">Клиент</th>
