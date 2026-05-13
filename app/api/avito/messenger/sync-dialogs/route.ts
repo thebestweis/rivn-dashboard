@@ -1,6 +1,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/app/lib/supabase/server";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
+import { POST as saveCrmDialog } from "@/app/api/crm/dialogs/route";
 
 export const dynamic = "force-dynamic";
 
@@ -79,19 +80,6 @@ function getInternalSecret() {
     process.env.CRON_SECRET ||
     process.env.VERCEL_CRON_SECRET
   );
-}
-
-function getCrmDialogsUrl(request: Request) {
-  const requestUrl = new URL(request.url);
-  const isProductionDomain =
-    requestUrl.hostname === "rivnos.ru" || requestUrl.hostname === "www.rivnos.ru";
-  const internalBaseUrl = isProductionDomain
-    ? "http://127.0.0.1:3000"
-    : process.env.INTERNAL_APP_URL ||
-      process.env.NEXT_PRIVATE_INTERNAL_APP_URL ||
-      requestUrl.origin;
-
-  return new URL("/api/crm/dialogs", internalBaseUrl);
 }
 
 function getLinkedClient(account: any) {
@@ -445,7 +433,7 @@ export async function POST(request: Request) {
           incomingMessages += 1;
         }
 
-        const crmResponse = await fetch(getCrmDialogsUrl(request), {
+        const crmResponse = await saveCrmDialog(new Request("http://rivn.local/api/crm/dialogs", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${secret}`,
@@ -471,14 +459,7 @@ export async function POST(request: Request) {
               ? new Date(message.created * 1000).toISOString()
               : new Date().toISOString(),
           }),
-          cache: "no-store",
-        }).catch((error) => {
-          throw new Error(
-            `CRM dialog internal request failed: ${
-              error instanceof Error ? error.message : "fetch failed"
-            }`
-          );
-        });
+        }));
 
         const crmResult = await crmResponse.json().catch(() => null);
 
