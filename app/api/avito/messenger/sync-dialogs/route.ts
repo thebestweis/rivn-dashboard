@@ -83,12 +83,13 @@ function getInternalSecret() {
 
 function getCrmDialogsUrl(request: Request) {
   const requestUrl = new URL(request.url);
-  const internalBaseUrl =
-    process.env.INTERNAL_APP_URL ||
-    process.env.NEXT_PRIVATE_INTERNAL_APP_URL ||
-    (requestUrl.hostname === "rivnos.ru" || requestUrl.hostname === "www.rivnos.ru"
-      ? "http://127.0.0.1:3000"
-      : requestUrl.origin);
+  const isProductionDomain =
+    requestUrl.hostname === "rivnos.ru" || requestUrl.hostname === "www.rivnos.ru";
+  const internalBaseUrl = isProductionDomain
+    ? "http://127.0.0.1:3000"
+    : process.env.INTERNAL_APP_URL ||
+      process.env.NEXT_PRIVATE_INTERNAL_APP_URL ||
+      requestUrl.origin;
 
   return new URL("/api/crm/dialogs", internalBaseUrl);
 }
