@@ -691,7 +691,13 @@ setIntegrations(integrationsData.integrations ?? []);
       }
 
       setIntegrationMessage(
-        `Диалоги загружены: чатов проверено ${result.chatsChecked}, новых сообщений ${result.messagesSynced}.`
+        `Диалоги загружены: чатов ${result.chatsChecked}, сообщений найдено ${
+          result.messagesChecked ?? 0
+        }, новых ${result.messagesSynced}, дублей ${
+          result.duplicateMessages ?? 0
+        }, входящих ${result.incomingMessages ?? 0}, исходящих ${
+          result.outgoingMessages ?? 0
+        }.`
       );
     } catch (error) {
       setIntegrationMessage(

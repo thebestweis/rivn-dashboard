@@ -29,6 +29,10 @@ type AvitoWebhookBody = {
   version?: string;
 };
 
+type NormalizedWebhookValue = NonNullable<
+  NonNullable<AvitoWebhookBody["payload"]>["value"]
+>;
+
 type ServiceSupabase = ReturnType<typeof getSupabase>;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -88,6 +92,72 @@ function getImageUrl(value: NonNullable<AvitoWebhookBody["payload"]>["value"]) {
     Object.values(sizes).find(Boolean) ||
     null
   );
+}
+
+function pickString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" || typeof value === "bigint") {
+      return String(value);
+    }
+  }
+
+  return "";
+}
+
+function normalizeWebhookValue(body: AvitoWebhookBody): NormalizedWebhookValue {
+  const payloadValue = (body.payload?.value ?? {}) as Record<string, any>;
+  const message = (payloadValue.message ??
+    payloadValue.last_message ??
+    payloadValue.value ??
+    {}) as Record<string, any>;
+  const chat = (payloadValue.chat ?? message.chat ?? {}) as Record<string, any>;
+  const rawContent = (message.content ?? payloadValue.content ?? {}) as Record<
+    string,
+    any
+  >;
+  const content = rawContent as NormalizedWebhookValue["content"];
+
+  return {
+    ...payloadValue,
+    ...message,
+    id: pickString(
+      message.id,
+      message.message_id,
+      payloadValue.id,
+      payloadValue.message_id,
+      body.id
+    ),
+    user_id: pickString(
+      message.user_id,
+      payloadValue.user_id,
+      payloadValue.account_id,
+      chat.user_id
+    ),
+    author_id: pickString(message.author_id, payloadValue.author_id),
+    chat_id: pickString(
+      message.chat_id,
+      payloadValue.chat_id,
+      chat.id,
+      payloadValue.dialog_id,
+      payloadValue.conversation_id
+    ),
+    item_id:
+      message.item_id ??
+      payloadValue.item_id ??
+      chat.item_id ??
+      rawContent.item?.id ??
+      null,
+    type: pickString(message.type, payloadValue.type, body.payload?.type),
+    content,
+    created:
+      typeof message.created === "number"
+        ? message.created
+        : typeof payloadValue.created === "number"
+          ? payloadValue.created
+          : undefined,
+    published_at: pickString(message.published_at, payloadValue.published_at),
+  };
 }
 
 function getLinkedClient(account: any) {
@@ -177,10 +247,16 @@ async function findAvitoAccount(params: {
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => ({}))) as AvitoWebhookBody;
-    const value = body.payload?.value;
+    const value = normalizeWebhookValue(body);
 
     if (!value?.user_id || !value.chat_id || !value.id) {
-      return Response.json({ ok: true, skipped: true });
+      console.warn("Avito messenger webhook skipped: incomplete payload", {
+        type: body.payload?.type,
+        hasUserId: Boolean(value?.user_id),
+        hasChatId: Boolean(value?.chat_id),
+        hasMessageId: Boolean(value?.id),
+      });
+      return Response.json({ ok: true, skipped: "incomplete_payload" });
     }
 
     const avitoUserId = String(value.user_id);
@@ -201,6 +277,10 @@ export async function POST(request: Request) {
     const linkedClient = getLinkedClient(account);
 
     if (account?.crm_dialogs_enabled === false) {
+      console.warn("Avito messenger webhook skipped: CRM dialogs disabled", {
+        avitoUserId,
+        accountId: account?.id,
+      });
       return Response.json({ ok: true, skipped: "crm_dialogs_disabled" });
     }
 
@@ -211,6 +291,10 @@ export async function POST(request: Request) {
     });
 
     if (!linkedClient?.workspace_id) {
+      console.warn("Avito messenger webhook skipped: account not connected", {
+        avitoUserId,
+        accountId: account?.id ?? null,
+      });
       return Response.json({ ok: true, skipped: "account_not_connected" });
     }
 

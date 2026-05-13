@@ -44,11 +44,12 @@ function isLocalUrl(value: string) {
 }
 
 function normalizeAppUrl(request: Request) {
+  const requestOrigin = new URL(request.url).origin;
   const candidates = [
+    requestOrigin,
     process.env.AVITO_MESSENGER_WEBHOOK_BASE_URL,
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.NEXT_PUBLIC_BASE_URL,
-    new URL(request.url).origin,
     "https://rivnos.ru",
   ].filter((value): value is string => Boolean(value));
 

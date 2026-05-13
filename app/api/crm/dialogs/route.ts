@@ -39,6 +39,17 @@ type ResolvedAssignment = {
   payload: Record<string, unknown>;
 };
 
+const DEFAULT_SALES_STAGES = [
+  { name: "Заявка получена", kind: "regular" },
+  { name: "Первичная квалификация", kind: "regular" },
+  { name: "Сбор информации", kind: "regular" },
+  { name: "КП отправлено", kind: "regular" },
+  { name: "Переговоры", kind: "regular" },
+  { name: "Оплата", kind: "payment" },
+  { name: "Проект оплачен", kind: "paid_project" },
+  { name: "Потеряно", kind: "lost" },
+] as const;
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -180,7 +191,7 @@ async function resolveSalesPipeline(params: {
   supabase: ServiceSupabase;
   workspaceId: string;
 }) {
-  const { data: pipeline, error: pipelineError } = await params.supabase
+  let { data: pipeline, error: pipelineError } = await params.supabase
     .from("crm_pipelines")
     .select("*")
     .eq("workspace_id", params.workspaceId)
@@ -195,10 +206,28 @@ async function resolveSalesPipeline(params: {
   }
 
   if (!pipeline) {
-    throw new Error("Active CRM sales pipeline not found");
+    const { data: createdPipeline, error: createPipelineError } = await params.supabase
+      .from("crm_pipelines")
+      .insert({
+        workspace_id: params.workspaceId,
+        name: "Общая воронка продаж",
+        kind: "sales",
+        sort_order: 10,
+        is_active: true,
+      })
+      .select("*")
+      .single();
+
+    if (createPipelineError || !createdPipeline) {
+      throw new Error(
+        `CRM sales pipeline create failed: ${createPipelineError?.message ?? "no data"}`
+      );
+    }
+
+    pipeline = createdPipeline;
   }
 
-  const { data: stage, error: stageError } = await params.supabase
+  let { data: stage, error: stageError } = await params.supabase
     .from("crm_pipeline_stages")
     .select("*")
     .eq("workspace_id", params.workspaceId)
@@ -213,7 +242,40 @@ async function resolveSalesPipeline(params: {
   }
 
   if (!stage) {
-    throw new Error("Active CRM first stage not found");
+    const { error: createStagesError } = await params.supabase
+      .from("crm_pipeline_stages")
+      .insert(
+        DEFAULT_SALES_STAGES.map((item, index) => ({
+          workspace_id: params.workspaceId,
+          pipeline_id: pipeline.id,
+          name: item.name,
+          kind: item.kind,
+          sort_order: (index + 1) * 10,
+          is_active: true,
+        }))
+      );
+
+    if (createStagesError) {
+      throw new Error(`CRM sales stages create failed: ${createStagesError.message}`);
+    }
+
+    const { data: createdStage, error: createdStageError } = await params.supabase
+      .from("crm_pipeline_stages")
+      .select("*")
+      .eq("workspace_id", params.workspaceId)
+      .eq("pipeline_id", pipeline.id)
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (createdStageError || !createdStage) {
+      throw new Error(
+        `CRM first sales stage lookup failed: ${createdStageError?.message ?? "no data"}`
+      );
+    }
+
+    stage = createdStage;
   }
 
   return { pipeline, stage };
@@ -657,6 +719,8 @@ export async function POST(request: Request) {
       messageId: message.id,
     });
   } catch (error) {
+    console.error("CRM dialog sync failed:", error);
+
     return Response.json(
       {
         ok: false,

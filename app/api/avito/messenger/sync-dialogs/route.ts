@@ -10,6 +10,12 @@ type AvitoChat = {
   id: string;
   created?: number;
   updated?: number;
+  created_at?: number;
+  updated_at?: number;
+  last_message?: {
+    created?: number;
+    created_at?: number;
+  };
   context?: {
     value?: {
       id?: number | string;
@@ -118,6 +124,54 @@ function getImageUrl(message: AvitoMessage) {
     Object.values(sizes).find(Boolean) ||
     null
   );
+}
+
+function getChatTimestamp(chat: AvitoChat) {
+  return Number(
+    chat.updated ||
+      chat.updated_at ||
+      chat.last_message?.created ||
+      chat.last_message?.created_at ||
+      chat.created ||
+      chat.created_at ||
+      0
+  );
+}
+
+function normalizeAvitoChats(data: any): AvitoChat[] {
+  if (Array.isArray(data)) {
+    return data as AvitoChat[];
+  }
+
+  if (Array.isArray(data?.chats)) {
+    return data.chats as AvitoChat[];
+  }
+
+  if (Array.isArray(data?.result?.chats)) {
+    return data.result.chats as AvitoChat[];
+  }
+
+  return [];
+}
+
+function normalizeAvitoMessages(data: any): AvitoMessage[] {
+  if (Array.isArray(data)) {
+    return data as AvitoMessage[];
+  }
+
+  if (Array.isArray(data?.messages)) {
+    return data.messages as AvitoMessage[];
+  }
+
+  if (Array.isArray(data?.result?.messages)) {
+    return data.result.messages as AvitoMessage[];
+  }
+
+  if (Array.isArray(data?.[0]?.messages)) {
+    return data[0].messages as AvitoMessage[];
+  }
+
+  return [];
 }
 
 async function requireWorkspaceAccess(
@@ -234,18 +288,14 @@ async function fetchChats(params: {
       throw new Error(`Avito не отдал список чатов: ${JSON.stringify(data)}`);
     }
 
-    const batch = Array.isArray(data?.chats) ? (data.chats as AvitoChat[]) : [];
-    const relevant = batch.filter(
-      (chat) => Number(chat.updated || chat.created || 0) >= params.sinceUnix
-    );
+    const batch = normalizeAvitoChats(data);
+    const relevant = batch.filter((chat) => getChatTimestamp(chat) >= params.sinceUnix);
 
     chats.push(...relevant);
 
     if (batch.length < limit) break;
 
-    const oldestUpdated = Math.min(
-      ...batch.map((chat) => Number(chat.updated || chat.created || 0))
-    );
+    const oldestUpdated = Math.min(...batch.map((chat) => getChatTimestamp(chat)));
 
     if (oldestUpdated < params.sinceUnix) break;
 
@@ -277,7 +327,7 @@ async function fetchMessages(params: {
     throw new Error(`Avito не отдал сообщения: ${JSON.stringify(data)}`);
   }
 
-  return Array.isArray(data) ? (data as AvitoMessage[]) : [];
+  return normalizeAvitoMessages(data);
 }
 
 export async function POST(request: Request) {
@@ -322,6 +372,13 @@ export async function POST(request: Request) {
 
     let syncedMessages = 0;
     let createdOrTouchedDeals = 0;
+    let messagesChecked = 0;
+    let emptyMessages = 0;
+    let duplicateMessages = 0;
+    let incomingMessages = 0;
+    let outgoingMessages = 0;
+    const emptyChatIds: string[] = [];
+    const sampleMessageIds: string[] = [];
 
     for (const chat of chats) {
       const messages = await fetchMessages({
@@ -329,6 +386,11 @@ export async function POST(request: Request) {
         avitoUserId,
         chatId: chat.id,
       });
+
+      if (messages.length === 0 && emptyChatIds.length < 5) {
+        emptyChatIds.push(chat.id);
+      }
+
       const sourceItemId = chat.context?.value?.id
         ? String(chat.context.value.id)
         : "";
@@ -348,8 +410,27 @@ export async function POST(request: Request) {
       )) {
         if (!message.id) continue;
 
+        messagesChecked += 1;
+        if (sampleMessageIds.length < 5) {
+          sampleMessageIds.push(message.id);
+        }
+
         const messageBody = getMessageBody(message);
-        if (!messageBody) continue;
+        if (!messageBody) {
+          emptyMessages += 1;
+          continue;
+        }
+
+        const senderType =
+          message.direction === "out" || String(message.author_id ?? "") === avitoUserId
+            ? "manager"
+            : "client";
+
+        if (senderType === "manager") {
+          outgoingMessages += 1;
+        } else {
+          incomingMessages += 1;
+        }
 
         const crmResponse = await fetch(
           new URL("/api/crm/dialogs", request.url),
@@ -374,7 +455,7 @@ export async function POST(request: Request) {
               sourceItemUrl,
               body: messageBody,
               attachmentUrl: getImageUrl(message),
-              senderType: message.direction === "out" ? "manager" : "client",
+              senderType,
               createdAt: message.created
                 ? new Date(message.created * 1000).toISOString()
                 : new Date().toISOString(),
@@ -393,6 +474,7 @@ export async function POST(request: Request) {
 
         syncedMessages += crmResult.duplicate ? 0 : 1;
         createdOrTouchedDeals += crmResult.duplicate ? 0 : 1;
+        duplicateMessages += crmResult.duplicate ? 1 : 0;
       }
     }
 
@@ -400,8 +482,15 @@ export async function POST(request: Request) {
       ok: true,
       accountId: account.id,
       chatsChecked: chats.length,
+      messagesChecked,
       messagesSynced: syncedMessages,
       dealsTouched: createdOrTouchedDeals,
+      duplicateMessages,
+      emptyMessages,
+      incomingMessages,
+      outgoingMessages,
+      emptyChatIds,
+      sampleMessageIds,
     });
   } catch (error) {
     return Response.json(
