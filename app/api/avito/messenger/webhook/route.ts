@@ -59,6 +59,18 @@ function getInternalSecret() {
   );
 }
 
+function getCrmDialogsUrl(request: Request) {
+  const requestUrl = new URL(request.url);
+  const internalBaseUrl =
+    process.env.INTERNAL_APP_URL ||
+    process.env.NEXT_PRIVATE_INTERNAL_APP_URL ||
+    (requestUrl.hostname === "rivnos.ru" || requestUrl.hostname === "www.rivnos.ru"
+      ? "http://127.0.0.1:3000"
+      : requestUrl.origin);
+
+  return new URL("/api/crm/dialogs", internalBaseUrl);
+}
+
 function getMessageText(value: NonNullable<AvitoWebhookBody["payload"]>["value"]) {
   const content = value?.content;
 
@@ -316,7 +328,7 @@ export async function POST(request: Request) {
     const sourceItemUrl =
       chatItem?.url || value.content?.item?.item_url || null;
 
-    const crmResponse = await fetch(new URL("/api/crm/dialogs", request.url), {
+    const crmResponse = await fetch(getCrmDialogsUrl(request), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${secret}`,
@@ -345,6 +357,12 @@ export async function POST(request: Request) {
             : new Date().toISOString(),
       }),
       cache: "no-store",
+    }).catch((error) => {
+      throw new Error(
+        `CRM dialog internal request failed: ${
+          error instanceof Error ? error.message : "fetch failed"
+        }`
+      );
     });
 
     const crmResult = await crmResponse.json().catch(() => null);

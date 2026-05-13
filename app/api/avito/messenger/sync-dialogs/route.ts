@@ -81,6 +81,18 @@ function getInternalSecret() {
   );
 }
 
+function getCrmDialogsUrl(request: Request) {
+  const requestUrl = new URL(request.url);
+  const internalBaseUrl =
+    process.env.INTERNAL_APP_URL ||
+    process.env.NEXT_PRIVATE_INTERNAL_APP_URL ||
+    (requestUrl.hostname === "rivnos.ru" || requestUrl.hostname === "www.rivnos.ru"
+      ? "http://127.0.0.1:3000"
+      : requestUrl.origin);
+
+  return new URL("/api/crm/dialogs", internalBaseUrl);
+}
+
 function getLinkedClient(account: any) {
   return Array.isArray(account?.avito_report_clients)
     ? account.avito_report_clients[0]
@@ -432,37 +444,40 @@ export async function POST(request: Request) {
           incomingMessages += 1;
         }
 
-        const crmResponse = await fetch(
-          new URL("/api/crm/dialogs", request.url),
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${secret}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              workspaceId,
-              channel: "avito",
-              avitoUserId,
-              externalDialogId: chat.id,
-              externalMessageId: message.id,
-              sourceKind: "avito",
-              sourceName: "Avito",
-              title,
-              clientName,
-              sourceItemId,
-              sourceItemTitle,
-              sourceItemUrl,
-              body: messageBody,
-              attachmentUrl: getImageUrl(message),
-              senderType,
-              createdAt: message.created
-                ? new Date(message.created * 1000).toISOString()
-                : new Date().toISOString(),
-            }),
-            cache: "no-store",
-          }
-        );
+        const crmResponse = await fetch(getCrmDialogsUrl(request), {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${secret}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            workspaceId,
+            channel: "avito",
+            avitoUserId,
+            externalDialogId: chat.id,
+            externalMessageId: message.id,
+            sourceKind: "avito",
+            sourceName: "Avito",
+            title,
+            clientName,
+            sourceItemId,
+            sourceItemTitle,
+            sourceItemUrl,
+            body: messageBody,
+            attachmentUrl: getImageUrl(message),
+            senderType,
+            createdAt: message.created
+              ? new Date(message.created * 1000).toISOString()
+              : new Date().toISOString(),
+          }),
+          cache: "no-store",
+        }).catch((error) => {
+          throw new Error(
+            `CRM dialog internal request failed: ${
+              error instanceof Error ? error.message : "fetch failed"
+            }`
+          );
+        });
 
         const crmResult = await crmResponse.json().catch(() => null);
 
