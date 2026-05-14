@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -338,7 +338,7 @@ function AssigneePreview({ members }: { members: MemberProfilePreview[] }) {
   );
 }
 
-function DealCard({
+const DealCard = memo(function DealCard({
   deal,
   assigneeProfiles,
   sourceName,
@@ -437,7 +437,9 @@ function DealCard({
       </div>
     </button>
   );
-}
+});
+
+DealCard.displayName = "DealCard";
 
 function CrmPageContent() {
   const searchParams = useSearchParams();
@@ -487,11 +489,23 @@ function CrmPageContent() {
       sourceId: sourceFilter,
       assigneeId: assigneeFilter,
       status: statusFilter,
+      pipelineId: selectedPipelineId,
     }),
-    [assigneeFilter, debouncedSearch, sourceFilter, statusFilter]
+    [
+      assigneeFilter,
+      debouncedSearch,
+      selectedPipelineId,
+      sourceFilter,
+      statusFilter,
+    ]
   );
 
-  const { data, isLoading, error } = useCrmBootstrapQuery(
+  const {
+    data,
+    isLoading,
+    error,
+    refetch: refetchCrm,
+  } = useCrmBootstrapQuery(
     isReady && hasAccess,
     crmFilters
   );
@@ -554,11 +568,25 @@ function CrmPageContent() {
   const [assignmentRuleDrafts, setAssignmentRuleDrafts] = useState<
     Record<string, AssignmentRuleDraft>
   >({});
+  const [isCrmLoadingSlow, setIsCrmLoadingSlow] = useState(false);
 
   const {
     data: selectedDealDetails,
     isLoading: isDealDetailsLoading,
   } = useCrmDealDetailsQuery(selectedDealId, isReady && hasAccess);
+
+  useEffect(() => {
+    if (!isReady || isLoading) {
+      setIsCrmLoadingSlow(false);
+      const timeoutId = window.setTimeout(() => {
+        setIsCrmLoadingSlow(true);
+      }, 8000);
+
+      return () => window.clearTimeout(timeoutId);
+    }
+
+    setIsCrmLoadingSlow(false);
+  }, [isLoading, isReady]);
 
   const pipelines = data?.pipelines ?? [];
   const stages = data?.stages ?? [];
@@ -753,6 +781,22 @@ function CrmPageContent() {
       ),
     [activeMembers]
   );
+  const dealAssigneeProfilesById = useMemo(
+    () =>
+      new Map(
+        deals.map((deal) => [
+          deal.id,
+          deal.assignees
+            .map((assignee) =>
+              memberProfileById.get(assignee.workspace_member_id)
+            )
+            .filter(
+              (member): member is MemberProfilePreview => Boolean(member)
+            ),
+        ])
+      ),
+    [deals, memberProfileById]
+  );
   const assignableMembers = useMemo(
     () =>
       canViewAllDeals
@@ -762,9 +806,7 @@ function CrmPageContent() {
   );
 
   function getDealAssigneeProfiles(deal: CrmDeal) {
-    return deal.assignees
-      .map((assignee) => memberProfileById.get(assignee.workspace_member_id))
-      .filter((member): member is MemberProfilePreview => Boolean(member));
+    return dealAssigneeProfilesById.get(deal.id) ?? [];
   }
 
   const sourceNameById = useMemo(
@@ -1378,6 +1420,22 @@ function CrmPageContent() {
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Загружаем CRM...
           </p>
+          {isCrmLoadingSlow ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
+              <p className="font-semibold">CRM грузится дольше обычного.</p>
+              <p className="mt-1 text-amber-700 dark:text-amber-200">
+                Такое может быть при слабом интернете или большом количестве
+                сделок. Попробуй повторить загрузку, данные не потеряются.
+              </p>
+              <button
+                type="button"
+                onClick={() => void refetchCrm()}
+                className="mt-3 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-400"
+              >
+                Повторить загрузку
+              </button>
+            </div>
+          ) : null}
         </div>
       </main>
     );

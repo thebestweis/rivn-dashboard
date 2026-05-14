@@ -15,6 +15,8 @@ const itemIdsMemoryCache = new Map<
 
 const pendingItemRequests = new Map<string, Promise<number[]>>();
 const pendingStatsRequests = new Map<string, Promise<AvitoPeriodStats>>();
+const pendingAggregateStatsRequests = new Map<string, Promise<AvitoPeriodStats>>();
+const AGGREGATE_STATS_CACHE_HASH = "stats-v2-totals";
 
 type AvitoStatPoint = {
   uniqViews?: number;
@@ -32,6 +34,8 @@ type AvitoPeriodStats = {
   contacts: number;
   favorites: number;
 };
+
+type MetricBucket = keyof AvitoPeriodStats;
 
 export class AvitoApiError extends Error {
   status: number;
@@ -472,6 +476,318 @@ async function saveStatsCache(params: {
   }
 
   await supabase.from("avito_report_stats_cache").insert(payload);
+}
+
+function normalizeMetricName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function getMetricBucket(metricName: string): MetricBucket | null {
+  const normalized = normalizeMetricName(metricName);
+
+  if (
+    [
+      "uniqviews",
+      "uniqueviews",
+      "views",
+      "view",
+      "itemviews",
+      "impressions",
+    ].includes(normalized)
+  ) {
+    return "views";
+  }
+
+  if (
+    [
+      "uniqcontacts",
+      "uniquecontacts",
+      "contacts",
+      "contact",
+      "contactsshown",
+      "contactshows",
+    ].includes(normalized)
+  ) {
+    return "contacts";
+  }
+
+  if (
+    [
+      "uniqfavorites",
+      "uniquefavorites",
+      "favorites",
+      "favorite",
+      "favourites",
+      "favourite",
+    ].includes(normalized)
+  ) {
+    return "favorites";
+  }
+
+  return null;
+}
+
+const coreAnalyticsMetrics = ["views", "contacts", "favorites"];
+
+function toFiniteNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/\s/g, "").replace(",", "."));
+
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return 0;
+}
+
+function addMetricValue(
+  totals: AvitoPeriodStats,
+  metricName: string,
+  value: unknown
+) {
+  const bucket = getMetricBucket(metricName);
+
+  if (!bucket) {
+    return false;
+  }
+
+  totals[bucket] += toFiniteNumber(value);
+  return true;
+}
+
+function collectMetricsFromValue(value: unknown): AvitoPeriodStats {
+  const totals: AvitoPeriodStats = {
+    views: 0,
+    contacts: 0,
+    favorites: 0,
+  };
+
+  const visit = (node: unknown) => {
+    if (!node || typeof node !== "object") {
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        visit(item);
+      }
+      return;
+    }
+
+    const record = node as Record<string, unknown>;
+    const metricName =
+      record.slug ?? record.name ?? record.code ?? record.metric ?? record.type;
+    const metricValue =
+      record.value ?? record.amount ?? record.count ?? record.total;
+
+    if (
+      typeof metricName === "string" &&
+      metricValue !== undefined &&
+      addMetricValue(totals, metricName, metricValue)
+    ) {
+      return;
+    }
+
+    for (const [key, nestedValue] of Object.entries(record)) {
+      addMetricValue(totals, key, nestedValue);
+    }
+
+    const nestedCollections = [
+      record.metrics,
+      record.stats,
+      record.items,
+      record.values,
+      record.groupings,
+      record.groups,
+    ];
+
+    for (const nestedCollection of nestedCollections) {
+      visit(nestedCollection);
+    }
+  };
+
+  visit(value);
+
+  return totals;
+}
+
+function parseAggregateStatsResponse(data: unknown): AvitoPeriodStats {
+  const root = data as Record<string, unknown> | null;
+  const result =
+    root && typeof root === "object" && "result" in root
+      ? (root.result as Record<string, unknown> | unknown[])
+      : data;
+
+  const candidates: unknown[] = [];
+
+  if (result && typeof result === "object") {
+    if (Array.isArray(result)) {
+      candidates.push(result);
+    } else {
+      const resultRecord = result as Record<string, unknown>;
+      candidates.push(
+        resultRecord.totals,
+        resultRecord.total,
+        resultRecord.metrics,
+        resultRecord.stats,
+        resultRecord.groupings,
+        resultRecord.groups,
+        result
+      );
+    }
+  }
+
+  candidates.push(data);
+
+  for (const candidate of candidates) {
+    const totals = collectMetricsFromValue(candidate);
+
+    if (totals.views || totals.contacts || totals.favorites) {
+      return totals;
+    }
+  }
+
+  return {
+    views: 0,
+    contacts: 0,
+    favorites: 0,
+  };
+}
+
+async function fetchAggregateStatsFromAvito(params: {
+  accessToken: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+}) {
+  const requestBodies = [
+    {
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+      grouping: "totals",
+      metrics: coreAnalyticsMetrics,
+      limit: 1000,
+      offset: 0,
+    },
+    {
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+      grouping: "totals",
+      metrics: coreAnalyticsMetrics,
+      limit: 1000,
+      offset: 0,
+      filter: {},
+    },
+    {
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+      grouping: "totals",
+      metrics: ["views", "contacts"],
+      limit: 1000,
+      offset: 0,
+    },
+  ];
+  let lastError: unknown = null;
+
+  for (const body of requestBodies) {
+    try {
+      return await fetchAvitoJson(
+        `https://api.avito.ru/stats/v2/accounts/${params.avitoUserId}/items`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${params.accessToken}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        },
+        "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ Р°РіСЂРµРіРёСЂРѕРІР°РЅРЅРѕР№ СЃС‚Р°С‚РёСЃС‚РёРєРё"
+      );
+    } catch (error) {
+      lastError = error;
+
+      if (
+        !(error instanceof AvitoApiError) ||
+        ![400, 404, 422].includes(error.status)
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+export async function getAvitoAggregateStatsForPeriod(params: {
+  accountId?: string;
+  accessToken: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+}): Promise<AvitoPeriodStats> {
+  const cacheKey = buildStatsCacheKey({
+    accountId: params.accountId,
+    avitoUserId: params.avitoUserId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    itemIdsHash: AGGREGATE_STATS_CACHE_HASH,
+  });
+  const pending = pendingAggregateStatsRequests.get(cacheKey);
+
+  if (pending) {
+    return pending;
+  }
+
+  const request = (async () => {
+    const cached = await loadStatsCache({
+      accountId: params.accountId,
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+    });
+
+    if (
+      cached?.isComplete &&
+      cached.itemIdsHash === AGGREGATE_STATS_CACHE_HASH
+    ) {
+      return {
+        views: cached.views,
+        contacts: cached.contacts,
+        favorites: cached.favorites,
+      };
+    }
+
+    const data = await fetchAggregateStatsFromAvito(params);
+    const stats = parseAggregateStatsResponse(data);
+
+    await saveStatsCache({
+      id: cached?.id,
+      accountId: params.accountId,
+      avitoUserId: params.avitoUserId,
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+      itemIdsHash: AGGREGATE_STATS_CACHE_HASH,
+      views: stats.views,
+      contacts: stats.contacts,
+      favorites: stats.favorites,
+      processedChunks: 1,
+      totalChunks: 1,
+      isComplete: true,
+    });
+
+    return stats;
+  })().finally(() => {
+    pendingAggregateStatsRequests.delete(cacheKey);
+  });
+
+  pendingAggregateStatsRequests.set(cacheKey, request);
+
+  return request;
 }
 
 export async function getCachedAvitoStatsForPeriod(params: {

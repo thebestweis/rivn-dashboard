@@ -267,6 +267,7 @@ export type CrmBootstrapFilters = {
   sourceId?: string;
   assigneeId?: string;
   status?: "all" | CrmDealStatus;
+  pipelineId?: string;
 };
 
 export type CrmStageHistoryFilters = {
@@ -896,39 +897,60 @@ export async function getCrmBootstrap(
     );
   }
 
-  const { data: assigneesData, error: assigneesError } = await supabase
-    .from("crm_deal_assignees")
-    .select("*")
-    .eq("workspace_id", workspace.id);
-
-  if (assigneesError) {
-    throw new Error(`Не удалось загрузить ответственных CRM: ${assigneesError.message}`);
-  }
-
   const role = resolveRole(membership?.role);
+  const canViewAllDeals = role ? canViewAllCrmDeals(role) : false;
   const search = normalizeFilterValue(filters.search);
   const sourceId = normalizeFilterValue(filters.sourceId);
   const assigneeId = normalizeFilterValue(filters.assigneeId);
+  const pipelineId = normalizeFilterValue(filters.pipelineId);
   const status = filters.status && filters.status !== "all" ? filters.status : "";
-  const visibleDealIds = (assigneesData ?? [])
-    .filter((assignee) => {
-      if (assigneeId) {
-        return assignee.workspace_member_id === assigneeId;
-      }
-
-      return assignee.workspace_member_id === membership?.id;
-    })
-    .map((assignee) => assignee.deal_id);
   const stages = ((stagesResult.data ?? []) as DbCrmStageRow[]).map(mapStage);
+  const pipelines = ((pipelinesResult.data ?? []) as DbCrmPipelineRow[]).map(
+    mapPipeline
+  );
+  const defaultPipelineId =
+    pipelines.find((pipeline) => pipeline.kind === "sales")?.id ??
+    pipelines[0]?.id ??
+    "";
+  const scopedStages =
+    pipelineId === "all"
+      ? stages
+      : stages.filter(
+          (stage) => stage.pipeline_id === (pipelineId || defaultPipelineId)
+        );
+  let visibleDealIds: string[] = [];
+
+  if (!canViewAllDeals || assigneeId) {
+    let visibleAssigneesQuery = supabase
+      .from("crm_deal_assignees")
+      .select("deal_id")
+      .eq("workspace_id", workspace.id);
+
+    visibleAssigneesQuery = visibleAssigneesQuery.eq(
+      "workspace_member_id",
+      assigneeId || membership?.id || ""
+    );
+
+    const { data: visibleAssigneesData, error: visibleAssigneesError } =
+      await visibleAssigneesQuery;
+
+    if (visibleAssigneesError) {
+      throw new Error(
+        `Не удалось загрузить доступные сделки CRM: ${visibleAssigneesError.message}`
+      );
+    }
+
+    visibleDealIds = Array.from(
+      new Set((visibleAssigneesData ?? []).map((assignee) => assignee.deal_id))
+    );
+  }
 
   if (
-    ((!role || !canViewAllCrmDeals(role)) || assigneeId) &&
+    ((!role || !canViewAllDeals) || assigneeId) &&
     visibleDealIds.length === 0
   ) {
     return {
-      pipelines: ((pipelinesResult.data ?? []) as DbCrmPipelineRow[]).map(
-        mapPipeline
-      ),
+      pipelines,
       stages,
       sources: (sourcesResult.data ?? []) as CrmSource[],
       lossReasons: ((lossReasonsResult.data ?? []) as DbCrmLossReasonRow[]).map(
@@ -942,59 +964,8 @@ export async function getCrmBootstrap(
     };
   }
 
-  let dealsQuery = supabase
-    .from("crm_deals")
-    .select("id,stage_id", { count: "exact" })
-    .eq("workspace_id", workspace.id)
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: false });
-
-  if (!role || !canViewAllCrmDeals(role) || assigneeId) {
-    dealsQuery = dealsQuery.in("id", visibleDealIds);
-  }
-
-  if (sourceId) {
-    dealsQuery = dealsQuery.eq("source_id", sourceId);
-  }
-
-  if (status) {
-    dealsQuery = dealsQuery.eq("status", status);
-  }
-
-  if (search) {
-    const term = `%${escapeIlikeValue(search)}%`;
-    dealsQuery = dealsQuery.or(
-      [
-        `title.ilike.${term}`,
-        `client_name.ilike.${term}`,
-        `phone.ilike.${term}`,
-        `telegram.ilike.${term}`,
-        `description.ilike.${term}`,
-      ].join(",")
-    );
-  }
-
-  const { data: dealsData, error: dealsError, count: dealsCount } =
-    await dealsQuery.range(0, 0);
-
-  if (dealsError) {
-    throw new Error(`Не удалось загрузить сделки CRM: ${dealsError.message}`);
-  }
-
-  const stageDealCounts = stages.reduce<Record<string, number>>((acc, stage) => {
-    acc[stage.id] = (dealsData ?? []).filter(
-      (deal) => deal.stage_id === stage.id
-    ).length;
-    return acc;
-  }, {});
-
-  if (stages.length === 1 && typeof dealsCount === "number") {
-    stageDealCounts[stages[0].id] = dealsCount;
-  }
-
-  const canViewAllDeals = role ? canViewAllCrmDeals(role) : false;
   const stageDealResults = await Promise.all(
-    stages.map(async (stage) => {
+    scopedStages.map(async (stage) => {
       let stageQuery = supabase
         .from("crm_deals")
         .select("*", { count: "exact" })
@@ -1047,8 +1018,27 @@ export async function getCrmBootstrap(
   const exactStageDealCounts = Object.fromEntries(
     stageDealResults.map((result) => [result.stageId, result.count])
   );
+  const limitedDealIds = Array.from(
+    new Set(limitedDealsData.map((deal) => deal.id))
+  );
+  let assignees: CrmDealAssignee[] = [];
 
-  const assignees = (assigneesData ?? []) as CrmDealAssignee[];
+  if (limitedDealIds.length > 0) {
+    const { data: assigneesData, error: assigneesError } = await supabase
+      .from("crm_deal_assignees")
+      .select("*")
+      .eq("workspace_id", workspace.id)
+      .in("deal_id", limitedDealIds);
+
+    if (assigneesError) {
+      throw new Error(
+        `Не удалось загрузить ответственных CRM: ${assigneesError.message}`
+      );
+    }
+
+    assignees = (assigneesData ?? []) as CrmDealAssignee[];
+  }
+
   const assigneesByDeal = new Map<string, CrmDealAssignee[]>();
 
   for (const assignee of assignees) {
@@ -1058,9 +1048,7 @@ export async function getCrmBootstrap(
   }
 
   return {
-    pipelines: ((pipelinesResult.data ?? []) as DbCrmPipelineRow[]).map(
-      mapPipeline
-    ),
+    pipelines,
     stages,
     sources: (sourcesResult.data ?? []) as CrmSource[],
     lossReasons: ((lossReasonsResult.data ?? []) as DbCrmLossReasonRow[]).map(

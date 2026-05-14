@@ -1,7 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import {
-  getCachedAvitoItemIds,
-  getCachedAvitoStatsForPeriod,
+  getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
@@ -945,17 +944,10 @@ export async function GET() {
               continue;
             }
 
-            const itemIds = await getCachedAvitoItemIds({
-              accountId: account.id,
-              avitoUserId: account.avito_user_id,
-              accessToken: account.access_token,
-            });
-
-            const currentStatsRaw = await getCachedAvitoStatsForPeriod({
+            const currentStatsRaw = await getAvitoAggregateStatsForPeriod({
   accountId: account.id,
   accessToken: account.access_token,
   avitoUserId: account.avito_user_id,
-  itemIds,
   dateFrom: currentPeriodStart,
   dateTo: currentPeriodEnd,
 });
@@ -971,11 +963,10 @@ const currentStats = buildStats({
   expenses: currentExpenses,
 });
 
-          const previousStatsRaw = await getCachedAvitoStatsForPeriod({
+          const previousStatsRaw = await getAvitoAggregateStatsForPeriod({
   accountId: account.id,
   accessToken: account.access_token,
   avitoUserId: account.avito_user_id,
-  itemIds,
   dateFrom: previousPeriodStart,
   dateTo: previousPeriodEnd,
 });

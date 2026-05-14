@@ -391,8 +391,15 @@ export function AppSidebar() {
         </div>
       </div>
 
+      <div
+        aria-hidden="true"
+        className={`hidden shrink-0 transition-[width] duration-300 ease-out lg:block ${
+          isCollapsed ? "w-[88px]" : "w-72"
+        }`}
+      />
+
       <aside
-        className={`sticky top-0 hidden h-screen border-r border-slate-200 bg-white transition-[width] duration-300 ease-out lg:flex lg:flex-col dark:border-white/10 dark:bg-[#0F1524] ${
+        className={`fixed inset-y-0 left-0 z-[220] hidden h-screen border-r border-slate-200 bg-white transition-[width] duration-300 ease-out lg:flex lg:flex-col dark:border-white/10 dark:bg-[#0F1524] ${
           isCollapsed ? "w-[88px]" : "w-72"
         }`}
       >

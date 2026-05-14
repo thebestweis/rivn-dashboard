@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
+import { getAvitoAggregateStatsForPeriod } from "@/app/api/avito/avito-api-helpers";
 import {
   buildDialogAnalyticsBlock,
   getDialogAnalytics,
@@ -513,20 +514,18 @@ export async function GET(request: Request) {
           }
 
           const accessToken = await resolveAvitoAccessToken(account);
-          const itemIds = await getAllItemIds(accessToken);
-
-          const currentStatsRaw = await getStatsForPeriod({
+          const currentStatsRaw = await getAvitoAggregateStatsForPeriod({
+            accountId: account.id,
             accessToken,
             avitoUserId: account.avito_user_id,
-            itemIds,
             dateFrom: currentStartDate,
             dateTo: currentEndDate,
           });
 
-          const previousStatsRaw = await getStatsForPeriod({
+          const previousStatsRaw = await getAvitoAggregateStatsForPeriod({
+            accountId: account.id,
             accessToken,
             avitoUserId: account.avito_user_id,
-            itemIds,
             dateFrom: prevStartDate,
             dateTo: prevEndDate,
           });

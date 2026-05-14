@@ -213,6 +213,7 @@ export default function AdminPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [planFilter, setPlanFilter] = useState<PlanFilter>("all");
   const [onlyLowBalance, setOnlyLowBalance] = useState(false);
+  const [isWorkspaceListExpanded, setIsWorkspaceListExpanded] = useState(false);
 
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -325,6 +326,23 @@ export default function AdminPage() {
       );
     });
   }, [workspaces, search, statusFilter, planFilter, onlyLowBalance]);
+
+  const hasWorkspaceFilters = useMemo(() => {
+    return (
+      search.trim() !== "" ||
+      statusFilter !== "all" ||
+      planFilter !== "all" ||
+      onlyLowBalance
+    );
+  }, [search, statusFilter, planFilter, onlyLowBalance]);
+
+  const visibleWorkspaces = useMemo(() => {
+    if (hasWorkspaceFilters || isWorkspaceListExpanded) {
+      return filteredWorkspaces;
+    }
+
+    return filteredWorkspaces.slice(0, 3);
+  }, [filteredWorkspaces, hasWorkspaceFilters, isWorkspaceListExpanded]);
 
   const filteredLogs = useMemo(() => {
     const normalized = logSearch.trim().toLowerCase();
@@ -638,11 +656,23 @@ if (!result.ok) {
               {filteredWorkspaces.length}
             </span>
           </div>
+
+          {!hasWorkspaceFilters && filteredWorkspaces.length > 3 ? (
+            <button
+              type="button"
+              onClick={() => setIsWorkspaceListExpanded((prev) => !prev)}
+              className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+            >
+              {isWorkspaceListExpanded
+                ? "Скрыть список"
+                : `Развернуть все кабинеты (${filteredWorkspaces.length})`}
+            </button>
+          ) : null}
         </div>
 
         <div className="space-y-3">
           {filteredWorkspaces.length > 0 ? (
-            filteredWorkspaces.map((ws) => (
+            visibleWorkspaces.map((ws) => (
               <div
                 key={ws.id}
                 onClick={() => setSelectedWorkspace(ws)}

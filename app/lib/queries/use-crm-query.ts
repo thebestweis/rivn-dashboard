@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 import { useAppContextState } from "../../providers/app-context-provider";
 import { queryKeys } from "../query-keys";
 import {
@@ -49,6 +54,7 @@ function buildCrmFiltersKey(filters: CrmBootstrapFilters) {
     sourceId: filters.sourceId ?? "",
     assigneeId: filters.assigneeId ?? "",
     status: filters.status ?? "all",
+    pipelineId: filters.pipelineId ?? "",
   });
 }
 
@@ -302,6 +308,21 @@ function upsertDealInBootstrap(deal: CrmDeal, current?: CrmBootstrap) {
   };
 }
 
+function getCrmBootstrapQueryPrefix(workspaceId: string) {
+  return ["crm", "bootstrap", workspaceId] as const;
+}
+
+function updateCrmBootstrapQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  workspaceId: string,
+  updater: (current?: CrmBootstrap) => CrmBootstrap | undefined
+) {
+  queryClient.setQueriesData<CrmBootstrap>(
+    { queryKey: getCrmBootstrapQueryPrefix(workspaceId) },
+    updater
+  );
+}
+
 function upsertStageInBootstrap(stage: CrmStage, current?: CrmBootstrap) {
   if (!current) return current;
 
@@ -411,13 +432,12 @@ export function useCreateCrmDealMutation() {
     onSuccess: (deal) => {
       if (!workspaceId) return;
 
-      queryClient.setQueryData<CrmBootstrap>(
-        queryKeys.crmBootstrap(workspaceId),
-        (current) => upsertDealInBootstrap(deal, current)
+      updateCrmBootstrapQueries(queryClient, workspaceId, (current) =>
+        upsertDealInBootstrap(deal, current)
       );
 
       void queryClient.invalidateQueries({
-        queryKey: ["crm", "bootstrap", workspaceId],
+        queryKey: getCrmBootstrapQueryPrefix(workspaceId),
       });
     },
   });
@@ -439,13 +459,12 @@ export function useUpdateCrmDealMutation() {
     onSuccess: (deal) => {
       if (!workspaceId) return;
 
-      queryClient.setQueryData<CrmBootstrap>(
-        queryKeys.crmBootstrap(workspaceId),
-        (current) => upsertDealInBootstrap(deal, current)
+      updateCrmBootstrapQueries(queryClient, workspaceId, (current) =>
+        upsertDealInBootstrap(deal, current)
       );
 
       void queryClient.invalidateQueries({
-        queryKey: ["crm", "bootstrap", workspaceId],
+        queryKey: getCrmBootstrapQueryPrefix(workspaceId),
       });
     },
   });
@@ -462,20 +481,39 @@ export function useMoveCrmDealMutation() {
       if (!workspaceId) return;
 
       await queryClient.cancelQueries({
-        queryKey: queryKeys.crmBootstrap(workspaceId),
+        queryKey: getCrmBootstrapQueryPrefix(workspaceId),
       });
 
-      const previous = queryClient.getQueryData<CrmBootstrap>(
-        queryKeys.crmBootstrap(workspaceId)
-      );
+      const previous = queryClient.getQueriesData<CrmBootstrap>({
+        queryKey: getCrmBootstrapQueryPrefix(workspaceId),
+      });
 
-      queryClient.setQueryData<CrmBootstrap>(
-        queryKeys.crmBootstrap(workspaceId),
+      updateCrmBootstrapQueries(
+        queryClient,
+        workspaceId,
         (current) => {
           if (!current) return current;
 
+          const previousDeal = current.deals.find(
+            (deal) => deal.id === input.dealId
+          );
+          const movedBetweenStages =
+            previousDeal && previousDeal.stage_id !== input.stageId;
+
           return {
             ...current,
+            stageDealCounts:
+              movedBetweenStages && previousDeal
+                ? {
+                    ...current.stageDealCounts,
+                    [previousDeal.stage_id]: Math.max(
+                      (current.stageDealCounts[previousDeal.stage_id] ?? 1) - 1,
+                      0
+                    ),
+                    [input.stageId]:
+                      (current.stageDealCounts[input.stageId] ?? 0) + 1,
+                  }
+                : current.stageDealCounts,
             deals: current.deals.map((deal) =>
               deal.id === input.dealId
                 ? {
@@ -499,22 +537,18 @@ export function useMoveCrmDealMutation() {
     onError: (_error, _input, context) => {
       if (!workspaceId || !context?.previous) return;
 
-      queryClient.setQueryData(
-        queryKeys.crmBootstrap(workspaceId),
-        context.previous
+      context.previous.forEach(
+        ([queryKey, data]: [QueryKey, CrmBootstrap | undefined]) => {
+          queryClient.setQueryData(queryKey, data);
+        }
       );
     },
     onSuccess: (deal) => {
       if (!workspaceId) return;
 
-      queryClient.setQueryData<CrmBootstrap>(
-        queryKeys.crmBootstrap(workspaceId),
-        (current) => upsertDealInBootstrap(deal, current)
+      updateCrmBootstrapQueries(queryClient, workspaceId, (current) =>
+        upsertDealInBootstrap(deal, current)
       );
-
-      void queryClient.invalidateQueries({
-        queryKey: ["crm", "bootstrap", workspaceId],
-      });
     },
   });
 }

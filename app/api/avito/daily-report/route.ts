@@ -3,8 +3,7 @@ import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
-  getCachedAvitoItemIds,
-  getCachedAvitoStatsForPeriod,
+  getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
@@ -567,26 +566,18 @@ export async function GET(request: Request) {
           }
 
           const accessToken = await resolveAvitoAccessToken(account);
-          const itemIds = await getCachedAvitoItemIds({
-            accountId: account.id,
-            avitoUserId: account.avito_user_id,
-            accessToken,
-          });
-
-          const currentStatsRaw = await getCachedAvitoStatsForPeriod({
+          const currentStatsRaw = await getAvitoAggregateStatsForPeriod({
             accountId: account.id,
             accessToken,
             avitoUserId: account.avito_user_id,
-            itemIds,
             dateFrom: yesterday,
             dateTo: yesterday,
           });
 
-          const previousStatsRaw = await getCachedAvitoStatsForPeriod({
+          const previousStatsRaw = await getAvitoAggregateStatsForPeriod({
             accountId: account.id,
             accessToken,
             avitoUserId: account.avito_user_id,
-            itemIds,
             dateFrom: beforeYesterday,
             dateTo: beforeYesterday,
           });

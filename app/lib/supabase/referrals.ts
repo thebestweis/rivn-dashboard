@@ -28,6 +28,7 @@ export type ReferralAttributionItem = {
 export type ReferralRewardItem = {
   id: string;
   referral_attribution_id: string;
+  referral_link_id: string | null;
   referrer_user_id: string;
   referred_user_id: string;
   referred_user_email: string | null;
@@ -104,6 +105,7 @@ function mapReferralReward(row: DbReferralRewardRow): ReferralRewardItem {
   return {
     id: row.id,
     referral_attribution_id: row.referral_attribution_id,
+    referral_link_id: null,
     referrer_user_id: row.referrer_user_id,
     referred_user_id: row.referred_user_id,
     referred_user_email: profile?.email ?? null,
@@ -431,7 +433,39 @@ export async function getMyReferralRewards(): Promise<ReferralRewardItem[]> {
     throw new Error(`Не удалось загрузить реферальные начисления: ${error.message}`);
   }
 
-  return ((data ?? []) as DbReferralRewardRow[]).map(mapReferralReward);
+  const rewards = ((data ?? []) as DbReferralRewardRow[]).map(mapReferralReward);
+  const attributionIds = Array.from(
+    new Set(rewards.map((item) => item.referral_attribution_id).filter(Boolean))
+  );
+
+  if (attributionIds.length === 0) {
+    return rewards;
+  }
+
+  const { data: attributions, error: attributionsError } = await supabase
+    .from("referral_attributions")
+    .select("id, referral_link_id")
+    .in("id", attributionIds);
+
+  if (attributionsError) {
+    throw new Error(
+      `Не удалось загрузить привязки реферальных начислений: ${attributionsError.message}`
+    );
+  }
+
+  const linkIdByAttributionId = new Map<string, string | null>();
+
+  ((attributions ?? []) as { id: string; referral_link_id: string | null }[]).forEach(
+    (item) => {
+      linkIdByAttributionId.set(item.id, item.referral_link_id ?? null);
+    }
+  );
+
+  return rewards.map((reward) => ({
+    ...reward,
+    referral_link_id:
+      linkIdByAttributionId.get(reward.referral_attribution_id) ?? null,
+  }));
 }
 
 export async function getMyReferralStats(): Promise<ReferralStats> {

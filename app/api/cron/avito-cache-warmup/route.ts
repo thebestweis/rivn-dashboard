@@ -2,8 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
-  getCachedAvitoItemIds,
-  getCachedAvitoStatsForPeriod,
+  getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
@@ -107,7 +106,6 @@ export async function GET(request: Request) {
       accountId: string;
       accountName: string;
       status: "warmed" | "skipped" | "failed";
-      itemIdsCount?: number;
       error?: string;
     }> = [];
 
@@ -124,26 +122,18 @@ export async function GET(request: Request) {
         }
 
         const accessToken = await resolveAvitoAccessToken(account);
-        const itemIds = await getCachedAvitoItemIds({
-          accountId: account.id,
-          avitoUserId: account.avito_user_id,
-          accessToken,
-        });
-
-        await getCachedAvitoStatsForPeriod({
+        await getAvitoAggregateStatsForPeriod({
           accountId: account.id,
           accessToken,
           avitoUserId: account.avito_user_id,
-          itemIds,
           dateFrom: yesterday,
           dateTo: yesterday,
         });
 
-        await getCachedAvitoStatsForPeriod({
+        await getAvitoAggregateStatsForPeriod({
           accountId: account.id,
           accessToken,
           avitoUserId: account.avito_user_id,
-          itemIds,
           dateFrom: beforeYesterday,
           dateTo: beforeYesterday,
         });
@@ -161,7 +151,6 @@ export async function GET(request: Request) {
           accountId: account.id,
           accountName: account.name,
           status: "warmed",
-          itemIdsCount: itemIds.length,
         });
       } catch (error) {
         results.push({

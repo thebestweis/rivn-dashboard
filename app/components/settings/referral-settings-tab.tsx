@@ -71,6 +71,13 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function formatDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function buildReferralUrl(code: string) {
   if (typeof window === "undefined") {
     return `/register?ref=${code}`;
@@ -98,6 +105,15 @@ export function ReferralSettingsTab() {
   const [editingLinkComment, setEditingLinkComment] = useState("");
   const [savingLinkDetailsId, setSavingLinkDetailsId] = useState<string | null>(
     null
+  );
+  const [selectedRewardLinkId, setSelectedRewardLinkId] = useState("all");
+  const [rewardPeriodFrom, setRewardPeriodFrom] = useState(() => {
+    const date = new Date();
+    date.setDate(1);
+    return formatDateInputValue(date);
+  });
+  const [rewardPeriodTo, setRewardPeriodTo] = useState(() =>
+    formatDateInputValue(new Date())
   );
 
   const [toastMessage, setToastMessage] = useState("");
@@ -164,6 +180,60 @@ export function ReferralSettingsTab() {
   const personalLinks = useMemo(() => {
     return links.filter((item) => item.link_type === "personal_50");
   }, [links]);
+
+  const filteredRewards = useMemo(() => {
+    const fromTime = rewardPeriodFrom
+      ? new Date(`${rewardPeriodFrom}T00:00:00`).getTime()
+      : null;
+    const toTime = rewardPeriodTo
+      ? new Date(`${rewardPeriodTo}T23:59:59`).getTime()
+      : null;
+
+    return rewards.filter((reward) => {
+      const rewardTime = new Date(reward.created_at).getTime();
+
+      if (selectedRewardLinkId !== "all") {
+        if (reward.referral_link_id !== selectedRewardLinkId) {
+          return false;
+        }
+      }
+
+      if (fromTime !== null && rewardTime < fromTime) {
+        return false;
+      }
+
+      if (toTime !== null && rewardTime > toTime) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [rewards, rewardPeriodFrom, rewardPeriodTo, selectedRewardLinkId]);
+
+  const rewardPeriodStats = useMemo(() => {
+    return filteredRewards.reduce(
+      (acc, reward) => {
+        acc.paymentAmount += reward.payment_amount;
+        acc.rewardAmount += reward.reward_amount;
+
+        if (reward.status === "approved") {
+          acc.approvedAmount += reward.reward_amount;
+        }
+
+        if (reward.status === "paid") {
+          acc.paidAmount += reward.reward_amount;
+        }
+
+        return acc;
+      },
+      {
+        paymentAmount: 0,
+        rewardAmount: 0,
+        approvedAmount: 0,
+        paidAmount: 0,
+      }
+    );
+  }, [filteredRewards]);
 
   async function handleCopyLink(code: string) {
     try {
@@ -625,6 +695,110 @@ export function ReferralSettingsTab() {
               </div>
             ) : null}
 
+            {isSuperAdmin ? (
+              <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <div className="text-sm text-white/45">
+                      Выплаты по конкретной ссылке
+                    </div>
+                    <div className="mt-1 text-sm text-white/65">
+                      Выбери супер-ссылку и период, чтобы быстро увидеть, сколько
+                      начислено партнёру.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedRewardLinkId("all");
+                      const date = new Date();
+                      date.setDate(1);
+                      setRewardPeriodFrom(formatDateInputValue(date));
+                      setRewardPeriodTo(formatDateInputValue(new Date()));
+                    }}
+                    className="w-fit rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/75 transition hover:bg-white/[0.07] hover:text-white"
+                  >
+                    Сбросить фильтр
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)_minmax(0,0.7fr)]">
+                  <label className="space-y-2">
+                    <div className="text-xs text-white/45">Ссылка</div>
+                    <select
+                      value={selectedRewardLinkId}
+                      onChange={(event) =>
+                        setSelectedRewardLinkId(event.target.value)
+                      }
+                      className="h-[46px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                    >
+                      <option value="all">Все ссылки</option>
+                      {personalLinks.map((link) => (
+                        <option key={link.id} value={link.id}>
+                          {link.label || link.code} · {link.reward_percent}%
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <div className="text-xs text-white/45">С даты</div>
+                    <input
+                      type="date"
+                      value={rewardPeriodFrom}
+                      onChange={(event) =>
+                        setRewardPeriodFrom(event.target.value)
+                      }
+                      className="h-[46px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <div className="text-xs text-white/45">По дату</div>
+                    <input
+                      type="date"
+                      value={rewardPeriodTo}
+                      onChange={(event) =>
+                        setRewardPeriodTo(event.target.value)
+                      }
+                      className="h-[46px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-4">
+                  <div className="rounded-2xl border border-white/10 bg-[#0F1524] p-4">
+                    <div className="text-xs text-white/45">Оплат по фильтру</div>
+                    <div className="mt-2 text-lg font-semibold text-white">
+                      {filteredRewards.length}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-[#0F1524] p-4">
+                    <div className="text-xs text-white/45">Сумма оплат</div>
+                    <div className="mt-2 text-lg font-semibold text-white">
+                      {formatMoney(rewardPeriodStats.paymentAmount)}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-[#0F1524] p-4">
+                    <div className="text-xs text-white/45">Начислено</div>
+                    <div className="mt-2 text-lg font-semibold text-emerald-300">
+                      {formatMoney(rewardPeriodStats.approvedAmount)}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-[#0F1524] p-4">
+                    <div className="text-xs text-white/45">Выплачено</div>
+                    <div className="mt-2 text-lg font-semibold text-sky-300">
+                      {formatMoney(rewardPeriodStats.paidAmount)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="mt-6 overflow-hidden rounded-[24px] border border-white/8">
               <table className="w-full text-left text-sm">
                 <thead className="bg-white/[0.04] text-white/45">
@@ -640,8 +814,8 @@ export function ReferralSettingsTab() {
                 </thead>
 
                 <tbody>
-                  {rewards.length > 0 ? (
-                    rewards.map((reward) => (
+                  {filteredRewards.length > 0 ? (
+                    filteredRewards.map((reward) => (
                       <tr
                         key={reward.id}
                         className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"

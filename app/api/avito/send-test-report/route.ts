@@ -29,6 +29,18 @@ async function readJsonResponse(response: Response) {
   }
 }
 
+function getInternalOrigin(request: Request) {
+  if (process.env.INTERNAL_APP_URL) {
+    return process.env.INTERNAL_APP_URL;
+  }
+
+  if (process.env.VERCEL) {
+    return new URL(request.url).origin;
+  }
+
+  return "http://127.0.0.1:3000";
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -106,7 +118,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const origin = new URL(request.url).origin;
+    const origin = getInternalOrigin(request);
     const url = new URL("/api/avito/test-report", origin);
     url.searchParams.set("clientCode", client.client_code);
     url.searchParams.set("secret", cronSecret);

@@ -575,14 +575,15 @@ export async function POST(request: Request) {
       });
     }
 
-    const { data: existingConversation, error: conversationLookupError } =
+    const { data: existingConversations, error: conversationLookupError } =
       await supabase
         .from("crm_conversations")
         .select("*")
         .eq("workspace_id", workspaceId)
         .eq("channel", channel)
         .eq("external_id", externalDialogId)
-        .maybeSingle();
+        .order("created_at", { ascending: true })
+        .limit(1);
 
     if (conversationLookupError) {
       throw new Error(
@@ -590,6 +591,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const existingConversation = existingConversations?.[0] ?? null;
     let dealId = existingConversation?.deal_id ?? null;
 
     if (!dealId) {
@@ -635,17 +637,20 @@ export async function POST(request: Request) {
     }
 
     if (externalMessageId) {
-      const { data: duplicate, error: duplicateError } = await supabase
+      const { data: duplicateMessages, error: duplicateError } = await supabase
         .from("crm_messages")
         .select("id")
         .eq("workspace_id", workspaceId)
         .eq("conversation_id", conversation.id)
         .eq("external_id", externalMessageId)
-        .maybeSingle();
+        .order("created_at", { ascending: true })
+        .limit(1);
 
       if (duplicateError) {
         throw new Error(`CRM message lookup failed: ${duplicateError.message}`);
       }
+
+      const duplicate = duplicateMessages?.[0] ?? null;
 
       if (duplicate) {
         return Response.json({
