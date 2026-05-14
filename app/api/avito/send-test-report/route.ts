@@ -34,7 +34,23 @@ async function readJsonResponse(response: Response) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+    let body: { workspaceId?: string; clientId?: string };
+
+    try {
+      body = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Сервер получил некорректный JSON. Проверь, что запрос отправляет workspaceId и clientId в формате JSON.",
+          received: rawBody.slice(0, 200),
+        },
+        { status: 400 }
+      );
+    }
+
     const workspaceId = body.workspaceId;
     const clientId = body.clientId;
 
