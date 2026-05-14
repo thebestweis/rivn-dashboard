@@ -130,7 +130,7 @@ export async function POST(request: Request) {
 
     const result = await readJsonResponse(response);
 
-    if (!response.ok || !result.ok) {
+    if (!response.ok || !result?.ok) {
       throw new Error(
         result?.error ||
           `Не удалось отправить тестовый отчёт. Сервер вернул пустой ответ (${response.status}).`

@@ -119,6 +119,25 @@ function getLastDaysRange(days: number) {
   };
 }
 
+async function readApiResponse(response: Response) {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      ok: false,
+      error:
+        "Сервер вернул не API-ответ, а страницу ошибки. Обычно это значит, что запрос попал не в тот адрес или приложение на сервере ещё не обновилось.",
+      raw: text.slice(0, 300),
+    };
+  }
+}
+
 function FieldHint({ children }: { children: React.ReactNode }) {
   return <div className="mt-2 text-xs leading-5 text-white/35">{children}</div>;
 }
@@ -365,9 +384,9 @@ setIntegrations(integrationsData.integrations ?? []);
         }),
       });
 
-      const result = await response.json();
+      const result = await readApiResponse(response);
 
-      if (!response.ok || !result.ok) {
+      if (!response.ok || !result?.ok) {
         throw new Error(result.error || "Avito не принял данные");
       }
 
@@ -806,9 +825,9 @@ setIntegrations(integrationsData.integrations ?? []);
         }),
       });
 
-      const result = await response.json();
+      const result = await readApiResponse(response);
 
-      if (!response.ok || !result.ok) {
+      if (!response.ok || !result?.ok) {
         throw new Error(result.error || "Не удалось отправить тестовый отчёт");
       }
 
