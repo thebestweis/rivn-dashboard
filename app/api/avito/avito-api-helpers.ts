@@ -549,7 +549,8 @@ function getMetricBucket(metricName: string): MetricBucket | null {
   return null;
 }
 
-const coreAnalyticsMetrics = ["views", "contacts", "favorites"];
+const coreAnalyticsMetrics = ["uniqViews", "uniqContacts", "uniqFavorites"];
+const fallbackAnalyticsMetrics = ["views", "contacts", "favorites"];
 
 function toFiniteNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -726,6 +727,10 @@ function addStats(left: AvitoPeriodStats, right: AvitoPeriodStats) {
   left.favorites += right.favorites;
 }
 
+function hasStatsValue(stats?: AvitoPeriodStats | null) {
+  return Boolean(stats && (stats.views || stats.contacts || stats.favorites));
+}
+
 function parseAggregateStatsByDayResponse(data: unknown) {
   const result =
     data && typeof data === "object" && "result" in data
@@ -788,7 +793,7 @@ async function fetchAggregateStatsFromAvito(params: {
       dateFrom: params.dateFrom,
       dateTo: params.dateTo,
       grouping: "totals",
-      metrics: coreAnalyticsMetrics,
+      metrics: fallbackAnalyticsMetrics,
       limit: 1000,
       offset: 0,
       filter: {},
@@ -840,14 +845,16 @@ async function fetchAggregateStatsByDayFromAvito(params: {
   dateFrom: string;
   dateTo: string;
 }) {
-  const requestBodies = ["day", "date"].map((grouping) => ({
-    dateFrom: params.dateFrom,
-    dateTo: params.dateTo,
-    grouping,
-    metrics: coreAnalyticsMetrics,
-    limit: 1000,
-    offset: 0,
-  }));
+  const requestBodies = ["day", "date"].flatMap((grouping) =>
+    [coreAnalyticsMetrics, fallbackAnalyticsMetrics].map((metrics) => ({
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+      grouping,
+      metrics,
+      limit: 1000,
+      offset: 0,
+    }))
+  );
   let lastError: unknown = null;
 
   for (const body of requestBodies) {
@@ -1004,6 +1011,29 @@ export async function getAvitoAggregateStatsByDayForPeriod(params: {
     try {
       const data = await fetchAggregateStatsByDayFromAvito(params);
       const statsByDate = parseAggregateStatsByDayResponse(data);
+      const parsedHasValues = Object.values(statsByDate).some(hasStatsValue);
+
+      if (!parsedHasValues) {
+        const fallbackByDate: Record<string, AvitoPeriodStats> = {
+          ...cachedByDate,
+        };
+
+        for (const date of dates) {
+          if (hasStatsValue(fallbackByDate[date])) {
+            continue;
+          }
+
+          fallbackByDate[date] = await getAvitoAggregateStatsForPeriod({
+            accountId: params.accountId,
+            accessToken: params.accessToken,
+            avitoUserId: params.avitoUserId,
+            dateFrom: date,
+            dateTo: date,
+          });
+        }
+
+        return fallbackByDate;
+      }
 
       for (const date of dates) {
         const stats = statsByDate[date];
