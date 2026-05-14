@@ -124,12 +124,14 @@ async function linkChatToClientCode(params: {
   const supabase = getSupabase();
   const clientCode = params.clientCode.trim();
 
-  const { data: client, error: clientError } = await supabase
+  const { data: clients, error: clientError } = await supabase
     .from("avito_report_clients")
     .select("id, name, client_code, telegram_chat_id")
     .eq("client_code", clientCode)
     .eq("is_active", true)
-    .maybeSingle();
+    .limit(1);
+
+  const client = clients?.[0];
 
   if (clientError || !client) {
     await sendTelegramMessage(
@@ -142,13 +144,15 @@ async function linkChatToClientCode(params: {
 
   const chatId = String(params.chatId);
 
-  const { data: existingChatLink, error: existingChatLinkError } =
+  const { data: existingChatLinks, error: existingChatLinkError } =
     await supabase
       .from("avito_report_chat_links")
       .select("client_id")
       .eq("telegram_chat_id", chatId)
       .eq("is_active", true)
-      .maybeSingle();
+      .limit(1);
+
+  const existingChatLink = existingChatLinks?.[0];
 
   if (existingChatLinkError) {
     await sendTelegramMessage(
@@ -194,12 +198,14 @@ async function linkChatToClientCode(params: {
     return;
   }
 
-  const { data: existingLinkByChat, error: existingLinkByChatError } =
+  const { data: existingLinksByChat, error: existingLinkByChatError } =
     await supabase
       .from("avito_report_chat_links")
       .select("id")
       .eq("telegram_chat_id", chatId)
-      .maybeSingle();
+      .limit(1);
+
+  const existingLinkByChat = existingLinksByChat?.[0];
 
   if (existingLinkByChatError) {
     await sendTelegramMessage(
@@ -350,11 +356,13 @@ export async function POST(req: Request) {
     if (text === "/status" || text.startsWith("/status@")) {
       const supabase = getSupabase();
 
-      const { data: link } = await supabase
+      const { data: links } = await supabase
         .from("avito_report_chat_links")
         .select("client_id, telegram_chat_id, is_active, avito_report_clients(name, client_code)")
         .eq("telegram_chat_id", String(chatId))
-        .maybeSingle();
+        .limit(1);
+
+      const link = links?.[0];
 
       if (!link) {
         await sendTelegramMessage(

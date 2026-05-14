@@ -363,6 +363,32 @@ function buildAccountBlock(params: {
   ].join("\n");
 }
 
+function buildAccountPartialBlock(params: {
+  accountName: string;
+  current: PeriodStats;
+  previous: PeriodStats;
+  warnings: string[];
+}) {
+  const warningLines = params.warnings.map((warning) => {
+    const safeWarning = warning
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    return `⚠️ ${safeWarning}`;
+  });
+
+  return [
+    buildAccountBlock({
+      accountName: params.accountName,
+      current: params.current,
+      previous: params.previous,
+    }),
+    "",
+    ...warningLines,
+  ].join("\n");
+}
+
 function buildDailyReport(params: {
   date: string;
   accountBlocks: string[];
@@ -576,43 +602,65 @@ export async function GET(request: Request) {
           }
 
           const accessToken = await resolveAvitoAccessToken(account);
-          const statsByDay = await getAvitoAggregateStatsByDayForPeriod({
-            accountId: account.id,
-            accessToken,
-            avitoUserId: account.avito_user_id,
-            dateFrom: beforeYesterday,
-            dateTo: yesterday,
-          });
-
-          const currentStatsRaw = statsByDay[yesterday] ?? {
-            views: 0,
-            contacts: 0,
-            favorites: 0,
+          const warnings: string[] = [];
+          let currentStatsRaw = { views: 0, contacts: 0, favorites: 0 };
+          let previousStatsRaw = { views: 0, contacts: 0, favorites: 0 };
+          let currentAvitoSpendings = {
+            total: 0,
+            presence: 0,
+            promotion: 0,
+            commission: 0,
+            rest: 0,
           };
-          const previousStatsRaw = statsByDay[beforeYesterday] ?? {
-            views: 0,
-            contacts: 0,
-            favorites: 0,
+          let previousAvitoSpendings = {
+            total: 0,
+            presence: 0,
+            promotion: 0,
+            commission: 0,
+            rest: 0,
           };
 
-          const rawAvitoSpendings = await fetchAvitoSpendings({
-            accountId: account.id,
-            accessToken,
-            userId: account.avito_user_id,
-            dateFrom: beforeYesterday,
-            dateTo: yesterday,
-            grouping: "day",
-          });
+          try {
+            const statsByDay = await getAvitoAggregateStatsByDayForPeriod({
+              accountId: account.id,
+              accessToken,
+              avitoUserId: account.avito_user_id,
+              dateFrom: beforeYesterday,
+              dateTo: yesterday,
+            });
 
-          const currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-            dateFrom: yesterday,
-            dateTo: yesterday,
-          });
+            currentStatsRaw = statsByDay[yesterday] ?? currentStatsRaw;
+            previousStatsRaw = statsByDay[beforeYesterday] ?? previousStatsRaw;
+          } catch (statsError) {
+            warnings.push(
+              `Статистика просмотров и контактов временно недоступна: ${getFriendlyAvitoErrorMessage(statsError)}`
+            );
+          }
 
-          const previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-            dateFrom: beforeYesterday,
-            dateTo: beforeYesterday,
-          });
+          try {
+            const rawAvitoSpendings = await fetchAvitoSpendings({
+              accountId: account.id,
+              accessToken,
+              userId: account.avito_user_id,
+              dateFrom: beforeYesterday,
+              dateTo: yesterday,
+              grouping: "day",
+            });
+
+            currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
+              dateFrom: yesterday,
+              dateTo: yesterday,
+            });
+
+            previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
+              dateFrom: beforeYesterday,
+              dateTo: beforeYesterday,
+            });
+          } catch (spendingsError) {
+            warnings.push(
+              `Расходы временно недоступны: ${getFriendlyAvitoErrorMessage(spendingsError)}`
+            );
+          }
 
           const currentStats = buildStats({
             ...currentStatsRaw,
@@ -634,7 +682,8 @@ export async function GET(request: Request) {
           totalPreviousRaw.favorites += previousStats.favorites;
           totalPreviousRaw.expenses += previousStats.expenses;
 
-          await saveAvitoReportMetric({
+          if (warnings.length === 0) {
+            await saveAvitoReportMetric({
   clientId: client.id,
   accountId: account.id,
   reportType: "daily",
@@ -653,14 +702,27 @@ export async function GET(request: Request) {
     previousAvitoSpendings,
   },
 });
+          }
 
-          accountBlocks.push(
-            buildAccountBlock({
-              accountName: account.name,
-              current: currentStats,
-              previous: previousStats,
-            })
-          );
+          if (warnings.length > 0) {
+            failedAccountsCount += 1;
+            accountBlocks.push(
+              buildAccountPartialBlock({
+                accountName: account.name,
+                current: currentStats,
+                previous: previousStats,
+                warnings,
+              })
+            );
+          } else {
+            accountBlocks.push(
+              buildAccountBlock({
+                accountName: account.name,
+                current: currentStats,
+                previous: previousStats,
+              })
+            );
+          }
           } catch (accountError) {
             failedAccountsCount += 1;
             accountBlocks.push(buildAccountErrorBlock(account.name, accountError));
@@ -685,7 +747,8 @@ export async function GET(request: Request) {
         const totalCurrent = buildStats(totalCurrentRaw);
         const totalPrevious = buildStats(totalPreviousRaw);
 
-        await saveAvitoReportMetric({
+        if (failedAccountsCount === 0) {
+          await saveAvitoReportMetric({
   clientId: client.id,
   accountId: null,
   reportType: "daily",
@@ -702,6 +765,7 @@ export async function GET(request: Request) {
     previous: totalPrevious,
   },
 });
+        }
 
         const reportText = buildDailyReport({
           date: yesterday,

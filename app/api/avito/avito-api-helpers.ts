@@ -731,6 +731,46 @@ function hasStatsValue(stats?: AvitoPeriodStats | null) {
   return Boolean(stats && (stats.views || stats.contacts || stats.favorites));
 }
 
+async function getCachedChunkedStatsByDay(params: {
+  accountId?: string;
+  accessToken: string;
+  avitoUserId: string;
+  dates: string[];
+  cachedByDate?: Record<string, AvitoPeriodStats>;
+}) {
+  const itemIds = await getCachedAvitoItemIds({
+    accountId: params.accountId,
+    avitoUserId: params.avitoUserId,
+    accessToken: params.accessToken,
+  });
+  const statsByDate: Record<string, AvitoPeriodStats> = {
+    ...(params.cachedByDate ?? {}),
+  };
+
+  if (!itemIds.length) {
+    return statsByDate;
+  }
+
+  for (const date of params.dates) {
+    if (hasStatsValue(statsByDate[date])) {
+      continue;
+    }
+
+    statsByDate[date] = await getCachedAvitoStatsForPeriod({
+      accountId: params.accountId,
+      accessToken: params.accessToken,
+      avitoUserId: params.avitoUserId,
+      itemIds,
+      dateFrom: date,
+      dateTo: date,
+    });
+
+    await sleep(1500);
+  }
+
+  return statsByDate;
+}
+
 function parseAggregateStatsByDayResponse(data: unknown) {
   const result =
     data && typeof data === "object" && "result" in data
@@ -1014,25 +1054,13 @@ export async function getAvitoAggregateStatsByDayForPeriod(params: {
       const parsedHasValues = Object.values(statsByDate).some(hasStatsValue);
 
       if (!parsedHasValues) {
-        const fallbackByDate: Record<string, AvitoPeriodStats> = {
-          ...cachedByDate,
-        };
-
-        for (const date of dates) {
-          if (hasStatsValue(fallbackByDate[date])) {
-            continue;
-          }
-
-          fallbackByDate[date] = await getAvitoAggregateStatsForPeriod({
-            accountId: params.accountId,
-            accessToken: params.accessToken,
-            avitoUserId: params.avitoUserId,
-            dateFrom: date,
-            dateTo: date,
-          });
-        }
-
-        return fallbackByDate;
+        return getCachedChunkedStatsByDay({
+          accountId: params.accountId,
+          accessToken: params.accessToken,
+          avitoUserId: params.avitoUserId,
+          dates,
+          cachedByDate,
+        });
       }
 
       for (const date of dates) {
@@ -1069,11 +1097,24 @@ export async function getAvitoAggregateStatsByDayForPeriod(params: {
         ...statsByDate,
       };
     } catch (error) {
-      if (
-        isAvitoRateLimitError(error) &&
-        Object.keys(cachedByDate).length > 0
-      ) {
-        return cachedByDate;
+      try {
+        const fallbackByDate = await getCachedChunkedStatsByDay({
+          accountId: params.accountId,
+          accessToken: params.accessToken,
+          avitoUserId: params.avitoUserId,
+          dates,
+          cachedByDate,
+        });
+
+        if (Object.keys(fallbackByDate).length > 0) {
+          return fallbackByDate;
+        }
+      } catch (fallbackError) {
+        if (Object.keys(cachedByDate).length > 0) {
+          return cachedByDate;
+        }
+
+        throw fallbackError;
       }
 
       throw error;
