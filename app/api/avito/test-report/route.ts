@@ -203,20 +203,30 @@ async function sendTelegramMessage(chatId: string, text: string) {
     throw new Error("Не найден TELEGRAM_BOT_TOKEN");
   }
 
-  const response = await fetch(
-    `https://api.telegram.org/bot${telegramToken}/sendMessage`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: "HTML",
-      }),
-    }
-  );
+  let response: Response;
+
+  try {
+    response = await fetch(
+      `https://api.telegram.org/bot${telegramToken}/sendMessage`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: "HTML",
+        }),
+      }
+    );
+  } catch (error) {
+    throw new Error(
+      `Не удалось отправить отчёт в Telegram: ${
+        error instanceof Error ? error.message : "network error"
+      }`
+    );
+  }
 
   const data = await readJsonResponse(response);
 

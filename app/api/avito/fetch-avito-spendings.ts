@@ -254,25 +254,35 @@ function mergeSpendingsResponses(responses: any[]) {
 }
 
 async function fetchAvitoSpendingsOnce(params: FetchAvitoSpendingsParams) {
-  const response = await fetch(
-    `https://api.avito.ru/stats/v2/accounts/${params.userId}/spendings`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${params.accessToken}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        dateFrom: params.dateFrom,
-        dateTo: params.dateTo,
-        filter: null,
-        grouping: params.grouping,
-        spendingTypes: params.spendingTypes,
-      }),
-      cache: "no-store",
-    }
-  );
+  let response: Response;
+
+  try {
+    response = await fetch(
+      `https://api.avito.ru/stats/v2/accounts/${params.userId}/spendings`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${params.accessToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          dateFrom: params.dateFrom,
+          dateTo: params.dateTo,
+          filter: null,
+          grouping: params.grouping,
+          spendingTypes: params.spendingTypes,
+        }),
+        cache: "no-store",
+      }
+    );
+  } catch (error) {
+    throw new Error(
+      `Не удалось подключиться к Avito API расходов: ${
+        error instanceof Error ? error.message : "network error"
+      }`
+    );
+  }
 
   const text = await response.text();
 

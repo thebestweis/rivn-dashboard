@@ -113,10 +113,24 @@ export async function fetchAvitoJson(
   let lastData: unknown = null;
 
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
-    const response = await fetch(url, {
-      ...init,
-      cache: "no-store",
-    });
+    let response: Response;
+
+    try {
+      response = await fetch(url, {
+        ...init,
+        cache: "no-store",
+      });
+    } catch (error) {
+      throw new AvitoApiError(
+        `${context}: не удалось подключиться к Avito API (${error instanceof Error ? error.message : "network error"})`,
+        0,
+        {
+          url,
+          cause: error instanceof Error ? error.message : String(error),
+        }
+      );
+    }
+
     const data = await readJsonResponse(response);
 
     if (response.ok) {
