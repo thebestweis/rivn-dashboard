@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
-  getAvitoAggregateStatsForPeriod,
+  getAvitoAggregateStatsByDayForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
@@ -122,20 +122,12 @@ export async function GET(request: Request) {
         }
 
         const accessToken = await resolveAvitoAccessToken(account);
-        await getAvitoAggregateStatsForPeriod({
-          accountId: account.id,
-          accessToken,
-          avitoUserId: account.avito_user_id,
-          dateFrom: yesterday,
-          dateTo: yesterday,
-        });
-
-        await getAvitoAggregateStatsForPeriod({
+        await getAvitoAggregateStatsByDayForPeriod({
           accountId: account.id,
           accessToken,
           avitoUserId: account.avito_user_id,
           dateFrom: beforeYesterday,
-          dateTo: beforeYesterday,
+          dateTo: yesterday,
         });
 
         await fetchAvitoSpendings({

@@ -4,7 +4,7 @@ import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { verifyCronSecret } from "../../cron/verify-cron-secret";
 import {
-  getAvitoAggregateStatsForPeriod,
+  getAvitoAggregateStatsByDayForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
@@ -508,21 +508,24 @@ export async function GET(request: Request) {
             clientSecret: account.avito_client_secret,
           }));
 
-        const currentStatsRaw = await getAvitoAggregateStatsForPeriod({
-          accountId: account.id,
-          accessToken,
-          avitoUserId: account.avito_user_id,
-          dateFrom: yesterday,
-          dateTo: yesterday,
-        });
-
-        const previousStatsRaw = await getAvitoAggregateStatsForPeriod({
+        const statsByDay = await getAvitoAggregateStatsByDayForPeriod({
           accountId: account.id,
           accessToken,
           avitoUserId: account.avito_user_id,
           dateFrom: beforeYesterday,
-          dateTo: beforeYesterday,
+          dateTo: yesterday,
         });
+
+        const currentStatsRaw = statsByDay[yesterday] ?? {
+          views: 0,
+          contacts: 0,
+          favorites: 0,
+        };
+        const previousStatsRaw = statsByDay[beforeYesterday] ?? {
+          views: 0,
+          contacts: 0,
+          favorites: 0,
+        };
 
         const rawAvitoSpendings = await fetchAvitoSpendings({
           accountId: account.id,

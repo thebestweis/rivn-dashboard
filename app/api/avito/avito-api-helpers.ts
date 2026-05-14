@@ -16,7 +16,12 @@ const itemIdsMemoryCache = new Map<
 const pendingItemRequests = new Map<string, Promise<number[]>>();
 const pendingStatsRequests = new Map<string, Promise<AvitoPeriodStats>>();
 const pendingAggregateStatsRequests = new Map<string, Promise<AvitoPeriodStats>>();
+const pendingAggregateStatsByDayRequests = new Map<
+  string,
+  Promise<Record<string, AvitoPeriodStats>>
+>();
 const AGGREGATE_STATS_CACHE_HASH = "stats-v2-totals";
+const AGGREGATE_STATS_BY_DAY_CACHE_HASH = "stats-v2-day";
 
 type AvitoStatPoint = {
   uniqViews?: number;
@@ -410,21 +415,24 @@ async function loadStatsCache(params: {
     .eq("account_id", params.accountId)
     .eq("date_from", params.dateFrom)
     .eq("date_to", params.dateTo)
-    .maybeSingle();
+    .order("updated_at", { ascending: false })
+    .limit(1);
 
-  if (error || !data) {
+  const row = data?.[0] ?? null;
+
+  if (error || !row) {
     return null;
   }
 
   return {
-    id: String(data.id),
-    views: Number(data.views || 0),
-    contacts: Number(data.contacts || 0),
-    favorites: Number(data.favorites || 0),
-    processedChunks: Number(data.processed_chunks || 0),
-    totalChunks: Number(data.total_chunks || 0),
-    itemIdsHash: String(data.item_ids_hash || ""),
-    isComplete: data.is_complete === true,
+    id: String(row.id),
+    views: Number(row.views || 0),
+    contacts: Number(row.contacts || 0),
+    favorites: Number(row.favorites || 0),
+    processedChunks: Number(row.processed_chunks || 0),
+    totalChunks: Number(row.total_chunks || 0),
+    itemIdsHash: String(row.item_ids_hash || ""),
+    isComplete: row.is_complete === true,
   };
 }
 
@@ -659,6 +667,94 @@ function parseAggregateStatsResponse(data: unknown): AvitoPeriodStats {
   };
 }
 
+function normalizeDateKey(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const match = value.match(/\d{4}-\d{2}-\d{2}/);
+  return match?.[0] ?? "";
+}
+
+function getGroupingDate(record: Record<string, unknown>): string {
+  const directDate =
+    normalizeDateKey(record.date) ||
+    normalizeDateKey(record.day) ||
+    normalizeDateKey(record.id) ||
+    normalizeDateKey(record.name) ||
+    normalizeDateKey(record.title) ||
+    normalizeDateKey(record.value) ||
+    normalizeDateKey(record.dateFrom) ||
+    normalizeDateKey(record.date_from);
+
+  if (directDate) {
+    return directDate;
+  }
+
+  for (const nestedValue of Object.values(record)) {
+    if (nestedValue && typeof nestedValue === "object" && !Array.isArray(nestedValue)) {
+      const nestedDate: string = getGroupingDate(
+        nestedValue as Record<string, unknown>
+      );
+
+      if (nestedDate) {
+        return nestedDate;
+      }
+    }
+  }
+
+  return "";
+}
+
+function addStats(left: AvitoPeriodStats, right: AvitoPeriodStats) {
+  left.views += right.views;
+  left.contacts += right.contacts;
+  left.favorites += right.favorites;
+}
+
+function parseAggregateStatsByDayResponse(data: unknown) {
+  const result =
+    data && typeof data === "object" && "result" in data
+      ? (data as Record<string, unknown>).result
+      : data;
+  const resultRecord =
+    result && typeof result === "object" && !Array.isArray(result)
+      ? (result as Record<string, unknown>)
+      : null;
+  const groupings = [
+    resultRecord?.groupings,
+    resultRecord?.groups,
+    resultRecord?.items,
+    Array.isArray(result) ? result : null,
+  ].find((value): value is unknown[] => Array.isArray(value));
+  const statsByDate: Record<string, AvitoPeriodStats> = {};
+
+  if (!groupings) {
+    return statsByDate;
+  }
+
+  for (const grouping of groupings) {
+    if (!grouping || typeof grouping !== "object") {
+      continue;
+    }
+
+    const record = grouping as Record<string, unknown>;
+    const date = getGroupingDate(record);
+
+    if (!date) {
+      continue;
+    }
+
+    if (!statsByDate[date]) {
+      statsByDate[date] = { views: 0, contacts: 0, favorites: 0 };
+    }
+
+    addStats(statsByDate[date], collectMetricsFromValue(record));
+  }
+
+  return statsByDate;
+}
+
 async function fetchAggregateStatsFromAvito(params: {
   accessToken: string;
   avitoUserId: string;
@@ -708,6 +804,52 @@ async function fetchAggregateStatsFromAvito(params: {
           body: JSON.stringify(body),
         },
         "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ Р°РіСЂРµРіРёСЂРѕРІР°РЅРЅРѕР№ СЃС‚Р°С‚РёСЃС‚РёРєРё"
+      );
+    } catch (error) {
+      lastError = error;
+
+      if (
+        !(error instanceof AvitoApiError) ||
+        ![400, 404, 422].includes(error.status)
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function fetchAggregateStatsByDayFromAvito(params: {
+  accessToken: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+}) {
+  const requestBodies = ["day", "date"].map((grouping) => ({
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    grouping,
+    metrics: coreAnalyticsMetrics,
+    limit: 1000,
+    offset: 0,
+  }));
+  let lastError: unknown = null;
+
+  for (const body of requestBodies) {
+    try {
+      return await fetchAvitoJson(
+        `https://api.avito.ru/stats/v2/accounts/${params.avitoUserId}/items`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${params.accessToken}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        },
+        "Ошибка получения статистики по дням"
       );
     } catch (error) {
       lastError = error;
@@ -786,6 +928,117 @@ export async function getAvitoAggregateStatsForPeriod(params: {
   });
 
   pendingAggregateStatsRequests.set(cacheKey, request);
+
+  return request;
+}
+
+export async function getAvitoAggregateStatsByDayForPeriod(params: {
+  accountId?: string;
+  accessToken: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+}): Promise<Record<string, AvitoPeriodStats>> {
+  const cacheKey = JSON.stringify({
+    accountId: params.accountId,
+    avitoUserId: params.avitoUserId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    itemIdsHash: AGGREGATE_STATS_BY_DAY_CACHE_HASH,
+  });
+  const pending = pendingAggregateStatsByDayRequests.get(cacheKey);
+
+  if (pending) {
+    return pending;
+  }
+
+  const request = (async () => {
+    const dates: string[] = [];
+    const start = new Date(`${params.dateFrom}T00:00:00.000Z`);
+    const end = new Date(`${params.dateTo}T00:00:00.000Z`);
+
+    for (
+      const current = new Date(start);
+      current <= end;
+      current.setUTCDate(current.getUTCDate() + 1)
+    ) {
+      dates.push(current.toISOString().slice(0, 10));
+    }
+
+    const cachedByDate: Record<string, AvitoPeriodStats> = {};
+
+    for (const date of dates) {
+      const cached = await loadStatsCache({
+        accountId: params.accountId,
+        dateFrom: date,
+        dateTo: date,
+      });
+
+      if (cached?.isComplete) {
+        cachedByDate[date] = {
+          views: cached.views,
+          contacts: cached.contacts,
+          favorites: cached.favorites,
+        };
+      }
+    }
+
+    if (dates.every((date) => cachedByDate[date])) {
+      return cachedByDate;
+    }
+
+    try {
+      const data = await fetchAggregateStatsByDayFromAvito(params);
+      const statsByDate = parseAggregateStatsByDayResponse(data);
+
+      for (const date of dates) {
+        const stats = statsByDate[date];
+
+        if (!stats) {
+          continue;
+        }
+
+        const cached = await loadStatsCache({
+          accountId: params.accountId,
+          dateFrom: date,
+          dateTo: date,
+        });
+
+        await saveStatsCache({
+          id: cached?.id,
+          accountId: params.accountId,
+          avitoUserId: params.avitoUserId,
+          dateFrom: date,
+          dateTo: date,
+          itemIdsHash: AGGREGATE_STATS_BY_DAY_CACHE_HASH,
+          views: stats.views,
+          contacts: stats.contacts,
+          favorites: stats.favorites,
+          processedChunks: 1,
+          totalChunks: 1,
+          isComplete: true,
+        });
+      }
+
+      return {
+        ...cachedByDate,
+        ...statsByDate,
+      };
+    } catch (error) {
+      if (
+        isAvitoRateLimitError(error) &&
+        Object.keys(cachedByDate).length > 0
+      ) {
+        return cachedByDate;
+      }
+
+      throw error;
+    }
+  })().finally(() => {
+    pendingAggregateStatsByDayRequests.delete(cacheKey);
+  });
+
+  pendingAggregateStatsByDayRequests.set(cacheKey, request);
 
   return request;
 }
