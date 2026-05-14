@@ -1,5 +1,8 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/app/lib/supabase/server";
+import { GET as sendAvitoTestReport } from "@/app/api/avito/test-report/route";
+
+export const dynamic = "force-dynamic";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -27,18 +30,6 @@ async function readJsonResponse(response: Response) {
       error: text.slice(0, 500),
     };
   }
-}
-
-function getInternalOrigin(request: Request) {
-  if (process.env.INTERNAL_APP_URL) {
-    return process.env.INTERNAL_APP_URL;
-  }
-
-  if (process.env.VERCEL) {
-    return new URL(request.url).origin;
-  }
-
-  return "http://127.0.0.1:3000";
 }
 
 export async function POST(request: Request) {
@@ -118,15 +109,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const origin = getInternalOrigin(request);
-    const url = new URL("/api/avito/test-report", origin);
+    const url = new URL("http://rivn.local/api/avito/test-report");
     url.searchParams.set("clientCode", client.client_code);
     url.searchParams.set("secret", cronSecret);
 
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      cache: "no-store",
-    });
+    const response = await sendAvitoTestReport(new Request(url));
 
     const result = await readJsonResponse(response);
 
