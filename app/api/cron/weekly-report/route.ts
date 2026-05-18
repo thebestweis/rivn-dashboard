@@ -1,9 +1,18 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
-import { getAvitoAggregateStatsForPeriod } from "@/app/api/avito/avito-api-helpers";
+import {
+  getAvitoAggregateStatsForPeriod,
+  getFriendlyAvitoErrorMessage,
+} from "@/app/api/avito/avito-api-helpers";
+import {
+  enqueueAvitoReportRetryJob,
+  loadAvitoReportSnapshot,
+  upsertAvitoReportSnapshot,
+  type AvitoSnapshotStatus,
+} from "@/app/api/avito/report-reliability";
 import {
   buildDialogAnalyticsBlock,
   getDialogAnalytics,
@@ -49,7 +58,7 @@ type PeriodStats = {
 
 function getSupabase() {
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Не найдены переменные Supabase");
+    throw new Error("РќРµ РЅР°Р№РґРµРЅС‹ РїРµСЂРµРјРµРЅРЅС‹Рµ Supabase");
   }
 
   return createClient(supabaseUrl, supabaseKey);
@@ -87,7 +96,7 @@ function formatNumber(value: number) {
 }
 
 function formatMoney(value: number) {
-  return `${formatNumber(value)} ₽`;
+  return `${formatNumber(value)} в‚Ѕ`;
 }
 
 function formatPercent(value: number) {
@@ -148,12 +157,12 @@ function buildMetricLine(
   if (type === "percent") formattedValue = formatPercent(current);
   if (type === "number") formattedValue = formatNumber(current);
 
-  return `— ${label}: ${formattedValue} (${formatChange(change)})`;
+  return `вЂ” ${label}: ${formattedValue} (${formatChange(change)})`;
 }
 
 async function sendTelegramMessage(chatId: string, text: string) {
   if (!telegramToken) {
-    throw new Error("Не найден TELEGRAM_BOT_TOKEN");
+    throw new Error("РќРµ РЅР°Р№РґРµРЅ TELEGRAM_BOT_TOKEN");
   }
 
   const response = await fetch(
@@ -197,18 +206,18 @@ async function resolveAvitoAccessToken(account: AvitoAccount) {
 
 function buildAccountErrorBlock(accountName: string, error: unknown) {
   const message =
-    error instanceof Error ? error.message : "Неизвестная ошибка Avito";
+    error instanceof Error ? error.message : "РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР° Avito";
   const safeMessage = message
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
   return [
-    "━━━━━━━━━━━━",
-    `Аккаунт: <b>${accountName}</b>`,
+    "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
+    `РђРєРєР°СѓРЅС‚: <b>${accountName}</b>`,
     "",
-    "⚠️ Аккаунт не проверен.",
-    `Причина: ${safeMessage}`,
+    "вљ пёЏ РђРєРєР°СѓРЅС‚ РЅРµ РїСЂРѕРІРµСЂРµРЅ.",
+    `РџСЂРёС‡РёРЅР°: ${safeMessage}`,
   ].join("\n");
 }
 
@@ -232,7 +241,7 @@ async function getAllItemIds(accessToken: string) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(`Ошибка получения объявлений: ${JSON.stringify(data)}`);
+      throw new Error(`РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РѕР±СЉСЏРІР»РµРЅРёР№: ${JSON.stringify(data)}`);
     }
 
     const resources = Array.isArray(data.resources) ? data.resources : [];
@@ -283,7 +292,7 @@ async function getStatsForPeriod(params: {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(`Ошибка получения статистики: ${JSON.stringify(data)}`);
+      throw new Error(`РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СЃС‚Р°С‚РёСЃС‚РёРєРё: ${JSON.stringify(data)}`);
     }
 
     const items = (data?.result?.items || []) as AvitoStatsItem[];
@@ -311,14 +320,40 @@ function buildAccountBlock(params: {
   previous: PeriodStats;
 }) {
   return [
-    "━━━━━━━━━━━━",
-    `Аккаунт: <b>${params.accountName}</b>`,
+    "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
+    `РђРєРєР°СѓРЅС‚: <b>${params.accountName}</b>`,
     "",
-    buildMetricLine("Расходы", params.current.expenses, params.previous.expenses, "money"),
-    buildMetricLine("Просмотры", params.current.views, params.previous.views, "number"),
-    buildMetricLine("Конверсия", params.current.conversion, params.previous.conversion, "percent"),
-    buildMetricLine("Контакты", params.current.contacts, params.previous.contacts, "number"),
-    buildMetricLine("Стоимость 1 контакта", params.current.costPerContact, params.previous.costPerContact, "money"),
+    buildMetricLine("Р Р°СЃС…РѕРґС‹", params.current.expenses, params.previous.expenses, "money"),
+    buildMetricLine("РџСЂРѕСЃРјРѕС‚СЂС‹", params.current.views, params.previous.views, "number"),
+    buildMetricLine("РљРѕРЅРІРµСЂСЃРёСЏ", params.current.conversion, params.previous.conversion, "percent"),
+    buildMetricLine("РљРѕРЅС‚Р°РєС‚С‹", params.current.contacts, params.previous.contacts, "number"),
+    buildMetricLine("РЎС‚РѕРёРјРѕСЃС‚СЊ 1 РєРѕРЅС‚Р°РєС‚Р°", params.current.costPerContact, params.previous.costPerContact, "money"),
+  ].join("\n");
+}
+
+function buildAccountPartialBlock(params: {
+  accountName: string;
+  current: PeriodStats;
+  previous: PeriodStats;
+  warnings: string[];
+}) {
+  const warningLines = params.warnings.map((warning) => {
+    const safeWarning = warning
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    return `вљ пёЏ ${safeWarning}`;
+  });
+
+  return [
+    buildAccountBlock({
+      accountName: params.accountName,
+      current: params.current,
+      previous: params.previous,
+    }),
+    "",
+    ...warningLines,
   ].join("\n");
 }
 
@@ -329,41 +364,51 @@ function buildWeeklyReport(params: {
   totalCurrent: PeriodStats;
   totalPrevious: PeriodStats;
   dialogAnalyticsBlock: string;
+  failedAccountsCount?: number;
 }) {
   const hasMultipleAccounts = params.accountBlocks.length > 1;
 
   const baseLines = [
-    `📊 <b>Еженедельный Avito-отчёт</b>`,
+    `рџ“Љ <b>Р•Р¶РµРЅРµРґРµР»СЊРЅС‹Р№ Avito-РѕС‚С‡С‘С‚</b>`,
     `<b>${params.periodLabel}</b>`,
     "",
     ...params.accountBlocks,
   ];
 
   if (!hasMultipleAccounts) {
+    const footer = params.failedAccountsCount
+      ? "✅ Отчёт сформирован. Аккаунт требует повторной проверки."
+      : "✅ Аккаунт проверен";
+
     return [
       ...baseLines,
       "",
       params.dialogAnalyticsBlock,
       "",
-      "✅ Аккаунт проверен",
+      footer,
     ].join("\n");
   }
+
+  const footer = params.failedAccountsCount
+    ? "✅ Отчёт сформирован. Часть аккаунтов требует повторной проверки."
+    : "✅ Аккаунты проверены";
+
 
   return [
     ...baseLines,
     "",
-    "━━━━━━━━━━━━",
-    "<b>Итого по всем аккаунтам</b>",
+    "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
+    "<b>РС‚РѕРіРѕ РїРѕ РІСЃРµРј Р°РєРєР°СѓРЅС‚Р°Рј</b>",
     "",
-    buildMetricLine("Расходы", params.totalCurrent.expenses, params.totalPrevious.expenses, "money"),
-    buildMetricLine("Просмотры", params.totalCurrent.views, params.totalPrevious.views, "number"),
-    buildMetricLine("Конверсия", params.totalCurrent.conversion, params.totalPrevious.conversion, "percent"),
-    buildMetricLine("Контакты", params.totalCurrent.contacts, params.totalPrevious.contacts, "number"),
-    buildMetricLine("Стоимость 1 контакта", params.totalCurrent.costPerContact, params.totalPrevious.costPerContact, "money"),
+    buildMetricLine("Р Р°СЃС…РѕРґС‹", params.totalCurrent.expenses, params.totalPrevious.expenses, "money"),
+    buildMetricLine("РџСЂРѕСЃРјРѕС‚СЂС‹", params.totalCurrent.views, params.totalPrevious.views, "number"),
+    buildMetricLine("РљРѕРЅРІРµСЂСЃРёСЏ", params.totalCurrent.conversion, params.totalPrevious.conversion, "percent"),
+    buildMetricLine("РљРѕРЅС‚Р°РєС‚С‹", params.totalCurrent.contacts, params.totalPrevious.contacts, "number"),
+    buildMetricLine("РЎС‚РѕРёРјРѕСЃС‚СЊ 1 РєРѕРЅС‚Р°РєС‚Р°", params.totalCurrent.costPerContact, params.totalPrevious.costPerContact, "money"),
     "",
     params.dialogAnalyticsBlock,
     "",
-    "✅ Аккаунты проверены",
+    footer,
   ].join("\n");
 }
 
@@ -376,6 +421,8 @@ export async function GET(request: Request) {
   }
 
   try {
+    const requestUrl = new URL(request.url);
+    const forceSend = requestUrl.searchParams.get("force") === "1";
     const supabase = getSupabase();
 
     const { data: clients, error: clientsError } = await supabase
@@ -389,7 +436,7 @@ export async function GET(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Ошибка получения клиентов: ${clientsError.message}`,
+          error: `РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РєР»РёРµРЅС‚РѕРІ: ${clientsError.message}`,
         },
         { status: 500 }
       );
@@ -399,7 +446,7 @@ export async function GET(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Активные клиенты с Telegram chat_id не найдены",
+          error: "РђРєС‚РёРІРЅС‹Рµ РєР»РёРµРЅС‚С‹ СЃ Telegram chat_id РЅРµ РЅР°Р№РґРµРЅС‹",
         },
         { status: 404 }
       );
@@ -420,7 +467,7 @@ export async function GET(request: Request) {
     const prevStartDate = toDateOnly(prevStart);
     const prevEndDate = toDateOnly(prevEnd);
 
-    const periodLabel = `${formatDate(currentStart)} — ${formatDate(currentEnd)}`;
+    const periodLabel = `${formatDate(currentStart)} вЂ” ${formatDate(currentEnd)}`;
     const weekKey = `${currentStartDate}_${currentEndDate}`;
 
     const results: {
@@ -443,13 +490,13 @@ export async function GET(request: Request) {
           .eq("status", "success")
           .maybeSingle();
 
-        if (existingLog) {
+        if (existingLog && !forceSend) {
           results.push({
             clientId: client.id,
             clientName: client.name,
             status: "skipped",
             accountsCount: 0,
-            error: "Weekly отчёт уже был отправлен за этот период",
+            error: "Weekly РѕС‚С‡С‘С‚ СѓР¶Рµ Р±С‹Р» РѕС‚РїСЂР°РІР»РµРЅ Р·Р° СЌС‚РѕС‚ РїРµСЂРёРѕРґ",
           });
 
           continue;
@@ -462,7 +509,7 @@ export async function GET(request: Request) {
           .eq("is_active", true);
 
         if (accountsError) {
-          throw new Error(`Ошибка получения аккаунтов: ${accountsError.message}`);
+          throw new Error(`РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ Р°РєРєР°СѓРЅС‚РѕРІ: ${accountsError.message}`);
         }
 
         if (!accounts || accounts.length === 0) {
@@ -471,7 +518,7 @@ export async function GET(request: Request) {
             clientName: client.name,
             status: "skipped",
             accountsCount: 0,
-            error: "Активные Avito-аккаунты клиента не найдены",
+            error: "РђРєС‚РёРІРЅС‹Рµ Avito-Р°РєРєР°СѓРЅС‚С‹ РєР»РёРµРЅС‚Р° РЅРµ РЅР°Р№РґРµРЅС‹",
           });
 
           continue;
@@ -497,16 +544,17 @@ export async function GET(request: Request) {
           favorites: 0,
           expenses: 0,
         };
+        let failedAccountsCount = 0;
 
         for (const account of accounts as AvitoAccount[]) {
           try {
           if (!account.avito_user_id) {
             accountBlocks.push(
               [
-                "━━━━━━━━━━━━",
-                `Аккаунт: <b>${account.name}</b>`,
+                "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
+                `РђРєРєР°СѓРЅС‚: <b>${account.name}</b>`,
                 "",
-                "⚠️ Аккаунт не проверен: нет avito_user_id.",
+                "вљ пёЏ РђРєРєР°СѓРЅС‚ РЅРµ РїСЂРѕРІРµСЂРµРЅ: РЅРµС‚ avito_user_id.",
               ].join("\n")
             );
 
@@ -514,40 +562,136 @@ export async function GET(request: Request) {
           }
 
           const accessToken = await resolveAvitoAccessToken(account);
-          const currentStatsRaw = await getAvitoAggregateStatsForPeriod({
-            accountId: account.id,
-            accessToken,
-            avitoUserId: account.avito_user_id,
-            dateFrom: currentStartDate,
-            dateTo: currentEndDate,
-          });
+          const warnings: string[] = [];
+          let statsStatus: AvitoSnapshotStatus = "success";
+          let expensesStatus: AvitoSnapshotStatus = "success";
+          let currentStatsRaw = { views: 0, contacts: 0, favorites: 0 };
+          let previousStatsRaw = { views: 0, contacts: 0, favorites: 0 };
+          let currentAvitoSpendings = {
+            total: 0,
+            presence: 0,
+            promotion: 0,
+            commission: 0,
+            rest: 0,
+          };
+          let previousAvitoSpendings = {
+            total: 0,
+            presence: 0,
+            promotion: 0,
+            commission: 0,
+            rest: 0,
+          };
 
-          const previousStatsRaw = await getAvitoAggregateStatsForPeriod({
-            accountId: account.id,
-            accessToken,
-            avitoUserId: account.avito_user_id,
-            dateFrom: prevStartDate,
-            dateTo: prevEndDate,
-          });
+          try {
+            currentStatsRaw = await getAvitoAggregateStatsForPeriod({
+              accountId: account.id,
+              accessToken,
+              avitoUserId: account.avito_user_id,
+              dateFrom: currentStartDate,
+              dateTo: currentEndDate,
+            });
 
-          const rawAvitoSpendings = await fetchAvitoSpendings({
-            accountId: account.id,
-            accessToken,
-            userId: account.avito_user_id,
-            dateFrom: prevStartDate,
-            dateTo: currentEndDate,
-            grouping: "day",
-          });
+            previousStatsRaw = await getAvitoAggregateStatsForPeriod({
+              accountId: account.id,
+              accessToken,
+              avitoUserId: account.avito_user_id,
+              dateFrom: prevStartDate,
+              dateTo: prevEndDate,
+            });
+          } catch (statsError) {
+            statsStatus = "failed";
+            const cachedCurrent = await loadAvitoReportSnapshot({
+              supabase,
+              accountId: account.id,
+              reportType: "weekly",
+              periodStart: currentStartDate,
+              periodEnd: currentEndDate,
+            });
+            const cachedPrevious = await loadAvitoReportSnapshot({
+              supabase,
+              accountId: account.id,
+              reportType: "weekly",
+              periodStart: prevStartDate,
+              periodEnd: prevEndDate,
+            });
 
-          const currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-            dateFrom: currentStartDate,
-            dateTo: currentEndDate,
-          });
+            if (
+              cachedCurrent?.statsStatus === "success" &&
+              cachedCurrent.qualityStatus !== "critical"
+            ) {
+              currentStatsRaw = {
+                views: cachedCurrent.views,
+                contacts: cachedCurrent.contacts,
+                favorites: cachedCurrent.favorites,
+              };
+              statsStatus = "success";
 
-          const previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-            dateFrom: prevStartDate,
-            dateTo: prevEndDate,
-          });
+              if (cachedPrevious?.statsStatus === "success") {
+                previousStatsRaw = {
+                  views: cachedPrevious.views,
+                  contacts: cachedPrevious.contacts,
+                  favorites: cachedPrevious.favorites,
+                };
+              }
+            } else {
+              warnings.push(
+                `Stats are temporarily unavailable: ${getFriendlyAvitoErrorMessage(statsError)}`
+              );
+            }
+          }
+
+          try {
+            const rawAvitoSpendings = await fetchAvitoSpendings({
+              accountId: account.id,
+              accessToken,
+              userId: account.avito_user_id,
+              dateFrom: prevStartDate,
+              dateTo: currentEndDate,
+              grouping: "day",
+            });
+
+            currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
+              dateFrom: currentStartDate,
+              dateTo: currentEndDate,
+            });
+
+            previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
+              dateFrom: prevStartDate,
+              dateTo: prevEndDate,
+            });
+          } catch (spendingsError) {
+            expensesStatus = "failed";
+            const cachedCurrent = await loadAvitoReportSnapshot({
+              supabase,
+              accountId: account.id,
+              reportType: "weekly",
+              periodStart: currentStartDate,
+              periodEnd: currentEndDate,
+            });
+            const cachedPrevious = await loadAvitoReportSnapshot({
+              supabase,
+              accountId: account.id,
+              reportType: "weekly",
+              periodStart: prevStartDate,
+              periodEnd: prevEndDate,
+            });
+
+            if (
+              cachedCurrent?.expensesStatus === "success" &&
+              cachedCurrent.qualityStatus !== "critical"
+            ) {
+              currentAvitoSpendings.total = cachedCurrent.expenses;
+              expensesStatus = "success";
+
+              if (cachedPrevious?.expensesStatus === "success") {
+                previousAvitoSpendings.total = cachedPrevious.expenses;
+              }
+            } else {
+              warnings.push(
+                `Expenses are temporarily unavailable: ${getFriendlyAvitoErrorMessage(spendingsError)}`
+              );
+            }
+          }
 
           const currentStats = buildStats({
             ...currentStatsRaw,
@@ -558,6 +702,41 @@ export async function GET(request: Request) {
             ...previousStatsRaw,
             expenses: previousAvitoSpendings.total,
           });
+
+          const snapshot = await upsertAvitoReportSnapshot({
+            supabase,
+            clientId: client.id,
+            accountId: account.id,
+            reportType: "weekly",
+            periodStart: currentStartDate,
+            periodEnd: currentEndDate,
+            current: currentStats,
+            previous: previousStats,
+            statsStatus,
+            expensesStatus,
+            warnings,
+            lastError: warnings.join("\n") || null,
+            raw: {
+              accountName: account.name,
+              previous: previousStats,
+              currentAvitoSpendings,
+              previousAvitoSpendings,
+            },
+          });
+
+          if (snapshot.qualityStatus !== "ok") {
+            await enqueueAvitoReportRetryJob({
+              supabase,
+              clientId: client.id,
+              accountId: account.id,
+              reportType: "weekly",
+              periodStart: currentStartDate,
+              periodEnd: currentEndDate,
+              priority: snapshot.qualityStatus === "critical" ? 10 : 50,
+              delayMinutes: 30,
+              lastError: snapshot.warnings.join("\n") || null,
+            });
+          }
 
           try {
             const dialogAnalytics = await getDialogAnalytics({
@@ -585,14 +764,27 @@ export async function GET(request: Request) {
           totalPreviousRaw.favorites += previousStats.favorites;
           totalPreviousRaw.expenses += previousStats.expenses;
 
-          accountBlocks.push(
-            buildAccountBlock({
-              accountName: account.name,
-              current: currentStats,
-              previous: previousStats,
-            })
-          );
+          if (warnings.length > 0) {
+            failedAccountsCount += 1;
+            accountBlocks.push(
+              buildAccountPartialBlock({
+                accountName: account.name,
+                current: currentStats,
+                previous: previousStats,
+                warnings,
+              })
+            );
+          } else {
+            accountBlocks.push(
+              buildAccountBlock({
+                accountName: account.name,
+                current: currentStats,
+                previous: previousStats,
+              })
+            );
+          }
           } catch (accountError) {
+            failedAccountsCount += 1;
             accountBlocks.push(buildAccountErrorBlock(account.name, accountError));
 
             await supabase.from("avito_report_logs").insert({
@@ -605,7 +797,7 @@ export async function GET(request: Request) {
               message:
                 accountError instanceof Error
                   ? accountError.message
-                  : "Неизвестная ошибка Avito-аккаунта",
+                  : "РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР° Avito-Р°РєРєР°СѓРЅС‚Р°",
             });
           }
         }
@@ -623,6 +815,7 @@ export async function GET(request: Request) {
           totalCurrent,
           totalPrevious,
           dialogAnalyticsBlock,
+          failedAccountsCount,
         });
 
         await sendTelegramMessage(client.telegram_chat_id, reportText);
@@ -647,7 +840,7 @@ export async function GET(request: Request) {
         const errorMessage =
           clientError instanceof Error
             ? clientError.message
-            : "Неизвестная ошибка клиента";
+            : "РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР° РєР»РёРµРЅС‚Р°";
 
         results.push({
           clientId: client.id,
@@ -671,7 +864,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: "Weekly Avito-отчёты обработаны по всем активным клиентам",
+      message: "Weekly Avito-РѕС‚С‡С‘С‚С‹ РѕР±СЂР°Р±РѕС‚Р°РЅС‹ РїРѕ РІСЃРµРј Р°РєС‚РёРІРЅС‹Рј РєР»РёРµРЅС‚Р°Рј",
       period: {
         currentStart: currentStartDate,
         currentEnd: currentEndDate,
@@ -688,7 +881,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Ошибка weekly report",
+        error: error instanceof Error ? error.message : "РћС€РёР±РєР° weekly report",
       },
       { status: 500 }
     );

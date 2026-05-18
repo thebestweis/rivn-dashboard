@@ -7,6 +7,12 @@ import {
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
+import {
+  enqueueAvitoReportRetryJob,
+  loadAvitoReportSnapshot,
+  upsertAvitoReportSnapshot,
+  type AvitoSnapshotStatus,
+} from "@/app/api/avito/report-reliability";
 
 import { verifyCronSecret } from "../../cron/verify-cron-secret";
 
@@ -603,6 +609,8 @@ export async function GET(request: Request) {
 
           const accessToken = await resolveAvitoAccessToken(account);
           const warnings: string[] = [];
+          let statsStatus: AvitoSnapshotStatus = "success";
+          let expensesStatus: AvitoSnapshotStatus = "success";
           let currentStatsRaw = { views: 0, contacts: 0, favorites: 0 };
           let previousStatsRaw = { views: 0, contacts: 0, favorites: 0 };
           let currentAvitoSpendings = {
@@ -632,9 +640,45 @@ export async function GET(request: Request) {
             currentStatsRaw = statsByDay[yesterday] ?? currentStatsRaw;
             previousStatsRaw = statsByDay[beforeYesterday] ?? previousStatsRaw;
           } catch (statsError) {
-            warnings.push(
-              `Статистика просмотров и контактов временно недоступна: ${getFriendlyAvitoErrorMessage(statsError)}`
-            );
+            statsStatus = "failed";
+            const cachedCurrent = await loadAvitoReportSnapshot({
+              supabase,
+              accountId: account.id,
+              reportType: "daily",
+              periodStart: yesterday,
+              periodEnd: yesterday,
+            });
+            const cachedPrevious = await loadAvitoReportSnapshot({
+              supabase,
+              accountId: account.id,
+              reportType: "daily",
+              periodStart: beforeYesterday,
+              periodEnd: beforeYesterday,
+            });
+
+            if (
+              cachedCurrent?.statsStatus === "success" &&
+              cachedCurrent.qualityStatus !== "critical"
+            ) {
+              currentStatsRaw = {
+                views: cachedCurrent.views,
+                contacts: cachedCurrent.contacts,
+                favorites: cachedCurrent.favorites,
+              };
+              statsStatus = "success";
+
+              if (cachedPrevious?.statsStatus === "success") {
+                previousStatsRaw = {
+                  views: cachedPrevious.views,
+                  contacts: cachedPrevious.contacts,
+                  favorites: cachedPrevious.favorites,
+                };
+              }
+            } else {
+              warnings.push(
+                `Статистика просмотров и контактов временно недоступна: ${getFriendlyAvitoErrorMessage(statsError)}`
+              );
+            }
           }
 
           try {
@@ -657,9 +701,37 @@ export async function GET(request: Request) {
               dateTo: beforeYesterday,
             });
           } catch (spendingsError) {
-            warnings.push(
-              `Расходы временно недоступны: ${getFriendlyAvitoErrorMessage(spendingsError)}`
-            );
+            expensesStatus = "failed";
+            const cachedCurrent = await loadAvitoReportSnapshot({
+              supabase,
+              accountId: account.id,
+              reportType: "daily",
+              periodStart: yesterday,
+              periodEnd: yesterday,
+            });
+            const cachedPrevious = await loadAvitoReportSnapshot({
+              supabase,
+              accountId: account.id,
+              reportType: "daily",
+              periodStart: beforeYesterday,
+              periodEnd: beforeYesterday,
+            });
+
+            if (
+              cachedCurrent?.expensesStatus === "success" &&
+              cachedCurrent.qualityStatus !== "critical"
+            ) {
+              currentAvitoSpendings.total = cachedCurrent.expenses;
+              expensesStatus = "success";
+
+              if (cachedPrevious?.expensesStatus === "success") {
+                previousAvitoSpendings.total = cachedPrevious.expenses;
+              }
+            } else {
+              warnings.push(
+                `Расходы временно недоступны: ${getFriendlyAvitoErrorMessage(spendingsError)}`
+              );
+            }
           }
 
           const currentStats = buildStats({
@@ -671,6 +743,41 @@ export async function GET(request: Request) {
             ...previousStatsRaw,
             expenses: previousAvitoSpendings.total,
           });
+
+          const snapshot = await upsertAvitoReportSnapshot({
+            supabase,
+            clientId: client.id,
+            accountId: account.id,
+            reportType: "daily",
+            periodStart: yesterday,
+            periodEnd: yesterday,
+            current: currentStats,
+            previous: previousStats,
+            statsStatus,
+            expensesStatus,
+            warnings,
+            lastError: warnings.join("\n") || null,
+            raw: {
+              accountName: account.name,
+              previous: previousStats,
+              currentAvitoSpendings,
+              previousAvitoSpendings,
+            },
+          });
+
+          if (snapshot.qualityStatus !== "ok") {
+            await enqueueAvitoReportRetryJob({
+              supabase,
+              clientId: client.id,
+              accountId: account.id,
+              reportType: "daily",
+              periodStart: yesterday,
+              periodEnd: yesterday,
+              priority: snapshot.qualityStatus === "critical" ? 10 : 50,
+              delayMinutes: 20,
+              lastError: snapshot.warnings.join("\n") || null,
+            });
+          }
 
           totalCurrentRaw.views += currentStats.views;
           totalCurrentRaw.contacts += currentStats.contacts;

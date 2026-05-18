@@ -771,6 +771,37 @@ async function getCachedChunkedStatsByDay(params: {
   return statsByDate;
 }
 
+async function getCachedChunkedStatsForRange(params: {
+  accountId?: string;
+  accessToken: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+}) {
+  const itemIds = await getCachedAvitoItemIds({
+    accountId: params.accountId,
+    avitoUserId: params.avitoUserId,
+    accessToken: params.accessToken,
+  });
+
+  if (!itemIds.length) {
+    return {
+      views: 0,
+      contacts: 0,
+      favorites: 0,
+    };
+  }
+
+  return getCachedAvitoStatsForPeriod({
+    accountId: params.accountId,
+    accessToken: params.accessToken,
+    avitoUserId: params.avitoUserId,
+    itemIds,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+  });
+}
+
 function parseAggregateStatsByDayResponse(data: unknown) {
   const result =
     data && typeof data === "object" && "result" in data
@@ -965,8 +996,30 @@ export async function getAvitoAggregateStatsForPeriod(params: {
       };
     }
 
-    const data = await fetchAggregateStatsFromAvito(params);
-    const stats = parseAggregateStatsResponse(data);
+    let stats: AvitoPeriodStats;
+
+    try {
+      const data = await fetchAggregateStatsFromAvito(params);
+      stats = parseAggregateStatsResponse(data);
+
+      if (!hasStatsValue(stats)) {
+        stats = await getCachedChunkedStatsForRange(params);
+      }
+    } catch (error) {
+      if (cached?.isComplete) {
+        return {
+          views: cached.views,
+          contacts: cached.contacts,
+          favorites: cached.favorites,
+        };
+      }
+
+      stats = await getCachedChunkedStatsForRange(params);
+
+      if (!hasStatsValue(stats)) {
+        throw error;
+      }
+    }
 
     await saveStatsCache({
       id: cached?.id,

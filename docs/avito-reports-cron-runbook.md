@@ -27,7 +27,7 @@ Weekly reports should run at 10:00 Moscow time on Mondays:
 Use this only for testing:
 
 ```txt
-https://rivn-dashboard.vercel.app/api/cron/daily?secret=CRON_SECRET&force=1
+https://rivnos.ru/api/cron/daily?secret=CRON_SECRET&force=1
 ```
 
 `force=1` bypasses the duplicate protection and sends the report again for the same period.
@@ -37,7 +37,7 @@ https://rivn-dashboard.vercel.app/api/cron/daily?secret=CRON_SECRET&force=1
 Use this for production retries:
 
 ```txt
-https://rivn-dashboard.vercel.app/api/cron/daily?secret=CRON_SECRET
+https://rivnos.ru/api/cron/daily?secret=CRON_SECRET
 ```
 
 This does not bypass duplicate protection. If one client already received a successful daily report, they will be skipped. If another client failed, the retry can still send their report.
@@ -51,8 +51,13 @@ For reliable production delivery, keep Vercel cron as a fallback and add an exte
 - 09:00 MSK: `/api/cron/daily?secret=CRON_SECRET`
 - 09:15 MSK: `/api/cron/daily?secret=CRON_SECRET`
 - 09:30 MSK: `/api/cron/daily?secret=CRON_SECRET`
+- Every 30-60 minutes: `/api/cron/avito-report-sync?secret=CRON_SECRET`
+- Before reports, for example 08:30 MSK: `/api/cron/avito-cache-warmup?secret=CRON_SECRET`
 
 Because duplicate protection is checked per client and period, retries should not duplicate successful reports.
+
+`/api/cron/avito-cache-warmup` prepares Avito data before users receive reports.
+`/api/cron/avito-report-sync` retries accounts that got a partial or suspicious snapshot, so the next report can reuse prepared data instead of sending false zero metrics.
 
 The project also has Vercel retry routes:
 

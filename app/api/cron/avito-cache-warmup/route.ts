@@ -6,6 +6,8 @@ import {
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
+import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
+import { upsertAvitoReportSnapshot } from "@/app/api/avito/report-reliability";
 import { verifyCronSecret } from "../verify-cron-secret";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -57,6 +59,24 @@ async function resolveAvitoAccessToken(account: AvitoAccount) {
   }
 
   return getAvitoAccessToken();
+}
+
+function buildStats(params: {
+  views: number;
+  contacts: number;
+  favorites: number;
+  expenses?: number;
+}) {
+  const expenses = params.expenses || 0;
+
+  return {
+    views: params.views,
+    contacts: params.contacts,
+    favorites: params.favorites,
+    expenses,
+    conversion: params.views > 0 ? (params.contacts / params.views) * 100 : 0,
+    costPerContact: params.contacts > 0 ? expenses / params.contacts : 0,
+  };
 }
 
 export async function GET(request: Request) {
@@ -122,7 +142,7 @@ export async function GET(request: Request) {
         }
 
         const accessToken = await resolveAvitoAccessToken(account);
-        await getAvitoAggregateStatsByDayForPeriod({
+        const statsByDay = await getAvitoAggregateStatsByDayForPeriod({
           accountId: account.id,
           accessToken,
           avitoUserId: account.avito_user_id,
@@ -130,13 +150,56 @@ export async function GET(request: Request) {
           dateTo: yesterday,
         });
 
-        await fetchAvitoSpendings({
+        const rawSpendings = await fetchAvitoSpendings({
           accountId: account.id,
           accessToken,
           userId: account.avito_user_id,
           dateFrom: beforeYesterday,
           dateTo: yesterday,
           grouping: "day",
+        });
+
+        const currentSpendings = parseAvitoSpendings(rawSpendings, {
+          dateFrom: yesterday,
+          dateTo: yesterday,
+        });
+        const previousSpendings = parseAvitoSpendings(rawSpendings, {
+          dateFrom: beforeYesterday,
+          dateTo: beforeYesterday,
+        });
+        const currentStats = buildStats({
+          ...(statsByDay[yesterday] ?? {
+            views: 0,
+            contacts: 0,
+            favorites: 0,
+          }),
+          expenses: currentSpendings.total,
+        });
+        const previousStats = buildStats({
+          ...(statsByDay[beforeYesterday] ?? {
+            views: 0,
+            contacts: 0,
+            favorites: 0,
+          }),
+          expenses: previousSpendings.total,
+        });
+
+        await upsertAvitoReportSnapshot({
+          supabase,
+          clientId: account.client_id,
+          accountId: account.id,
+          reportType: "daily",
+          periodStart: yesterday,
+          periodEnd: yesterday,
+          current: currentStats,
+          previous: previousStats,
+          statsStatus: "success",
+          expensesStatus: "success",
+          raw: {
+            accountName: account.name,
+            source: "cache_warmup",
+            previous: previousStats,
+          },
         });
 
         results.push({
