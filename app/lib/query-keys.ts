@@ -23,6 +23,8 @@ export const queryKeys = {
   payments: ["payments"] as const,
   paymentsByWorkspace: (workspaceId: string) =>
     ["payments", "workspace", workspaceId] as const,
+  paymentsByWorkspaceFilters: (workspaceId: string, filtersKey: string) =>
+    ["payments", "workspace", workspaceId, filtersKey] as const,
 
   expenses: ["expenses"] as const,
   expensesByWorkspace: (workspaceId: string) =>

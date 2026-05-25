@@ -318,13 +318,19 @@ export function getBillingPhase(billing: WorkspaceBilling | null): {
     };
   }
 
+  const expiredByDate = isBillingExpired(billing);
+  const isTrial = billing.subscription_status === "trial";
+  const isActive =
+    billing.subscription_status === "active" || (isTrial && !expiredByDate);
+
   return {
-    isTrial: billing.subscription_status === "trial",
-    isActive: billing.subscription_status === "active",
+    isTrial,
+    isActive,
     isPastDue: billing.subscription_status === "past_due",
     isCanceled: billing.subscription_status === "canceled",
-    isExpired: billing.subscription_status === "expired",
+    isExpired: billing.subscription_status === "expired" || expiredByDate,
     isReadOnly:
+      expiredByDate ||
       billing.subscription_status === "past_due" ||
       billing.subscription_status === "canceled" ||
       billing.subscription_status === "expired",

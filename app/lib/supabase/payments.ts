@@ -24,6 +24,25 @@ type DbPaymentRow = {
   updated_at: string;
 };
 
+export type PaymentListStatus = "planned" | "paid" | "all";
+export type PaymentSortField =
+  | "client"
+  | "project"
+  | "created_at"
+  | "due_date"
+  | "paid_date"
+  | "amount"
+  | "status";
+export type PaymentSortDirection = "asc" | "desc";
+
+export type PaymentListFilters = {
+  status?: PaymentListStatus;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: PaymentSortField;
+  sortDirection?: PaymentSortDirection;
+};
+
 function mapPayment(item: DbPaymentRow): Payment {
   return {
     id: item.id,
@@ -42,14 +61,56 @@ function mapPayment(item: DbPaymentRow): Payment {
   };
 }
 
-export async function getPaymentsFromSupabase(): Promise<Payment[]> {
-  const { supabase, workspace } = await getAppContext();
+function getPaymentDateColumn(status: PaymentListStatus) {
+  return status === "paid" ? "paid_date" : "due_date";
+}
 
-  const { data, error } = await supabase
+function getDbSortColumn(
+  sortBy: PaymentSortField | undefined,
+  status: PaymentListStatus
+) {
+  if (sortBy === "amount" || sortBy === "status" || sortBy === "created_at") {
+    return sortBy;
+  }
+
+  if (sortBy === "paid_date") return "paid_date";
+  if (sortBy === "due_date") return "due_date";
+
+  return getPaymentDateColumn(status);
+}
+
+export async function getPaymentsFromSupabase(
+  filters: PaymentListFilters = {}
+): Promise<Payment[]> {
+  const { supabase, workspace } = await getAppContext();
+  const status = filters.status ?? "all";
+  const dateColumn = getPaymentDateColumn(status);
+  const sortColumn = getDbSortColumn(filters.sortBy, status);
+  const ascending = filters.sortDirection === "asc";
+
+  let query = supabase
     .from("payments")
     .select("*")
-    .eq("workspace_id", workspace.id)
-    .order("due_date", { ascending: false })
+    .eq("workspace_id", workspace.id);
+
+  if (status === "paid") {
+    query = query.eq("status", "paid");
+  }
+
+  if (status === "planned") {
+    query = query.neq("status", "paid");
+  }
+
+  if (filters.dateFrom) {
+    query = query.gte(dateColumn, filters.dateFrom);
+  }
+
+  if (filters.dateTo) {
+    query = query.lte(dateColumn, filters.dateTo);
+  }
+
+  const { data, error } = await query
+    .order(sortColumn, { ascending, nullsFirst: false })
     .order("created_at", { ascending: false });
 
   if (error) {

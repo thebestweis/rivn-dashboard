@@ -15,8 +15,13 @@ export const config = {
     "/expenses/:path*",
     "/payroll/:path*",
     "/analytics/:path*",
+    "/avito-reports/:path*",
+    "/crm/:path*",
+    "/billing/:path*",
     "/settings/:path*",
+    "/admin/:path*",
     "/login",
     "/register",
+    "/session-expired",
   ],
 };

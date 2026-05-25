@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "./app-sidebar";
 import { AccessDenied } from "../access/access-denied";
+import { NotificationCenter } from "../notifications/notification-center";
 import { usePathAccess } from "../../lib/use-page-access";
 import { useAppContextState } from "../../providers/app-context-provider";
 import { AppDataPreloader } from "../../providers/app-data-preloader";
@@ -29,6 +31,19 @@ function isInternalAppRoute(pathname: string) {
   );
 }
 
+function getDaysLeft(date: string | null | undefined) {
+  if (!date) return null;
+
+  const end = new Date(date);
+  if (Number.isNaN(end.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  return Math.max(0, Math.ceil((end.getTime() - today.getTime()) / 86400000));
+}
+
 export function RootAppShell({
   children,
 }: {
@@ -38,18 +53,56 @@ export function RootAppShell({
   const {
     isLoading,
     hasAccess,
-    isBillingReadOnly,
-    canInteract,
   } = usePathAccess(pathname);
   const {
     isReady: isAppContextReady,
     errorMessage: appContextErrorMessage,
     refreshAppContext,
+    billingAccess,
+    workspace,
   } = useAppContextState();
+  const [isTrialWelcomeOpen, setIsTrialWelcomeOpen] = useState(false);
 
   const isInternalRoute = isInternalAppRoute(pathname);
   const isBillingRoute =
     pathname === "/billing" || pathname.startsWith("/billing/");
+  const trialDaysLeft = useMemo(
+    () => getDaysLeft(billingAccess?.endDate),
+    [billingAccess?.endDate]
+  );
+  const isTrialActive =
+    Boolean(billingAccess?.isTrial) &&
+    !billingAccess?.isExpired &&
+    trialDaysLeft !== null &&
+    trialDaysLeft > 0;
+  const shouldShowTrialEndingBanner =
+    isTrialActive && trialDaysLeft !== null && trialDaysLeft <= 4;
+
+  useEffect(() => {
+    if (!isInternalRoute || !isTrialActive || !workspace?.id) return;
+
+    const storageKey = `rivn_trial_welcome_seen_${workspace.id}_${billingAccess?.endDate ?? "trial"}`;
+
+    try {
+      if (localStorage.getItem(storageKey) !== "1") {
+        setIsTrialWelcomeOpen(true);
+      }
+    } catch {
+      setIsTrialWelcomeOpen(true);
+    }
+  }, [billingAccess?.endDate, isInternalRoute, isTrialActive, workspace?.id]);
+
+  function closeTrialWelcome() {
+    setIsTrialWelcomeOpen(false);
+
+    if (!workspace?.id) return;
+
+    const storageKey = `rivn_trial_welcome_seen_${workspace.id}_${billingAccess?.endDate ?? "trial"}`;
+
+    try {
+      localStorage.setItem(storageKey, "1");
+    } catch {}
+  }
 
   if (!isInternalRoute) {
     return <>{children}</>;
@@ -114,25 +167,51 @@ export function RootAppShell({
       <AppDataPreloader />
       <div className="flex min-h-screen min-w-0 overflow-x-hidden">
         <AppSidebar />
+        <NotificationCenter />
 
         <div className="min-w-0 flex-1 overflow-x-hidden pb-24 pt-20 lg:pb-0 lg:pt-0">
           <div className="relative min-h-screen overflow-x-hidden">
-            {isBillingReadOnly && !isBillingRoute ? (
-              <div className="sticky top-0 z-20 border-b border-amber-500/20 bg-amber-500/10 px-5 py-3 text-sm text-amber-200 backdrop-blur-sm lg:px-8">
-                Активирована пробная подписка в режиме TEAM. Приятного использования!
+            {shouldShowTrialEndingBanner && !isBillingRoute ? (
+              <div className="sticky top-0 z-20 border-b border-amber-500/25 bg-amber-500/10 px-5 py-3 text-sm text-amber-100 backdrop-blur-sm lg:px-8">
+                Пробная подписка заканчивается через {trialDaysLeft}{" "}
+                {trialDaysLeft === 1 ? "день" : "дня"}. Пополни баланс и
+                оформи подписку, чтобы продолжить работу без паузы.
               </div>
             ) : null}
 
             <div className="relative">
               {children}
 
-              {!isLoading && !canInteract && !isBillingRoute ? (
-                <div className="absolute inset-0 z-10 bg-[#0B0F1A]/35 backdrop-blur-[1px]" />
-              ) : null}
             </div>
           </div>
         </div>
       </div>
+
+      {isTrialWelcomeOpen ? (
+        <button
+          type="button"
+          onClick={closeTrialWelcome}
+          className="fixed inset-0 z-50 flex cursor-default items-center justify-center bg-[#020617]/55 px-4 text-left backdrop-blur-sm"
+        >
+          <span className="block w-full max-w-xl cursor-default rounded-[28px] border border-emerald-400/20 bg-[#121826] p-6 text-white shadow-[0_30px_90px_rgba(0,0,0,0.45)] sm:p-7">
+            <span className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">
+              Пробный период активирован
+            </span>
+            <span className="mt-5 block text-2xl font-semibold tracking-tight sm:text-3xl">
+              Добро пожаловать в RIVN OS
+            </span>
+            <span className="mt-4 block text-sm leading-6 text-white/65">
+              Тебе доступен пробный период на {trialDaysLeft ?? "несколько"}{" "}
+              {trialDaysLeft === 1 ? "день" : "дня"}. Все основные функции
+              работают как на полноценном тарифе: можно создавать клиентов,
+              проекты, задачи, платежи и подключать отчёты.
+            </span>
+            <span className="mt-6 inline-flex rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-[#06120f] shadow-[0_18px_45px_rgba(16,185,129,0.28)]">
+              Понятно, начать работу
+            </span>
+          </span>
+        </button>
+      ) : null}
     </div>
   );
 }

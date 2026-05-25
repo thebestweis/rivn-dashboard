@@ -24,6 +24,10 @@ import {
 } from "../lib/notifications-client";
 import { parseRubAmount } from "../lib/storage";
 import type { PaymentFormData } from "../lib/types/payment";
+import type {
+  PaymentSortDirection,
+  PaymentSortField,
+} from "../lib/supabase/payments";
 import {
   createPaymentInSupabase,
   deletePaymentFromSupabase,
@@ -78,6 +82,42 @@ interface PlannedPaymentRow {
 }
 
 type PaymentClientMap = Record<string, string>;
+type DatePreset = "month" | "7d" | "30d" | "all";
+
+function toInputDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getCurrentMonthRange() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  return {
+    from: toInputDate(start),
+    to: toInputDate(now),
+  };
+}
+
+function getPresetRange(preset: DatePreset) {
+  const now = new Date();
+
+  if (preset === "all") {
+    return { from: "", to: "" };
+  }
+
+  if (preset === "month") {
+    return getCurrentMonthRange();
+  }
+
+  const days = preset === "7d" ? 7 : 30;
+  const start = new Date(now);
+  start.setDate(now.getDate() - days + 1);
+
+  return {
+    from: toInputDate(start),
+    to: toInputDate(now),
+  };
+}
 
 function toSupabaseDate(value: string) {
   if (!value) return "";
@@ -126,6 +166,11 @@ function getPlannedStatus(payment: {
 
 function getClientDisplayName(client: ClientItem) {
   return client.name || client.clientName || client.title || "Без названия";
+}
+
+function compareText(a: string, b: string, direction: PaymentSortDirection) {
+  const result = a.localeCompare(b, "ru", { sensitivity: "base" });
+  return direction === "asc" ? result : -result;
 }
 
 function PaymentsStatsSkeleton() {
@@ -193,6 +238,12 @@ export default function PaymentsPage() {
     useSectionPermission("payments");
 
   const [activeTab, setActiveTab] = useState<"planned" | "fact">("planned");
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState<PaymentSortField>("due_date");
+  const [sortDirection, setSortDirection] =
+    useState<PaymentSortDirection>("asc");
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
     "success"
@@ -242,7 +293,18 @@ export default function PaymentsPage() {
     data: paymentsData = [],
     isLoading: isPaymentsLoading,
     error: paymentsError,
-  } = usePaymentsQuery(hasAccess);
+  } = usePaymentsQuery(hasAccess, {
+    status: activeTab === "fact" ? "paid" : "planned",
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+    sortBy,
+    sortDirection,
+  });
+
+  useEffect(() => {
+    setSortBy(activeTab === "fact" ? "paid_date" : "due_date");
+    setSortDirection(activeTab === "fact" ? "desc" : "asc");
+  }, [activeTab]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -295,7 +357,7 @@ export default function PaymentsPage() {
   const factPayments = useMemo<FactPaymentRow[]>(() => {
     if (!hasAccess) return [];
 
-    return paymentsData
+    const mapped = paymentsData
       .filter((payment) => payment.status === "paid")
       .map((payment) => ({
         id: payment.id,
@@ -308,7 +370,17 @@ export default function PaymentsPage() {
         source: payment.notes ?? "",
         documentUrl: payment.document_url ?? "",
       }));
-  }, [hasAccess, paymentsData, clientMap, projectNameMap]);
+
+    if (sortBy === "client") {
+      return [...mapped].sort((a, b) => compareText(a.client, b.client, sortDirection));
+    }
+
+    if (sortBy === "project") {
+      return [...mapped].sort((a, b) => compareText(a.project, b.project, sortDirection));
+    }
+
+    return mapped;
+  }, [hasAccess, paymentsData, clientMap, projectNameMap, sortBy, sortDirection]);
 
   const plannedPayments = useMemo<PlannedPaymentRow[]>(() => {
     if (!hasAccess) return [];
@@ -329,12 +401,24 @@ export default function PaymentsPage() {
         documentUrl: payment.document_url ?? "",
       }));
 
+    if (sortBy === "client") {
+      return [...mapped].sort((a, b) => compareText(a.client, b.client, sortDirection));
+    }
+
+    if (sortBy === "project") {
+      return [...mapped].sort((a, b) => compareText(a.project, b.project, sortDirection));
+    }
+
+    if (sortBy !== "status") {
+      return mapped;
+    }
+
     return [...mapped].sort((a, b) => {
-      if (a.status === "overdue" && b.status !== "overdue") return -1;
-      if (a.status !== "overdue" && b.status === "overdue") return 1;
-      return 0;
+      const priorities = { overdue: 0, waiting: 1, planned: 1, paid: 2 };
+      const result = priorities[a.status] - priorities[b.status];
+      return sortDirection === "asc" ? result : -result;
     });
-  }, [hasAccess, paymentsData, clientMap, projectNameMap]);
+  }, [hasAccess, paymentsData, clientMap, projectNameMap, sortBy, sortDirection]);
 
   const plannedTotal = plannedPayments.reduce(
     (sum, item) => sum + parseRubAmount(item.amount),
@@ -353,6 +437,37 @@ export default function PaymentsPage() {
   const projectsMap = useMemo(() => {
     return new Map(projects.map((project) => [project.id, project]));
   }, [projects]);
+
+  function handleDatePresetChange(preset: DatePreset) {
+    const range = getPresetRange(preset);
+    setDatePreset(preset);
+    setDateFrom(range.from);
+    setDateTo(range.to);
+  }
+
+  function handleDateFromChange(value: string) {
+    setDatePreset("all");
+    setDateFrom(value);
+  }
+
+  function handleDateToChange(value: string) {
+    setDatePreset("all");
+    setDateTo(value);
+  }
+
+  function handleSort(field: string) {
+    const nextField = field as PaymentSortField;
+
+    if (sortBy === nextField) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortBy(nextField);
+    setSortDirection(
+      nextField === "client" || nextField === "project" ? "asc" : "desc"
+    );
+  }
 
   function showNoAccessMessage() {
     setToastType("error");
@@ -803,6 +918,63 @@ export default function PaymentsPage() {
             onCreatePayment={handleOpenCreatePayment}
           />
 
+          <div className="rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.24)]">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div>
+                <div className="text-sm font-medium text-white/75">
+                  Период платежей
+                </div>
+                <p className="mt-1 text-xs text-white/45">
+                  Для плановых счетов фильтр смотрит дату оплаты, для оплаченных — дату фактической оплаты.
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+                <label className="grid gap-1 text-xs text-white/45">
+                  С даты
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(event) => handleDateFromChange(event.target.value)}
+                    className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-emerald-400/50"
+                  />
+                </label>
+
+                <label className="grid gap-1 text-xs text-white/45">
+                  По дату
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(event) => handleDateToChange(event.target.value)}
+                    className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-emerald-400/50"
+                  />
+                </label>
+
+                <div className="grid grid-cols-4 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+                  {[
+                    ["month", "Месяц"],
+                    ["7d", "7 дн."],
+                    ["30d", "30 дн."],
+                    ["all", "Все"],
+                  ].map(([preset, label]) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handleDatePresetChange(preset as DatePreset)}
+                      className={`rounded-xl px-3 py-2 text-xs font-medium transition ${
+                        datePreset === preset
+                          ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.28)]"
+                          : "text-white/55 hover:text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {loadingPayments ? (
             <PaymentsStatsSkeleton />
           ) : (
@@ -846,6 +1018,9 @@ export default function PaymentsPage() {
                   onMarkPaid={handleMarkAsPaid}
                   onEdit={handleStartEditPlanned}
                   onDelete={handleDeletePayment}
+                  sortBy={sortBy}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
                   processingPaymentId={processingPaymentId}
                   deletingPaymentId={deletingPaymentId}
                   canManagePayments={canShowManageActions}
@@ -865,6 +1040,9 @@ export default function PaymentsPage() {
                 items={factPayments}
                 onEdit={handleStartEdit}
                 onDelete={handleDeletePayment}
+                sortBy={sortBy}
+                sortDirection={sortDirection}
+                onSort={handleSort}
                 deletingPaymentId={deletingPaymentId}
                 canManage={canShowManageActions}
               />

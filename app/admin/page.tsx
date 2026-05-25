@@ -12,6 +12,9 @@ import type {
   AdminWorkspaceRow,
   AdminActionLogRow,
 } from "../lib/supabase/admin";
+import { AdminHealthPanel } from "./admin-health-panel";
+import { AdminMonitoringPanel } from "./admin-monitoring-panel";
+import { AdminReferralPayoutPanel } from "./admin-referral-payout-panel";
 
 type AdminPlanCode = "base" | "team" | "strategy";
 type BillingPeriod = "monthly" | "yearly";
@@ -22,7 +25,9 @@ type LogTypeFilter =
   | "manual_balance_adjustment"
   | "activate_plan_from_balance"
   | "force_billing_status"
-  | "assign_referral_attribution";
+  | "assign_referral_attribution"
+  | "broadcast_notification"
+  | "update_referral_reward_status";
 
 function formatMoney(value: number | null | undefined) {
   return new Intl.NumberFormat("ru-RU", {
@@ -85,6 +90,10 @@ function getActionLabel(actionType: string) {
       return "Принудительная смена статуса";
     case "assign_referral_attribution":
       return "Ручная реферальная привязка";
+    case "broadcast_notification":
+      return "Рассылка уведомления";
+    case "update_referral_reward_status":
+      return "Статус реферальной выплаты";
     default:
       return actionType;
   }
@@ -100,6 +109,10 @@ function getActionBadgeClass(actionType: string) {
       return "bg-amber-500/15 text-amber-300";
     case "assign_referral_attribution":
       return "bg-sky-500/15 text-sky-300";
+    case "broadcast_notification":
+      return "bg-fuchsia-500/15 text-fuchsia-300";
+    case "update_referral_reward_status":
+      return "bg-cyan-500/15 text-cyan-300";
     default:
       return "bg-white/10 text-white/60";
   }
@@ -171,6 +184,27 @@ function getLogSummary(log: AdminActionLogRow) {
     };
   }
 
+  if (log.action_type === "broadcast_notification") {
+    const title = String(payload.title ?? "");
+    const recipientsCount = Number(payload.recipientsCount ?? 0);
+
+    return {
+      title: title || "Уведомление отправлено клиентам",
+      description: `Получателей: ${recipientsCount}`,
+    };
+  }
+
+  if (log.action_type === "update_referral_reward_status") {
+    const previousStatus = String(payload.previousStatus ?? "");
+    const nextStatus = String(payload.nextStatus ?? "");
+    const rewardAmount = Number(payload.rewardAmount ?? 0);
+
+    return {
+      title: `${previousStatus || "—"} → ${nextStatus || "—"}`,
+      description: `Сумма выплаты: ${formatMoney(rewardAmount)}`,
+    };
+  }
+
   return {
     title: getActionLabel(log.action_type),
     description: "Служебное действие",
@@ -230,6 +264,10 @@ export default function AdminPage() {
   const [replaceReferralAttribution, setReplaceReferralAttribution] =
     useState(false);
   const [isLoadingReferralAction, setIsLoadingReferralAction] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastBody, setBroadcastBody] = useState("");
+  const [broadcastLinkUrl, setBroadcastLinkUrl] = useState("");
+  const [isBroadcastSending, setIsBroadcastSending] = useState(false);
 
   const [logSearch, setLogSearch] = useState("");
   const [logTypeFilter, setLogTypeFilter] = useState<LogTypeFilter>("all");
@@ -555,6 +593,57 @@ if (!result.ok) {
     }
   }
 
+  async function handleBroadcastNotification() {
+    const title = broadcastTitle.trim();
+    const message = broadcastBody.trim();
+    const linkUrl = broadcastLinkUrl.trim();
+
+    if (title.length < 3) {
+      alert("Напиши короткий и понятный заголовок уведомления");
+      return;
+    }
+
+    if (message.length < 5) {
+      alert("Напиши текст уведомления для клиентов");
+      return;
+    }
+
+    try {
+      setIsBroadcastSending(true);
+
+      const response = await fetch("/api/admin/notifications/broadcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          title,
+          body: message,
+          linkUrl: linkUrl || null,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Не удалось отправить уведомление");
+      }
+
+      setBroadcastTitle("");
+      setBroadcastBody("");
+      setBroadcastLinkUrl("");
+      await reloadWorkspaces(selectedWorkspace?.id);
+
+      alert(`Уведомление отправлено. Получателей: ${data.recipientsCount}`);
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Не удалось отправить уведомление"
+      );
+    } finally {
+      setIsBroadcastSending(false);
+    }
+  }
+
   if (!mounted || isLoading) {
     return <div className="p-6 text-white/60">Проверка доступа...</div>;
   }
@@ -569,6 +658,69 @@ if (!result.ok) {
 
       <div className="text-white/60">
         Здесь ты управляешь балансами, тарифами и подписками пользователей.
+      </div>
+
+      <AdminHealthPanel />
+
+      <AdminMonitoringPanel />
+
+      <AdminReferralPayoutPanel />
+
+      <div className="rounded-2xl border border-white/10 bg-[#121826] p-5">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="text-lg font-semibold text-white">
+              Рассылка уведомлений клиентам
+            </div>
+            <div className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
+              Сообщение появится в центре уведомлений у всех активных пользователей.
+              Пиши простым человеческим языком: без технических кодов и внутренних ошибок.
+            </div>
+          </div>
+
+          <div className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-xs font-semibold text-violet-200">
+            Маркетинг и важные новости
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
+          <input
+            value={broadcastTitle}
+            onChange={(event) => setBroadcastTitle(event.target.value)}
+            placeholder="Заголовок, например: Новая функция в CRM"
+            className="h-[48px] rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none placeholder:text-white/35"
+          />
+
+          <input
+            value={broadcastLinkUrl}
+            onChange={(event) => setBroadcastLinkUrl(event.target.value)}
+            placeholder="Ссылка внутри сервиса, например /guide (необязательно)"
+            className="h-[48px] rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none placeholder:text-white/35"
+          />
+        </div>
+
+        <textarea
+          value={broadcastBody}
+          onChange={(event) => setBroadcastBody(event.target.value)}
+          placeholder="Текст уведомления для клиентов"
+          rows={4}
+          className="mt-3 w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none placeholder:text-white/35"
+        />
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs leading-5 text-white/45">
+            Пример: “Мы добавили быстрый фильтр по платежам. Теперь нужный счёт можно найти быстрее.”
+          </div>
+
+          <button
+            type="button"
+            onClick={handleBroadcastNotification}
+            disabled={isBroadcastSending}
+            className="rounded-xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-[#06120f] transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isBroadcastSending ? "Отправляем..." : "Отправить всем"}
+          </button>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
@@ -988,6 +1140,8 @@ if (!result.ok) {
               { value: "activate_plan_from_balance", label: "Тарифы" },
               { value: "force_billing_status", label: "Статусы" },
               { value: "assign_referral_attribution", label: "Рефералка" },
+              { value: "broadcast_notification", label: "Уведомления" },
+              { value: "update_referral_reward_status", label: "Выплаты" },
             ].map((item) => (
               <button
                 key={item.value}

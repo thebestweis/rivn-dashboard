@@ -15,9 +15,41 @@ interface PlannedPaymentsTableProps {
   onMarkPaid: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  sortBy: string;
+  sortDirection: "asc" | "desc";
+  onSort: (field: string) => void;
   processingPaymentId?: string | null;
   deletingPaymentId?: string | null;
     canManagePayments?: boolean;
+}
+
+function SortHeader({
+  field,
+  label,
+  sortBy,
+  sortDirection,
+  onSort,
+}: {
+  field: string;
+  label: string;
+  sortBy: string;
+  sortDirection: "asc" | "desc";
+  onSort: (field: string) => void;
+}) {
+  const isActive = sortBy === field;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(field)}
+      className="inline-flex items-center gap-1 text-left font-medium transition hover:text-white"
+    >
+      <span>{label}</span>
+      <span className={isActive ? "text-emerald-300" : "text-white/25"}>
+        {isActive ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
+      </span>
+    </button>
+  );
 }
 
 export function PlannedPaymentsTable({
@@ -25,6 +57,9 @@ export function PlannedPaymentsTable({
   onMarkPaid,
   onEdit,
   onDelete,
+  sortBy,
+  sortDirection,
+  onSort,
   processingPaymentId,
   deletingPaymentId,
   canManagePayments,
@@ -45,12 +80,24 @@ export function PlannedPaymentsTable({
         <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="bg-white/[0.04] text-white/45">
             <tr>
-              <th className="px-4 py-3 font-medium">Клиент</th>
-              <th className="px-4 py-3 font-medium">Проект</th>
-              <th className="px-4 py-3 font-medium">Дата счёта</th>
-              <th className="px-4 py-3 font-medium">Дата оплаты</th>
-              <th className="px-4 py-3 font-medium">Сумма</th>
-              <th className="px-4 py-3 font-medium">Статус</th>
+              <th className="px-4 py-3">
+                <SortHeader field="client" label="Клиент" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
+              <th className="px-4 py-3">
+                <SortHeader field="project" label="Проект" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
+              <th className="px-4 py-3">
+                <SortHeader field="created_at" label="Дата счёта" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
+              <th className="px-4 py-3">
+                <SortHeader field="due_date" label="Дата оплаты" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
+              <th className="px-4 py-3">
+                <SortHeader field="amount" label="Сумма" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
+              <th className="px-4 py-3">
+                <SortHeader field="status" label="Статус" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
               <th className="px-4 py-3 font-medium">Комментарий</th>
               <th className="px-4 py-3 font-medium">Документ</th>
               {canManagePayments ? (

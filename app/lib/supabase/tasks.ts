@@ -47,6 +47,7 @@ export type TaskAssignee = {
   created_at: string;
   workspace_member?: {
     id: string;
+    name: string | null;
     email: string | null;
     role: string;
     status: string;
@@ -133,6 +134,7 @@ type DbTaskAssigneeRow = {
     | {
         id: string;
         workspace_id: string;
+        display_name: string | null;
         role: string;
         status: string;
         profiles?:
@@ -147,6 +149,7 @@ type DbTaskAssigneeRow = {
     | {
         id: string;
         workspace_id: string;
+        display_name: string | null;
         role: string;
         status: string;
         profiles?:
@@ -217,6 +220,7 @@ function mapTaskAssignee(row: DbTaskAssigneeRow): TaskAssignee {
     workspace_member: workspaceMember
       ? {
           id: workspaceMember.id,
+          name: workspaceMember.display_name ?? null,
           email: profile?.email ?? null,
           role: workspaceMember.role,
           status: workspaceMember.status,
@@ -388,6 +392,7 @@ export async function getTaskAssignees(taskId: string): Promise<TaskAssignee[]> 
   workspace_members!inner (
     id,
     workspace_id,
+    display_name,
     role,
     status,
     profiles!workspace_members_user_id_fkey (
@@ -429,6 +434,7 @@ export async function getTaskAssigneesMap(
   workspace_members!inner (
     id,
     workspace_id,
+    display_name,
     role,
     status,
     profiles!workspace_members_user_id_fkey (

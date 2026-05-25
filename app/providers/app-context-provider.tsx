@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { getAppContext } from "../lib/supabase/app-context";
 import {
   getAccessibleWorkspaces,
@@ -48,6 +49,21 @@ type AppContextState = {
 const APP_CONTEXT_CACHE_KEY = "app_context_cache";
 const QUERY_CACHE_KEY = "RIVN_OS_QUERY_CACHE";
 const APP_CONTEXT_CACHE_TTL_MS = 5 * 60 * 1000;
+const AUTH_EXPIRED_PATHS = [
+  "/dashboard",
+  "/clients",
+  "/projects",
+  "/tasks",
+  "/payments",
+  "/payroll",
+  "/expenses",
+  "/analytics",
+  "/avito-reports",
+  "/crm",
+  "/billing",
+  "/settings",
+  "/admin",
+];
 
 type AppContextCache = {
   user: any | null;
@@ -77,6 +93,25 @@ function isBootstrapPendingErrorMessage(message: string) {
     normalizedMessage.includes("navigatorlockacquiretimeouterror") ||
     normalizedMessage.includes("failed to acquire lock") ||
     message.includes("Пользователь не авторизован")
+  );
+}
+
+function isAuthExpiredErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  return (
+    message.includes("Auth session missing") ||
+    message.includes("User not authenticated") ||
+    normalizedMessage.includes("jwt") ||
+    normalizedMessage.includes("session") ||
+    normalizedMessage.includes("refresh token") ||
+    message.includes("Пользователь не авторизован")
+  );
+}
+
+function isProtectedAppPath(pathname: string) {
+  return AUTH_EXPIRED_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
   );
 }
 
@@ -137,6 +172,8 @@ export function AppContextProvider({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const cachedRef = useRef<AppContextCache | null>(readCachedAppContext());
   const refreshPromiseRef = useRef<Promise<void> | null>(null);
 
@@ -185,6 +222,15 @@ export function AppContextProvider({
     setErrorMessage("");
     setIsLoading(false);
   }, []);
+
+  const redirectToSessionExpired = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (!isProtectedAppPath(pathname)) return;
+
+    const params = new URLSearchParams();
+    params.set("next", pathname);
+    router.replace(`/session-expired?${params.toString()}`);
+  }, [pathname, router]);
 
   const refreshAppContext = useCallback(async () => {
     if (refreshPromiseRef.current) {
@@ -281,6 +327,15 @@ export function AppContextProvider({
         });
       }
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Не удалось загрузить app context";
+
+      if (isAuthExpiredErrorMessage(message)) {
+        resetStateToEmpty();
+        redirectToSessionExpired();
+        return;
+      }
+
       if (!cachedRef.current) {
         setUser(null);
         setProfile(null);
@@ -307,7 +362,7 @@ export function AppContextProvider({
     });
 
     return refreshPromiseRef.current;
-  }, []);
+  }, [redirectToSessionExpired, resetStateToEmpty]);
 
   useEffect(() => {
     void refreshAppContext();
@@ -353,16 +408,15 @@ export function AppContextProvider({
       }
 
       if (event === "SIGNED_OUT") {
-        cachedRef.current = null;
-        clearCachedAppContext();
         resetStateToEmpty();
+        redirectToSessionExpired();
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [refreshAppContext, resetStateToEmpty]);
+  }, [refreshAppContext, redirectToSessionExpired, resetStateToEmpty]);
 
   const value = useMemo<AppContextState>(
     () => ({

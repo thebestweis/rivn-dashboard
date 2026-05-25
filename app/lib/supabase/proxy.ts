@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/landing", "/login", "/register"];
+const PUBLIC_PATHS = ["/", "/landing", "/login", "/register", "/session-expired"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/auth");
@@ -48,14 +48,17 @@ export async function updateSession(request: NextRequest) {
 
   if (!isAuthenticated && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/session-expired";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
     if (
     isAuthenticated &&
-    (pathname === "/landing" || pathname === "/login" || pathname === "/register")
+    (pathname === "/landing" ||
+      pathname === "/login" ||
+      pathname === "/register" ||
+      pathname === "/session-expired")
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
