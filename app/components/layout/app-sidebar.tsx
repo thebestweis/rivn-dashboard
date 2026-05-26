@@ -33,6 +33,7 @@ import { useAppContextState } from "../../providers/app-context-provider";
 import { getWorkspaceMemberPermissions } from "../../lib/supabase/workspace-member-permissions";
 import { canAccessSectionWithCustomPermissions } from "../../lib/custom-access";
 import { useCrmInboxQuery } from "../../lib/queries/use-crm-query";
+import { NotificationCenter } from "../notifications/notification-center";
 import { ThemeToggle } from "../ui/theme-toggle";
 
 const navItems: Array<{
@@ -411,19 +412,22 @@ export function AppSidebar() {
           }`}
         >
           <div
-            className={`mb-6 flex items-center ${
+            className={`mb-6 flex min-w-0 items-center ${
               isCollapsed ? "justify-center" : "gap-3"
             }`}
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.18)] dark:text-emerald-300">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.18)] dark:text-emerald-300">
               <span className="text-lg font-bold">R</span>
             </div>
 
             <div className={`min-w-0 flex-1 ${isCollapsed ? "hidden" : ""}`}>
-              <div className="text-sm text-slate-500 dark:text-white/50">
+              <div className="truncate text-sm text-slate-500 dark:text-white/50">
                 {sidebarBrandLabel}
               </div>
-              <div className="text-lg font-semibold text-slate-900 dark:text-white">
+              <div
+                className="truncate text-lg font-semibold text-slate-900 dark:text-white"
+                title={sidebarCompanyLabel}
+              >
                 {sidebarCompanyLabel}
               </div>
             </div>
@@ -563,6 +567,13 @@ export function AppSidebar() {
           </div>
 
           <div className="mt-4 shrink-0">
+            <div className="mb-3">
+              <NotificationCenter
+                variant="sidebar"
+                isSidebarCollapsed={isCollapsed}
+              />
+            </div>
+
             <div className={`mb-3 ${isCollapsed ? "hidden" : ""}`}>
               <ThemeToggle />
             </div>

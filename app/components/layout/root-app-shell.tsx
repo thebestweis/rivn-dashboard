@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "./app-sidebar";
 import { AccessDenied } from "../access/access-denied";
-import { NotificationCenter } from "../notifications/notification-center";
 import { usePathAccess } from "../../lib/use-page-access";
 import { useAppContextState } from "../../providers/app-context-provider";
 import { AppDataPreloader } from "../../providers/app-data-preloader";
@@ -167,7 +166,6 @@ export function RootAppShell({
       <AppDataPreloader />
       <div className="flex min-h-screen min-w-0 overflow-x-hidden">
         <AppSidebar />
-        <NotificationCenter />
 
         <div className="min-w-0 flex-1 overflow-x-hidden pb-24 pt-20 lg:pb-0 lg:pt-0">
           <div className="relative min-h-screen overflow-x-hidden">

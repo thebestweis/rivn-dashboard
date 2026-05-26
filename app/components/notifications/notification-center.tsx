@@ -5,6 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, CheckCheck, Megaphone, X } from "lucide-react";
 import type { AppNotification } from "@/app/lib/notifications/center";
 
+type NotificationCenterProps = {
+  variant?: "floating" | "sidebar";
+  isSidebarCollapsed?: boolean;
+};
+
 type NotificationResponse = {
   ok: boolean;
   notifications: AppNotification[];
@@ -55,7 +60,10 @@ function formatNotificationDate(value: string) {
   }).format(date);
 }
 
-export function NotificationCenter() {
+export function NotificationCenter({
+  variant = "floating",
+  isSidebarCollapsed = false,
+}: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -69,6 +77,7 @@ export function NotificationCenter() {
     if (unreadCount > 99) return "99+";
     return String(unreadCount);
   }, [unreadCount]);
+  const isSidebarVariant = variant === "sidebar";
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -188,26 +197,56 @@ export function NotificationCenter() {
   }
 
   return (
-    <div ref={panelRef} className="fixed right-4 top-20 z-[260] lg:right-6 lg:top-5">
+    <div
+      ref={panelRef}
+      className={
+        isSidebarVariant
+          ? "relative"
+          : "fixed right-4 top-20 z-[260] lg:right-6 lg:top-5"
+      }
+    >
       <button
         type="button"
         onClick={() => {
           setIsOpen((value) => !value);
           if (!isOpen) void loadNotifications();
         }}
-        className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white/92 text-slate-700 shadow-[0_12px_34px_rgba(15,23,42,0.12)] backdrop-blur-xl transition hover:bg-slate-50 dark:border-white/10 dark:bg-[#121826]/92 dark:text-white dark:hover:bg-[#182033]"
+        className={
+          isSidebarVariant
+            ? `relative flex h-11 w-full items-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.07] ${
+                isSidebarCollapsed ? "justify-center px-0" : "justify-between px-3"
+              }`
+            : "relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white/92 text-slate-700 shadow-[0_12px_34px_rgba(15,23,42,0.12)] backdrop-blur-xl transition hover:bg-slate-50 dark:border-white/10 dark:bg-[#121826]/92 dark:text-white dark:hover:bg-[#182033]"
+        }
         aria-label="Открыть уведомления"
       >
-        <Bell className="h-5 w-5" />
+        <span className="flex min-w-0 items-center gap-3">
+          <Bell className="h-5 w-5 shrink-0" />
+          {isSidebarVariant && !isSidebarCollapsed ? (
+            <span className="truncate text-sm font-medium">Уведомления</span>
+          ) : null}
+        </span>
         {hasUnread ? (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-white shadow-[0_8px_20px_rgba(16,185,129,0.35)]">
+          <span
+            className={`flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-white shadow-[0_8px_20px_rgba(16,185,129,0.35)] ${
+              isSidebarVariant && !isSidebarCollapsed
+                ? "relative"
+                : "absolute -right-1 -top-1"
+            }`}
+          >
             {unreadLabel}
           </span>
         ) : null}
       </button>
 
       {isOpen ? (
-        <div className="absolute right-0 mt-3 w-[min(92vw,420px)] overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-[#121826] dark:shadow-[0_28px_90px_rgba(0,0,0,0.45)]">
+        <div
+          className={
+            isSidebarVariant
+              ? "absolute bottom-[calc(100%+12px)] left-0 z-[260] w-[min(88vw,420px)] overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-[#121826] dark:shadow-[0_28px_90px_rgba(0,0,0,0.45)]"
+              : "absolute right-0 mt-3 w-[min(92vw,420px)] overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-[#121826] dark:shadow-[0_28px_90px_rgba(0,0,0,0.45)]"
+          }
+        >
           <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-white/10">
             <div>
               <div className="text-base font-semibold text-slate-950 dark:text-white">
