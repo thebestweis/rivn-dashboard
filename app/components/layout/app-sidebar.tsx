@@ -304,6 +304,10 @@ export function AppSidebar() {
     showResolvedMenu && canLoadCrmInbox
   );
   const crmUnreadCount = sidebarInboxItems.filter((item) => item.isUnread).length;
+  const workspaceDisplayName =
+    typeof workspace?.name === "string" ? workspace.name.trim() : "";
+  const sidebarBrandLabel = workspaceDisplayName ? "RIVN OS" : "Agency OS";
+  const sidebarCompanyLabel = workspaceDisplayName || "RIVN";
 
   useEffect(() => {
     if (!isMounted || permissionsLoading) return;
@@ -370,12 +374,10 @@ export function AppSidebar() {
 
             <div className="min-w-0">
               <div className="text-xs text-slate-500 dark:text-white/45">
-                RIVN OS
+                {sidebarBrandLabel}
               </div>
               <div className="truncate text-sm font-semibold text-slate-950 dark:text-white">
-                {showResolvedContext && workspace?.name
-                  ? workspace.name
-                  : "Кабинет"}
+                {showResolvedContext ? sidebarCompanyLabel : "RIVN"}
               </div>
             </div>
           </Link>
@@ -419,10 +421,10 @@ export function AppSidebar() {
 
             <div className={`min-w-0 flex-1 ${isCollapsed ? "hidden" : ""}`}>
               <div className="text-sm text-slate-500 dark:text-white/50">
-                Agency OS
+                {sidebarBrandLabel}
               </div>
               <div className="text-lg font-semibold text-slate-900 dark:text-white">
-                RIVN Control
+                {sidebarCompanyLabel}
               </div>
             </div>
 

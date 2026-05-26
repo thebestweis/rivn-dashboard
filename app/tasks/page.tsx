@@ -35,6 +35,8 @@ type DayColumn = {
   date: Date;
 };
 
+const NO_PROJECT_VALUE = "__no_project__";
+
 function getStatusLabel(status: TaskStatus) {
   switch (status) {
     case "todo":
@@ -178,12 +180,6 @@ export default function TasksPage() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  useEffect(() => {
-    if (!quickTaskProjectId && projectsList.length > 0) {
-      setQuickTaskProjectId(projectsList[0].id);
-    }
-  }, [projectsList, quickTaskProjectId]);
-
   const isLoading =
     isTasksLoading || isProjectsLoading || isWorkspaceMembersLoading;
 
@@ -210,7 +206,9 @@ export default function TasksPage() {
         statusFilter === "all" || task.status === statusFilter;
 
       const matchesProject =
-        projectFilter === "all" || task.project_id === projectFilter;
+        projectFilter === "all" ||
+        (projectFilter === NO_PROJECT_VALUE && !task.project_id) ||
+        task.project_id === projectFilter;
 
       const matchesAssignee =
         assigneeFilter === "all"
@@ -337,10 +335,6 @@ export default function TasksPage() {
     const key = format(day, "yyyy-MM-dd");
     setCreatingDayKey(key);
     setQuickTaskTitle("");
-
-    if (!quickTaskProjectId && projectsList.length > 0) {
-      setQuickTaskProjectId(projectsList[0].id);
-    }
   }
 
   function handleCancelQuickCreate() {
@@ -369,17 +363,15 @@ export default function TasksPage() {
       return;
     }
 
-    if (!quickTaskProjectId) {
-      setToastType("error");
-      setToastMessage("Сначала выбери проект");
-      return;
-    }
-
     const deadlineAt = createDeadlineForDay(day);
+    const selectedProjectId =
+      quickTaskProjectId && quickTaskProjectId !== NO_PROJECT_VALUE
+        ? quickTaskProjectId
+        : null;
 
     try {
       await createTaskMutation.mutateAsync({
-        project_id: quickTaskProjectId,
+        project_id: selectedProjectId,
         title: trimmedTitle,
         deadline_at: deadlineAt,
       });
@@ -505,16 +497,20 @@ export default function TasksPage() {
 
   const projectOptions = [
     { value: "all", label: "Все проекты" },
+    { value: NO_PROJECT_VALUE, label: "Без проекта" },
     ...projectsList.map((project) => ({
       value: project.id,
       label: project.name,
     })),
   ];
 
-  const quickProjectOptions = projectsList.map((project) => ({
-  value: project.id,
-  label: project.name,
-}));
+  const quickProjectOptions = [
+    { value: NO_PROJECT_VALUE, label: "Без проекта" },
+    ...projectsList.map((project) => ({
+      value: project.id,
+      label: project.name,
+    })),
+  ];
 
   const assigneeOptions = [
     { value: "all", label: "Все исполнители" },
@@ -753,18 +749,20 @@ export default function TasksPage() {
                                   className="h-10 w-full rounded-xl bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/30"
                                 />
 
-<CustomSelect
-  value={quickTaskProjectId}
-  onChange={setQuickTaskProjectId}
-  options={quickProjectOptions}
-  placeholder={
-    projectsList.length === 0 ? "Нет проектов" : "Выбери проект"
-  }
-  disabled={projectsList.length === 0 || createTaskMutation.isPending}
-  className="mt-2"
-  buttonClassName="h-10 rounded-xl px-3 text-sm"
-  dropdownClassName="w-full"
-/>
+                                <CustomSelect
+                                  value={quickTaskProjectId || NO_PROJECT_VALUE}
+                                  onChange={(value) =>
+                                    setQuickTaskProjectId(
+                                      value === NO_PROJECT_VALUE ? "" : value
+                                    )
+                                  }
+                                  options={quickProjectOptions}
+                                  placeholder="Без проекта"
+                                  disabled={createTaskMutation.isPending}
+                                  className="mt-2"
+                                  buttonClassName="h-10 rounded-xl px-3 text-sm"
+                                  dropdownClassName="w-full"
+                                />
 
                                 <div className="mt-3 flex items-center justify-between gap-2">
                                   <button

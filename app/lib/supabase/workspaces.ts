@@ -1,4 +1,4 @@
-import { getAppContext } from "./app-context";
+import { clearAppContextMemoryCache, getAppContext } from "./app-context";
 
 export type WorkspaceRole = "owner" | "admin" | "manager" | "analyst" | "employee";
 export type WorkspaceMemberStatus = "active" | "invited" | "suspended" | "removed";
@@ -136,6 +136,8 @@ export async function setActiveWorkspace(workspaceId: string): Promise<void> {
   if (error) {
     throw new Error(`Не удалось переключить workspace: ${error.message}`);
   }
+
+  clearAppContextMemoryCache();
 }
 
 export async function createWorkspace(input: CreateWorkspaceInput) {
@@ -152,6 +154,8 @@ export async function createWorkspace(input: CreateWorkspaceInput) {
   if (error) {
     throw new Error(`Не удалось создать кабинет: ${error.message}`);
   }
+
+  clearAppContextMemoryCache();
 
   return data;
 }
@@ -176,6 +180,8 @@ export async function updateWorkspace(input: UpdateWorkspaceInput) {
   if (error) {
     throw new Error(`Не удалось обновить кабинет: ${error.message}`);
   }
+
+  clearAppContextMemoryCache();
 
   return data;
 }

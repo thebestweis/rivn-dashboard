@@ -576,12 +576,6 @@ export function TaskModal({
       return;
     }
 
-        if (!projectId) {
-      setToastType("error");
-      setToastMessage("У этой задачи нет проекта. Сначала привяжи её к проекту.");
-      return;
-    }
-
     if (!canManageTasks) {
       setToastType("error");
       setToastMessage("У тебя нет прав на создание подзадач");

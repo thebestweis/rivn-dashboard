@@ -75,6 +75,7 @@ export function AdminMonitoringPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedSegment, setSelectedSegment] = useState("all");
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   async function loadData() {
     try {
@@ -127,21 +128,38 @@ export function AdminMonitoringPanel() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => void loadData()}
-          disabled={isLoading}
-          className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:bg-white/[0.08] disabled:opacity-50"
-        >
-          {isLoading ? "Обновляем..." : "Обновить"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setIsCollapsed((prev) => !prev)}
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:bg-white/[0.08]"
+          >
+            {isCollapsed ? "Развернуть" : "Свернуть"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            disabled={isLoading}
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:bg-white/[0.08] disabled:opacity-50"
+          >
+            {isLoading ? "Обновляем..." : "Обновить"}
+          </button>
+        </div>
       </div>
 
-      {error ? (
-        <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-          {error}
+      {isCollapsed ? (
+        <div className="mt-4 rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white/60">
+          Блок скрыт. Пользователей: {data?.totals.registeredUsers ?? 0}, кабинетов:{" "}
+          {data?.totals.workspaces ?? 0}, застряли: {data?.totals.stuck ?? 0}.
         </div>
-      ) : null}
+      ) : (
+        <>
+          {error ? (
+            <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+              {error}
+            </div>
+          ) : null}
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         {[
@@ -276,6 +294,8 @@ export function AdminMonitoringPanel() {
           Часть данных не удалось прочитать: {data.warnings.join("; ")}
         </div>
       ) : null}
+        </>
+      )}
     </section>
   );
 }

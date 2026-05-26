@@ -172,3 +172,8 @@ export async function getAppContext(): Promise<AppContext> {
 
   return pendingAppContext;
 }
+
+export function clearAppContextMemoryCache() {
+  cachedAppContext = null;
+  pendingAppContext = null;
+}

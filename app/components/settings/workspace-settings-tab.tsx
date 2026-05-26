@@ -11,6 +11,7 @@ import {
 } from "../../lib/supabase/workspaces";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../lib/query-keys";
+import { useAppContextState } from "../../providers/app-context-provider";
 
 type WorkspaceFormState = {
   id: string | null;
@@ -77,6 +78,7 @@ function getRoleLabel(role: AccessibleWorkspace["membership_role"]) {
 export function WorkspaceSettingsTab() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { refreshAppContext } = useAppContextState();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -170,6 +172,7 @@ export function WorkspaceSettingsTab() {
         });
 
         await refreshWorkspaces();
+        await refreshAppContext();
         closeModal();
         router.refresh();
         return;
@@ -187,6 +190,7 @@ export function WorkspaceSettingsTab() {
 
       await setActiveWorkspace(created.id);
       await refreshWorkspaces();
+      await refreshAppContext();
 
       closeModal();
       router.refresh();
