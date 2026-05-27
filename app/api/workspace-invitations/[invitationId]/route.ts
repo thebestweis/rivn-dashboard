@@ -12,6 +12,14 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function getInviteBaseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+    "https://rivnos.ru"
+  ).replace(/\/+$/, "");
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ invitationId: string }> }
@@ -60,7 +68,7 @@ export async function PATCH(
       return NextResponse.json({
         ok: true,
         invitation: data,
-        inviteUrl: `${request.nextUrl.origin}/invite/${token}`,
+        inviteUrl: `${getInviteBaseUrl()}/invite/${token}`,
         error: "",
       });
     }

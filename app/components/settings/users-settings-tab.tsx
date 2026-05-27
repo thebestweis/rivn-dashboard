@@ -697,9 +697,9 @@ export function UsersSettingsTab() {
               Ссылка для сотрудника готова
             </div>
             <div className="mt-2 text-sm text-emerald-100/75">
-              Пока почта не подключена, скопируй ссылку и отправь её сотруднику
-              вручную. По ней он создаст аккаунт или войдёт в существующий и
-              сразу попадёт в этот кабинет.
+              Скопируй ссылку и отправь её сотруднику в Telegram, мессенджер
+              или любым удобным способом. По ней он создаст аккаунт или войдёт
+              в существующий и сразу попадёт в этот кабинет.
             </div>
             <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
               <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-xs text-white/75">

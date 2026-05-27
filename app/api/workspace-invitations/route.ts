@@ -15,6 +15,14 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function getInviteBaseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+    "https://rivnos.ru"
+  ).replace(/\/+$/, "");
+}
+
 export async function GET() {
   try {
     const { serviceSupabase, workspaceId } = await requireInvitationManager();
@@ -141,7 +149,7 @@ export async function POST(request: NextRequest) {
       throw new Error(error.message);
     }
 
-    const inviteUrl = new URL(`/invite/${token}`, request.nextUrl.origin);
+    const inviteUrl = new URL(`/invite/${token}`, getInviteBaseUrl());
 
     return NextResponse.json({
       ok: true,
