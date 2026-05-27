@@ -160,6 +160,29 @@ function buildMetricLine(
   return `вЂ” ${label}: ${formattedValue} (${formatChange(change)})`;
 }
 
+function hasUnavailableStatsWarning(warnings: string[]) {
+  return warnings.some((warning) => {
+    const lowerWarning = warning.toLowerCase();
+
+    return (
+      (lowerWarning.includes("просмотр") || lowerWarning.includes("контакт")) &&
+      (lowerWarning.includes("недоступ") ||
+        lowerWarning.includes("нулев") ||
+        lowerWarning.includes("огранич") ||
+        lowerWarning.includes("перепровер"))
+    ) || lowerWarning.includes("stats are temporarily unavailable");
+  });
+}
+
+function buildUnavailableStatsLines() {
+  return [
+    "— Просмотры: временно недоступны",
+    "— Конверсия: временно недоступна",
+    "— Контакты: временно недоступны",
+    "— Стоимость 1 контакта: временно недоступна",
+  ];
+}
+
 async function sendTelegramMessage(chatId: string, text: string) {
   if (!telegramToken) {
     throw new Error("РќРµ РЅР°Р№РґРµРЅ TELEGRAM_BOT_TOKEN");
@@ -336,6 +359,7 @@ function buildAccountPartialBlock(params: {
   current: PeriodStats;
   previous: PeriodStats;
   warnings: string[];
+  statsUnavailable?: boolean;
 }) {
   const warningLines = params.warnings.map((warning) => {
     const safeWarning = warning
@@ -346,12 +370,24 @@ function buildAccountPartialBlock(params: {
     return `вљ пёЏ ${safeWarning}`;
   });
 
+  if (!params.statsUnavailable) {
+    return [
+      buildAccountBlock({
+        accountName: params.accountName,
+        current: params.current,
+        previous: params.previous,
+      }),
+      "",
+      ...warningLines,
+    ].join("\n");
+  }
+
   return [
-    buildAccountBlock({
-      accountName: params.accountName,
-      current: params.current,
-      previous: params.previous,
-    }),
+    "━━━━━━━━━━━━",
+    `Аккаунт: <b>${params.accountName}</b>`,
+    "",
+    buildMetricLine("Расходы", params.current.expenses, params.previous.expenses, "money"),
+    ...buildUnavailableStatsLines(),
     "",
     ...warningLines,
   ].join("\n");
@@ -365,8 +401,10 @@ function buildWeeklyReport(params: {
   totalPrevious: PeriodStats;
   dialogAnalyticsBlock: string;
   failedAccountsCount?: number;
+  statsUnavailableAccountsCount?: number;
 }) {
   const hasMultipleAccounts = params.accountBlocks.length > 1;
+  const hasUnavailableStats = Boolean(params.statsUnavailableAccountsCount);
 
   const baseLines = [
     `рџ“Љ <b>Р•Р¶РµРЅРµРґРµР»СЊРЅС‹Р№ Avito-РѕС‚С‡С‘С‚</b>`,
@@ -401,10 +439,18 @@ function buildWeeklyReport(params: {
     "<b>РС‚РѕРіРѕ РїРѕ РІСЃРµРј Р°РєРєР°СѓРЅС‚Р°Рј</b>",
     "",
     buildMetricLine("Р Р°СЃС…РѕРґС‹", params.totalCurrent.expenses, params.totalPrevious.expenses, "money"),
-    buildMetricLine("РџСЂРѕСЃРјРѕС‚СЂС‹", params.totalCurrent.views, params.totalPrevious.views, "number"),
-    buildMetricLine("РљРѕРЅРІРµСЂСЃРёСЏ", params.totalCurrent.conversion, params.totalPrevious.conversion, "percent"),
-    buildMetricLine("РљРѕРЅС‚Р°РєС‚С‹", params.totalCurrent.contacts, params.totalPrevious.contacts, "number"),
-    buildMetricLine("РЎС‚РѕРёРјРѕСЃС‚СЊ 1 РєРѕРЅС‚Р°РєС‚Р°", params.totalCurrent.costPerContact, params.totalPrevious.costPerContact, "money"),
+    ...(hasUnavailableStats
+      ? [
+          ...buildUnavailableStatsLines(),
+          "",
+          "⚠️ Итоги по просмотрам и контактам не рассчитаны: Avito временно не отдал статистику по части аккаунтов.",
+        ]
+      : [
+          buildMetricLine("РџСЂРѕСЃРјРѕС‚СЂС‹", params.totalCurrent.views, params.totalPrevious.views, "number"),
+          buildMetricLine("РљРѕРЅРІРµСЂСЃРёСЏ", params.totalCurrent.conversion, params.totalPrevious.conversion, "percent"),
+          buildMetricLine("РљРѕРЅС‚Р°РєС‚С‹", params.totalCurrent.contacts, params.totalPrevious.contacts, "number"),
+          buildMetricLine("РЎС‚РѕРёРјРѕСЃС‚СЊ 1 РєРѕРЅС‚Р°РєС‚Р°", params.totalCurrent.costPerContact, params.totalPrevious.costPerContact, "money"),
+        ]),
     "",
     params.dialogAnalyticsBlock,
     "",
@@ -545,6 +591,7 @@ export async function GET(request: Request) {
           expenses: 0,
         };
         let failedAccountsCount = 0;
+        let statsUnavailableAccountsCount = 0;
 
         for (const account of accounts as AvitoAccount[]) {
           try {
@@ -760,14 +807,22 @@ export async function GET(request: Request) {
             });
           }
 
-          totalCurrentRaw.views += currentStats.views;
-          totalCurrentRaw.contacts += currentStats.contacts;
-          totalCurrentRaw.favorites += currentStats.favorites;
+          const statsUnavailable = hasUnavailableStatsWarning(warnings);
+
+          if (statsUnavailable) {
+            statsUnavailableAccountsCount += 1;
+          } else {
+            totalCurrentRaw.views += currentStats.views;
+            totalCurrentRaw.contacts += currentStats.contacts;
+            totalCurrentRaw.favorites += currentStats.favorites;
+
+            totalPreviousRaw.views += previousStats.views;
+            totalPreviousRaw.contacts += previousStats.contacts;
+            totalPreviousRaw.favorites += previousStats.favorites;
+          }
+
           totalCurrentRaw.expenses += currentStats.expenses;
 
-          totalPreviousRaw.views += previousStats.views;
-          totalPreviousRaw.contacts += previousStats.contacts;
-          totalPreviousRaw.favorites += previousStats.favorites;
           totalPreviousRaw.expenses += previousStats.expenses;
 
           if (warnings.length > 0) {
@@ -778,6 +833,7 @@ export async function GET(request: Request) {
                 current: currentStats,
                 previous: previousStats,
                 warnings,
+                statsUnavailable,
               })
             );
           } else {
@@ -822,6 +878,7 @@ export async function GET(request: Request) {
           totalPrevious,
           dialogAnalyticsBlock,
           failedAccountsCount,
+          statsUnavailableAccountsCount,
         });
 
         await sendTelegramMessage(client.telegram_chat_id, reportText);

@@ -1,6 +1,5 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/app/lib/supabase/server";
-import { GET as sendAvitoTestReport } from "@/app/api/avito/test-report/route";
 
 export const dynamic = "force-dynamic";
 
@@ -125,11 +124,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const url = new URL("http://rivn.local/api/avito/test-report");
+    const requestOrigin = new URL(request.url).origin;
+    const url = new URL("/api/avito/test-report", requestOrigin);
     url.searchParams.set("clientCode", client.client_code);
     url.searchParams.set("secret", cronSecret);
 
-    const response = await sendAvitoTestReport(new Request(url));
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    });
 
     const result = await readJsonResponse(response);
 
