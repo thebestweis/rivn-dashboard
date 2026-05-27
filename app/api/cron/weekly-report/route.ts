@@ -736,6 +736,12 @@ export async function GET(request: Request) {
               delayMinutes: 30,
               lastError: snapshot.warnings.join("\n") || null,
             });
+
+            for (const warning of snapshot.warnings) {
+              if (!warnings.includes(warning)) {
+                warnings.push(warning);
+              }
+            }
           }
 
           try {

@@ -4,7 +4,7 @@ import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { verifyCronSecret } from "../../cron/verify-cron-secret";
 import {
-  getAvitoAggregateStatsByDayForPeriod,
+  getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
@@ -564,16 +564,21 @@ export async function GET(request: Request) {
         };
 
         try {
-          const statsByDay = await getAvitoAggregateStatsByDayForPeriod({
+          currentStatsRaw = await getAvitoAggregateStatsForPeriod({
+            accountId: account.id,
+            accessToken,
+            avitoUserId: account.avito_user_id,
+            dateFrom: yesterday,
+            dateTo: yesterday,
+          });
+
+          previousStatsRaw = await getAvitoAggregateStatsForPeriod({
             accountId: account.id,
             accessToken,
             avitoUserId: account.avito_user_id,
             dateFrom: beforeYesterday,
-            dateTo: yesterday,
+            dateTo: beforeYesterday,
           });
-
-          currentStatsRaw = statsByDay[yesterday] ?? currentStatsRaw;
-          previousStatsRaw = statsByDay[beforeYesterday] ?? previousStatsRaw;
         } catch (statsError) {
           warnings.push(
             `Статистика просмотров и контактов временно недоступна: ${getFriendlyAvitoErrorMessage(statsError)}`
@@ -614,6 +619,17 @@ export async function GET(request: Request) {
           ...previousStatsRaw,
           expenses: previousAvitoSpendings.total,
         });
+
+        if (
+          currentStats.expenses > 0 &&
+          currentStats.views === 0 &&
+          currentStats.contacts === 0 &&
+          currentStats.favorites === 0
+        ) {
+          warnings.push(
+            "Avito вернул расходы, но просмотры и контакты пришли нулевыми. Данные нужно перепроверить."
+          );
+        }
 
         totalCurrentRaw.views += currentStats.views;
         totalCurrentRaw.contacts += currentStats.contacts;

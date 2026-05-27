@@ -3,7 +3,7 @@ import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
-  getAvitoAggregateStatsByDayForPeriod,
+  getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
@@ -629,16 +629,21 @@ export async function GET(request: Request) {
           };
 
           try {
-            const statsByDay = await getAvitoAggregateStatsByDayForPeriod({
+            currentStatsRaw = await getAvitoAggregateStatsForPeriod({
+              accountId: account.id,
+              accessToken,
+              avitoUserId: account.avito_user_id,
+              dateFrom: yesterday,
+              dateTo: yesterday,
+            });
+
+            previousStatsRaw = await getAvitoAggregateStatsForPeriod({
               accountId: account.id,
               accessToken,
               avitoUserId: account.avito_user_id,
               dateFrom: beforeYesterday,
-              dateTo: yesterday,
+              dateTo: beforeYesterday,
             });
-
-            currentStatsRaw = statsByDay[yesterday] ?? currentStatsRaw;
-            previousStatsRaw = statsByDay[beforeYesterday] ?? previousStatsRaw;
           } catch (statsError) {
             statsStatus = "failed";
             const cachedCurrent = await loadAvitoReportSnapshot({
@@ -777,6 +782,12 @@ export async function GET(request: Request) {
               delayMinutes: 20,
               lastError: snapshot.warnings.join("\n") || null,
             });
+
+            for (const warning of snapshot.warnings) {
+              if (!warnings.includes(warning)) {
+                warnings.push(warning);
+              }
+            }
           }
 
           totalCurrentRaw.views += currentStats.views;

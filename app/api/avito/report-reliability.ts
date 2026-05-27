@@ -50,7 +50,7 @@ export function assessAvitoReportQuality(params: {
 
   if (hasSpend && hasZeroStats) {
     warnings.push(
-      "Avito returned expenses, but views and contacts are zero. Snapshot needs recheck."
+      "Avito вернул расходы, но просмотры и контакты пришли нулевыми. Данные нужно перепроверить."
     );
   }
 
@@ -61,7 +61,7 @@ export function assessAvitoReportQuality(params: {
     hasSpend
   ) {
     warnings.push(
-      "Contacts dropped to zero while expenses exist. Snapshot needs recheck."
+      "Контакты упали до нуля при наличии расходов. Данные нужно перепроверить."
     );
   }
 

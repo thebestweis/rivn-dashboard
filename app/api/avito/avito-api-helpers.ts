@@ -515,6 +515,9 @@ function getMetricBucket(metricName: string): MetricBucket | null {
       "view",
       "itemviews",
       "impressions",
+      "totalviews",
+      "uniqview",
+      "uniqueview",
     ].includes(normalized)
   ) {
     return "views";
@@ -528,6 +531,11 @@ function getMetricBucket(metricName: string): MetricBucket | null {
       "contact",
       "contactsshown",
       "contactshows",
+      "totalcontacts",
+      "uniqcontact",
+      "uniquecontact",
+      "targetcontacts",
+      "targetedcontacts",
     ].includes(normalized)
   ) {
     return "contacts";
@@ -541,6 +549,9 @@ function getMetricBucket(metricName: string): MetricBucket | null {
       "favorite",
       "favourites",
       "favourite",
+      "totalfavorites",
+      "uniqfavorite",
+      "uniquefavorite",
     ].includes(normalized)
   ) {
     return "favorites";
@@ -551,6 +562,11 @@ function getMetricBucket(metricName: string): MetricBucket | null {
 
 const coreAnalyticsMetrics = ["uniqViews", "uniqContacts", "uniqFavorites"];
 const fallbackAnalyticsMetrics = ["views", "contacts", "favorites"];
+const snakeCaseAnalyticsMetrics = [
+  "uniq_views",
+  "uniq_contacts",
+  "uniq_favorites",
+];
 
 function toFiniteNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -873,6 +889,22 @@ async function fetchAggregateStatsFromAvito(params: {
       dateFrom: params.dateFrom,
       dateTo: params.dateTo,
       grouping: "totals",
+      metrics: snakeCaseAnalyticsMetrics,
+      limit: 1000,
+      offset: 0,
+    },
+    {
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+      grouping: "total",
+      metrics: fallbackAnalyticsMetrics,
+      limit: 1000,
+      offset: 0,
+    },
+    {
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+      grouping: "totals",
       metrics: ["views", "contacts"],
       limit: 1000,
       offset: 0,
@@ -880,9 +912,9 @@ async function fetchAggregateStatsFromAvito(params: {
   ];
   let lastError: unknown = null;
 
-  for (const body of requestBodies) {
+  for (const [index, body] of requestBodies.entries()) {
     try {
-      return await fetchAvitoJson(
+      const data = await fetchAvitoJson(
         `https://api.avito.ru/stats/v2/accounts/${params.avitoUserId}/items`,
         {
           method: "POST",
@@ -895,6 +927,12 @@ async function fetchAggregateStatsFromAvito(params: {
         },
         "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ Р°РіСЂРµРіРёСЂРѕРІР°РЅРЅРѕР№ СЃС‚Р°С‚РёСЃС‚РёРєРё"
       );
+
+      const parsed = parseAggregateStatsResponse(data);
+
+      if (hasStatsValue(parsed) || index === requestBodies.length - 1) {
+        return data;
+      }
     } catch (error) {
       lastError = error;
 
@@ -917,7 +955,7 @@ async function fetchAggregateStatsByDayFromAvito(params: {
   dateTo: string;
 }) {
   const requestBodies = ["day", "date"].flatMap((grouping) =>
-    [coreAnalyticsMetrics, fallbackAnalyticsMetrics].map((metrics) => ({
+    [coreAnalyticsMetrics, fallbackAnalyticsMetrics, snakeCaseAnalyticsMetrics].map((metrics) => ({
       dateFrom: params.dateFrom,
       dateTo: params.dateTo,
       grouping,
@@ -928,9 +966,9 @@ async function fetchAggregateStatsByDayFromAvito(params: {
   );
   let lastError: unknown = null;
 
-  for (const body of requestBodies) {
+  for (const [index, body] of requestBodies.entries()) {
     try {
-      return await fetchAvitoJson(
+      const data = await fetchAvitoJson(
         `https://api.avito.ru/stats/v2/accounts/${params.avitoUserId}/items`,
         {
           method: "POST",
@@ -943,6 +981,13 @@ async function fetchAggregateStatsByDayFromAvito(params: {
         },
         "Ошибка получения статистики по дням"
       );
+
+      const parsed = parseAggregateStatsByDayResponse(data);
+      const hasParsedValues = Object.values(parsed).some(hasStatsValue);
+
+      if (hasParsedValues || index === requestBodies.length - 1) {
+        return data;
+      }
     } catch (error) {
       lastError = error;
 
@@ -985,15 +1030,17 @@ export async function getAvitoAggregateStatsForPeriod(params: {
       dateTo: params.dateTo,
     });
 
-    if (
-      cached?.isComplete &&
-      cached.itemIdsHash === AGGREGATE_STATS_CACHE_HASH
-    ) {
-      return {
+    const cachedStats =
+      cached?.isComplete && cached.itemIdsHash === AGGREGATE_STATS_CACHE_HASH
+        ? {
         views: cached.views,
         contacts: cached.contacts,
         favorites: cached.favorites,
-      };
+          }
+        : null;
+
+    if (cachedStats && hasStatsValue(cachedStats)) {
+      return cachedStats;
     }
 
     let stats: AvitoPeriodStats;
@@ -1003,22 +1050,19 @@ export async function getAvitoAggregateStatsForPeriod(params: {
       stats = parseAggregateStatsResponse(data);
 
       if (!hasStatsValue(stats)) {
-        stats = await getCachedChunkedStatsForRange(params);
+        console.warn("[avito:stats-v2] aggregate response parsed as zero", {
+          accountId: params.accountId,
+          avitoUserId: params.avitoUserId,
+          dateFrom: params.dateFrom,
+          dateTo: params.dateTo,
+        });
       }
     } catch (error) {
-      if (cached?.isComplete) {
-        return {
-          views: cached.views,
-          contacts: cached.contacts,
-          favorites: cached.favorites,
-        };
+      if (cachedStats && hasStatsValue(cachedStats)) {
+        return cachedStats;
       }
 
-      stats = await getCachedChunkedStatsForRange(params);
-
-      if (!hasStatsValue(stats)) {
-        throw error;
-      }
+      throw error;
     }
 
     await saveStatsCache({
@@ -1088,7 +1132,19 @@ export async function getAvitoAggregateStatsByDayForPeriod(params: {
         dateTo: date,
       });
 
-      if (cached?.isComplete) {
+      const isAggregateCache =
+        cached?.itemIdsHash === AGGREGATE_STATS_BY_DAY_CACHE_HASH ||
+        cached?.itemIdsHash === AGGREGATE_STATS_CACHE_HASH;
+
+      if (
+        cached?.isComplete &&
+        isAggregateCache &&
+        hasStatsValue({
+          views: cached.views,
+          contacts: cached.contacts,
+          favorites: cached.favorites,
+        })
+      ) {
         cachedByDate[date] = {
           views: cached.views,
           contacts: cached.contacts,
@@ -1107,13 +1163,17 @@ export async function getAvitoAggregateStatsByDayForPeriod(params: {
       const parsedHasValues = Object.values(statsByDate).some(hasStatsValue);
 
       if (!parsedHasValues) {
-        return getCachedChunkedStatsByDay({
+        console.warn("[avito:stats-v2] aggregate day response parsed as zero", {
           accountId: params.accountId,
-          accessToken: params.accessToken,
           avitoUserId: params.avitoUserId,
-          dates,
-          cachedByDate,
+          dateFrom: params.dateFrom,
+          dateTo: params.dateTo,
         });
+
+        return {
+          ...cachedByDate,
+          ...statsByDate,
+        };
       }
 
       for (const date of dates) {
@@ -1150,24 +1210,8 @@ export async function getAvitoAggregateStatsByDayForPeriod(params: {
         ...statsByDate,
       };
     } catch (error) {
-      try {
-        const fallbackByDate = await getCachedChunkedStatsByDay({
-          accountId: params.accountId,
-          accessToken: params.accessToken,
-          avitoUserId: params.avitoUserId,
-          dates,
-          cachedByDate,
-        });
-
-        if (Object.keys(fallbackByDate).length > 0) {
-          return fallbackByDate;
-        }
-      } catch (fallbackError) {
-        if (Object.keys(cachedByDate).length > 0) {
-          return cachedByDate;
-        }
-
-        throw fallbackError;
+      if (Object.keys(cachedByDate).length > 0) {
+        return cachedByDate;
       }
 
       throw error;

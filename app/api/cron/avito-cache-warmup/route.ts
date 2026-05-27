@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
-  getAvitoAggregateStatsByDayForPeriod,
+  getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
@@ -142,12 +142,20 @@ export async function GET(request: Request) {
         }
 
         const accessToken = await resolveAvitoAccessToken(account);
-        const statsByDay = await getAvitoAggregateStatsByDayForPeriod({
+        const currentStatsRaw = await getAvitoAggregateStatsForPeriod({
+          accountId: account.id,
+          accessToken,
+          avitoUserId: account.avito_user_id,
+          dateFrom: yesterday,
+          dateTo: yesterday,
+        });
+
+        const previousStatsRaw = await getAvitoAggregateStatsForPeriod({
           accountId: account.id,
           accessToken,
           avitoUserId: account.avito_user_id,
           dateFrom: beforeYesterday,
-          dateTo: yesterday,
+          dateTo: beforeYesterday,
         });
 
         const rawSpendings = await fetchAvitoSpendings({
@@ -168,19 +176,11 @@ export async function GET(request: Request) {
           dateTo: beforeYesterday,
         });
         const currentStats = buildStats({
-          ...(statsByDay[yesterday] ?? {
-            views: 0,
-            contacts: 0,
-            favorites: 0,
-          }),
+          ...currentStatsRaw,
           expenses: currentSpendings.total,
         });
         const previousStats = buildStats({
-          ...(statsByDay[beforeYesterday] ?? {
-            views: 0,
-            contacts: 0,
-            favorites: 0,
-          }),
+          ...previousStatsRaw,
           expenses: previousSpendings.total,
         });
 
