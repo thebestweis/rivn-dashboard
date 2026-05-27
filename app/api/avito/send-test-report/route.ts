@@ -1,8 +1,10 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { createClient as createServerClient } from "@/app/lib/supabase/server";
+import { after } from "next/server";
 import { GET as sendAvitoTestReport } from "@/app/api/avito/test-report/route";
+import { createClient as createServerClient } from "@/app/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -129,21 +131,36 @@ export async function POST(request: Request) {
     url.searchParams.set("clientCode", client.client_code);
     url.searchParams.set("secret", cronSecret);
 
-    const response = await sendAvitoTestReport(new Request(url));
+    after(async () => {
+      try {
+        const response = await sendAvitoTestReport(new Request(url));
+        const result = await readJsonResponse(response);
 
-    const result = await readJsonResponse(response);
+        if (!response.ok || !result?.ok) {
+          throw new Error(
+            result?.error ||
+              `Avito test report failed with empty response (${response.status}).`
+          );
+        }
 
-    if (!response.ok || !result?.ok) {
-      throw new Error(
-        result?.error ||
-          `Не удалось отправить тестовый отчёт. Сервер вернул пустой ответ (${response.status}).`
-      );
-    }
+        console.log("[avito:send-test-report] background completed", {
+          clientId,
+          workspaceId,
+        });
+      } catch (error) {
+        console.error("[avito:send-test-report] background failed", {
+          clientId,
+          workspaceId,
+          error,
+        });
+      }
+    });
 
     return Response.json({
       ok: true,
-      message: "Тестовый отчёт отправлен в Telegram",
-      result,
+      mode: "background",
+      message:
+        "Тестовый отчёт запущен. Он придёт в Telegram после формирования.",
     });
   } catch (error) {
     return Response.json(
