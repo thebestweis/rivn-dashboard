@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import { useAppContextState } from "../../providers/app-context-provider";
 import {
-  addWorkspaceMemberByEmail,
   getWorkspaceMemberLimitState,
   getWorkspaceMembers,
   getWorkspaceMemberDisplayName,
@@ -16,6 +15,17 @@ import {
   type WorkspaceMemberPayType,
   type WorkspaceMemberRole,
 } from "../../lib/supabase/workspace-members";
+import {
+  cancelWorkspaceInvitation,
+  createWorkspaceInvitation,
+  getWorkspaceInvitations,
+  refreshWorkspaceInvitationLink,
+  type WorkspaceInvitationItem,
+} from "../../lib/workspace-invitations-client";
+import {
+  getWorkspaceInvitationRoleLabel,
+  getWorkspaceInvitationStatusLabel,
+} from "../../lib/workspace-invitations";
 import { AppToast } from "../ui/app-toast";
 import { BillingAccessBanner } from "../ui/billing-access-banner";
 import { getBillingErrorMessage } from "../../lib/billing-errors";
@@ -25,6 +35,7 @@ import {
   ensureSystemSettings,
   type SystemSettings,
 } from "../../lib/supabase/system-settings";
+import { CustomSelect } from "../ui/custom-select";
 
 const roleOptions: Array<{
   value: WorkspaceMemberRole;
@@ -44,6 +55,18 @@ const payTypeOptions: Array<{
   { value: "fixed_per_paid_project", label: "За оплаченный проект" },
   { value: "fixed_salary", label: "Оклад" },
   { value: "fixed_salary_plus_project", label: "Оклад + проектная часть" },
+];
+
+const inviteRoleOptions: Array<{
+  value: WorkspaceMemberRole;
+  label: string;
+}> = [
+  { value: "admin", label: "Админ" },
+  { value: "manager", label: "Менеджер" },
+  { value: "analyst", label: "Аналитик" },
+  { value: "employee", label: "Сотрудник" },
+  { value: "sales_head", label: "Руководитель отдела продаж" },
+  { value: "sales_manager", label: "Менеджер по продажам" },
 ];
 
 type MemberPayrollForm = {
@@ -110,10 +133,17 @@ export function UsersSettingsTab() {
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<WorkspaceMemberRole>("employee");
+  const [lastInviteUrl, setLastInviteUrl] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [cancelingInvitationId, setCancelingInvitationId] = useState<
+    string | null
+  >(null);
+  const [refreshingInvitationId, setRefreshingInvitationId] = useState<
+    string | null
+  >(null);
 
   const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
   const [isSavingPayroll, setIsSavingPayroll] = useState(false);
@@ -148,6 +178,20 @@ export function UsersSettingsTab() {
     queryFn: getWorkspaceMembers,
     enabled: Boolean(workspaceId),
     staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  });
+
+  const {
+    data: invitations = [],
+    isLoading: isInvitationsLoading,
+    isFetching: isInvitationsFetching,
+  } = useQuery<WorkspaceInvitationItem[]>({
+    queryKey: workspaceId
+      ? ["workspace-invitations-settings", "workspace", workspaceId]
+      : ["workspace-invitations-settings"],
+    queryFn: getWorkspaceInvitations,
+    enabled: Boolean(workspaceId) && canManageMembers,
+    staleTime: 1000 * 60,
     refetchOnWindowFocus: false,
   });
 
@@ -196,6 +240,11 @@ export function UsersSettingsTab() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.systemSettings,
       }),
+      queryClient.invalidateQueries({
+        queryKey: workspaceId
+          ? ["workspace-invitations-settings", "workspace", workspaceId]
+          : ["workspace-invitations-settings"],
+      }),
     ]);
   }
 
@@ -237,6 +286,10 @@ export function UsersSettingsTab() {
       return aName.localeCompare(bName, "ru");
     });
   }, [users]);
+
+  const pendingInvitations = useMemo(() => {
+    return invitations.filter((item) => item.status === "pending");
+  }, [invitations]);
 
   const addButtonDisabled =
     isSubmitting || !limitState?.canInviteMembers || !canManageMembers;
@@ -377,15 +430,16 @@ export function UsersSettingsTab() {
     try {
       setIsSubmitting(true);
 
-      await addWorkspaceMemberByEmail({
+      const result = await createWorkspaceInvitation({
         email: normalizedEmail,
         role,
       });
 
       setEmail("");
       setRole("employee");
+      setLastInviteUrl(result.inviteUrl);
       setToastType("success");
-      setToastMessage("Пользователь успешно добавлен в кабинет");
+      setToastMessage("Приглашение создано. Скопируй ссылку и отправь сотруднику.");
 
       await refreshMembersData();
     } catch (error) {
@@ -394,6 +448,60 @@ export function UsersSettingsTab() {
       setToastMessage(getBillingErrorMessage(error));
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleCopyInviteUrl(inviteUrl: string) {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setToastType("success");
+      setToastMessage("Ссылка приглашения скопирована");
+    } catch {
+      setToastType("error");
+      setToastMessage("Не удалось скопировать ссылку. Скопируй её вручную.");
+    }
+  }
+
+  async function handleCancelInvitation(invitationId: string) {
+    if (!canManageMembers) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на управление пользователями");
+      return;
+    }
+
+    try {
+      setCancelingInvitationId(invitationId);
+      await cancelWorkspaceInvitation(invitationId);
+      setToastType("success");
+      setToastMessage("Приглашение отменено");
+      await refreshMembersData();
+    } catch (error) {
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
+    } finally {
+      setCancelingInvitationId(null);
+    }
+  }
+
+  async function handleRefreshInvitationLink(invitationId: string) {
+    if (!canManageMembers) {
+      setToastType("error");
+      setToastMessage("У тебя нет прав на управление пользователями");
+      return;
+    }
+
+    try {
+      setRefreshingInvitationId(invitationId);
+      const result = await refreshWorkspaceInvitationLink(invitationId);
+      setLastInviteUrl(result.inviteUrl);
+      setToastType("success");
+      setToastMessage("Новая ссылка приглашения создана");
+      await refreshMembersData();
+    } catch (error) {
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
+    } finally {
+      setRefreshingInvitationId(null);
     }
   }
 
@@ -560,18 +668,13 @@ export function UsersSettingsTab() {
 
               <div>
                 <label className="mb-2 block text-sm text-white/55">Роль</label>
-                <select
+                <CustomSelect
                   value={role}
-                  onChange={(e) => setRole(e.target.value as WorkspaceMemberRole)}
+                  onChange={(value) => setRole(value as WorkspaceMemberRole)}
+                  options={inviteRoleOptions}
                   disabled={!canManageMembers}
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {roleOptions.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
+                  buttonClassName="h-[48px]"
+                />
               </div>
 
               <div className="flex items-end">
@@ -581,12 +684,120 @@ export function UsersSettingsTab() {
                   disabled={addButtonDisabled}
                   className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isSubmitting ? "Добавляем..." : "Добавить в кабинет"}
+                  {isSubmitting ? "Создаём..." : "Создать приглашение"}
                 </button>
               </div>
             </div>
           </div>
         </div>
+
+        {lastInviteUrl ? (
+          <div className="mt-5 rounded-[24px] border border-emerald-400/20 bg-emerald-500/10 p-4">
+            <div className="text-sm font-semibold text-emerald-100">
+              Ссылка для сотрудника готова
+            </div>
+            <div className="mt-2 text-sm text-emerald-100/75">
+              Пока почта не подключена, скопируй ссылку и отправь её сотруднику
+              вручную. По ней он создаст аккаунт или войдёт в существующий и
+              сразу попадёт в этот кабинет.
+            </div>
+            <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-xs text-white/75">
+                <div className="truncate">{lastInviteUrl}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleCopyInviteUrl(lastInviteUrl)}
+                className="h-[44px] rounded-2xl border border-emerald-300/20 bg-emerald-400/15 px-4 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/20"
+              >
+                Скопировать ссылку
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {canManageMembers ? (
+          <div className="mt-5 rounded-[24px] border border-white/8 bg-white/[0.025] p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-white">
+                  Ожидают приглашение
+                </div>
+                <div className="mt-1 text-sm text-white/50">
+                  Здесь видно, кто ещё не принял ссылку. Ссылку можно обновить,
+                  если старая потерялась.
+                </div>
+              </div>
+              {isInvitationsFetching && !isInvitationsLoading ? (
+                <div className="text-xs text-white/35">Обновляем...</div>
+              ) : null}
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {isInvitationsLoading ? (
+                <div className="rounded-2xl border border-white/8 bg-[#0F1524] px-4 py-4 text-sm text-white/45">
+                  Загружаем приглашения...
+                </div>
+              ) : pendingInvitations.length > 0 ? (
+                pendingInvitations.map((item) => {
+                  const isCanceling = cancelingInvitationId === item.id;
+                  const isRefreshingLink = refreshingInvitationId === item.id;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-[#0F1524] px-4 py-3 lg:flex-row lg:items-center lg:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-white">
+                          {item.email}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-white/45">
+                          <span>
+                            {getWorkspaceInvitationRoleLabel(item.role)}
+                          </span>
+                          <span>•</span>
+                          <span>
+                            {getWorkspaceInvitationStatusLabel(item.status)}
+                          </span>
+                          <span>•</span>
+                          <span>
+                            Действует до{" "}
+                            {new Date(item.expires_at).toLocaleDateString(
+                              "ru-RU"
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleRefreshInvitationLink(item.id)}
+                          disabled={isRefreshingLink || isCanceling}
+                          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/75 transition hover:bg-white/[0.07] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isRefreshingLink ? "Создаём..." : "Новая ссылка"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCancelInvitation(item.id)}
+                          disabled={isCanceling || isRefreshingLink}
+                          className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-100 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isCanceling ? "Отменяем..." : "Отменить"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-2xl border border-white/8 bg-[#0F1524] px-4 py-4 text-sm text-white/45">
+                  Активных приглашений пока нет.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
           <table className="w-full text-left text-sm">

@@ -29,6 +29,20 @@ async function waitForSessionReady() {
   throw new Error("Не удалось дождаться auth session после регистрации");
 }
 
+async function createWelcomeNotification() {
+  const response = await fetch("/api/notifications/welcome", {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(
+      payload?.error || "Не удалось создать приветственное уведомление"
+    );
+  }
+}
+
 export function RegisterPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -82,6 +96,12 @@ export function RegisterPageContent() {
       if (data.session) {
   await waitForSessionReady();
   await bootstrapAccountForCurrentUser();
+
+  try {
+    await createWelcomeNotification();
+  } catch (notificationError) {
+    console.error("Ошибка создания приветственного уведомления:", notificationError);
+  }
 
   if (data.user) {
     try {
