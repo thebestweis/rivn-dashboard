@@ -101,6 +101,7 @@ export async function upsertAvitoReportSnapshot(params: {
     client_id: params.clientId,
     account_id: params.accountId,
     report_type: params.reportType,
+    period_type: params.reportType,
     period_start: params.periodStart,
     period_end: params.periodEnd,
     views: Math.round(params.current.views),

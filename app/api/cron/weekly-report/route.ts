@@ -6,6 +6,7 @@ import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
   getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
+  sleep,
 } from "@/app/api/avito/avito-api-helpers";
 import {
   enqueueAvitoReportRetryJob,
@@ -188,20 +189,39 @@ async function sendTelegramMessage(chatId: string, text: string) {
     throw new Error("РќРµ РЅР°Р№РґРµРЅ TELEGRAM_BOT_TOKEN");
   }
 
-  const response = await fetch(
-    `https://api.telegram.org/bot${telegramToken}/sendMessage`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: "HTML",
-      }),
+  let response: Response | null = null;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      response = await fetch(
+        `https://api.telegram.org/bot${telegramToken}/sendMessage`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text,
+            parse_mode: "HTML",
+          }),
+        }
+      );
+      break;
+    } catch (error) {
+      lastError = error;
+      await sleep(1200 * (attempt + 1));
     }
-  );
+  }
+
+  if (!response) {
+    throw new Error(
+      `Не удалось отправить отчёт в Telegram: ${
+        lastError instanceof Error ? lastError.message : "network error"
+      }`
+    );
+  }
 
   const data = await response.json();
 

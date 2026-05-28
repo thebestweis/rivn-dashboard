@@ -217,10 +217,12 @@ async function sendTelegramMessage(chatId: string, text: string) {
     throw new Error("Не найден TELEGRAM_BOT_TOKEN");
   }
 
-  let response: Response;
+  let response: Response | null = null;
+  let lastError: unknown = null;
 
-  try {
-    response = await fetch(
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      response = await fetch(
       `https://api.telegram.org/bot${telegramToken}/sendMessage`,
       {
         method: "POST",
@@ -233,11 +235,18 @@ async function sendTelegramMessage(chatId: string, text: string) {
           parse_mode: "HTML",
         }),
       }
-    );
-  } catch (error) {
+      );
+      break;
+    } catch (error) {
+      lastError = error;
+      await sleep(1200 * (attempt + 1));
+    }
+  }
+
+  if (!response) {
     throw new Error(
       `Не удалось отправить отчёт в Telegram: ${
-        error instanceof Error ? error.message : "network error"
+        lastError instanceof Error ? lastError.message : "network error"
       }`
     );
   }

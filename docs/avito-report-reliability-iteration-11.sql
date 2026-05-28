@@ -9,6 +9,7 @@ alter table public.avito_report_snapshots
   add column if not exists client_id uuid references public.avito_report_clients(id) on delete cascade,
   add column if not exists account_id uuid references public.avito_report_accounts(id) on delete cascade,
   add column if not exists report_type text default 'daily',
+  add column if not exists period_type text default 'daily',
   add column if not exists period_start date,
   add column if not exists period_end date,
   add column if not exists views integer default 0,
@@ -31,6 +32,7 @@ alter table public.avito_report_snapshots
 update public.avito_report_snapshots
 set
   report_type = coalesce(report_type, 'daily'),
+  period_type = coalesce(period_type, report_type, 'daily'),
   views = coalesce(views, 0),
   contacts = coalesce(contacts, 0),
   favorites = coalesce(favorites, 0),
