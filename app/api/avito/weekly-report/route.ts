@@ -1,9 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import {
-  getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
+import {
+  enqueueAvitoReportRetryJob,
+  loadAvitoReportSnapshot,
+} from "@/app/api/avito/report-reliability";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -963,43 +966,71 @@ export async function GET() {
               continue;
             }
 
-            const currentStatsRaw = await getAvitoAggregateStatsForPeriod({
-  accountId: account.id,
-  accessToken: account.access_token,
-  avitoUserId: account.avito_user_id,
-  dateFrom: currentPeriodStart,
-  dateTo: currentPeriodEnd,
-});
+            const preparedCurrent = await loadAvitoReportSnapshot({
+              supabase,
+              accountId: account.id,
+              reportType: "weekly",
+              periodStart: currentPeriodStart,
+              periodEnd: currentPeriodEnd,
+            });
+            const preparedPrevious = await loadAvitoReportSnapshot({
+              supabase,
+              accountId: account.id,
+              reportType: "weekly",
+              periodStart: previousPeriodStart,
+              periodEnd: previousPeriodEnd,
+            });
 
-const currentExpenses = await getExpensesForPeriod({
-  accountId: account.id,
-  dateFrom: currentPeriodStart,
-  dateTo: currentPeriodEnd,
-});
+            if (preparedCurrent?.qualityStatus !== "ok") {
+              await enqueueAvitoReportRetryJob({
+                supabase,
+                clientId: client.id,
+                accountId: account.id,
+                reportType: "weekly",
+                periodStart: currentPeriodStart,
+                periodEnd: currentPeriodEnd,
+                priority: preparedCurrent?.qualityStatus === "critical" ? 10 : 50,
+                delayMinutes: 1.5,
+                lastError:
+                  preparedCurrent?.warnings.join("\n") ||
+                  "Weekly Avito data is still being collected.",
+              });
+            }
 
-const currentStats = buildStats({
-  ...currentStatsRaw,
-  expenses: currentExpenses,
-});
+            const currentStats = buildStats({
+              views: preparedCurrent?.statsStatus === "success" ? preparedCurrent.views : 0,
+              contacts:
+                preparedCurrent?.statsStatus === "success"
+                  ? preparedCurrent.contacts
+                  : 0,
+              favorites:
+                preparedCurrent?.statsStatus === "success"
+                  ? preparedCurrent.favorites
+                  : 0,
+              expenses:
+                preparedCurrent?.expensesStatus === "success"
+                  ? preparedCurrent.expenses
+                  : 0,
+            });
 
-          const previousStatsRaw = await getAvitoAggregateStatsForPeriod({
-  accountId: account.id,
-  accessToken: account.access_token,
-  avitoUserId: account.avito_user_id,
-  dateFrom: previousPeriodStart,
-  dateTo: previousPeriodEnd,
-});
-
-const previousExpenses = await getExpensesForPeriod({
-  accountId: account.id,
-  dateFrom: previousPeriodStart,
-  dateTo: previousPeriodEnd,
-});
-
-const previousStats = buildStats({
-  ...previousStatsRaw,
-  expenses: previousExpenses,
-});
+            const previousStats = buildStats({
+              views:
+                preparedPrevious?.statsStatus === "success"
+                  ? preparedPrevious.views
+                  : 0,
+              contacts:
+                preparedPrevious?.statsStatus === "success"
+                  ? preparedPrevious.contacts
+                  : 0,
+              favorites:
+                preparedPrevious?.statsStatus === "success"
+                  ? preparedPrevious.favorites
+                  : 0,
+              expenses:
+                preparedPrevious?.expensesStatus === "success"
+                  ? preparedPrevious.expenses
+                  : 0,
+            });
 
           const dialogAnalytics = await getDialogAnalytics({
             accessToken: account.access_token,

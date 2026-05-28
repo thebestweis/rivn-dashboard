@@ -82,6 +82,34 @@ function buildStats(params: {
   };
 }
 
+async function getPendingRetryJob(params: {
+  supabase: ReturnType<typeof getSupabase>;
+  accountId: string;
+  periodStart: string;
+  periodEnd: string;
+}) {
+  const { data, error } = await params.supabase
+    .from("avito_report_sync_jobs")
+    .select("id, status, next_run_at")
+    .eq("account_id", params.accountId)
+    .eq("report_type", "daily")
+    .eq("period_start", params.periodStart)
+    .eq("period_end", params.periodEnd)
+    .in("status", ["pending", "running"])
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  if (error || !data?.[0]) {
+    return null;
+  }
+
+  return data[0] as {
+    id: string;
+    status: "pending" | "running";
+    next_run_at: string | null;
+  };
+}
+
 export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -158,6 +186,31 @@ export async function GET(request: Request) {
             accountName: account.name,
             status: "skipped",
             error: "Данные уже собраны",
+          });
+          continue;
+        }
+
+        const pendingRetryJob = await getPendingRetryJob({
+          supabase,
+          accountId: account.id,
+          periodStart: yesterday,
+          periodEnd: yesterday,
+        });
+        const retryAt = pendingRetryJob?.next_run_at
+          ? new Date(pendingRetryJob.next_run_at).getTime()
+          : 0;
+        const isRetryWaiting =
+          pendingRetryJob?.status === "running" ||
+          (pendingRetryJob?.status === "pending" &&
+            Number.isFinite(retryAt) &&
+            retryAt > Date.now());
+
+        if (isRetryWaiting) {
+          results.push({
+            accountId: account.id,
+            accountName: account.name,
+            status: "skipped",
+            error: "РџРѕРІС‚РѕСЂРЅС‹Р№ СЃР±РѕСЂ СѓР¶Рµ Р·Р°РїР»Р°РЅРёСЂРѕРІР°РЅ",
           });
           continue;
         }

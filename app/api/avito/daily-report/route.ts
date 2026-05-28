@@ -1,9 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
-import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
-  getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
@@ -663,7 +660,6 @@ export async function GET(request: Request) {
             continue;
           }
 
-          const accessToken = await resolveAvitoAccessToken(account);
           const warnings: string[] = [];
           let statsStatus: AvitoSnapshotStatus = "success";
           let expensesStatus: AvitoSnapshotStatus = "success";
@@ -714,21 +710,10 @@ export async function GET(request: Request) {
                 };
               }
             } else {
-              currentStatsRaw = await getAvitoAggregateStatsForPeriod({
-                accountId: account.id,
-                accessToken,
-                avitoUserId: account.avito_user_id,
-                dateFrom: yesterday,
-                dateTo: yesterday,
-              });
-
-              previousStatsRaw = await getAvitoAggregateStatsForPeriod({
-                accountId: account.id,
-                accessToken,
-                avitoUserId: account.avito_user_id,
-                dateFrom: beforeYesterday,
-                dateTo: beforeYesterday,
-              });
+              statsStatus = "failed";
+              warnings.push(
+                "Статистика просмотров и контактов временно недоступна: данные Avito ещё собираются. Мы повторим сбор без лишних запросов к Avito."
+              );
             }
           } catch (statsError) {
             statsStatus = "failed";
@@ -780,24 +765,10 @@ export async function GET(request: Request) {
                 previousAvitoSpendings.total = preparedPrevious.expenses;
               }
             } else {
-              const rawAvitoSpendings = await fetchAvitoSpendings({
-                accountId: account.id,
-                accessToken,
-                userId: account.avito_user_id,
-                dateFrom: beforeYesterday,
-                dateTo: yesterday,
-                grouping: "day",
-              });
-
-              currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-                dateFrom: yesterday,
-                dateTo: yesterday,
-              });
-
-              previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-                dateFrom: beforeYesterday,
-                dateTo: beforeYesterday,
-              });
+              expensesStatus = "failed";
+              warnings.push(
+                "Расходы временно недоступны: данные Avito ещё собираются. Мы повторим сбор без лишних запросов к Avito."
+              );
             }
           } catch (spendingsError) {
             expensesStatus = "failed";

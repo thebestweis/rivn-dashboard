@@ -1,10 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
-import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
-  getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
 } from "@/app/api/avito/avito-api-helpers";
@@ -679,21 +676,10 @@ export async function GET(request: Request) {
                 };
               }
             } else {
-              currentStatsRaw = await getAvitoAggregateStatsForPeriod({
-                accountId: account.id,
-                accessToken,
-                avitoUserId: account.avito_user_id,
-                dateFrom: currentStartDate,
-                dateTo: currentEndDate,
-              });
-
-              previousStatsRaw = await getAvitoAggregateStatsForPeriod({
-                accountId: account.id,
-                accessToken,
-                avitoUserId: account.avito_user_id,
-                dateFrom: prevStartDate,
-                dateTo: prevEndDate,
-              });
+              statsStatus = "failed";
+              warnings.push(
+                "Stats are temporarily unavailable: Avito data is still being collected. The collector will retry without extra report-side requests."
+              );
             }
           } catch (statsError) {
             statsStatus = "failed";
@@ -745,24 +731,10 @@ export async function GET(request: Request) {
                 previousAvitoSpendings.total = preparedPrevious.expenses;
               }
             } else {
-              const rawAvitoSpendings = await fetchAvitoSpendings({
-                accountId: account.id,
-                accessToken,
-                userId: account.avito_user_id,
-                dateFrom: prevStartDate,
-                dateTo: currentEndDate,
-                grouping: "day",
-              });
-
-              currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-                dateFrom: currentStartDate,
-                dateTo: currentEndDate,
-              });
-
-              previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-                dateFrom: prevStartDate,
-                dateTo: prevEndDate,
-              });
+              expensesStatus = "failed";
+              warnings.push(
+                "Expenses are temporarily unavailable: Avito data is still being collected. The collector will retry without extra report-side requests."
+              );
             }
           } catch (spendingsError) {
             expensesStatus = "failed";
