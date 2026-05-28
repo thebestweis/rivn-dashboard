@@ -831,7 +831,10 @@ setIntegrations(integrationsData.integrations ?? []);
         throw new Error(result.error || "Не удалось отправить тестовый отчёт");
       }
 
-      setIntegrationMessage("Тестовый отчёт отправлен в Telegram");
+      setIntegrationMessage(
+        result.message ||
+          "Тестовый отчёт запущен. Он придёт в Telegram после формирования."
+      );
     } catch (error) {
       setIntegrationMessage(
         error instanceof Error

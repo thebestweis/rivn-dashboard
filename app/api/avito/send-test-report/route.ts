@@ -1,5 +1,4 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { after } from "next/server";
 import { GET as sendAvitoTestReport } from "@/app/api/avito/test-report/route";
 import { createClient as createServerClient } from "@/app/lib/supabase/server";
 
@@ -131,7 +130,7 @@ export async function POST(request: Request) {
     url.searchParams.set("clientCode", client.client_code);
     url.searchParams.set("secret", cronSecret);
 
-    after(async () => {
+    void (async () => {
       try {
         const response = await sendAvitoTestReport(new Request(url));
         const result = await readJsonResponse(response);
@@ -154,7 +153,7 @@ export async function POST(request: Request) {
           error,
         });
       }
-    });
+    })();
 
     return Response.json({
       ok: true,

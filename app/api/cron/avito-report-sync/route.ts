@@ -84,7 +84,7 @@ export async function GET(request: Request) {
     .lte("next_run_at", now)
     .order("priority", { ascending: true })
     .order("created_at", { ascending: true })
-    .limit(5);
+    .limit(1);
 
   if (jobsError) {
     return Response.json(
@@ -222,14 +222,16 @@ export async function GET(request: Request) {
           periodStart: job.period_start,
           periodEnd: job.period_end,
           priority: 80,
-          delayMinutes: 45,
+          delayMinutes: 1.5,
           lastError: snapshot.warnings.join("\n") || null,
         });
 
         await supabase
           .from("avito_report_sync_jobs")
           .update({
+            status: "pending",
             attempts: Number(job.attempts || 0) + 1,
+            next_run_at: new Date(Date.now() + 90 * 1000).toISOString(),
             last_error: snapshot.warnings.join("\n") || null,
             updated_at: new Date().toISOString(),
           })
@@ -252,7 +254,7 @@ export async function GET(request: Request) {
         .update({
           status: attempts >= 5 ? "failed" : "pending",
           attempts,
-          next_run_at: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
+          next_run_at: new Date(Date.now() + 90 * 1000).toISOString(),
           last_error: message,
           updated_at: new Date().toISOString(),
         })

@@ -4,10 +4,13 @@ import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
   getAvitoAggregateStatsForPeriod,
   getFriendlyAvitoErrorMessage,
-  sleep,
 } from "@/app/api/avito/avito-api-helpers";
 import { parseAvitoSpendings } from "@/app/api/avito/parse-avito-spendings";
-import { upsertAvitoReportSnapshot } from "@/app/api/avito/report-reliability";
+import {
+  enqueueAvitoReportRetryJob,
+  loadAvitoReportSnapshot,
+  upsertAvitoReportSnapshot,
+} from "@/app/api/avito/report-reliability";
 import { verifyCronSecret } from "../verify-cron-secret";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -141,6 +144,31 @@ export async function GET(request: Request) {
           continue;
         }
 
+        const existingSnapshot = await loadAvitoReportSnapshot({
+          supabase,
+          accountId: account.id,
+          reportType: "daily",
+          periodStart: yesterday,
+          periodEnd: yesterday,
+        });
+
+        if (existingSnapshot?.qualityStatus === "ok") {
+          results.push({
+            accountId: account.id,
+            accountName: account.name,
+            status: "skipped",
+            error: "Данные уже собраны",
+          });
+          continue;
+        }
+
+        const existingPreviousSnapshot = await loadAvitoReportSnapshot({
+          supabase,
+          accountId: account.id,
+          reportType: "daily",
+          periodStart: beforeYesterday,
+          periodEnd: beforeYesterday,
+        });
         const accessToken = await resolveAvitoAccessToken(account);
         const currentStatsRaw = await getAvitoAggregateStatsForPeriod({
           accountId: account.id,
@@ -149,20 +177,28 @@ export async function GET(request: Request) {
           dateFrom: yesterday,
           dateTo: yesterday,
         });
-
-        const previousStatsRaw = await getAvitoAggregateStatsForPeriod({
-          accountId: account.id,
-          accessToken,
-          avitoUserId: account.avito_user_id,
-          dateFrom: beforeYesterday,
-          dateTo: beforeYesterday,
-        });
+        const previousStatsRaw =
+          existingPreviousSnapshot?.statsStatus === "success"
+            ? {
+                views: existingPreviousSnapshot.views,
+                contacts: existingPreviousSnapshot.contacts,
+                favorites: existingPreviousSnapshot.favorites,
+              }
+            : await getAvitoAggregateStatsForPeriod({
+                accountId: account.id,
+                accessToken,
+                avitoUserId: account.avito_user_id,
+                dateFrom: beforeYesterday,
+                dateTo: beforeYesterday,
+              });
+        const hasPreparedPreviousExpenses =
+          existingPreviousSnapshot?.expensesStatus === "success";
 
         const rawSpendings = await fetchAvitoSpendings({
           accountId: account.id,
           accessToken,
           userId: account.avito_user_id,
-          dateFrom: beforeYesterday,
+          dateFrom: hasPreparedPreviousExpenses ? yesterday : beforeYesterday,
           dateTo: yesterday,
           grouping: "day",
         });
@@ -175,6 +211,9 @@ export async function GET(request: Request) {
           dateFrom: beforeYesterday,
           dateTo: beforeYesterday,
         });
+        if (hasPreparedPreviousExpenses) {
+          previousSpendings.total = existingPreviousSnapshot.expenses;
+        }
         const currentStats = buildStats({
           ...currentStatsRaw,
           expenses: currentSpendings.total,
@@ -184,7 +223,7 @@ export async function GET(request: Request) {
           expenses: previousSpendings.total,
         });
 
-        await upsertAvitoReportSnapshot({
+        const snapshot = await upsertAvitoReportSnapshot({
           supabase,
           clientId: account.client_id,
           accountId: account.id,
@@ -202,12 +241,42 @@ export async function GET(request: Request) {
           },
         });
 
+        if (snapshot.qualityStatus !== "ok") {
+          await enqueueAvitoReportRetryJob({
+            supabase,
+            clientId: account.client_id,
+            accountId: account.id,
+            reportType: "daily",
+            periodStart: yesterday,
+            periodEnd: yesterday,
+            priority: snapshot.qualityStatus === "critical" ? 10 : 50,
+            delayMinutes: 1.5,
+            lastError: snapshot.warnings.join("\n") || null,
+          });
+        }
+
         results.push({
           accountId: account.id,
           accountName: account.name,
-          status: "warmed",
+          status: snapshot.qualityStatus === "ok" ? "warmed" : "failed",
+          error:
+            snapshot.qualityStatus === "ok"
+              ? undefined
+              : snapshot.warnings.join("; ") || "Данные требуют повторного сбора",
         });
       } catch (error) {
+        await enqueueAvitoReportRetryJob({
+          supabase,
+          clientId: account.client_id,
+          accountId: account.id,
+          reportType: "daily",
+          periodStart: yesterday,
+          periodEnd: yesterday,
+          priority: 20,
+          delayMinutes: 1.5,
+          lastError: getFriendlyAvitoErrorMessage(error),
+        });
+
         results.push({
           accountId: account.id,
           accountName: account.name,
@@ -216,7 +285,7 @@ export async function GET(request: Request) {
         });
       }
 
-      await sleep(1200);
+      break;
     }
 
     return Response.json({

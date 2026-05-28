@@ -20,8 +20,8 @@ const pendingAggregateStatsByDayRequests = new Map<
   string,
   Promise<Record<string, AvitoPeriodStats>>
 >();
-const AGGREGATE_STATS_CACHE_HASH = "stats-v2-totals";
-const AGGREGATE_STATS_BY_DAY_CACHE_HASH = "stats-v2-day";
+const AGGREGATE_STATS_CACHE_HASH = "stats-v2-profile-totals-v2";
+const AGGREGATE_STATS_BY_DAY_CACHE_HASH = "stats-v2-profile-day-v2";
 const ACCURATE_ITEM_STATS_CACHE_HASH_PREFIX = "stats-v1-items:";
 
 type AvitoStatPoint = {
@@ -565,13 +565,7 @@ function getMetricBucket(metricName: string): MetricBucket | null {
   return null;
 }
 
-const coreAnalyticsMetrics = ["uniqViews", "uniqContacts", "uniqFavorites"];
-const fallbackAnalyticsMetrics = ["views", "contacts", "favorites"];
-const snakeCaseAnalyticsMetrics = [
-  "uniq_views",
-  "uniq_contacts",
-  "uniq_favorites",
-];
+const coreAnalyticsMetrics = ["views", "contacts", "favorites"];
 
 function toFiniteNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -927,7 +921,7 @@ async function fetchAggregateStatsByDayFromAvito(params: {
   dateTo: string;
 }) {
   const requestBodies = ["day", "date"].flatMap((grouping) =>
-    [coreAnalyticsMetrics, fallbackAnalyticsMetrics, snakeCaseAnalyticsMetrics].map((metrics) => ({
+    [coreAnalyticsMetrics].map((metrics) => ({
       dateFrom: params.dateFrom,
       dateTo: params.dateTo,
       grouping,
@@ -1034,67 +1028,13 @@ export async function getAvitoAggregateStatsForPeriod(params: {
           dateFrom: params.dateFrom,
           dateTo: params.dateTo,
         });
-
-        const itemIds = await getCachedAvitoItemIds({
-          accountId: params.accountId,
-          avitoUserId: params.avitoUserId,
-          accessToken: params.accessToken,
-        });
-
-        if (itemIds.length > 0) {
-          stats = await getCachedAvitoStatsForPeriod({
-            accountId: params.accountId,
-            accessToken: params.accessToken,
-            avitoUserId: params.avitoUserId,
-            itemIds,
-            dateFrom: params.dateFrom,
-            dateTo: params.dateTo,
-          });
-          cacheHash = buildAccurateItemStatsHash(itemIds);
-          totalChunks = Math.max(1, Math.ceil(itemIds.length / 200));
-          processedChunks = totalChunks;
-          cacheId = (
-            await loadStatsCache({
-              accountId: params.accountId,
-              dateFrom: params.dateFrom,
-              dateTo: params.dateTo,
-            })
-          )?.id;
-        }
       }
     } catch (error) {
       if (cachedStats && hasStatsValue(cachedStats)) {
         return cachedStats;
       }
 
-      const itemIds = await getCachedAvitoItemIds({
-        accountId: params.accountId,
-        avitoUserId: params.avitoUserId,
-        accessToken: params.accessToken,
-      });
-
-      if (!itemIds.length) {
-        throw error;
-      }
-
-      stats = await getCachedAvitoStatsForPeriod({
-        accountId: params.accountId,
-        accessToken: params.accessToken,
-        avitoUserId: params.avitoUserId,
-        itemIds,
-        dateFrom: params.dateFrom,
-        dateTo: params.dateTo,
-      });
-      cacheHash = buildAccurateItemStatsHash(itemIds);
-      totalChunks = Math.max(1, Math.ceil(itemIds.length / 200));
-      processedChunks = totalChunks;
-      cacheId = (
-        await loadStatsCache({
-          accountId: params.accountId,
-          dateFrom: params.dateFrom,
-          dateTo: params.dateTo,
-        })
-      )?.id;
+      throw error;
     }
 
     await saveStatsCache({
@@ -1109,7 +1049,7 @@ export async function getAvitoAggregateStatsForPeriod(params: {
       favorites: stats.favorites,
       processedChunks,
       totalChunks,
-      isComplete: true,
+      isComplete: hasStatsValue(stats),
     });
 
     return stats;

@@ -674,23 +674,53 @@ export async function GET(request: Request) {
             commission: 0,
             rest: 0,
           };
+          const preparedCurrent = await loadAvitoReportSnapshot({
+            supabase,
+            accountId: account.id,
+            reportType: "daily",
+            periodStart: yesterday,
+            periodEnd: yesterday,
+          });
+          const preparedPrevious = await loadAvitoReportSnapshot({
+            supabase,
+            accountId: account.id,
+            reportType: "daily",
+            periodStart: beforeYesterday,
+            periodEnd: beforeYesterday,
+          });
 
           try {
-            currentStatsRaw = await getAvitoAggregateStatsForPeriod({
-              accountId: account.id,
-              accessToken,
-              avitoUserId: account.avito_user_id,
-              dateFrom: yesterday,
-              dateTo: yesterday,
-            });
+            if (preparedCurrent?.qualityStatus === "ok") {
+              currentStatsRaw = {
+                views: preparedCurrent.views,
+                contacts: preparedCurrent.contacts,
+                favorites: preparedCurrent.favorites,
+              };
 
-            previousStatsRaw = await getAvitoAggregateStatsForPeriod({
-              accountId: account.id,
-              accessToken,
-              avitoUserId: account.avito_user_id,
-              dateFrom: beforeYesterday,
-              dateTo: beforeYesterday,
-            });
+              if (preparedPrevious?.statsStatus === "success") {
+                previousStatsRaw = {
+                  views: preparedPrevious.views,
+                  contacts: preparedPrevious.contacts,
+                  favorites: preparedPrevious.favorites,
+                };
+              }
+            } else {
+              currentStatsRaw = await getAvitoAggregateStatsForPeriod({
+                accountId: account.id,
+                accessToken,
+                avitoUserId: account.avito_user_id,
+                dateFrom: yesterday,
+                dateTo: yesterday,
+              });
+
+              previousStatsRaw = await getAvitoAggregateStatsForPeriod({
+                accountId: account.id,
+                accessToken,
+                avitoUserId: account.avito_user_id,
+                dateFrom: beforeYesterday,
+                dateTo: beforeYesterday,
+              });
+            }
           } catch (statsError) {
             statsStatus = "failed";
             const cachedCurrent = await loadAvitoReportSnapshot({
@@ -734,24 +764,32 @@ export async function GET(request: Request) {
           }
 
           try {
-            const rawAvitoSpendings = await fetchAvitoSpendings({
-              accountId: account.id,
-              accessToken,
-              userId: account.avito_user_id,
-              dateFrom: beforeYesterday,
-              dateTo: yesterday,
-              grouping: "day",
-            });
+            if (preparedCurrent?.qualityStatus === "ok") {
+              currentAvitoSpendings.total = preparedCurrent.expenses;
 
-            currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-              dateFrom: yesterday,
-              dateTo: yesterday,
-            });
+              if (preparedPrevious?.expensesStatus === "success") {
+                previousAvitoSpendings.total = preparedPrevious.expenses;
+              }
+            } else {
+              const rawAvitoSpendings = await fetchAvitoSpendings({
+                accountId: account.id,
+                accessToken,
+                userId: account.avito_user_id,
+                dateFrom: beforeYesterday,
+                dateTo: yesterday,
+                grouping: "day",
+              });
 
-            previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
-              dateFrom: beforeYesterday,
-              dateTo: beforeYesterday,
-            });
+              currentAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
+                dateFrom: yesterday,
+                dateTo: yesterday,
+              });
+
+              previousAvitoSpendings = parseAvitoSpendings(rawAvitoSpendings, {
+                dateFrom: beforeYesterday,
+                dateTo: beforeYesterday,
+              });
+            }
           } catch (spendingsError) {
             expensesStatus = "failed";
             const cachedCurrent = await loadAvitoReportSnapshot({
@@ -826,7 +864,7 @@ export async function GET(request: Request) {
               periodStart: yesterday,
               periodEnd: yesterday,
               priority: snapshot.qualityStatus === "critical" ? 10 : 50,
-              delayMinutes: 20,
+              delayMinutes: 1.5,
               lastError: snapshot.warnings.join("\n") || null,
             });
 

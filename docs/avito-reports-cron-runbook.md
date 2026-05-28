@@ -48,16 +48,19 @@ Do not use repeated same-day Vercel cron time changes for testing on Hobby plans
 
 For reliable production delivery, keep Vercel cron as a fallback and add an external scheduler with normal, non-force calls:
 
+- 03:00-08:50 MSK, every 2 minutes: `/api/cron/avito-cache-warmup?secret=CRON_SECRET`
+- 03:00-08:50 MSK, every 2 minutes: `/api/cron/avito-report-sync?secret=CRON_SECRET`
 - 09:00 MSK: `/api/cron/daily?secret=CRON_SECRET`
 - 09:15 MSK: `/api/cron/daily?secret=CRON_SECRET`
 - 09:30 MSK: `/api/cron/daily?secret=CRON_SECRET`
-- Every 30-60 minutes: `/api/cron/avito-report-sync?secret=CRON_SECRET`
-- Before reports, for example 08:30 MSK: `/api/cron/avito-cache-warmup?secret=CRON_SECRET`
+- After 09:00, every 10-15 minutes until stable: `/api/cron/avito-report-sync?secret=CRON_SECRET`
 
 Because duplicate protection is checked per client and period, retries should not duplicate successful reports.
 
-`/api/cron/avito-cache-warmup` prepares Avito data before users receive reports.
-`/api/cron/avito-report-sync` retries accounts that got a partial or suspicious snapshot, so the next report can reuse prepared data instead of sending false zero metrics.
+`/api/cron/avito-cache-warmup` prepares Avito data before users receive reports. It processes only one Avito account per call and skips accounts that already have a good snapshot for the period.
+`/api/cron/avito-report-sync` retries accounts that got a partial or suspicious snapshot. It also processes only one account per call and schedules the next attempt about 90 seconds later.
+
+Reports at 09:00 first reuse prepared snapshots from the database. If a good snapshot already exists, the report does not call Avito again for that account.
 
 The project also has Vercel retry routes:
 
