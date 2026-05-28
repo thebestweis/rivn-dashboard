@@ -11,6 +11,7 @@ import { canEditClients, isAppRole, type AppRole } from "../lib/permissions";
 import { useAppContextState } from "../providers/app-context-provider";
 import { getBillingErrorMessage } from "../lib/billing-errors";
 import { BillingAccessBanner } from "../components/ui/billing-access-banner";
+import { useConfirmDialog } from "../components/ui/confirm-dialog-provider";
 import {
   useClientEmployeesQuery,
   useClientsQuery,
@@ -98,6 +99,7 @@ export default function ClientsPage() {
   const createClientMutation = useCreateClientMutation();
   const updateClientMutation = useUpdateClientMutation();
   const deleteClientMutation = useDeleteClientMutation();
+  const { confirm } = useConfirmDialog();
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -252,9 +254,12 @@ export default function ClientsPage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Удалить клиента "${target.name}"? Это действие нельзя отменить.`
-    );
+    const confirmed = await confirm({
+      title: "Удалить клиента?",
+      description: `Клиент "${target.name}" будет удалён. Это действие нельзя отменить.`,
+      confirmLabel: "Удалить",
+      tone: "danger",
+    });
 
     if (!confirmed) return;
 

@@ -42,12 +42,43 @@ export function useCreateProjectMutation() {
   return useMutation({
     mutationFn: createProject,
     onSuccess: (createdProject) => {
-      if (!workspaceId) return;
+      const putProjectIntoList = (prev: Project[] = []) => {
+        const withoutDuplicate = prev.filter(
+          (project) => project.id !== createdProject.id
+        );
+
+        return [createdProject, ...withoutDuplicate].sort(
+          (a, b) => a.sort_order - b.sort_order
+        );
+      };
 
       queryClient.setQueryData<Project[]>(
-        queryKeys.projectsByWorkspace(workspaceId),
-        (prev = []) => [createdProject, ...prev].sort((a, b) => a.sort_order - b.sort_order)
+        queryKeys.projects,
+        putProjectIntoList
       );
+
+      if (workspaceId) {
+        queryClient.setQueryData<Project[]>(
+          queryKeys.projectsByWorkspace(workspaceId),
+          putProjectIntoList
+        );
+
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.activeTaskCountsByProject(workspaceId),
+        });
+      }
+
+      queryClient.setQueryData(
+        queryKeys.project(createdProject.id),
+        createdProject
+      );
+
+      queryClient.invalidateQueries({
+        queryKey: workspaceId
+          ? queryKeys.projectsByWorkspace(workspaceId)
+          : queryKeys.projects,
+        refetchType: "active",
+      });
     },
   });
 }

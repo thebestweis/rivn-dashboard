@@ -36,6 +36,7 @@ import {
   type SystemSettings,
 } from "../../lib/supabase/system-settings";
 import { CustomSelect } from "../ui/custom-select";
+import { useConfirmDialog } from "../ui/confirm-dialog-provider";
 
 const roleOptions: Array<{
   value: WorkspaceMemberRole;
@@ -119,6 +120,7 @@ function getPayTypeLabel(value: WorkspaceMemberPayType | null) {
 }
 
 export function UsersSettingsTab() {
+  const { confirm } = useConfirmDialog();
   const queryClient = useQueryClient();
 
   const {
@@ -557,7 +559,12 @@ export function UsersSettingsTab() {
       return;
     }
 
-    const shouldDelete = window.confirm("Удалить пользователя из кабинета?");
+    const shouldDelete = await confirm({
+      title: "Удалить пользователя?",
+      description: "Пользователь потеряет доступ к этому кабинету. Это не удалит его аккаунт из системы.",
+      confirmLabel: "Удалить",
+      tone: "danger",
+    });
     if (!shouldDelete) return;
 
     try {

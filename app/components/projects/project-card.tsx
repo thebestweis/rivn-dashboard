@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../lib/query-keys";
 import { getProjectById } from "../../lib/supabase/projects";
 import { getTasksByProject } from "../../lib/supabase/tasks";
+import { useConfirmDialog } from "../ui/confirm-dialog-provider";
 
 export type ProjectCardStatus = "active" | "paused" | "completed";
 
@@ -76,6 +77,7 @@ function ProjectCardComponent({
   isDeleting = false,
   canManageProject = false,
 }: ProjectCardProps) {
+  const { confirm } = useConfirmDialog();
   const queryClient = useQueryClient();
   const hasPrefetchedRef = useRef(false);
 
@@ -174,13 +176,16 @@ function ProjectCardComponent({
             {onDelete ? (
               <button
                 type="button"
-                onClick={(event) => {
+                onClick={async (event) => {
                   event.preventDefault();
                   event.stopPropagation();
 
-                  const isConfirmed = window.confirm(
-                    `Удалить проект "${name}"?`
-                  );
+                  const isConfirmed = await confirm({
+                    title: "Удалить проект?",
+                    description: `Проект "${name}" будет удалён. Это действие нельзя отменить.`,
+                    confirmLabel: "Удалить",
+                    tone: "danger",
+                  });
 
                   if (!isConfirmed || isDeleting) {
                     return;

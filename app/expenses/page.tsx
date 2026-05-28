@@ -10,6 +10,7 @@ import { ExpensesTable } from "../components/expenses/expenses-table";
 import { CreateExpenseModal } from "../components/expenses/create-expense-modal";
 import { EditExpenseModal } from "../components/expenses/edit-expense-modal";
 import { Skeleton } from "../components/ui/skeleton";
+import { useConfirmDialog } from "../components/ui/confirm-dialog-provider";
 import { formatRub, parseRubAmount } from "../lib/storage";
 import type { ExpenseFormData } from "../lib/types/expense";
 import { usePageAccess } from "../lib/use-page-access";
@@ -117,6 +118,7 @@ export default function ExpensesPage() {
   const createExpenseMutation = useCreateExpenseMutation();
   const updateExpenseMutation = useUpdateExpenseMutation();
   const deleteExpenseMutation = useDeleteExpenseMutation();
+  const { confirm } = useConfirmDialog();
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -368,9 +370,12 @@ export default function ExpensesPage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Удалить расход "${target.title}"? Это действие нельзя отменить.`
-    );
+    const confirmed = await confirm({
+      title: "Удалить расход?",
+      description: `Расход "${target.title}" будет удалён. Это действие нельзя отменить.`,
+      confirmLabel: "Удалить",
+      tone: "danger",
+    });
 
     if (!confirmed) return;
 

@@ -7,6 +7,7 @@ import { ThemeInit } from "./components/ui/theme-init";
 import { AppContextProvider } from "./providers/app-context-provider";
 import { QueryProvider } from "./providers/query-provider";
 import { RootAppShell } from "./components/layout/root-app-shell";
+import { ConfirmDialogProvider } from "./components/ui/confirm-dialog-provider";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -52,7 +53,9 @@ export default function RootLayout({
         <ThemeInit />
         <QueryProvider>
           <AppContextProvider>
-            <RootAppShell>{children}</RootAppShell>
+            <ConfirmDialogProvider>
+              <RootAppShell>{children}</RootAppShell>
+            </ConfirmDialogProvider>
           </AppContextProvider>
         </QueryProvider>
       </body>

@@ -12,6 +12,7 @@ import { PayrollPayoutsTable } from "../components/payroll/payroll-payouts-table
 import { PayrollExtraTable } from "../components/payroll/payroll-extra-table";
 import { AppToast } from "../components/ui/app-toast";
 import { CustomSelect } from "../components/ui/custom-select";
+import { useConfirmDialog } from "../components/ui/confirm-dialog-provider";
 
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -193,6 +194,7 @@ function getPayrollRoleLabel(role: string | null | undefined) {
 }
 
 export default function PayrollPage() {
+  const { confirm } = useConfirmDialog();
   const queryClient = useQueryClient();
 
   const {
@@ -895,9 +897,12 @@ setSystemSettings(settingsData);
       return;
     }
 
-    const confirmed = window.confirm(
-      `Удалить начисление для "${target.employee}" на сумму ${target.amount}?`
-    );
+    const confirmed = await confirm({
+      title: "Удалить начисление?",
+      description: `Начисление для "${target.employee}" на сумму ${target.amount} будет удалено.`,
+      confirmLabel: "Удалить",
+      tone: "danger",
+    });
 
     if (!confirmed) return;
 
@@ -940,9 +945,11 @@ setSystemSettings(settingsData);
       return;
     }
 
-    const confirmed = window.confirm(
-      `Провести внеплановую выплату сотруднику "${target.employee}" на сумму ${target.amount}?`
-    );
+    const confirmed = await confirm({
+      title: "Провести выплату?",
+      description: `Начисление для "${target.employee}" на сумму ${target.amount} будет отмечено как выплаченное.`,
+      confirmLabel: "Провести",
+    });
 
     if (!confirmed) return;
 
@@ -997,11 +1004,11 @@ setSystemSettings(settingsData);
       return;
     }
 
-    const confirmed = window.confirm(
-      `Провести выплату пользователю "${targetGroup.employee}" на сумму ₽${targetGroup.total.toLocaleString(
-        "ru-RU"
-      )}?`
-    );
+    const confirmed = await confirm({
+      title: "Выплатить сотруднику?",
+      description: `Будет создана выплата для "${targetGroup.employee}" на сумму ₽${targetGroup.total.toLocaleString("ru-RU")}.`,
+      confirmLabel: "Выплатить",
+    });
 
     if (!confirmed) return;
 
@@ -1087,11 +1094,11 @@ setSystemSettings(settingsData);
       0
     );
 
-    const confirmed = window.confirm(
-      `Провести выплату всех начислений сразу? Будет создано ${pendingEmployeePayouts.length} выплат(ы) на общую сумму ₽${totalAmount.toLocaleString(
-        "ru-RU"
-      )}.`
-    );
+    const confirmed = await confirm({
+      title: "Оплатить всё?",
+      description: `Будет создано выплат: ${pendingEmployeePayouts.length}. Общая сумма: ₽${totalAmount.toLocaleString("ru-RU")}.`,
+      confirmLabel: "Оплатить всё",
+    });
 
     if (!confirmed) return;
 
@@ -1238,9 +1245,12 @@ setSystemSettings(settingsData);
       return;
     }
 
-    const confirmed = window.confirm(
-      `Удалить выплату для "${target.employee}" на сумму ${target.amount}?`
-    );
+    const confirmed = await confirm({
+      title: "Удалить выплату?",
+      description: `Выплата для "${target.employee}" на сумму ${target.amount} будет удалена.`,
+      confirmLabel: "Удалить",
+      tone: "danger",
+    });
 
     if (!confirmed) return;
 
@@ -1336,9 +1346,12 @@ setSystemSettings(settingsData);
       return;
     }
 
-    const confirmed = window.confirm(
-      `Удалить внеплановую выплату для "${target.employee}" на сумму ${target.amount}?`
-    );
+    const confirmed = await confirm({
+      title: "Удалить внеплановую выплату?",
+      description: `Внеплановая выплата для "${target.employee}" на сумму ${target.amount} будет удалена.`,
+      confirmLabel: "Удалить",
+      tone: "danger",
+    });
 
     if (!confirmed) return;
 

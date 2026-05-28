@@ -14,6 +14,7 @@ import { CreatePaymentModal } from "../components/payments/create-payment-modal"
 import { EditPaymentModal } from "../components/payments/edit-payment-modal";
 import { EmptyState } from "../components/ui/empty-state";
 import { Skeleton } from "../components/ui/skeleton";
+import { useConfirmDialog } from "../components/ui/confirm-dialog-provider";
 
 import { AccessDenied } from "../components/access/access-denied";
 import { usePageAccess } from "../lib/use-page-access";
@@ -228,6 +229,7 @@ export default function PaymentsPage() {
   const queryClient = useQueryClient();
   const { workspace } = useAppContextState();
   const workspaceId = workspace?.id ?? "";
+  const { confirm } = useConfirmDialog();
 
   const {
     isLoading: isAccessLoading,
@@ -828,9 +830,12 @@ export default function PaymentsPage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Удалить оплату "${target.client}" на сумму ${target.amount}? Это действие нельзя отменить.`
-    );
+    const confirmed = await confirm({
+      title: "Удалить оплату?",
+      description: `Оплата для "${target.client}" на сумму ${target.amount} будет удалена. Это действие нельзя отменить.`,
+      confirmLabel: "Удалить",
+      tone: "danger",
+    });
 
     if (!confirmed) return;
 

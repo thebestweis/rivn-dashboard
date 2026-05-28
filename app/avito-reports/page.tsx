@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AvitoChart } from "@/app/components/avito/avito-chart";
+import { useConfirmDialog } from "@/app/components/ui/confirm-dialog-provider";
 import { useAppContextState } from "@/app/providers/app-context-provider";
 
 type AvitoMetric = {
@@ -151,6 +152,7 @@ const emptyAccount = (): AvitoAccountForm => ({
 });
 
 export default function AvitoReportsPage() {
+  const { confirm } = useConfirmDialog();
   const [data, setData] = useState<AvitoMetric[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -592,9 +594,12 @@ setIntegrations(integrationsData.integrations ?? []);
   }
 
   async function archiveIntegration(integration: AvitoIntegration) {
-    const confirmed = window.confirm(
-      `Отправка отчётов по проекту "${integration.name}" будет выключена. История и настройки останутся в системе. Архивировать проект?`
-    );
+    const confirmed = await confirm({
+      title: "Выключить Avito-проект?",
+      description: `Отчёты по проекту "${integration.name}" будут выключены. История и настройки останутся в системе.`,
+      confirmLabel: "Выключить",
+      tone: "danger",
+    });
 
     if (!confirmed) {
       return;
@@ -802,9 +807,11 @@ setIntegrations(integrationsData.integrations ?? []);
   }
 
   async function sendTestReport(integration: AvitoIntegration) {
-    const confirmed = window.confirm(
-      `Отправить тестовый отчёт по проекту "${integration.name}" в привязанную Telegram-беседу?`
-    );
+    const confirmed = await confirm({
+      title: "Отправить тестовый отчёт?",
+      description: `Тестовый отчёт по проекту "${integration.name}" будет отправлен в привязанную Telegram-беседу.`,
+      confirmLabel: "Отправить",
+    });
 
     if (!confirmed) {
       return;
