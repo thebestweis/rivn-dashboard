@@ -6,8 +6,6 @@ import { Api, TelegramClient } from "telegram";
 import { NewMessage } from "telegram/events/index.js";
 import { StringSession } from "telegram/sessions/index.js";
 
-const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
-
 function loadEnvFile(fileName) {
   const path = resolve(process.cwd(), fileName);
   if (!existsSync(path)) return;
@@ -236,13 +234,15 @@ class ReaderRuntime {
     this.trackedDialogs = [];
     this.pollTimer = null;
     this.isStopping = false;
+    this.isPolling = false;
+    this.needsRestart = false;
   }
 
   async start() {
     this.sourceChats = await loadSourceChats(this.reader.id);
     if (this.sourceChats.length === 0) {
       log("Reader пропущен: нет активных чатов", { readerId: this.reader.id });
-      return;
+      return false;
     }
 
     const sessionString = decryptSessionString(this.reader.encrypted_session_string, config.encryptionKey);
@@ -281,12 +281,13 @@ class ReaderRuntime {
 
     await updateReader(this.reader.id, { last_error: null, last_seen_at: new Date().toISOString() });
     log("Reader запущен", { readerId: this.reader.id, chats: this.trackedDialogs.length });
+    return true;
   }
 
   async stop() {
     this.isStopping = true;
     if (this.pollTimer) clearInterval(this.pollTimer);
-    if (this.client) await this.client.disconnect();
+    if (this.client && !this.client.disconnected) await this.client.disconnect().catch(() => undefined);
   }
 
   async resolveDialogs() {
@@ -324,7 +325,7 @@ class ReaderRuntime {
   }
 
   async handleNewMessage(event) {
-    if (!this.client) return;
+    if (!this.client || this.isStopping || this.client.disconnected) return;
     const message = event.message;
     if (!(message instanceof Api.Message)) return;
 
@@ -339,31 +340,40 @@ class ReaderRuntime {
   }
 
   async pollRecentMessages() {
-    if (!this.client || this.isStopping) return;
+    if (!this.client || this.isStopping || this.isPolling || this.client.disconnected) return;
 
-    for (const dialog of this.trackedDialogs) {
-      let messages = [];
-      try {
-        messages = await this.client.getMessages(dialog.entity, { limit: config.recentMessagesLimit });
-      } catch (error) {
-        if (/CHANNEL_PRIVATE|CHAT_ADMIN_REQUIRED|not a participant|forbidden|access/i.test(String(error))) {
-          await updateSourceChat(dialog.sourceChat.id, {
-            status: "access_lost",
-            last_checked_at: new Date().toISOString(),
-          });
-          continue;
+    this.isPolling = true;
+
+    try {
+      for (const dialog of this.trackedDialogs) {
+        if (this.isStopping || this.client.disconnected) return;
+
+        let messages = [];
+        try {
+          messages = await this.client.getMessages(dialog.entity, { limit: config.recentMessagesLimit });
+        } catch (error) {
+          if (/CHANNEL_PRIVATE|CHAT_ADMIN_REQUIRED|not a participant|forbidden|access/i.test(String(error))) {
+            await updateSourceChat(dialog.sourceChat.id, {
+              status: "access_lost",
+              last_checked_at: new Date().toISOString(),
+            });
+            continue;
+          }
+          throw error;
         }
-        throw error;
-      }
 
-      for (const message of [...messages].reverse()) {
-        if (message instanceof Api.Message) await this.processMessage(dialog.sourceChat, message);
+        for (const message of [...messages].reverse()) {
+          if (this.isStopping || this.client.disconnected) return;
+          if (message instanceof Api.Message) await this.processMessage(dialog.sourceChat, message);
+        }
       }
+    } finally {
+      this.isPolling = false;
     }
   }
 
   async processMessage(sourceChat, message) {
-    if (!this.client) return;
+    if (!this.client || this.isStopping || this.client.disconnected) return;
     const text = message.message ?? "";
     if (!text.trim()) return;
 
@@ -395,10 +405,25 @@ class ReaderRuntime {
   }
 
   async handleRuntimeError(error, message) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isDisconnectError = /disconnected|reconnect|TIMEOUT|Not connected/i.test(errorMessage);
+
+    if (this.isStopping && isDisconnectError) return;
+
     logError(message, error, { readerId: this.reader.id });
 
-    const errorMessage = error instanceof Error ? error.message : String(error);
     const isAuthError = /auth|session|authorize|unauthorized|AUTH_KEY|SESSION_REVOKED|USER_DEACTIVATED/i.test(errorMessage);
+
+    if (isDisconnectError && !isAuthError) {
+      this.needsRestart = true;
+      await updateReader(this.reader.id, {
+        status: "active",
+        last_error: "Telegram connection was reset. Reader will reconnect automatically.",
+        last_seen_at: new Date().toISOString(),
+      });
+      await this.stop();
+      return;
+    }
 
     await updateReader(this.reader.id, {
       status: isAuthError ? "auth_required" : "error",
@@ -411,28 +436,32 @@ class ReaderRuntime {
 }
 
 const runtimes = new Map();
+const startingReaders = new Set();
 
 async function syncReaders() {
   const readers = await loadReaders();
   const activeIds = new Set(readers.map((reader) => reader.id));
 
   for (const [readerId, runtime] of runtimes) {
-    if (!activeIds.has(readerId)) {
+    if (!activeIds.has(readerId) || runtime.needsRestart) {
       await runtime.stop();
       runtimes.delete(readerId);
-      log("Reader остановлен", { readerId });
+      log(runtime.needsRestart ? "Reader будет перезапущен" : "Reader остановлен", { readerId });
     }
   }
 
   for (const reader of readers) {
-    if (runtimes.has(reader.id)) continue;
+    if (runtimes.has(reader.id) || startingReaders.has(reader.id)) continue;
 
+    startingReaders.add(reader.id);
     const runtime = new ReaderRuntime(reader);
     try {
-      await runtime.start();
-      runtimes.set(reader.id, runtime);
+      const started = await runtime.start();
+      if (started) runtimes.set(reader.id, runtime);
     } catch (error) {
       await runtime.handleRuntimeError(error, "Reader не запустился");
+    } finally {
+      startingReaders.delete(reader.id);
     }
   }
 }
