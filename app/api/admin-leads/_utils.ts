@@ -1,4 +1,4 @@
-import { apiFailure } from "@/app/lib/api/errors";
+import { NextResponse } from "next/server";
 import { createCipheriv, randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -70,7 +70,20 @@ export async function writeAdminLeadsAudit(
 
 export function adminLeadsFailure(error: unknown) {
   console.error("RIVN Leads admin API error:", error);
-  return apiFailure({ error, code: "DATABASE_ERROR" });
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : "Не удалось получить данные RIVN Leads. Обнови страницу или проверь настройки сервера.";
+
+  return NextResponse.json(
+    {
+      ok: false,
+      error: message,
+      code: "RIVN_LEADS_ADMIN_ERROR",
+    },
+    { status: 500 }
+  );
 }
 
 function getEncryptionKey() {

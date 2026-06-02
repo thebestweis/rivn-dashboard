@@ -18,6 +18,24 @@ function isActiveStatus(status: string | null | undefined) {
   return status === "active" || status === "connected" || status === "ok";
 }
 
+const defaultCategories = [
+  {
+    name: "CRM и автоматизация",
+    slug: "crm",
+    description: "Чаты про CRM, интеграции, автоматизацию и воронки продаж",
+  },
+  {
+    name: "Маркетинг и реклама",
+    slug: "marketing",
+    description: "Чаты про digital, рекламу, SMM, таргет и продвижение",
+  },
+  {
+    name: "Бизнес и предприниматели",
+    slug: "business",
+    description: "Бизнес-чаты, где могут появляться запросы на услуги",
+  },
+];
+
 export async function GET() {
   try {
     const { serviceSupabase } = await requireSuperAdminRoute();
@@ -122,25 +140,49 @@ export async function GET() {
         .limit(30),
     ]);
 
-    const responses = [
-      workspacesResponse,
-      readersResponse,
-      categoriesResponse,
-      sourceChatsResponse,
-      projectsResponse,
-      projectSourceChatsResponse,
-      keywordsResponse,
-      stopWordsResponse,
-      latestLeadsResponse,
-      leadsTodayResponse,
-      leadsWeekResponse,
-      failedDeliveryResponse,
-      recentDeliveryResponse,
-    ];
-    const firstError = responses.find((response) => response.error)?.error;
+    const assertNoError = (label: string, response: { error: { message: string } | null }) => {
+      if (response.error) {
+        throw new Error(`Не удалось загрузить ${label}: ${response.error.message}`);
+      }
+    };
 
-    if (firstError) {
-      throw new Error(firstError.message);
+    assertNoError("кабинеты", workspacesResponse);
+    assertNoError("reader-аккаунты", readersResponse);
+    assertNoError("категории чатов", categoriesResponse);
+    assertNoError("чаты-источники", sourceChatsResponse);
+    assertNoError("проекты RIVN Leads", projectsResponse);
+    assertNoError("связи проектов и чатов", projectSourceChatsResponse);
+    assertNoError("ключевые слова", keywordsResponse);
+    assertNoError("стоп-слова", stopWordsResponse);
+    assertNoError("последние лиды", latestLeadsResponse);
+    assertNoError("лиды за сегодня", leadsTodayResponse);
+    assertNoError("лиды за неделю", leadsWeekResponse);
+    assertNoError("ошибки доставки", failedDeliveryResponse);
+    assertNoError("последние доставки", recentDeliveryResponse);
+
+    let categories = categoriesResponse.data ?? [];
+
+    if (categories.length === 0) {
+      const { error: seedError } = await serviceSupabase
+        .from("rivn_leads_source_chat_categories")
+        .upsert(defaultCategories, { onConflict: "slug" });
+
+      if (seedError) {
+        throw new Error(`Не удалось создать базовые категории RIVN Leads: ${seedError.message}`);
+      }
+
+      const { data: seededCategories, error: seededCategoriesError } = await serviceSupabase
+        .from("rivn_leads_source_chat_categories")
+        .select("id,name,slug,description")
+        .order("name", { ascending: true });
+
+      if (seededCategoriesError) {
+        throw new Error(
+          `Базовые категории созданы, но не удалось перечитать список: ${seededCategoriesError.message}`
+        );
+      }
+
+      categories = seededCategories ?? [];
     }
 
     const readers = readersResponse.data ?? [];
@@ -164,7 +206,7 @@ export async function GET() {
       },
       workspaces: workspacesResponse.data ?? [],
       readers,
-      categories: categoriesResponse.data ?? [],
+      categories,
       sourceChats,
       projects,
       projectSourceChats: projectSourceChatsResponse.data ?? [],
