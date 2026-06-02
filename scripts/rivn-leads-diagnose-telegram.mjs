@@ -148,7 +148,8 @@ async function main() {
 
   const proxy = getTelegramProxy();
   if (proxy) {
-    await testMode({ label: "configured-proxy", sessionString, apiId, apiHash, useWSS: false, proxy });
+    await testMode({ label: "configured-proxy-80", sessionString, apiId, apiHash, useWSS: false, proxy });
+    await testMode({ label: "configured-proxy-443", sessionString, apiId, apiHash, useWSS: true, proxy });
   } else {
     console.log("\n[configured-proxy] Прокси не настроен. Для проверки прокси добавь TELEGRAM_PROXY_* в .env.production.");
   }
