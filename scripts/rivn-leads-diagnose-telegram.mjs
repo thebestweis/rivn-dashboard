@@ -59,6 +59,29 @@ function decryptSessionString(encryptedSessionString, encryptionKey) {
   ]).toString("utf8");
 }
 
+function envFlag(name, defaultValue) {
+  const value = process.env[name];
+  if (value === undefined || value === null || value === "") return defaultValue;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
+function getTelegramProxy() {
+  const ip = process.env.TELEGRAM_PROXY_IP || process.env.TELEGRAM_PROXY_HOST;
+  const port = Number(process.env.TELEGRAM_PROXY_PORT);
+  const socksType = Number(process.env.TELEGRAM_PROXY_SOCKS_TYPE || 5);
+
+  if (!ip || !Number.isFinite(port) || port <= 0) return undefined;
+
+  return {
+    ip,
+    port,
+    socksType: socksType === 4 ? 4 : 5,
+    username: process.env.TELEGRAM_PROXY_USERNAME || undefined,
+    password: process.env.TELEGRAM_PROXY_PASSWORD || undefined,
+    timeout: Number(process.env.TELEGRAM_PROXY_TIMEOUT_SECONDS || 10),
+  };
+}
+
 function withTimeout(promise, ms, message) {
   let timeoutId = null;
   const timeout = new Promise((_, reject) => {
@@ -70,15 +93,17 @@ function withTimeout(promise, ms, message) {
   });
 }
 
-async function testMode({ label, sessionString, apiId, apiHash, useWSS }) {
+async function testMode({ label, sessionString, apiId, apiHash, useWSS, proxy }) {
   const startedAt = Date.now();
   const client = new TelegramClient(new StringSession(sessionString), apiId, apiHash, {
     connectionRetries: 1,
     useWSS,
+    proxy,
   });
 
   try {
     console.log(`\n[${label}] Проверяем подключение...`);
+    console.log(`[${label}] mode: useWSS=${useWSS}, proxy=${proxy ? `${proxy.ip}:${proxy.port}` : "off"}`);
     await withTimeout(client.connect(), 15_000, `[${label}] connect timeout`);
     const authorized = await withTimeout(client.isUserAuthorized(), 5_000, `[${label}] auth timeout`);
     if (!authorized) throw new Error(`[${label}] session не авторизована`);
@@ -120,6 +145,13 @@ async function main() {
 
   await testMode({ label: "old-direct-useWSS-false", sessionString, apiId, apiHash, useWSS: false });
   await testMode({ label: "wss-443-useWSS-true", sessionString, apiId, apiHash, useWSS: true });
+
+  const proxy = getTelegramProxy();
+  if (proxy) {
+    await testMode({ label: "configured-proxy", sessionString, apiId, apiHash, useWSS: false, proxy });
+  } else {
+    console.log("\n[configured-proxy] Прокси не настроен. Для проверки прокси добавь TELEGRAM_PROXY_* в .env.production.");
+  }
 }
 
 main().catch((error) => {
