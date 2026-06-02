@@ -43,34 +43,60 @@ type ManageAction =
   | "delete_reader"
   | "scan_reader_chats";
 
-function toTelegramChatId(entity: unknown) {
-  if (entity instanceof Api.Channel) return `-100${String(entity.id)}`;
-  if (entity instanceof Api.Chat) return `-${String(entity.id)}`;
+type TelegramDialogEntity = {
+  id?: string | number | bigint;
+  title?: string;
+  username?: string | null;
+  megagroup?: boolean;
+  broadcast?: boolean;
+  participantsCount?: number | null;
+  className?: string;
+  constructor?: { name?: string };
+};
+
+function getTelegramEntityKind(entity: unknown) {
+  const value = entity as TelegramDialogEntity | null;
+  const className = value?.className || value?.constructor?.name || "";
+
+  if (entity instanceof Api.Chat || className.includes("Chat")) return "chat";
+  if (entity instanceof Api.Channel || className.includes("Channel")) return "channel";
+
   return null;
+}
+
+function toTelegramChatId(entity: unknown) {
+  const value = entity as TelegramDialogEntity | null;
+  const id = value?.id;
+  const kind = getTelegramEntityKind(entity);
+
+  if (id === null || id === undefined || !kind) return null;
+  if (kind === "channel") return `-100${String(id)}`;
+  return `-${String(id)}`;
 }
 
 function dialogTitle(entity: unknown) {
-  if (entity instanceof Api.Channel || entity instanceof Api.Chat) {
-    return entity.title || "Telegram-чат без названия";
-  }
-
-  return null;
+  const value = entity as TelegramDialogEntity | null;
+  return value?.title || null;
 }
 
 function dialogUsername(entity: unknown) {
-  if (entity instanceof Api.Channel) return entity.username ?? null;
-  return null;
+  const value = entity as TelegramDialogEntity | null;
+  return value?.username ?? null;
 }
 
 function dialogKind(entity: unknown) {
-  if (entity instanceof Api.Chat) return "group";
-  if (entity instanceof Api.Channel) return entity.megagroup ? "supergroup" : "channel_discussion";
+  const value = entity as TelegramDialogEntity | null;
+  const kind = getTelegramEntityKind(entity);
+
+  if (kind === "chat") return "group";
+  if (kind === "channel") return value?.megagroup ? "supergroup" : "channel_discussion";
+
   return null;
 }
 
 function dialogMemberCount(entity: unknown) {
-  if (entity instanceof Api.Channel) return entity.participantsCount ?? null;
-  return null;
+  const value = entity as TelegramDialogEntity | null;
+  return value?.participantsCount ?? null;
 }
 
 async function ensureSourceChatCategory(serviceSupabase: any, niche?: string | null) {
@@ -761,6 +787,20 @@ export async function POST(request: Request) {
         });
 
         return apiSuccess({ found, saved, linked });
+      } catch (scanError) {
+        const message = scanError instanceof Error ? scanError.message : "Не удалось загрузить Telegram-чаты";
+
+        await serviceSupabase
+          .from("rivn_leads_reader_accounts")
+          .update({
+            status: message.includes("авториза") || message.includes("authoriz") ? "auth_required" : "error",
+            last_error: message,
+            last_seen_at: now,
+            updated_at: now,
+          })
+          .eq("id", id);
+
+        throw scanError;
       } finally {
         await client.disconnect().catch(() => undefined);
       }

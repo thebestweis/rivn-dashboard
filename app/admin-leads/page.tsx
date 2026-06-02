@@ -407,19 +407,27 @@ export default function AdminLeadsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const payload = (await response.json().catch(() => null)) as
-        | ({ ok?: boolean; error?: string } & Record<string, unknown>)
-        | null;
+      const rawPayload = await response.text();
+      const payload = rawPayload
+        ? (JSON.parse(rawPayload) as ({ ok?: boolean; error?: string } & Record<string, unknown>))
+        : null;
 
       if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.error || "Не удалось выполнить действие");
+        throw new Error(payload?.error || `Сервер вернул ошибку ${response.status}`);
       }
 
       setNotice(successMessage);
       await loadOverview();
       return payload;
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : "Не удалось выполнить действие");
+      const message =
+        actionError instanceof SyntaxError
+          ? "Сервер вернул не API-ответ. Скорее всего, приложение на сервере ещё не обновлено или маршрут упал при запуске."
+          : actionError instanceof Error
+            ? actionError.message
+            : "Не удалось выполнить действие";
+
+      setError(message);
       return null;
     } finally {
       setIsSubmitting(false);
