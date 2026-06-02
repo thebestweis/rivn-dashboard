@@ -511,6 +511,12 @@ export default function AdminLeadsPage() {
     );
 
     if (result) {
+      if (result.started) {
+        setNotice("Загрузка чатов запущена. Обнови страницу через несколько секунд, чтобы увидеть найденные чаты.");
+        window.setTimeout(() => void loadOverview(), 5000);
+        return;
+      }
+
       const found = typeof result.found === "number" ? result.found : 0;
       const saved = typeof result.saved === "number" ? result.saved : 0;
       const linked = typeof result.linked === "number" ? result.linked : 0;
