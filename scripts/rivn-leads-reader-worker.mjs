@@ -49,12 +49,6 @@ const config = {
   recentMessagesLimit: Number(process.env.RIVN_LEADS_RECENT_MESSAGES_LIMIT || 10),
 };
 
-function envFlag(name, defaultValue) {
-  const value = process.env[name];
-  if (value === undefined || value === null || value === "") return defaultValue;
-  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
-}
-
 function getTelegramProxy() {
   const ip = process.env.TELEGRAM_PROXY_IP || process.env.TELEGRAM_PROXY_HOST;
   const port = Number(process.env.TELEGRAM_PROXY_PORT);
@@ -74,10 +68,11 @@ function getTelegramProxy() {
 
 function getTelegramClientOptions(connectionRetries) {
   const proxy = getTelegramProxy();
+  const useWSS = proxy ? false : true;
 
   return {
     connectionRetries,
-    useWSS: proxy ? false : envFlag("TELEGRAM_USE_WSS", true),
+    useWSS,
     proxy,
   };
 }
@@ -251,11 +246,18 @@ class ReaderRuntime {
     }
 
     const sessionString = decryptSessionString(this.reader.encrypted_session_string, config.encryptionKey);
+    const telegramClientOptions = getTelegramClientOptions(5);
+    log("Reader Telegram connection mode", {
+      readerId: this.reader.id,
+      useWSS: telegramClientOptions.useWSS,
+      proxy: Boolean(telegramClientOptions.proxy),
+    });
+
     this.client = new TelegramClient(
       new StringSession(sessionString),
       config.telegramApiId,
       config.telegramApiHash,
-      getTelegramClientOptions(5)
+      telegramClientOptions
     );
 
     await this.client.connect();

@@ -55,12 +55,6 @@ type TelegramDialogEntity = {
   constructor?: { name?: string };
 };
 
-function envFlag(name: string, defaultValue: boolean) {
-  const value = process.env[name];
-  if (value === undefined || value === null || value === "") return defaultValue;
-  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
-}
-
 function getTelegramProxy(): ProxyInterface | undefined {
   const ip = process.env.TELEGRAM_PROXY_IP || process.env.TELEGRAM_PROXY_HOST;
   const port = Number(process.env.TELEGRAM_PROXY_PORT);
@@ -81,10 +75,11 @@ function getTelegramProxy(): ProxyInterface | undefined {
 
 function getTelegramClientOptions(connectionRetries: number) {
   const proxy = getTelegramProxy();
+  const useWSS = proxy ? false : true;
 
   return {
     connectionRetries,
-    useWSS: proxy ? false : envFlag("TELEGRAM_USE_WSS", true),
+    useWSS,
     proxy,
   };
 }
@@ -219,13 +214,20 @@ async function scanReaderChatsInBackground(params: {
   if (!reader) throw new Error("Reader-аккаунт не найден");
 
   const sessionString = decryptRivnLeadsSessionString(reader.encrypted_session_string);
-  const client = new TelegramClient(new StringSession(sessionString), apiId, apiHash, getTelegramClientOptions(3));
+  const telegramClientOptions = getTelegramClientOptions(3);
+  const client = new TelegramClient(new StringSession(sessionString), apiId, apiHash, telegramClientOptions);
 
   let found = 0;
   let saved = 0;
   let linked = 0;
 
   try {
+    console.log("RIVN Leads reader chat scan connection mode:", {
+      readerId,
+      useWSS: telegramClientOptions.useWSS,
+      proxy: Boolean(telegramClientOptions.proxy),
+    });
+
     await withTimeout(
       client.connect(),
       12_000,
