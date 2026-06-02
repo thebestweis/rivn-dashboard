@@ -839,7 +839,7 @@ export default function AdminLeadsPage() {
                         Добавь бота в беседу с клиентом и отправь туда эту команду. Бот сам определит chat_id и привяжет беседу к проекту.
                       </p>
                       <code className="mt-3 block overflow-x-auto rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-emerald-100">
-                        /leads@stat_rivnos_bot {selectedProject.id}
+                        /leads@rivn_leads_bot {selectedProject.id}
                       </code>
                     </div>
                   </div>

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "leads:reader": "node scripts/rivn-leads-reader-worker.mjs",
+    "leads:bot": "node scripts/rivn-leads-bot-worker.mjs",
     "leads:diagnose": "node scripts/rivn-leads-diagnose-telegram.mjs",
     "leads:scan-chats": "node scripts/rivn-leads-scan-reader-chats.mjs",
     "leads:session": "node scripts/rivn-leads-generate-session.mjs",
