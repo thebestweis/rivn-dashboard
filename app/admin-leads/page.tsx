@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useConfirmDialog } from "../components/ui/confirm-dialog-provider";
 import { useAppContextState } from "../providers/app-context-provider";
 
 type Summary = {
@@ -261,6 +262,7 @@ function getKeywords(value: unknown) {
 
 export default function AdminLeadsPage() {
   const { isLoading: isContextLoading, isSuperAdmin } = useAppContextState();
+  const { confirm } = useConfirmDialog();
   const [data, setData] = useState<OverviewResponse | null>(null);
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number][0]>("projects");
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -291,6 +293,15 @@ export default function AdminLeadsPage() {
     memberCount: "",
   });
   const [readerForm, setReaderForm] = useState({
+    label: "",
+    phoneHint: "",
+    assignedNiche: "",
+    maxChatsLimit: "50",
+    status: "paused",
+    sessionString: "",
+  });
+  const [editingReaderId, setEditingReaderId] = useState("");
+  const [readerEditForm, setReaderEditForm] = useState({
     label: "",
     phoneHint: "",
     assignedNiche: "",
@@ -367,8 +378,23 @@ export default function AdminLeadsPage() {
   }, [data?.projectSourceChats, selectedProjectId]);
 
   const selectedProjectChats = useMemo(() => {
-    return (data?.sourceChats ?? []).filter((chat) => projectSourceChatIds.has(chat.id));
-  }, [data?.sourceChats, projectSourceChatIds]);
+    return (data?.sourceChats ?? []).filter(
+      (chat) =>
+        projectSourceChatIds.has(chat.id) ||
+        (selectedProject?.reader_account_id && chat.reader_account_id === selectedProject.reader_account_id)
+    );
+  }, [data?.sourceChats, projectSourceChatIds, selectedProject?.reader_account_id]);
+
+  const sourceChatCountByReader = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const chat of data?.sourceChats ?? []) {
+      if (!chat.reader_account_id) continue;
+      counts.set(chat.reader_account_id, (counts.get(chat.reader_account_id) ?? 0) + 1);
+    }
+
+    return counts;
+  }, [data?.sourceChats]);
 
   async function runAction(body: Record<string, unknown>, successMessage: string) {
     setIsSubmitting(true);
@@ -381,7 +407,9 @@ export default function AdminLeadsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as
+        | ({ ok?: boolean; error?: string } & Record<string, unknown>)
+        | null;
 
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.error || "Не удалось выполнить действие");
@@ -389,8 +417,10 @@ export default function AdminLeadsPage() {
 
       setNotice(successMessage);
       await loadOverview();
+      return payload;
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "Не удалось выполнить действие");
+      return null;
     } finally {
       setIsSubmitting(false);
     }
@@ -464,6 +494,85 @@ export default function AdminLeadsPage() {
       },
       isLinked ? "Чат отключён от проекта" : "Чат подключён к проекту"
     );
+  }
+
+  async function scanReaderChats(reader: ReaderAccount) {
+    const result = await runAction(
+      { action: "scan_reader_chats", id: reader.id },
+      "Чаты reader-аккаунта загружены"
+    );
+
+    if (result) {
+      const found = typeof result.found === "number" ? result.found : 0;
+      const saved = typeof result.saved === "number" ? result.saved : 0;
+      const linked = typeof result.linked === "number" ? result.linked : 0;
+      setNotice(`Готово: найдено ${found}, сохранено ${saved}, привязано к проектам ${linked}`);
+    }
+  }
+
+  function startEditReader(reader: ReaderAccount) {
+    setEditingReaderId(reader.id);
+    setReaderEditForm({
+      label: reader.label,
+      phoneHint: reader.phone_hint ?? "",
+      assignedNiche: reader.assigned_niche ?? "",
+      maxChatsLimit: reader.max_chats_limit ? String(reader.max_chats_limit) : "50",
+      status: reader.status ?? "paused",
+      sessionString: "",
+    });
+  }
+
+  function cancelEditReader() {
+    setEditingReaderId("");
+    setReaderEditForm({
+      label: "",
+      phoneHint: "",
+      assignedNiche: "",
+      maxChatsLimit: "50",
+      status: "paused",
+      sessionString: "",
+    });
+  }
+
+  async function saveReaderEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingReaderId) return;
+
+    const result = await runAction(
+      {
+        action: "update_reader",
+        id: editingReaderId,
+        label: readerEditForm.label,
+        phoneHint: readerEditForm.phoneHint,
+        assignedNiche: readerEditForm.assignedNiche,
+        maxChatsLimit: readerEditForm.maxChatsLimit,
+        status: readerEditForm.status,
+        sessionString: readerEditForm.sessionString,
+      },
+      "Reader-аккаунт обновлён"
+    );
+
+    if (result) cancelEditReader();
+  }
+
+  async function deleteReader(reader: ReaderAccount) {
+    const confirmed = await confirm({
+      title: "Удалить reader-аккаунт?",
+      description:
+        "Проекты и найденные чаты не удалятся, но этот reader больше не будет читать Telegram-чаты и искать заявки.",
+      confirmLabel: "Удалить",
+      cancelLabel: "Отмена",
+      tone: "danger",
+    });
+
+    if (!confirmed) return;
+
+    const result = await runAction(
+      { action: "delete_reader", id: reader.id },
+      "Reader-аккаунт удалён"
+    );
+
+    if (result && editingReaderId === reader.id) cancelEditReader();
   }
 
   async function createKeyword(event: FormEvent<HTMLFormElement>) {
@@ -798,7 +907,11 @@ export default function AdminLeadsPage() {
                   </form>
 
                   {(data?.sourceChats ?? []).map((chat) => {
-                    const isLinked = projectSourceChatIds.has(chat.id);
+                    const isInheritedFromReader = Boolean(
+                      selectedProject?.reader_account_id && chat.reader_account_id === selectedProject.reader_account_id
+                    );
+                    const isLinked =
+                      projectSourceChatIds.has(chat.id) || isInheritedFromReader;
 
                     return (
                       <article key={chat.id} className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
@@ -822,9 +935,9 @@ export default function AdminLeadsPage() {
                                   ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
                                   : "border-white/10 bg-white/5 text-white/55"
                               }`}
-                              disabled={isSubmitting}
+                              disabled={isSubmitting || isInheritedFromReader}
                             >
-                              {isLinked ? "Подключен" : "Подключить"}
+                              {isInheritedFromReader ? "Из reader" : isLinked ? "Подключен" : "Подключить"}
                             </button>
                           </div>
                         </div>
@@ -924,6 +1037,14 @@ export default function AdminLeadsPage() {
 
       {!isLoading && activeTab === "readers" ? (
         <Section title="Reader-аккаунты" description="Reader-аккаунт — это Telegram-аккаунт, который легально состоит в нужных чатах и читает сообщения для поиска заявок. Session string хранится только в зашифрованном виде.">
+          <div className="mb-6 rounded-2xl border border-violet-300/20 bg-violet-300/10 p-4">
+            <p className="text-sm font-semibold text-violet-100">Как подключить чаты одной кнопкой</p>
+            <p className="mt-2 text-sm leading-6 text-white/60">
+              Сначала добавь reader-аккаунт с Telegram session string. После сохранения ниже появится карточка reader-аккаунта
+              с кнопкой «Загрузить чаты». Она сама считает доступные Telegram-чаты аккаунта и привяжет их как единую пачку.
+            </p>
+          </div>
+
           <form className="mb-6 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4" onSubmit={(event) => void createReader(event)}>
             <div className="grid gap-3 lg:grid-cols-2">
               <input
@@ -984,31 +1105,134 @@ export default function AdminLeadsPage() {
           </form>
 
           <div className="space-y-3">
-            {(data?.readers ?? []).map((reader) => (
-              <article key={reader.id} className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h3 className="font-semibold">{reader.label}</h3>
-                    <p className="mt-1 text-sm text-white/45">
-                      {reader.phone_hint || "Телефон скрыт"} · {reader.assigned_niche || "Ниша не указана"}
-                    </p>
-                    <p className="mt-1 text-xs text-white/35">
-                      Последняя активность: {formatDate(reader.last_seen_at)} · лимит чатов: {reader.max_chats_limit ?? "не указан"}
-                    </p>
+            {(data?.readers ?? []).length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.025] p-6 text-sm leading-6 text-white/55">
+                Reader-аккаунтов пока нет. Добавь первый reader выше, и после сохранения здесь появится кнопка «Загрузить чаты».
+              </div>
+            ) : null}
+
+            {(data?.readers ?? []).map((reader) => {
+              const isEditing = editingReaderId === reader.id;
+
+              return (
+                <article key={reader.id} className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold">{reader.label}</h3>
+                        <StatusPill status={reader.status} />
+                      </div>
+                      <p className="mt-1 text-sm text-white/45">
+                        {reader.phone_hint || "Телефон скрыт"} · {reader.assigned_niche || "Ниша не указана"}
+                      </p>
+                      <p className="mt-1 text-xs text-white/35">
+                        Последняя активность: {formatDate(reader.last_seen_at)} · лимит чатов: {reader.max_chats_limit ?? "не указан"}
+                      </p>
+                    </div>
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[240px]">
+                      <button
+                        type="button"
+                        onClick={() => void scanReaderChats(reader)}
+                        className="rounded-2xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-300/15 disabled:opacity-50"
+                        disabled={isSubmitting}
+                      >
+                        Загрузить чаты
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => (isEditing ? cancelEditReader() : startEditReader(reader))}
+                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 transition hover:bg-white/10 disabled:opacity-50"
+                        disabled={isSubmitting}
+                      >
+                        {isEditing ? "Свернуть" : "Редактировать"}
+                      </button>
+                    </div>
                   </div>
-                  <select
-                    className={fieldClass("max-w-[240px]")}
-                    value={reader.status ?? "paused"}
-                    onChange={(event) => void runAction({ action: "update_reader_status", id: reader.id, status: event.target.value }, "Статус reader обновлён")}
-                  >
-                    {readerStatusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
-                </div>
-                {reader.last_error ? (
-                  <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">{reader.last_error}</p>
-                ) : null}
-              </article>
-            ))}
+
+                  <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-white/55">
+                    Подключено чатов: {sourceChatCountByReader.get(reader.id) ?? 0}. Один reader = одна пачка чатов, которую можно выбрать в проекте.
+                  </p>
+
+                  {isEditing ? (
+                    <form className="mt-4 rounded-2xl border border-white/10 bg-[#0B1020]/80 p-4" onSubmit={(event) => void saveReaderEdit(event)}>
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <input
+                          className={fieldClass()}
+                          placeholder="Название reader-аккаунта"
+                          value={readerEditForm.label}
+                          onChange={(event) => setReaderEditForm({ ...readerEditForm, label: event.target.value })}
+                          required
+                        />
+                        <input
+                          className={fieldClass()}
+                          placeholder="Телефон-подсказка"
+                          value={readerEditForm.phoneHint}
+                          onChange={(event) => setReaderEditForm({ ...readerEditForm, phoneHint: event.target.value })}
+                        />
+                      </div>
+                      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                        <input
+                          className={fieldClass()}
+                          placeholder="Ниша или роль аккаунта"
+                          value={readerEditForm.assignedNiche}
+                          onChange={(event) => setReaderEditForm({ ...readerEditForm, assignedNiche: event.target.value })}
+                        />
+                        <input
+                          className={fieldClass()}
+                          placeholder="Лимит чатов"
+                          value={readerEditForm.maxChatsLimit}
+                          onChange={(event) => setReaderEditForm({ ...readerEditForm, maxChatsLimit: event.target.value })}
+                        />
+                        <select
+                          className={fieldClass()}
+                          value={readerEditForm.status}
+                          onChange={(event) => setReaderEditForm({ ...readerEditForm, status: event.target.value })}
+                        >
+                          {readerStatusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                      </div>
+                      <textarea
+                        className={fieldClass("mt-3 min-h-[110px] resize-none")}
+                        placeholder="Новый Telegram session string. Оставь пустым, если не нужно менять авторизацию."
+                        value={readerEditForm.sessionString}
+                        onChange={(event) => setReaderEditForm({ ...readerEditForm, sessionString: event.target.value })}
+                      />
+                      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <button
+                          type="button"
+                          onClick={() => void deleteReader(reader)}
+                          className="rounded-2xl border border-rose-300/25 bg-rose-300/10 px-4 py-3 text-sm font-semibold text-rose-100 transition hover:bg-rose-300/15 disabled:opacity-50"
+                          disabled={isSubmitting}
+                        >
+                          Удалить reader
+                        </button>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <button
+                            type="button"
+                            onClick={cancelEditReader}
+                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10 disabled:opacity-50"
+                            disabled={isSubmitting}
+                          >
+                            Отмена
+                          </button>
+                          <button
+                            type="submit"
+                            className="rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-[#06120f] transition hover:bg-emerald-300 disabled:opacity-50"
+                            disabled={isSubmitting}
+                          >
+                            Сохранить
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  ) : null}
+
+                  {reader.last_error ? (
+                    <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">{reader.last_error}</p>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         </Section>
       ) : null}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createCipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const leadProjectStatuses = ["draft", "active", "paused", "archived"] as const;
@@ -108,4 +108,20 @@ export function encryptRivnLeadsSessionString(sessionString: string) {
   const tag = cipher.getAuthTag();
 
   return ["v1", iv.toString("base64"), tag.toString("base64"), encrypted.toString("base64")].join(":");
+}
+
+export function decryptRivnLeadsSessionString(encryptedSessionString: string) {
+  const [version, ivBase64, tagBase64, encryptedBase64] = encryptedSessionString.split(":");
+
+  if (version !== "v1" || !ivBase64 || !tagBase64 || !encryptedBase64) {
+    throw new Error("Telegram session string сохранён в неподдерживаемом формате");
+  }
+
+  const decipher = createDecipheriv("aes-256-gcm", getEncryptionKey(), Buffer.from(ivBase64, "base64"));
+  decipher.setAuthTag(Buffer.from(tagBase64, "base64"));
+
+  return Buffer.concat([
+    decipher.update(Buffer.from(encryptedBase64, "base64")),
+    decipher.final(),
+  ]).toString("utf8");
 }

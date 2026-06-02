@@ -30,6 +30,7 @@ type SourceChatRow = {
   id: string;
   title: string;
   telegram_chat_id: string;
+  reader_account_id: string | null;
 };
 
 type ProjectSourceChatRow = {
@@ -200,7 +201,7 @@ export async function processRivnLeadsMessage(
 
   const { data: sourceChat, error: sourceChatError } = await serviceSupabase
     .from("rivn_leads_source_chats")
-    .select("id,title,telegram_chat_id")
+    .select("id,title,telegram_chat_id,reader_account_id")
     .eq("id", message.sourceChatId)
     .maybeSingle<SourceChatRow>();
 
@@ -220,7 +221,23 @@ export async function processRivnLeadsMessage(
     .returns<ProjectSourceChatRow[]>();
 
   if (linksError) throw new Error(linksError.message);
-  const projectIds = (links ?? []).map((link) => link.project_id);
+
+  const explicitProjectIds = (links ?? []).map((link) => link.project_id);
+  const readerProjectIds: string[] = [];
+
+  if (sourceChat.reader_account_id) {
+    const { data: readerProjects, error: readerProjectsError } = await serviceSupabase
+      .from("rivn_leads_projects")
+      .select("id")
+      .eq("reader_account_id", sourceChat.reader_account_id)
+      .eq("status", "active");
+
+    if (readerProjectsError) throw new Error(readerProjectsError.message);
+    readerProjectIds.push(...((readerProjects ?? []) as Array<{ id: string }>).map((project) => project.id));
+  }
+
+  const projectIds = [...new Set([...explicitProjectIds, ...readerProjectIds])];
+
   if (projectIds.length === 0) {
     return { processed: true, reason: "no_projects_for_source", leadsCreated: 0, leadsDelivered: 0 };
   }
