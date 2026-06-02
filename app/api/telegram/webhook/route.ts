@@ -7,13 +7,26 @@ type TelegramUpdate = {
     chat: {
       id: number;
       title?: string;
+      username?: string;
+      first_name?: string;
+      last_name?: string;
       type: string;
     };
     from?: {
       id: number;
       username?: string;
       first_name?: string;
+      last_name?: string;
     };
+  };
+};
+
+type TelegramChatUpdatePayload = TelegramUpdate & {
+  edited_message?: TelegramUpdate["message"];
+  channel_post?: TelegramUpdate["message"];
+  my_chat_member?: {
+    chat?: TelegramUpdate["message"] extends { chat: infer Chat } ? Chat : never;
+    from?: TelegramUpdate["message"] extends { from?: infer From } ? From : never;
   };
 };
 
@@ -53,7 +66,7 @@ async function sendTelegramMessage(chatId: string | number, text: string) {
   }
 }
 
-async function saveTelegramChatFromUpdate(update: any) {
+async function saveTelegramChatFromUpdate(update: TelegramChatUpdatePayload) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -96,22 +109,6 @@ async function saveTelegramChatFromUpdate(update: any) {
   if (error) {
     console.error("Ошибка сохранения telegram_bot_chats:", error);
   }
-}
-
-async function isChatAdmin(chatId: number, userId: number) {
-  if (!telegramToken) {
-    return false;
-  }
-
-  const response = await fetch(
-    `https://api.telegram.org/bot${telegramToken}/getChatMember?chat_id=${chatId}&user_id=${userId}`
-  );
-
-  const data = await response.json();
-
-  const status = data?.result?.status;
-
-  return status === "creator" || status === "administrator";
 }
 
 async function linkChatToClientCode(params: {
@@ -254,6 +251,58 @@ async function linkChatToClientCode(params: {
   );
 }
 
+async function linkChatToRivnLeadsProject(params: {
+  projectId: string;
+  chatId: number;
+}) {
+  const supabase = getSupabase();
+  const projectId = params.projectId.trim();
+  const chatId = String(params.chatId);
+
+  const { data: project, error: projectError } = await supabase
+    .from("rivn_leads_projects")
+    .select("id,name,destination_chat_id")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (projectError || !project) {
+    await sendTelegramMessage(
+      params.chatId,
+      "❌ Проект RIVN Leads не найден. Проверь команду из админки и попробуй ещё раз."
+    );
+    return;
+  }
+
+  const { error: updateError } = await supabase
+    .from("rivn_leads_projects")
+    .update({
+      destination_chat_id: chatId,
+      telegram_bot_added: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", project.id);
+
+  if (updateError) {
+    await sendTelegramMessage(
+      params.chatId,
+      `❌ Не удалось привязать чат к RIVN Leads: ${updateError.message}`
+    );
+    return;
+  }
+
+  await sendTelegramMessage(
+    params.chatId,
+    [
+      "✅ <b>Готово! Чат привязан к RIVN Leads</b>",
+      "",
+      `Проект: ${project.name}`,
+      `Chat ID: <code>${chatId}</code>`,
+      "",
+      "Теперь найденные заявки по этому проекту будут приходить в эту беседу.",
+    ].join("\n")
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const update = (await req.json()) as TelegramUpdate;
@@ -273,6 +322,23 @@ export async function POST(req: Request) {
     const fromUsername = message.from?.username || null;
     const [commandRaw = "", commandPayload = ""] = text.split(/\s+/);
     const command = commandRaw.split("@")[0].toLowerCase();
+
+    if (command === "/leads" || command === "/rivnleads") {
+      if (!commandPayload) {
+        await sendTelegramMessage(
+          chatId,
+          "⚠️ Укажи ID проекта RIVN Leads. Команду лучше скопировать из админки проекта."
+        );
+        return Response.json({ ok: true });
+      }
+
+      await linkChatToRivnLeadsProject({
+        projectId: commandPayload,
+        chatId,
+      });
+
+      return Response.json({ ok: true });
+    }
 
     if (command === "/start") {
       if (commandPayload) {

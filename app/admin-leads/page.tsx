@@ -833,6 +833,15 @@ export default function AdminLeadsPage() {
                     <p className="text-sm text-white/50">Доставка лидов</p>
                     <p className="mt-2 font-semibold">{selectedProject.destination_chat_id || "Telegram-чат не указан"}</p>
                     <p className="mt-1 text-sm text-white/45">Бот добавлен: {selectedProject.telegram_bot_added ? "да" : "нет"}</p>
+                    <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-3">
+                      <p className="text-sm font-semibold text-emerald-100">Быстрая привязка Telegram-беседы</p>
+                      <p className="mt-2 text-sm leading-5 text-white/60">
+                        Добавь бота в беседу с клиентом и отправь туда эту команду. Бот сам определит chat_id и привяжет беседу к проекту.
+                      </p>
+                      <code className="mt-3 block overflow-x-auto rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-emerald-100">
+                        /leads@stat_rivnos_bot {selectedProject.id}
+                      </code>
+                    </div>
                   </div>
 
                   <form className="space-y-3" onSubmit={(event) => void createKeyword(event)}>
