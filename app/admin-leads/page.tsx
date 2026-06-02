@@ -514,6 +514,7 @@ export default function AdminLeadsPage() {
       if (result.started) {
         setNotice("Загрузка чатов запущена. Обнови страницу через несколько секунд, чтобы увидеть найденные чаты.");
         window.setTimeout(() => void loadOverview(), 5000);
+        window.setTimeout(() => void loadOverview(), 25000);
         return;
       }
 

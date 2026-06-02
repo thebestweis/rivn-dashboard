@@ -99,6 +99,18 @@ function dialogMemberCount(entity: unknown) {
   return value?.participantsCount ?? null;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
 async function ensureSourceChatCategory(serviceSupabase: any, niche?: string | null) {
   const normalizedNiche = niche?.trim().toLowerCase();
   const preferredSlug = normalizedNiche === "crm" ? "crm" : normalizedNiche === "marketing" ? "marketing" : null;
@@ -182,14 +194,26 @@ async function scanReaderChatsInBackground(params: {
   let linked = 0;
 
   try {
-    await client.connect();
+    await withTimeout(
+      client.connect(),
+      12_000,
+      "Telegram слишком долго отвечает при подключении reader-аккаунта. Проверь session string и доступ сервера к Telegram."
+    );
 
-    if (!(await client.isUserAuthorized())) {
+    if (!(await withTimeout(
+      client.isUserAuthorized(),
+      5_000,
+      "Telegram не подтвердил авторизацию reader-аккаунта. Попробуй заменить session string."
+    ))) {
       throw new Error("Reader-аккаунт требует повторной авторизации в Telegram");
     }
 
     const limit = Math.min(Number(reader.max_chats_limit) || 500, 500);
-    const dialogs = await client.getDialogs({ limit });
+    const dialogs = await withTimeout(
+      client.getDialogs({ limit }),
+      18_000,
+      "Telegram слишком долго отдаёт список чатов. Попробуй уменьшить лимит чатов reader-аккаунта и повторить загрузку."
+    );
     const categoryId = await ensureSourceChatCategory(serviceSupabase, reader.assigned_niche);
 
     const uniqueRows = new Map<string, {
