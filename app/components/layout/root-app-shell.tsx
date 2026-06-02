@@ -22,6 +22,7 @@ const appRoutes = [
   "/billing",
   "/settings",
   "/admin",
+  "/admin-leads",
 ];
 
 function isInternalAppRoute(pathname: string) {

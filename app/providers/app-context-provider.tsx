@@ -63,6 +63,7 @@ const AUTH_EXPIRED_PATHS = [
   "/billing",
   "/settings",
   "/admin",
+  "/admin-leads",
 ];
 
 type AppContextCache = {
