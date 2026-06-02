@@ -75,7 +75,7 @@ function getTelegramProxy(): ProxyInterface | undefined {
 
 function getTelegramClientOptions(connectionRetries: number) {
   const proxy = getTelegramProxy();
-  const useWSS = true;
+  const useWSS = proxy ? false : true;
 
   return {
     connectionRetries,

@@ -59,12 +59,6 @@ function decryptSessionString(encryptedSessionString, encryptionKey) {
   ]).toString("utf8");
 }
 
-function envFlag(name, defaultValue) {
-  const value = process.env[name];
-  if (value === undefined || value === null || value === "") return defaultValue;
-  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
-}
-
 function getTelegramProxy() {
   const ip = process.env.TELEGRAM_PROXY_IP || process.env.TELEGRAM_PROXY_HOST;
   const port = Number(process.env.TELEGRAM_PROXY_PORT);
@@ -148,8 +142,8 @@ async function main() {
 
   const proxy = getTelegramProxy();
   if (proxy) {
-    await testMode({ label: "configured-proxy-80", sessionString, apiId, apiHash, useWSS: false, proxy });
-    await testMode({ label: "configured-proxy-443", sessionString, apiId, apiHash, useWSS: true, proxy });
+    await testMode({ label: "configured-socks5-proxy", sessionString, apiId, apiHash, useWSS: false, proxy });
+    console.log("[configured-socks5-proxy] Важно: GramJS не поддерживает useWSS=true вместе с SOCKS5-прокси, поэтому прокси проверяется только в совместимом режиме.");
   } else {
     console.log("\n[configured-proxy] Прокси не настроен. Для проверки прокси добавь TELEGRAM_PROXY_* в .env.production.");
   }
