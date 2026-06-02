@@ -1,5 +1,6 @@
 import { apiSuccess } from "@/app/lib/api/errors";
 import { Api, TelegramClient } from "telegram";
+import type { ProxyInterface } from "telegram/network/connection/TCPMTProxy";
 import { StringSession } from "telegram/sessions";
 import { requireSuperAdminRoute } from "../../admin/_utils";
 import {
@@ -53,6 +54,40 @@ type TelegramDialogEntity = {
   className?: string;
   constructor?: { name?: string };
 };
+
+function envFlag(name: string, defaultValue: boolean) {
+  const value = process.env[name];
+  if (value === undefined || value === null || value === "") return defaultValue;
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+}
+
+function getTelegramProxy(): ProxyInterface | undefined {
+  const ip = process.env.TELEGRAM_PROXY_IP || process.env.TELEGRAM_PROXY_HOST;
+  const port = Number(process.env.TELEGRAM_PROXY_PORT);
+  const rawSocksType = Number(process.env.TELEGRAM_PROXY_SOCKS_TYPE || 5);
+  const socksType: 4 | 5 = rawSocksType === 4 ? 4 : 5;
+
+  if (!ip || !Number.isFinite(port) || port <= 0) return undefined;
+
+  return {
+    ip,
+    port,
+    socksType,
+    username: process.env.TELEGRAM_PROXY_USERNAME || undefined,
+    password: process.env.TELEGRAM_PROXY_PASSWORD || undefined,
+    timeout: Number(process.env.TELEGRAM_PROXY_TIMEOUT_SECONDS || 10),
+  };
+}
+
+function getTelegramClientOptions(connectionRetries: number) {
+  const proxy = getTelegramProxy();
+
+  return {
+    connectionRetries,
+    useWSS: proxy ? false : envFlag("TELEGRAM_USE_WSS", true),
+    proxy,
+  };
+}
 
 function getTelegramEntityKind(entity: unknown) {
   const value = entity as TelegramDialogEntity | null;
@@ -184,10 +219,7 @@ async function scanReaderChatsInBackground(params: {
   if (!reader) throw new Error("Reader-аккаунт не найден");
 
   const sessionString = decryptRivnLeadsSessionString(reader.encrypted_session_string);
-  const client = new TelegramClient(new StringSession(sessionString), apiId, apiHash, {
-    connectionRetries: 3,
-    useWSS: false,
-  });
+  const client = new TelegramClient(new StringSession(sessionString), apiId, apiHash, getTelegramClientOptions(3));
 
   let found = 0;
   let saved = 0;

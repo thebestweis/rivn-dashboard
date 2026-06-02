@@ -49,6 +49,39 @@ const config = {
   recentMessagesLimit: Number(process.env.RIVN_LEADS_RECENT_MESSAGES_LIMIT || 10),
 };
 
+function envFlag(name, defaultValue) {
+  const value = process.env[name];
+  if (value === undefined || value === null || value === "") return defaultValue;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
+function getTelegramProxy() {
+  const ip = process.env.TELEGRAM_PROXY_IP || process.env.TELEGRAM_PROXY_HOST;
+  const port = Number(process.env.TELEGRAM_PROXY_PORT);
+  const socksType = Number(process.env.TELEGRAM_PROXY_SOCKS_TYPE || 5);
+
+  if (!ip || !Number.isFinite(port) || port <= 0) return undefined;
+
+  return {
+    ip,
+    port,
+    socksType: socksType === 4 ? 4 : 5,
+    username: process.env.TELEGRAM_PROXY_USERNAME || undefined,
+    password: process.env.TELEGRAM_PROXY_PASSWORD || undefined,
+    timeout: Number(process.env.TELEGRAM_PROXY_TIMEOUT_SECONDS || 10),
+  };
+}
+
+function getTelegramClientOptions(connectionRetries) {
+  const proxy = getTelegramProxy();
+
+  return {
+    connectionRetries,
+    useWSS: proxy ? false : envFlag("TELEGRAM_USE_WSS", true),
+    proxy,
+  };
+}
+
 if (!Number.isFinite(config.telegramApiId) || config.telegramApiId <= 0) {
   throw new Error("TELEGRAM_API_ID должен быть числом");
 }
@@ -218,10 +251,12 @@ class ReaderRuntime {
     }
 
     const sessionString = decryptSessionString(this.reader.encrypted_session_string, config.encryptionKey);
-    this.client = new TelegramClient(new StringSession(sessionString), config.telegramApiId, config.telegramApiHash, {
-      connectionRetries: 5,
-      useWSS: false,
-    });
+    this.client = new TelegramClient(
+      new StringSession(sessionString),
+      config.telegramApiId,
+      config.telegramApiHash,
+      getTelegramClientOptions(5)
+    );
 
     await this.client.connect();
 
