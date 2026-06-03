@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Check } from "lucide-react";
 import {
   createTask,
   updateTaskStatus,
@@ -142,6 +143,9 @@ export function ProjectTasksBoard({
   const [updatingTaskIds, setUpdatingTaskIds] = useState<Record<string, boolean>>(
     {}
   );
+  const [completedFlashTaskIds, setCompletedFlashTaskIds] = useState<
+    Record<string, boolean>
+  >({});
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
 
@@ -188,6 +192,17 @@ export function ProjectTasksBoard({
 
   function isTaskUpdating(taskId: string) {
     return Boolean(updatingTaskIds[taskId]);
+  }
+
+  function flashTaskComplete(taskId: string) {
+    setCompletedFlashTaskIds((prev) => ({ ...prev, [taskId]: true }));
+    window.setTimeout(() => {
+      setCompletedFlashTaskIds((prev) => {
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+    }, 700);
   }
 
   async function handleCreateTask(status: TaskStatus) {
@@ -258,9 +273,14 @@ export function ProjectTasksBoard({
 
     try {
       setTaskUpdating(task.id, true);
-      await updateTaskStatus(task.id, nextStatus);
+      if (nextStatus === "done") {
+        flashTaskComplete(task.id);
+      }
       onTaskStatusChanged(task.id, nextStatus);
+
+      await updateTaskStatus(task.id, nextStatus);
     } catch (error) {
+      onTaskStatusChanged(task.id, task.status);
       console.error(error);
       window.alert(getBillingErrorMessage(error));
     } finally {
@@ -297,9 +317,14 @@ export function ProjectTasksBoard({
 
     try {
       setTaskUpdating(taskId, true);
-      await updateTaskStatus(taskId, nextStatus);
+      if (nextStatus === "done") {
+        flashTaskComplete(taskId);
+      }
       onTaskStatusChanged(taskId, nextStatus);
+
+      await updateTaskStatus(taskId, nextStatus);
     } catch (error) {
+      onTaskStatusChanged(taskId, task.status);
       console.error(error);
       window.alert(getBillingErrorMessage(error));
     } finally {
@@ -328,14 +353,13 @@ export function ProjectTasksBoard({
 
     try {
       setTaskUpdating(subtask.id, true);
-      await updateTaskStatus(subtask.id, nextStatus);
+      const updateSubtaskStatus = onSubtaskToggle ?? onTaskStatusChanged;
+      updateSubtaskStatus(subtask.id, nextStatus);
 
-      if (onSubtaskToggle) {
-        onSubtaskToggle(subtask.id, nextStatus);
-      } else {
-        onTaskStatusChanged(subtask.id, nextStatus);
-      }
+      await updateTaskStatus(subtask.id, nextStatus);
     } catch (error) {
+      const updateSubtaskStatus = onSubtaskToggle ?? onTaskStatusChanged;
+      updateSubtaskStatus(subtask.id, subtask.status);
       console.error(error);
       window.alert(getBillingErrorMessage(error));
     } finally {
@@ -442,6 +466,7 @@ export function ProjectTasksBoard({
                     : 0;
                 const assigneesLabel = getAssigneesLabel(task);
                 const assigneesCount = task.assignees?.length ?? 0;
+                const isCompletedFlashing = completedFlashTaskIds[task.id];
 
                 return (
                   <article
@@ -474,7 +499,11 @@ export function ProjectTasksBoard({
                         onTaskOpen(task.id);
                       }
                     }}
-                    className={`cursor-pointer rounded-[18px] border px-4 py-3 transition hover:border-white/25 hover:bg-[#131c2a] ${
+                    className={`cursor-pointer rounded-[18px] border px-4 py-3 transition duration-200 hover:border-white/25 hover:bg-[#131c2a] ${
+                      isCompletedFlashing
+                        ? "scale-[0.99] ring-2 ring-emerald-400/45"
+                        : ""
+                    } ${
                       draggedTaskId === task.id || isTaskUpdating(task.id)
                         ? "opacity-60"
                         : ""
@@ -497,12 +526,16 @@ export function ProjectTasksBoard({
                         disabled={
                           isTaskUpdating(task.id) || !canManageTasksWithBilling
                         }
-                        className={`mt-1 h-5 w-5 shrink-0 rounded-full border transition ${
-                          task.status === "done"
+                        className={`mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
+                          task.status === "done" || isCompletedFlashing
                             ? "border-emerald-400 bg-emerald-400"
                             : "border-white/30 bg-transparent hover:border-white/60"
                         }`}
-                      />
+                      >
+                        {task.status === "done" || isCompletedFlashing ? (
+                          <Check className="h-3.5 w-3.5 text-black" strokeWidth={3} />
+                        ) : null}
+                      </button>
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-3">

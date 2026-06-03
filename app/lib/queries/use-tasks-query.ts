@@ -105,6 +105,35 @@ export function useUpdateTaskStatusMutation() {
       task: Task;
       nextStatus: TaskStatus;
     }) => updateTaskStatus(task.id, nextStatus),
+    onMutate: async (variables) => {
+      const taskQueries = queryClient
+        .getQueryCache()
+        .findAll({
+          predicate: (query) =>
+            query.queryKey[0] === "tasks" &&
+            (query.queryKey[1] === "workspace" ||
+              query.queryKey[1] === "project"),
+        });
+      const previousTaskLists = taskQueries.map((query) => ({
+        queryKey: query.queryKey,
+        data: queryClient.getQueryData<Task[]>(query.queryKey),
+      }));
+
+      await Promise.all(
+        taskQueries.map((query) =>
+          queryClient.cancelQueries({ queryKey: query.queryKey })
+        )
+      );
+
+      patchTaskStatusInCaches(queryClient, variables.task, variables.nextStatus);
+
+      return { previousTaskLists };
+    },
+    onError: (_error, _variables, context) => {
+      context?.previousTaskLists.forEach((snapshot) => {
+        queryClient.setQueryData(snapshot.queryKey, snapshot.data);
+      });
+    },
     onSuccess: (_, variables) => {
       patchTaskStatusInCaches(queryClient, variables.task, variables.nextStatus);
     },

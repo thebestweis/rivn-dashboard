@@ -41,7 +41,6 @@ import { CustomSelect } from "../ui/custom-select";
 import { useActiveWorkspaceMembers } from "../../lib/queries/use-workspace-members-query";
 import {
   patchTaskStatusInCaches,
-  syncTaskAcrossCaches,
   useUpdateTaskPositionsMutation,
 } from "../../lib/queries/use-tasks-query";
 
@@ -628,18 +627,18 @@ export function TaskModal({
 
     try {
       setUpdatingSubtaskId(subtask.id);
-
-      await updateTaskStatus(subtask.id, nextStatus);
-
-      const updatedSubtask = {
+      const optimisticSubtask = {
         ...subtask,
         status: nextStatus,
         updated_at: new Date().toISOString(),
       };
 
       patchTaskStatusInCaches(queryClient, subtask, nextStatus);
-      onTaskUpdated(updatedSubtask);
+      onTaskUpdated(optimisticSubtask);
+      await updateTaskStatus(subtask.id, nextStatus);
     } catch (error) {
+      patchTaskStatusInCaches(queryClient, subtask, subtask.status);
+      onTaskUpdated(subtask);
       console.error(error);
       setToastType("error");
       setToastMessage(getBillingErrorMessage(error));

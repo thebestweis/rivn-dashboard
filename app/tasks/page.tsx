@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, format, isSameDay, startOfWeek } from "date-fns";
 import { ru } from "date-fns/locale";
+import { Check } from "lucide-react";
 import { CustomSelect } from "../components/ui/custom-select";
 import { AppToast } from "../components/ui/app-toast";
 import { TaskModal } from "../components/tasks/task-modal";
@@ -16,7 +17,6 @@ import { type Task, type TaskStatus } from "../lib/supabase/tasks";
 import { BillingAccessBanner } from "../components/ui/billing-access-banner";
 import { useProjectsQuery } from "../lib/queries/use-projects-query";
 import {
-  patchTaskStatusInCaches,
   syncTaskAcrossCaches,
   useCreateTaskMutation,
   useTasksQuery,
@@ -131,6 +131,9 @@ export default function TasksPage() {
   const [quickTaskTitle, setQuickTaskTitle] = useState("");
   const [quickTaskProjectId, setQuickTaskProjectId] = useState("");
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+  const [completedFlashTaskIds, setCompletedFlashTaskIds] = useState<
+    Record<string, boolean>
+  >({});
 
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
@@ -331,6 +334,17 @@ export default function TasksPage() {
     syncTaskAcrossCaches(queryClient, createdTask);
   }
 
+  function flashTaskComplete(taskId: string) {
+    setCompletedFlashTaskIds((prev) => ({ ...prev, [taskId]: true }));
+    window.setTimeout(() => {
+      setCompletedFlashTaskIds((prev) => {
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+    }, 700);
+  }
+
   function handleStartQuickCreate(day: Date) {
     const key = format(day, "yyyy-MM-dd");
     setCreatingDayKey(key);
@@ -405,6 +419,9 @@ export default function TasksPage() {
 
     try {
       setUpdatingTaskId(task.id);
+      if (nextStatus === "done") {
+        flashTaskComplete(task.id);
+      }
 
       await updateTaskStatusMutation.mutateAsync({
         task,
@@ -810,6 +827,8 @@ export default function TasksPage() {
                                   : 0;
 
                               const isOverdue = isTaskOverdue(task);
+                              const isCompletedFlashing =
+                                completedFlashTaskIds[task.id];
 
                               return (
                                 <article
@@ -844,7 +863,11 @@ export default function TasksPage() {
                                       handleTaskOpen(task.id);
                                     }
                                   }}
-                                  className={`cursor-pointer rounded-[20px] border p-4 transition hover:border-white/20 hover:bg-[#111C2B] ${
+                                  className={`cursor-pointer rounded-[20px] border p-4 transition duration-200 hover:border-white/20 hover:bg-[#111C2B] ${
+                                    isCompletedFlashing
+                                      ? "scale-[0.99] ring-2 ring-emerald-400/45"
+                                      : ""
+                                  } ${
                                     isOverdue
                                       ? "border-red-500/25 bg-red-500/[0.04]"
                                       : "border-white/10 bg-[#121826]"
@@ -885,12 +908,18 @@ export default function TasksPage() {
                                           handleQuickToggle(task);
                                         }}
                                         disabled={updatingTaskId === task.id}
-                                        className={`mt-1 h-5 w-5 shrink-0 rounded-full border transition ${
-                                          task.status === "done"
+                                        className={`mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
+                                          task.status === "done" ||
+                                          isCompletedFlashing
                                             ? "border-emerald-400 bg-emerald-400"
                                             : "border-white/30 bg-transparent hover:border-white/60"
                                         }`}
-                                      />
+                                      >
+                                        {task.status === "done" ||
+                                        isCompletedFlashing ? (
+                                          <Check className="h-3.5 w-3.5 text-black" strokeWidth={3} />
+                                        ) : null}
+                                      </button>
                                     ) : null}
                                   </div>
 
