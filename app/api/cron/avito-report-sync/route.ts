@@ -16,6 +16,7 @@ import { verifyCronSecret } from "../verify-cron-secret";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const AVITO_REPORT_CRON_DISABLED = true;
 
 type AvitoAccount = {
   id: string;
@@ -70,6 +71,16 @@ async function resolveAvitoAccessToken(account: AvitoAccount) {
 export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (AVITO_REPORT_CRON_DISABLED) {
+    console.log("[cron:avito-report-sync] skipped because Avito report cron is temporarily disabled");
+
+    return Response.json({
+      ok: true,
+      disabled: true,
+      message: "Avito report sync is temporarily disabled",
+    });
   }
 
   const supabase = getSupabase();

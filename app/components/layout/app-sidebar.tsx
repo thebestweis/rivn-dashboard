@@ -14,7 +14,6 @@ import {
   CreditCard,
   Handshake,
   LayoutDashboard,
-  LineChart,
   ListChecks,
   Menu,
   ReceiptText,
@@ -51,7 +50,6 @@ const navItems: Array<{
   { label: "Зарплаты", href: "/payroll", section: "payroll", icon: WalletCards },
   { label: "Расходы", href: "/expenses", section: "expenses", icon: ReceiptText },
   { label: "Аналитика", href: "/analytics", section: "analytics", icon: BarChart3 },
-  { label: "Авито отчёты", href: "/avito-reports", section: "analytics", icon: LineChart },
   { label: "Тарифы", href: "/billing", section: "billing", icon: CreditCard },
   { label: "Настройки", href: "/settings", section: "settings", icon: Settings },
 ];

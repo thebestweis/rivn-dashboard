@@ -6,6 +6,8 @@ import { GET as runAvitoDailyReport } from "../../avito/daily-report/route";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+const AVITO_REPORT_CRON_DISABLED = true;
+
 async function runDailyReportAndNotify(internalRequest: Request) {
   try {
     const response = await runAvitoDailyReport(internalRequest);
@@ -35,6 +37,16 @@ export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
     console.error("[cron:daily] unauthorized request");
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (AVITO_REPORT_CRON_DISABLED) {
+    console.log("[cron:daily] skipped because Avito report cron is temporarily disabled");
+
+    return Response.json({
+      ok: true,
+      disabled: true,
+      message: "Avito daily reports are temporarily disabled",
+    });
   }
 
   try {

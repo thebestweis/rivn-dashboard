@@ -4,9 +4,21 @@ import { GET as runAvitoWeeklyReport } from "../weekly-report/route";
 
 export const dynamic = "force-dynamic";
 
+const AVITO_REPORT_CRON_DISABLED = true;
+
 export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (AVITO_REPORT_CRON_DISABLED) {
+    console.log("[cron:weekly] skipped because Avito report cron is temporarily disabled");
+
+    return Response.json({
+      ok: true,
+      disabled: true,
+      message: "Avito weekly reports are temporarily disabled",
+    });
   }
 
   try {

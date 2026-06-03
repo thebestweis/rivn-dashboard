@@ -15,6 +15,7 @@ import { verifyCronSecret } from "../verify-cron-secret";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const AVITO_REPORT_CRON_DISABLED = true;
 
 type AvitoAccount = {
   id: string;
@@ -113,6 +114,16 @@ async function getPendingRetryJob(params: {
 export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (AVITO_REPORT_CRON_DISABLED) {
+    console.log("[cron:avito-cache-warmup] skipped because Avito report cron is temporarily disabled");
+
+    return Response.json({
+      ok: true,
+      disabled: true,
+      message: "Avito report cache warmup is temporarily disabled",
+    });
   }
 
   try {

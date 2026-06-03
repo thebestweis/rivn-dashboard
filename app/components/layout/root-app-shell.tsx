@@ -60,10 +60,15 @@ export function RootAppShell({
     refreshAppContext,
     billingAccess,
     workspace,
+    isSuperAdmin,
   } = useAppContextState();
   const [isTrialWelcomeOpen, setIsTrialWelcomeOpen] = useState(false);
 
   const isInternalRoute = isInternalAppRoute(pathname);
+  const isAvitoReportsRoute =
+    pathname === "/avito-reports" || pathname.startsWith("/avito-reports/");
+  const isAvitoReportsBlocked =
+    isAvitoReportsRoute && isAppContextReady && !isSuperAdmin;
   const isBillingRoute =
     pathname === "/billing" || pathname.startsWith("/billing/");
   const trialDaysLeft = useMemo(
@@ -143,7 +148,7 @@ export function RootAppShell({
     );
   }
 
-  if (!isLoading && !hasAccess) {
+  if (!isLoading && (!hasAccess || isAvitoReportsBlocked)) {
     return (
       <div className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 dark:bg-[#0B0F1A] dark:text-white">
         <div className="flex min-h-screen min-w-0 overflow-x-hidden">
