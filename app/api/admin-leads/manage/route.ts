@@ -5,6 +5,7 @@ import { StringSession } from "telegram/sessions";
 import { requireSuperAdminRoute } from "../../admin/_utils";
 import {
   adminLeadsFailure,
+  type AdminLeadsClient,
   decryptRivnLeadsSessionString,
   encryptRivnLeadsSessionString,
   keywordMatchTypes,
@@ -141,7 +142,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
   });
 }
 
-async function ensureSourceChatCategory(serviceSupabase: any, niche?: string | null) {
+async function ensureSourceChatCategory(serviceSupabase: AdminLeadsClient, niche?: string | null) {
   const normalizedNiche = niche?.trim().toLowerCase();
   const preferredSlug = normalizedNiche === "crm" ? "crm" : normalizedNiche === "marketing" ? "marketing" : null;
 
@@ -180,7 +181,7 @@ async function ensureSourceChatCategory(serviceSupabase: any, niche?: string | n
   return created.id as string;
 }
 
-async function getProjectWorkspaceId(serviceSupabase: any, projectId: string) {
+async function getProjectWorkspaceId(serviceSupabase: AdminLeadsClient, projectId: string) {
   const { data, error } = await serviceSupabase
     .from("rivn_leads_projects")
     .select("workspace_id")
@@ -195,7 +196,7 @@ async function getProjectWorkspaceId(serviceSupabase: any, projectId: string) {
 }
 
 async function scanReaderChatsInBackground(params: {
-  serviceSupabase: any;
+  serviceSupabase: AdminLeadsClient;
   userId: string;
   readerId: string;
   apiId: number;
@@ -632,7 +633,7 @@ export async function POST(request: Request) {
           },
           { onConflict: "project_id,normalized_value" }
         )
-        .select("id")
+        .select("id,project_id,value,match_type,enabled")
         .single();
 
       if (error) throw new Error(error.message);
@@ -644,7 +645,7 @@ export async function POST(request: Request) {
         entityId: data.id,
       });
 
-      return apiSuccess({ id: data.id });
+      return apiSuccess({ id: data.id, keyword: data });
     }
 
     if (body.action === "update_keyword") {
@@ -690,7 +691,7 @@ export async function POST(request: Request) {
           },
           { onConflict: "project_id,normalized_value" }
         )
-        .select("id")
+        .select("id,project_id,value,enabled")
         .single();
 
       if (error) throw new Error(error.message);
@@ -702,7 +703,7 @@ export async function POST(request: Request) {
         entityId: data.id,
       });
 
-      return apiSuccess({ id: data.id });
+      return apiSuccess({ id: data.id, stopWord: data });
     }
 
     if (body.action === "update_stop_word") {

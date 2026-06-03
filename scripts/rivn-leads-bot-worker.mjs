@@ -201,9 +201,6 @@ function formatLeadMessage(lead) {
   const project = one(lead, "rivn_leads_projects");
   const sourceChat = one(lead, "rivn_leads_source_chats");
   const telegramMessage = one(lead, "rivn_leads_telegram_messages");
-  const matchedKeywords = Array.isArray(lead.matched_keywords)
-    ? lead.matched_keywords.map((item) => String(item?.value ?? item)).filter(Boolean)
-    : [];
   const authorUsername = telegramMessage?.author_username
     ? `@${String(telegramMessage.author_username).replace(/^@/, "")}`
     : "username отсутствует";
@@ -212,7 +209,7 @@ function formatLeadMessage(lead) {
     "🔥 <b>Потенциальный лид</b>",
     "",
     "<b>Сообщение:</b>",
-    htmlEscape(telegramMessage?.message_text || ""),
+    `<blockquote>${htmlEscape(telegramMessage?.message_text || "")}</blockquote>`,
     "",
     "<b>Контакт:</b>",
     htmlEscape(authorUsername),
@@ -222,12 +219,6 @@ function formatLeadMessage(lead) {
     "",
     "<b>Проект:</b>",
     htmlEscape(project?.name || "RIVN Leads"),
-    "",
-    "<b>Совпадения:</b>",
-    htmlEscape(matchedKeywords.length > 0 ? matchedKeywords.join(", ") : "не указаны"),
-    "",
-    "<b>Ссылка:</b>",
-    telegramMessage?.message_link ? htmlEscape(telegramMessage.message_link) : "ссылка недоступна",
   ].join("\n");
 }
 

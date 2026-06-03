@@ -396,7 +396,11 @@ export default function AdminLeadsPage() {
     return counts;
   }, [data?.sourceChats]);
 
-  async function runAction(body: Record<string, unknown>, successMessage: string) {
+  async function runAction(
+    body: Record<string, unknown>,
+    successMessage: string,
+    options: { refresh?: boolean } = {}
+  ) {
     setIsSubmitting(true);
     setNotice("");
     setError("");
@@ -417,7 +421,9 @@ export default function AdminLeadsPage() {
       }
 
       setNotice(successMessage);
-      await loadOverview();
+      if (options.refresh !== false) {
+        await loadOverview();
+      }
       return payload;
     } catch (actionError) {
       const message =
@@ -594,15 +600,24 @@ export default function AdminLeadsPage() {
     event.preventDefault();
     if (!selectedProjectId) return;
 
-    await runAction(
+    const result = await runAction(
       {
         action: "create_keyword",
         projectId: selectedProjectId,
         value: keywordForm.value,
         matchType: keywordForm.matchType,
       },
-      "Ключевое слово добавлено"
+      "Ключевое слово добавлено",
+      { refresh: false }
     );
+    const keyword = result?.keyword as Keyword | undefined;
+    if (keyword) {
+      setData((current) => {
+        if (!current) return current;
+        const keywords = current.keywords.filter((item) => item.id !== keyword.id);
+        return { ...current, keywords: [...keywords, keyword] };
+      });
+    }
     setKeywordForm({ value: "", matchType: "contains" });
   }
 
@@ -610,14 +625,23 @@ export default function AdminLeadsPage() {
     event.preventDefault();
     if (!selectedProjectId) return;
 
-    await runAction(
+    const result = await runAction(
       {
         action: "create_stop_word",
         projectId: selectedProjectId,
         value: stopWordForm.value,
       },
-      "Стоп-слово добавлено"
+      "Стоп-слово добавлено",
+      { refresh: false }
     );
+    const stopWord = result?.stopWord as StopWord | undefined;
+    if (stopWord) {
+      setData((current) => {
+        if (!current) return current;
+        const stopWords = current.stopWords.filter((item) => item.id !== stopWord.id);
+        return { ...current, stopWords: [...stopWords, stopWord] };
+      });
+    }
     setStopWordForm({ value: "" });
   }
 
