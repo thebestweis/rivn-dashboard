@@ -45,6 +45,7 @@ const config = {
   appUrl: (process.env.RIVN_LEADS_APP_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || "https://rivnos.ru").replace(/\/$/, ""),
   syncIntervalMs: Number(process.env.RIVN_LEADS_READER_SYNC_MS || 30_000),
   recentMessagesLimit: Number(process.env.RIVN_LEADS_RECENT_MESSAGES_LIMIT || 10),
+  heartbeatMs: Number(process.env.RIVN_LEADS_READER_HEARTBEAT_MS || 60_000),
 };
 
 function getTelegramProxy() {
@@ -439,6 +440,7 @@ class ReaderRuntime {
 
 const runtimes = new Map();
 const startingReaders = new Set();
+let lastHeartbeatAt = 0;
 
 async function syncReaders() {
   const readers = await loadReaders();
@@ -466,6 +468,24 @@ async function syncReaders() {
       startingReaders.delete(reader.id);
     }
   }
+
+  const now = Date.now();
+  if (now - lastHeartbeatAt >= config.heartbeatMs) {
+    lastHeartbeatAt = now;
+    log("Reader heartbeat", {
+      activeReaders: readers.length,
+      runningReaders: runtimes.size,
+      startingReaders: startingReaders.size,
+      runtimes: [...runtimes.values()].map((runtime) => ({
+        readerId: runtime.reader.id,
+        sourceChats: runtime.sourceChats.length,
+        trackedDialogs: runtime.trackedDialogs.length,
+        disconnected: Boolean(runtime.client?.disconnected),
+        needsRestart: runtime.needsRestart,
+        isPolling: runtime.isPolling,
+      })),
+    });
+  }
 }
 
 async function shutdown(signal) {
@@ -481,6 +501,7 @@ async function main() {
   log("Запускаем RIVN Leads reader worker", {
     appUrl: config.appUrl,
     syncIntervalMs: config.syncIntervalMs,
+    heartbeatMs: config.heartbeatMs,
   });
 
   await syncReaders();
