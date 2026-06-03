@@ -401,6 +401,8 @@ class ReaderRuntime {
       telegramMessageId,
       leadsCreated: result?.leadsCreated ?? 0,
       leadsDelivered: result?.leadsDelivered ?? 0,
+      reason: result?.reason ?? null,
+      leadIds: result?.leadIds ?? [],
     });
   }
 

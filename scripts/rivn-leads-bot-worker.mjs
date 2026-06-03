@@ -40,6 +40,9 @@ const config = {
   serviceRoleKey: requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
   telegramBotToken: requiredEnv("TELEGRAM_BOT_TOKEN"),
   pollTimeoutSeconds: Number(process.env.RIVN_LEADS_BOT_POLL_TIMEOUT_SECONDS || 25),
+  deliveryPollMs: Number(process.env.RIVN_LEADS_BOT_DELIVERY_POLL_MS || 10_000),
+  deliveryBatchSize: Number(process.env.RIVN_LEADS_BOT_DELIVERY_BATCH_SIZE || 20),
+  retryFailedDeliveries: process.env.RIVN_LEADS_BOT_RETRY_FAILED_DELIVERIES !== "false",
 };
 
 const supabase = createClient(config.supabaseUrl, config.serviceRoleKey, {
@@ -48,6 +51,7 @@ const supabase = createClient(config.supabaseUrl, config.serviceRoleKey, {
 
 let offset = 0;
 let isStopping = false;
+let isDelivering = false;
 
 function log(message, meta = {}) {
   console.log(JSON.stringify({ level: "info", service: "rivn-leads-bot", message, ...meta }));
@@ -84,13 +88,20 @@ async function callTelegram(method, payload) {
   return body.result;
 }
 
-async function sendTelegramMessage(chatId, text) {
+async function sendTelegramMessage(chatId, text, parseMode = "HTML") {
   return callTelegram("sendMessage", {
     chat_id: chatId,
     text,
-    parse_mode: "HTML",
+    parse_mode: parseMode,
     disable_web_page_preview: true,
   });
+}
+
+function htmlEscape(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 function pickMessage(update) {
@@ -103,6 +114,11 @@ function parseCommand(text) {
     command: commandRaw.split("@")[0].toLowerCase(),
     payload: payload.trim(),
   };
+}
+
+function one(row, key) {
+  const value = row?.[key];
+  return Array.isArray(value) ? value[0] : value;
 }
 
 async function saveTelegramChatFromMessage(message) {
@@ -131,7 +147,7 @@ async function saveTelegramChatFromMessage(message) {
     { onConflict: "chat_id" }
   );
 
-  if (error) logError("Не удалось сохранить Telegram chat_id", error, { chatId: chat.id });
+  if (error) logError("Failed to save Telegram chat_id", error, { chatId: chat.id });
 }
 
 async function linkChatToRivnLeadsProject({ projectId, chatId }) {
@@ -171,7 +187,7 @@ async function linkChatToRivnLeadsProject({ projectId, chatId }) {
     [
       "<b>Готово! Чат привязан к RIVN Leads</b>",
       "",
-      `Проект: ${project.name}`,
+      `Проект: ${htmlEscape(project.name)}`,
       `Chat ID: <code>${telegramChatId}</code>`,
       "",
       "Теперь найденные заявки по этому проекту будут приходить в эту беседу.",
@@ -179,6 +195,134 @@ async function linkChatToRivnLeadsProject({ projectId, chatId }) {
   );
 
   return { linked: true, projectId: project.id };
+}
+
+function formatLeadMessage(lead) {
+  const project = one(lead, "rivn_leads_projects");
+  const sourceChat = one(lead, "rivn_leads_source_chats");
+  const telegramMessage = one(lead, "rivn_leads_telegram_messages");
+  const matchedKeywords = Array.isArray(lead.matched_keywords)
+    ? lead.matched_keywords.map((item) => String(item?.value ?? item)).filter(Boolean)
+    : [];
+  const authorUsername = telegramMessage?.author_username
+    ? `@${String(telegramMessage.author_username).replace(/^@/, "")}`
+    : "username отсутствует";
+
+  return [
+    "🔥 <b>Потенциальный лид</b>",
+    "",
+    "<b>Сообщение:</b>",
+    htmlEscape(telegramMessage?.message_text || ""),
+    "",
+    "<b>Контакт:</b>",
+    htmlEscape(authorUsername),
+    "",
+    "<b>Источник:</b>",
+    htmlEscape(sourceChat?.title || "Telegram-чат"),
+    "",
+    "<b>Проект:</b>",
+    htmlEscape(project?.name || "RIVN Leads"),
+    "",
+    "<b>Совпадения:</b>",
+    htmlEscape(matchedKeywords.length > 0 ? matchedKeywords.join(", ") : "не указаны"),
+    "",
+    "<b>Ссылка:</b>",
+    telegramMessage?.message_link ? htmlEscape(telegramMessage.message_link) : "ссылка недоступна",
+  ].join("\n");
+}
+
+async function fetchPendingLeads() {
+  const statuses = config.retryFailedDeliveries ? ["new", "delivery_failed"] : ["new"];
+
+  const { data, error } = await supabase
+    .from("rivn_leads_leads")
+    .select(
+      `
+        id,
+        project_id,
+        source_chat_id,
+        status,
+        matched_keywords,
+        rivn_leads_projects!inner(id,name,destination_chat_id),
+        rivn_leads_source_chats!inner(id,title),
+        rivn_leads_telegram_messages!inner(id,message_text,author_username,message_link)
+      `
+    )
+    .in("status", statuses)
+    .order("created_at", { ascending: true })
+    .limit(config.deliveryBatchSize);
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+async function markDeliveryFailed(lead, destinationChatId, error) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  await supabase.from("rivn_leads_delivery_logs").insert({
+    lead_id: lead.id,
+    project_id: lead.project_id,
+    destination_chat_id: destinationChatId || "",
+    status: "failed",
+    error_message: message,
+  });
+
+  await supabase.from("rivn_leads_leads").update({ status: "delivery_failed" }).eq("id", lead.id);
+}
+
+async function deliverLead(lead) {
+  const project = one(lead, "rivn_leads_projects");
+  const destinationChatId = project?.destination_chat_id ? String(project.destination_chat_id) : "";
+
+  if (!destinationChatId) {
+    await markDeliveryFailed(lead, destinationChatId, new Error("Project has no destination_chat_id"));
+    return { delivered: false, reason: "destination_missing" };
+  }
+
+  const sent = await sendTelegramMessage(destinationChatId, formatLeadMessage(lead));
+
+  await supabase.from("rivn_leads_delivery_logs").insert({
+    lead_id: lead.id,
+    project_id: lead.project_id,
+    destination_chat_id: destinationChatId,
+    telegram_bot_message_id: String(sent.message_id),
+    status: "sent",
+  });
+
+  await supabase
+    .from("rivn_leads_leads")
+    .update({ status: "delivered", delivered_at: new Date().toISOString() })
+    .eq("id", lead.id);
+
+  return { delivered: true, reason: null };
+}
+
+async function deliverPendingLeads() {
+  if (isDelivering) return;
+  isDelivering = true;
+
+  try {
+    const leads = await fetchPendingLeads();
+    for (const lead of leads) {
+      if (isStopping) return;
+
+      try {
+        const result = await deliverLead(lead);
+        log("Lead delivery processed", {
+          leadId: lead.id,
+          projectId: lead.project_id,
+          delivered: result.delivered,
+          reason: result.reason,
+        });
+      } catch (error) {
+        const project = one(lead, "rivn_leads_projects");
+        await markDeliveryFailed(lead, project?.destination_chat_id, error);
+        logError("Lead delivery failed", error, { leadId: lead.id, projectId: lead.project_id });
+      }
+    }
+  } finally {
+    isDelivering = false;
+  }
 }
 
 async function handleUpdate(update) {
@@ -204,7 +348,7 @@ async function handleUpdate(update) {
   }
 
   const result = await linkChatToRivnLeadsProject({ projectId: payload, chatId });
-  log("Команда привязки RIVN Leads обработана", {
+  log("RIVN Leads link command processed", {
     chatId: String(chatId),
     projectId: payload,
     linked: result.linked,
@@ -226,7 +370,7 @@ async function pollUpdates() {
     try {
       await handleUpdate(update);
     } catch (error) {
-      logError("Не удалось обработать Telegram update", error, {
+      logError("Failed to process Telegram update", error, {
         updateId: update.update_id,
       });
     }
@@ -241,30 +385,38 @@ async function main() {
   const me = await callTelegram("getMe", {});
   await clearWebhook();
 
-  log("RIVN Leads bot worker запущен", {
+  log("RIVN Leads bot worker started", {
     botUsername: me?.username || null,
     pollTimeoutSeconds: config.pollTimeoutSeconds,
+    deliveryPollMs: config.deliveryPollMs,
   });
+
+  void deliverPendingLeads().catch((error) => logError("Initial lead delivery poll failed", error));
+  const deliveryTimer = setInterval(() => {
+    void deliverPendingLeads().catch((error) => logError("Lead delivery poll failed", error));
+  }, config.deliveryPollMs);
 
   while (!isStopping) {
     try {
       await pollUpdates();
     } catch (error) {
-      logError("Ошибка long polling Telegram", error);
+      logError("Telegram long polling failed", error);
       await sleep(3000);
     }
   }
+
+  clearInterval(deliveryTimer);
 }
 
 async function shutdown(signal) {
   isStopping = true;
-  log("Останавливаем RIVN Leads bot worker", { signal });
+  log("Stopping RIVN Leads bot worker", { signal });
 }
 
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
 main().catch((error) => {
-  logError("RIVN Leads bot worker упал при запуске", error);
+  logError("RIVN Leads bot worker crashed on startup", error);
   process.exit(1);
 });

@@ -38,16 +38,20 @@ export async function POST(request: Request) {
     }
 
     const serviceSupabase = createServiceRoleClient();
-    const result = await processRivnLeadsMessage(serviceSupabase, {
-      sourceChatId,
-      telegramChatId,
-      telegramMessageId,
-      messageText,
-      authorName: typeof body?.authorName === "string" ? body.authorName : null,
-      authorUsername: typeof body?.authorUsername === "string" ? body.authorUsername : null,
-      messageLink: typeof body?.messageLink === "string" ? body.messageLink : null,
-      messageDate: typeof body?.messageDate === "string" ? body.messageDate : new Date().toISOString(),
-    });
+    const result = await processRivnLeadsMessage(
+      serviceSupabase,
+      {
+        sourceChatId,
+        telegramChatId,
+        telegramMessageId,
+        messageText,
+        authorName: typeof body?.authorName === "string" ? body.authorName : null,
+        authorUsername: typeof body?.authorUsername === "string" ? body.authorUsername : null,
+        messageLink: typeof body?.messageLink === "string" ? body.messageLink : null,
+        messageDate: typeof body?.messageDate === "string" ? body.messageDate : new Date().toISOString(),
+      },
+      { deliver: process.env.RIVN_LEADS_DELIVER_IN_INGEST === "true" }
+    );
 
     return apiSuccess({ result });
   } catch (error) {
