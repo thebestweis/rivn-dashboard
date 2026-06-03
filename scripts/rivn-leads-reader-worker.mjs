@@ -193,11 +193,14 @@ async function loadReaders() {
   const { data, error } = await supabase
     .from("rivn_leads_reader_accounts")
     .select("id,label,encrypted_session_string,status,last_error")
-    .eq("status", "active")
+    .in("status", ["active", "error"])
     .order("created_at", { ascending: true });
 
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []).filter((reader) => {
+    if (reader.status === "active") return true;
+    return /disconnected|reconnect|TIMEOUT|Not connected/i.test(String(reader.last_error || ""));
+  });
 }
 
 async function loadSourceChats(readerId) {
