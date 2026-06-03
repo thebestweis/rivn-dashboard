@@ -238,6 +238,7 @@ class ReaderRuntime {
     this.trackedDialogs = [];
     this.pollTimer = null;
     this.isStopping = false;
+    this.isConnected = false;
     this.isPolling = false;
     this.needsRestart = false;
   }
@@ -265,6 +266,7 @@ class ReaderRuntime {
     );
 
     await this.client.connect();
+    this.isConnected = true;
 
     if (!(await this.client.isUserAuthorized())) {
       await updateReader(this.reader.id, {
@@ -291,7 +293,8 @@ class ReaderRuntime {
   async stop() {
     this.isStopping = true;
     if (this.pollTimer) clearInterval(this.pollTimer);
-    if (this.client && !this.client.disconnected) await this.client.disconnect().catch(() => undefined);
+    this.isConnected = false;
+    if (this.client) await this.client.disconnect().catch(() => undefined);
   }
 
   async resolveDialogs() {
@@ -329,7 +332,7 @@ class ReaderRuntime {
   }
 
   async handleNewMessage(event) {
-    if (!this.client || this.isStopping || this.client.disconnected) return;
+    if (!this.client || this.isStopping || !this.isConnected) return;
     const message = event.message;
     if (!(message instanceof Api.Message)) return;
 
@@ -344,13 +347,13 @@ class ReaderRuntime {
   }
 
   async pollRecentMessages() {
-    if (!this.client || this.isStopping || this.isPolling || this.client.disconnected) return;
+    if (!this.client || this.isStopping || this.isPolling || !this.isConnected) return;
 
     this.isPolling = true;
 
     try {
       for (const dialog of this.trackedDialogs) {
-        if (this.isStopping || this.client.disconnected) return;
+        if (this.isStopping || !this.isConnected) return;
 
         let messages = [];
         try {
@@ -367,7 +370,7 @@ class ReaderRuntime {
         }
 
         for (const message of [...messages].reverse()) {
-          if (this.isStopping || this.client.disconnected) return;
+          if (this.isStopping || !this.isConnected) return;
           if (message instanceof Api.Message) await this.processMessage(dialog.sourceChat, message);
         }
       }
@@ -377,7 +380,7 @@ class ReaderRuntime {
   }
 
   async processMessage(sourceChat, message) {
-    if (!this.client || this.isStopping || this.client.disconnected) return;
+    if (!this.client || this.isStopping || !this.isConnected) return;
     const text = message.message ?? "";
     if (!text.trim()) return;
 
@@ -483,7 +486,7 @@ async function syncReaders() {
         readerId: runtime.reader.id,
         sourceChats: runtime.sourceChats.length,
         trackedDialogs: runtime.trackedDialogs.length,
-        disconnected: Boolean(runtime.client?.disconnected),
+        connected: runtime.isConnected,
         needsRestart: runtime.needsRestart,
         isPolling: runtime.isPolling,
       })),
