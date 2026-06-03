@@ -192,7 +192,7 @@ async function sendToIngest(payload) {
 async function loadReaders() {
   const { data, error } = await supabase
     .from("rivn_leads_reader_accounts")
-    .select("id,label,encrypted_session_string,status,last_error")
+    .select("id,label,encrypted_session_string,status,last_error,assigned_niche,max_chats_limit")
     .in("status", ["active", "error"])
     .order("created_at", { ascending: true });
 
@@ -214,6 +214,10 @@ async function loadSourceChats(readerId) {
   return data ?? [];
 }
 
+function isChatScanRequested(reader) {
+  return String(reader?.last_error || "").startsWith("chat_scan_requested:");
+}
+
 async function updateReader(readerId, payload) {
   const { error } = await supabase
     .from("rivn_leads_reader_accounts")
@@ -230,6 +234,89 @@ async function updateSourceChat(sourceChatId, payload) {
   if (error) logError("Не удалось обновить чат-источник", error, { sourceChatId });
 }
 
+function dialogTitle(entity) {
+  return entity?.title || null;
+}
+
+function dialogUsername(entity) {
+  return entity?.username ?? null;
+}
+
+function dialogKind(entity) {
+  if (entity instanceof Api.Chat) return "group";
+  if (entity instanceof Api.Channel) return entity.megagroup ? "supergroup" : "channel_discussion";
+  return null;
+}
+
+function dialogMemberCount(entity) {
+  return entity?.participantsCount ?? null;
+}
+
+async function ensureSourceChatCategory(niche) {
+  const normalizedNiche = niche?.trim().toLowerCase();
+  const preferredSlug = normalizedNiche === "crm" ? "crm" : normalizedNiche === "marketing" ? "marketing" : null;
+
+  let query = supabase
+    .from("rivn_leads_source_chat_categories")
+    .select("id")
+    .limit(1);
+
+  if (preferredSlug) query = query.eq("slug", preferredSlug);
+
+  const { data: existing, error: existingError } = await query.maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+  if (existing?.id) return existing.id;
+
+  const { data: fallback, error: fallbackError } = await supabase
+    .from("rivn_leads_source_chat_categories")
+    .select("id")
+    .order("name", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (fallbackError) throw new Error(fallbackError.message);
+  if (fallback?.id) return fallback.id;
+
+  const { data: created, error: createError } = await supabase
+    .from("rivn_leads_source_chat_categories")
+    .insert({
+      name: "Business",
+      slug: "business",
+      description: "Telegram business chats for lead monitoring",
+    })
+    .select("id")
+    .single();
+
+  if (createError) throw new Error(createError.message);
+  return created.id;
+}
+
+async function linkChatsToProjects(readerId, savedChats, now) {
+  const { data: projects, error: projectsError } = await supabase
+    .from("rivn_leads_projects")
+    .select("id")
+    .eq("reader_account_id", readerId);
+
+  if (projectsError) throw new Error(projectsError.message);
+  if (!projects?.length || !savedChats?.length) return 0;
+
+  const links = projects.flatMap((project) =>
+    savedChats.map((chat) => ({
+      project_id: project.id,
+      source_chat_id: chat.id,
+      enabled: true,
+      updated_at: now,
+    }))
+  );
+
+  const { error: linksError } = await supabase
+    .from("rivn_leads_project_source_chats")
+    .upsert(links, { onConflict: "project_id,source_chat_id" });
+
+  if (linksError) throw new Error(linksError.message);
+  return links.length;
+}
+
 class ReaderRuntime {
   constructor(reader) {
     this.reader = reader;
@@ -244,8 +331,9 @@ class ReaderRuntime {
   }
 
   async start() {
+    const shouldScanChats = isChatScanRequested(this.reader);
     this.sourceChats = await loadSourceChats(this.reader.id);
-    if (this.sourceChats.length === 0) {
+    if (this.sourceChats.length === 0 && !shouldScanChats) {
       log("Reader пропущен: нет активных чатов", { readerId: this.reader.id });
       return false;
     }
@@ -277,6 +365,18 @@ class ReaderRuntime {
       throw new Error(`Reader ${this.reader.id} требует повторной авторизации`);
     }
 
+    if (shouldScanChats) {
+      const result = await this.scanReaderChats();
+      log("Reader Telegram chats scanned", { readerId: this.reader.id, ...result });
+      this.sourceChats = await loadSourceChats(this.reader.id);
+
+      if (this.sourceChats.length === 0) {
+        log("Reader РїСЂРѕРїСѓС‰РµРЅ: РЅРµС‚ Р°РєС‚РёРІРЅС‹С… С‡Р°С‚РѕРІ", { readerId: this.reader.id });
+        await this.stop();
+        return false;
+      }
+    }
+
     await this.resolveDialogs();
     this.client.addEventHandler((event) => void this.handleNewMessage(event), new NewMessage({}));
     await this.pollRecentMessages();
@@ -295,6 +395,67 @@ class ReaderRuntime {
     if (this.pollTimer) clearInterval(this.pollTimer);
     this.isConnected = false;
     if (this.client) await this.client.disconnect().catch(() => undefined);
+  }
+
+  async scanReaderChats() {
+    if (!this.client) return { found: 0, saved: 0, linked: 0 };
+
+    const now = new Date().toISOString();
+    const limit = Math.min(Number(this.reader.max_chats_limit) || 500, 500);
+    const dialogs = await this.client.getDialogs({ limit });
+    const categoryId = await ensureSourceChatCategory(this.reader.assigned_niche);
+    const uniqueRows = new Map();
+
+    for (const dialog of dialogs) {
+      const telegramChatId = toTelegramChatId(dialog.entity);
+      const title = dialogTitle(dialog.entity);
+      const type = dialogKind(dialog.entity);
+      const username = dialogUsername(dialog.entity);
+
+      if (!telegramChatId || !title || !type) continue;
+
+      uniqueRows.set(telegramChatId, {
+        category_id: categoryId,
+        reader_account_id: this.reader.id,
+        title,
+        telegram_chat_id: telegramChatId,
+        username,
+        type,
+        access_level: username ? "public" : "private",
+        status: "active",
+        member_count: dialogMemberCount(dialog.entity),
+        last_checked_at: now,
+        updated_at: now,
+      });
+    }
+
+    const rows = [...uniqueRows.values()];
+
+    if (rows.length === 0) {
+      await updateReader(this.reader.id, {
+        status: "active",
+        last_error: "Telegram connected, but no group chats were found",
+        last_seen_at: now,
+      });
+      return { found: 0, saved: 0, linked: 0 };
+    }
+
+    const { data: savedChats, error: saveChatsError } = await supabase
+      .from("rivn_leads_source_chats")
+      .upsert(rows, { onConflict: "telegram_chat_id" })
+      .select("id,title");
+
+    if (saveChatsError) throw new Error(saveChatsError.message);
+
+    const linked = await linkChatsToProjects(this.reader.id, savedChats ?? [], now);
+
+    await updateReader(this.reader.id, {
+      status: "active",
+      last_error: null,
+      last_seen_at: now,
+    });
+
+    return { found: rows.length, saved: savedChats?.length ?? 0, linked };
   }
 
   async resolveDialogs() {
@@ -451,9 +612,10 @@ let lastHeartbeatAt = 0;
 async function syncReaders() {
   const readers = await loadReaders();
   const activeIds = new Set(readers.map((reader) => reader.id));
+  const scanRequestedIds = new Set(readers.filter(isChatScanRequested).map((reader) => reader.id));
 
   for (const [readerId, runtime] of runtimes) {
-    if (!activeIds.has(readerId) || runtime.needsRestart) {
+    if (!activeIds.has(readerId) || runtime.needsRestart || scanRequestedIds.has(readerId)) {
       await runtime.stop();
       runtimes.delete(readerId);
       log(runtime.needsRestart ? "Reader будет перезапущен" : "Reader остановлен", { readerId });

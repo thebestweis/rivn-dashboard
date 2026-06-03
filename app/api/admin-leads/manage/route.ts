@@ -1,12 +1,8 @@
 import { apiSuccess } from "@/app/lib/api/errors";
-import { Api, TelegramClient } from "telegram";
-import type { ProxyInterface } from "telegram/network/connection/TCPMTProxy";
-import { StringSession } from "telegram/sessions";
 import { requireSuperAdminRoute } from "../../admin/_utils";
 import {
   adminLeadsFailure,
   type AdminLeadsClient,
-  decryptRivnLeadsSessionString,
   encryptRivnLeadsSessionString,
   keywordMatchTypes,
   leadProjectStatuses,
@@ -45,142 +41,6 @@ type ManageAction =
   | "delete_reader"
   | "scan_reader_chats";
 
-type TelegramDialogEntity = {
-  id?: string | number | bigint;
-  title?: string;
-  username?: string | null;
-  megagroup?: boolean;
-  broadcast?: boolean;
-  participantsCount?: number | null;
-  className?: string;
-  constructor?: { name?: string };
-};
-
-function getTelegramProxy(): ProxyInterface | undefined {
-  const ip = process.env.TELEGRAM_PROXY_IP || process.env.TELEGRAM_PROXY_HOST;
-  const port = Number(process.env.TELEGRAM_PROXY_PORT);
-  const rawSocksType = Number(process.env.TELEGRAM_PROXY_SOCKS_TYPE || 5);
-  const socksType: 4 | 5 = rawSocksType === 4 ? 4 : 5;
-
-  if (!ip || !Number.isFinite(port) || port <= 0) return undefined;
-
-  return {
-    ip,
-    port,
-    socksType,
-    username: process.env.TELEGRAM_PROXY_USERNAME || undefined,
-    password: process.env.TELEGRAM_PROXY_PASSWORD || undefined,
-    timeout: Number(process.env.TELEGRAM_PROXY_TIMEOUT_SECONDS || 10),
-  };
-}
-
-function getTelegramClientOptions(connectionRetries: number) {
-  const proxy = getTelegramProxy();
-  const useWSS = proxy ? false : true;
-
-  return {
-    connectionRetries,
-    useWSS,
-    proxy,
-  };
-}
-
-function getTelegramEntityKind(entity: unknown) {
-  const value = entity as TelegramDialogEntity | null;
-  const className = value?.className || value?.constructor?.name || "";
-
-  if (entity instanceof Api.Chat || className.includes("Chat")) return "chat";
-  if (entity instanceof Api.Channel || className.includes("Channel")) return "channel";
-
-  return null;
-}
-
-function toTelegramChatId(entity: unknown) {
-  const value = entity as TelegramDialogEntity | null;
-  const id = value?.id;
-  const kind = getTelegramEntityKind(entity);
-
-  if (id === null || id === undefined || !kind) return null;
-  if (kind === "channel") return `-100${String(id)}`;
-  return `-${String(id)}`;
-}
-
-function dialogTitle(entity: unknown) {
-  const value = entity as TelegramDialogEntity | null;
-  return value?.title || null;
-}
-
-function dialogUsername(entity: unknown) {
-  const value = entity as TelegramDialogEntity | null;
-  return value?.username ?? null;
-}
-
-function dialogKind(entity: unknown) {
-  const value = entity as TelegramDialogEntity | null;
-  const kind = getTelegramEntityKind(entity);
-
-  if (kind === "chat") return "group";
-  if (kind === "channel") return value?.megagroup ? "supergroup" : "channel_discussion";
-
-  return null;
-}
-
-function dialogMemberCount(entity: unknown) {
-  const value = entity as TelegramDialogEntity | null;
-  return value?.participantsCount ?? null;
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  const timeout = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(message)), ms);
-  });
-
-  return Promise.race([promise, timeout]).finally(() => {
-    if (timeoutId) clearTimeout(timeoutId);
-  });
-}
-
-async function ensureSourceChatCategory(serviceSupabase: AdminLeadsClient, niche?: string | null) {
-  const normalizedNiche = niche?.trim().toLowerCase();
-  const preferredSlug = normalizedNiche === "crm" ? "crm" : normalizedNiche === "marketing" ? "marketing" : null;
-
-  let query = serviceSupabase
-    .from("rivn_leads_source_chat_categories")
-    .select("id")
-    .limit(1);
-
-  if (preferredSlug) query = query.eq("slug", preferredSlug);
-
-  const { data: existing, error: existingError } = await query.maybeSingle();
-  if (existingError) throw new Error(existingError.message);
-  if (existing?.id) return existing.id as string;
-
-  const { data: fallback, error: fallbackError } = await serviceSupabase
-    .from("rivn_leads_source_chat_categories")
-    .select("id")
-    .order("name", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (fallbackError) throw new Error(fallbackError.message);
-  if (fallback?.id) return fallback.id as string;
-
-  const { data: created, error: createError } = await serviceSupabase
-    .from("rivn_leads_source_chat_categories")
-    .insert({
-      name: "Бизнес и предприниматели",
-      slug: "business",
-      description: "Бизнес-чаты, где могут появляться запросы на услуги",
-    })
-    .select("id")
-    .single();
-
-  if (createError) throw new Error(createError.message);
-  return created.id as string;
-}
-
 async function getProjectWorkspaceId(serviceSupabase: AdminLeadsClient, projectId: string) {
   const { data, error } = await serviceSupabase
     .from("rivn_leads_projects")
@@ -193,173 +53,6 @@ async function getProjectWorkspaceId(serviceSupabase: AdminLeadsClient, projectI
   }
 
   return data.workspace_id as string;
-}
-
-async function scanReaderChatsInBackground(params: {
-  serviceSupabase: AdminLeadsClient;
-  userId: string;
-  readerId: string;
-  apiId: number;
-  apiHash: string;
-  now: string;
-}) {
-  const { serviceSupabase, userId, readerId, apiId, apiHash, now } = params;
-
-  const { data: reader, error: readerError } = await serviceSupabase
-    .from("rivn_leads_reader_accounts")
-    .select("id,label,encrypted_session_string,assigned_niche,max_chats_limit")
-    .eq("id", readerId)
-    .maybeSingle();
-
-  if (readerError) throw new Error(readerError.message);
-  if (!reader) throw new Error("Reader-аккаунт не найден");
-
-  const sessionString = decryptRivnLeadsSessionString(reader.encrypted_session_string);
-  const telegramClientOptions = getTelegramClientOptions(3);
-  const client = new TelegramClient(new StringSession(sessionString), apiId, apiHash, telegramClientOptions);
-
-  let found = 0;
-  let saved = 0;
-  let linked = 0;
-
-  try {
-    console.log("RIVN Leads reader chat scan connection mode:", {
-      readerId,
-      useWSS: telegramClientOptions.useWSS,
-      proxy: Boolean(telegramClientOptions.proxy),
-    });
-
-    await withTimeout(
-      client.connect(),
-      12_000,
-      "Telegram слишком долго отвечает при подключении reader-аккаунта. Проверь session string и доступ сервера к Telegram."
-    );
-
-    if (!(await withTimeout(
-      client.isUserAuthorized(),
-      5_000,
-      "Telegram не подтвердил авторизацию reader-аккаунта. Попробуй заменить session string."
-    ))) {
-      throw new Error("Reader-аккаунт требует повторной авторизации в Telegram");
-    }
-
-    const limit = Math.min(Number(reader.max_chats_limit) || 500, 500);
-    const dialogs = await withTimeout(
-      client.getDialogs({ limit }),
-      18_000,
-      "Telegram слишком долго отдаёт список чатов. Попробуй уменьшить лимит чатов reader-аккаунта и повторить загрузку."
-    );
-    const categoryId = await ensureSourceChatCategory(serviceSupabase, reader.assigned_niche);
-
-    const uniqueRows = new Map<string, {
-      category_id: string;
-      reader_account_id: string;
-      title: string;
-      telegram_chat_id: string;
-      username: string | null;
-      type: string;
-      access_level: string;
-      status: string;
-      member_count: number | null;
-      last_checked_at: string;
-      updated_at: string;
-    }>();
-
-    for (const dialog of dialogs) {
-      const telegramChatId = toTelegramChatId(dialog.entity);
-      const title = dialogTitle(dialog.entity);
-      const type = dialogKind(dialog.entity);
-      const username = dialogUsername(dialog.entity);
-
-      if (!telegramChatId || !title || !type) continue;
-
-      uniqueRows.set(telegramChatId, {
-        category_id: categoryId,
-        reader_account_id: readerId,
-        title,
-        telegram_chat_id: telegramChatId,
-        username,
-        type,
-        access_level: username ? "public" : "private",
-        status: "active",
-        member_count: dialogMemberCount(dialog.entity),
-        last_checked_at: now,
-        updated_at: now,
-      });
-    }
-
-    const rows = [...uniqueRows.values()];
-    found = rows.length;
-
-    if (rows.length > 0) {
-      const { data: savedChats, error: saveChatsError } = await serviceSupabase
-        .from("rivn_leads_source_chats")
-        .upsert(rows, { onConflict: "telegram_chat_id" })
-        .select("id");
-
-      if (saveChatsError) throw new Error(saveChatsError.message);
-      saved = savedChats?.length ?? 0;
-
-      const { data: projects, error: projectsError } = await serviceSupabase
-        .from("rivn_leads_projects")
-        .select("id")
-        .eq("reader_account_id", readerId);
-
-      if (projectsError) throw new Error(projectsError.message);
-
-      const links = (projects ?? []).flatMap((project: { id: string }) =>
-        (savedChats ?? []).map((chat: { id: string }) => ({
-          project_id: project.id,
-          source_chat_id: chat.id,
-          enabled: true,
-          updated_at: now,
-        }))
-      );
-
-      if (links.length > 0) {
-        const { error: linksError } = await serviceSupabase
-          .from("rivn_leads_project_source_chats")
-          .upsert(links, { onConflict: "project_id,source_chat_id" });
-
-        if (linksError) throw new Error(linksError.message);
-        linked = links.length;
-      }
-    }
-
-    await serviceSupabase
-      .from("rivn_leads_reader_accounts")
-      .update({
-        status: "active",
-        last_error: null,
-        last_seen_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", readerId);
-
-    await writeAdminLeadsAudit(serviceSupabase, {
-      userId,
-      action: "reader.scan_chats",
-      entityType: "RivnLeadsReaderAccount",
-      entityId: readerId,
-      metadata: { found, saved, linked },
-    });
-  } catch (scanError) {
-    const message = scanError instanceof Error ? scanError.message : "Не удалось загрузить Telegram-чаты";
-
-    await serviceSupabase
-      .from("rivn_leads_reader_accounts")
-      .update({
-        status: message.includes("авториза") || message.includes("authoriz") ? "auth_required" : "error",
-        last_error: message,
-        last_seen_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", readerId);
-
-    console.error("RIVN Leads reader chat scan failed:", scanError);
-  } finally {
-    await client.disconnect().catch(() => undefined);
-  }
 }
 
 export async function POST(request: Request) {
@@ -868,13 +561,7 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "scan_reader_chats") {
-      const id = requiredString(body.id, "ID reader-аккаунта");
-      const apiId = Number(process.env.TELEGRAM_API_ID);
-      const apiHash = process.env.TELEGRAM_API_HASH;
-
-      if (!Number.isFinite(apiId) || apiId <= 0 || !apiHash) {
-        throw new Error("TELEGRAM_API_ID и TELEGRAM_API_HASH должны быть заполнены на сервере");
-      }
+      const id = requiredString(body.id, "Reader account ID");
 
       const { data: reader, error: readerError } = await serviceSupabase
         .from("rivn_leads_reader_accounts")
@@ -883,25 +570,25 @@ export async function POST(request: Request) {
         .maybeSingle();
 
       if (readerError) throw new Error(readerError.message);
-      if (!reader) throw new Error("Reader-аккаунт не найден");
+      if (!reader) throw new Error("Reader account not found");
 
-      await serviceSupabase
+      const { error: updateError } = await serviceSupabase
         .from("rivn_leads_reader_accounts")
         .update({
           status: "active",
-          last_error: "Загрузка Telegram-чатов запущена. Обычно это занимает несколько секунд.",
+          last_error: `chat_scan_requested:${now}`,
           last_seen_at: now,
           updated_at: now,
         })
         .eq("id", id);
 
-      void scanReaderChatsInBackground({
-        serviceSupabase,
+      if (updateError) throw new Error(updateError.message);
+
+      await writeAdminLeadsAudit(serviceSupabase, {
         userId: user.id,
-        readerId: id,
-        apiId,
-        apiHash,
-        now,
+        action: "reader.scan_chats.request",
+        entityType: "RivnLeadsReaderAccount",
+        entityId: id,
       });
 
       return apiSuccess({ started: true });
