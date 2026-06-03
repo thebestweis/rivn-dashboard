@@ -16,7 +16,7 @@ export type StopWordCandidate = {
 export function normalizeLeadText(text: string): string {
   return text
     .toLowerCase()
-    .replaceAll("ё", "е")
+    .replace(/\u0451/g, "\u0435")
     .replace(/[^\p{L}\p{N}\s@._-]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -42,32 +42,56 @@ export function findLeadStopWords(normalizedText: string, stopWords: StopWordCan
 }
 
 function keywordMatches(normalizedText: string, normalizedKeyword: string, matchType: KeywordMatchType) {
-  if (!normalizedKeyword) return false;
-  if (matchType === "contains") return containsPhrase(normalizedText, normalizedKeyword);
-  if (matchType === "exact") return exactPhrase(normalizedText, normalizedKeyword);
+  const keyword = normalizeLeadText(normalizedKeyword);
 
-  return containsPhrase(normalizedText, normalizedKeyword) || fuzzyPhrase(normalizedText, normalizedKeyword);
+  if (!keyword) return false;
+  if (matchType === "contains") return containsKeyword(normalizedText, keyword);
+  if (matchType === "exact") return exactPhrase(normalizedText, keyword);
+
+  return containsKeyword(normalizedText, keyword) || fuzzyPhrase(normalizedText, keyword);
 }
 
 function containsPhrase(normalizedText: string, normalizedPhrase: string) {
-  return normalizedText.includes(normalizedPhrase);
+  const phrase = normalizeLeadText(normalizedPhrase);
+  if (!phrase) return false;
+  return normalizedText.includes(phrase);
+}
+
+function containsKeyword(normalizedText: string, normalizedKeyword: string) {
+  if (isShortCyrillicKeyword(normalizedKeyword) || isShortNumericKeyword(normalizedKeyword)) {
+    return exactPhrase(normalizedText, normalizedKeyword);
+  }
+
+  return containsPhrase(normalizedText, normalizedKeyword);
 }
 
 function exactPhrase(normalizedText: string, normalizedPhrase: string) {
-  const escaped = normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const phrase = normalizeLeadText(normalizedPhrase);
+  if (!phrase) return false;
+
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(^|\\s)${escaped}(\\s|$)`, "u").test(normalizedText);
+}
+
+function isShortCyrillicKeyword(value: string) {
+  return /^[\u0430-\u044f]{1,3}$/u.test(value);
+}
+
+function isShortNumericKeyword(value: string) {
+  return /^\d{1,3}$/u.test(value);
 }
 
 function fuzzyPhrase(normalizedText: string, normalizedPhrase: string) {
   const textTokens = normalizedText.split(" ").filter(Boolean);
-  const phraseTokens = normalizeLeadText(normalizedPhrase).split(" ").filter(Boolean);
+  const phrase = normalizeLeadText(normalizedPhrase);
+  const phraseTokens = phrase.split(" ").filter(Boolean);
   if (phraseTokens.length === 0 || textTokens.length === 0) return false;
 
   const windowSize = phraseTokens.length;
   for (let index = 0; index <= textTokens.length - windowSize; index += 1) {
     const window = textTokens.slice(index, index + windowSize).join(" ");
-    const maxDistance = Math.max(1, Math.floor(normalizedPhrase.length * 0.2));
-    if (levenshteinDistance(window, normalizedPhrase) <= maxDistance) return true;
+    const maxDistance = Math.max(1, Math.floor(phrase.length * 0.2));
+    if (levenshteinDistance(window, phrase) <= maxDistance) return true;
   }
 
   return false;
