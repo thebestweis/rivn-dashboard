@@ -45,11 +45,13 @@ function escapeHtml(value) {
 }
 
 async function sendAlert(title, lines) {
-  const telegramBotToken = env("TELEGRAM_BOT_TOKEN");
+  const telegramBotToken = env("RIVN_LEADS_ALERT_BOT_TOKEN", ["TELEGRAM_BOT_TOKEN"]);
   const alertChatId = env("RIVN_LEADS_ALERT_CHAT_ID", ["CRON_ERROR_CHAT_ID"]);
 
   if (!telegramBotToken || !alertChatId) {
-    console.error("No TELEGRAM_BOT_TOKEN or RIVN_LEADS_ALERT_CHAT_ID/CRON_ERROR_CHAT_ID for RIVN Leads health alert");
+    console.error(
+      "No RIVN_LEADS_ALERT_BOT_TOKEN/TELEGRAM_BOT_TOKEN or RIVN_LEADS_ALERT_CHAT_ID/CRON_ERROR_CHAT_ID for RIVN Leads health alert"
+    );
     return;
   }
 

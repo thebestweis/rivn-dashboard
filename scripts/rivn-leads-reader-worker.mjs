@@ -46,7 +46,7 @@ const config = {
   syncIntervalMs: Number(process.env.RIVN_LEADS_READER_SYNC_MS || 30_000),
   recentMessagesLimit: Number(process.env.RIVN_LEADS_RECENT_MESSAGES_LIMIT || 10),
   heartbeatMs: Number(process.env.RIVN_LEADS_READER_HEARTBEAT_MS || 60_000),
-  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
+  telegramBotToken: process.env.RIVN_LEADS_ALERT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "",
   alertChatId: process.env.RIVN_LEADS_ALERT_CHAT_ID || process.env.CRON_ERROR_CHAT_ID || "",
   alertThrottleMs: Number(process.env.RIVN_LEADS_ALERT_THROTTLE_MS || 300_000),
 };
