@@ -46,6 +46,9 @@ const config = {
   syncIntervalMs: Number(process.env.RIVN_LEADS_READER_SYNC_MS || 30_000),
   recentMessagesLimit: Number(process.env.RIVN_LEADS_RECENT_MESSAGES_LIMIT || 10),
   heartbeatMs: Number(process.env.RIVN_LEADS_READER_HEARTBEAT_MS || 60_000),
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
+  alertChatId: process.env.RIVN_LEADS_ALERT_CHAT_ID || process.env.CRON_ERROR_CHAT_ID || "",
+  alertThrottleMs: Number(process.env.RIVN_LEADS_ALERT_THROTTLE_MS || 300_000),
 };
 
 function getTelegramProxy() {
@@ -98,6 +101,56 @@ function logError(message, error, meta = {}) {
       ...meta,
     })
   );
+}
+
+const alertSentAt = new Map();
+
+function isRecoverableReaderError(error) {
+  return /disconnected|reconnect|TIMEOUT|Not connected|fetch failed|network|socket hang up|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|temporar|external service|Telegram connection was reset|Внешний сервис|временно не ответил/i.test(
+    String(error || "")
+  );
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+async function sendAdminAlert(title, lines = [], throttleKey = title) {
+  if (!config.telegramBotToken || !config.alertChatId) return;
+
+  const now = Date.now();
+  const previousSentAt = alertSentAt.get(throttleKey) || 0;
+  if (now - previousSentAt < config.alertThrottleMs) return;
+  alertSentAt.set(throttleKey, now);
+
+  const text = [
+    `[ALERT] <b>${escapeHtml(title)}</b>`,
+    "",
+    ...lines.map((line) => escapeHtml(line)),
+  ].join("\n");
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${config.telegramBotToken}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: config.alertChatId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      logError("RIVN Leads alert delivery failed", new Error(`${response.status}: ${body}`));
+    }
+  } catch (error) {
+    logError("RIVN Leads alert delivery failed", error);
+  }
 }
 
 function getKey(encryptionKey) {
@@ -199,7 +252,7 @@ async function loadReaders() {
   if (error) throw new Error(error.message);
   return (data ?? []).filter((reader) => {
     if (reader.status === "active") return true;
-    return /disconnected|reconnect|TIMEOUT|Not connected/i.test(String(reader.last_error || ""));
+    return isRecoverableReaderError(reader.last_error);
   });
 }
 
@@ -371,7 +424,7 @@ class ReaderRuntime {
       this.sourceChats = await loadSourceChats(this.reader.id);
 
       if (this.sourceChats.length === 0) {
-        log("Reader РїСЂРѕРїСѓС‰РµРЅ: РЅРµС‚ Р°РєС‚РёРІРЅС‹С… С‡Р°С‚РѕРІ", { readerId: this.reader.id });
+        log("Reader пропущен: нет активных чатов", { readerId: this.reader.id });
         await this.stop();
         return false;
       }
@@ -385,7 +438,7 @@ class ReaderRuntime {
       void this.pollRecentMessages().catch((error) => this.handleRuntimeError(error, "Ошибка фонового опроса сообщений"));
     }, config.syncIntervalMs);
 
-    await updateReader(this.reader.id, { last_error: null, last_seen_at: new Date().toISOString() });
+    await updateReader(this.reader.id, { status: "active", last_error: null, last_seen_at: new Date().toISOString() });
     log("Reader запущен", { readerId: this.reader.id, chats: this.trackedDialogs.length });
     return true;
   }
@@ -562,7 +615,7 @@ class ReaderRuntime {
       last_message_at: getMessageDate(message),
       last_checked_at: new Date().toISOString(),
     });
-    await updateReader(this.reader.id, { last_error: null, last_seen_at: new Date().toISOString() });
+    await updateReader(this.reader.id, { status: "active", last_error: null, last_seen_at: new Date().toISOString() });
     log("Сообщение обработано", {
       readerId: this.reader.id,
       sourceChatId: sourceChat.id,
@@ -577,23 +630,47 @@ class ReaderRuntime {
   async handleRuntimeError(error, message) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const isDisconnectError = /disconnected|reconnect|TIMEOUT|Not connected/i.test(errorMessage);
+    const isRecoverableError = isRecoverableReaderError(errorMessage);
 
     if (this.isStopping && isDisconnectError) return;
 
     logError(message, error, { readerId: this.reader.id });
 
     const isAuthError = /auth|session|authorize|unauthorized|AUTH_KEY|SESSION_REVOKED|USER_DEACTIVATED/i.test(errorMessage);
+    const readerLabel = this.reader.label || this.reader.id;
 
-    if (isDisconnectError && !isAuthError) {
+    if (isRecoverableError && !isAuthError) {
+      await sendAdminAlert(
+        "RIVN Leads reader is reconnecting",
+        [
+          `Reader: ${readerLabel}`,
+          `Reason: ${errorMessage}`,
+          "Status: recoverable error, worker will restart reader automatically.",
+        ],
+        `reader-recoverable:${this.reader.id}:${errorMessage.slice(0, 120)}`
+      );
       this.needsRestart = true;
       await updateReader(this.reader.id, {
         status: "active",
-        last_error: "Telegram connection was reset. Reader will reconnect automatically.",
+        last_error: errorMessage,
         last_seen_at: new Date().toISOString(),
       });
       await this.stop();
       return;
     }
+
+    await sendAdminAlert(
+      isAuthError ? "RIVN Leads reader needs Telegram re-auth" : "RIVN Leads reader stopped",
+      [
+        `Reader: ${readerLabel}`,
+        `Reason: ${errorMessage}`,
+        `Status: ${isAuthError ? "auth_required" : "error"}`,
+        isAuthError
+          ? "Action: generate and save a new Telegram session string."
+          : "Action: check worker logs and run leads diagnostics.",
+      ],
+      `reader-fatal:${this.reader.id}:${isAuthError ? "auth" : errorMessage.slice(0, 120)}`
+    );
 
     await updateReader(this.reader.id, {
       status: isAuthError ? "auth_required" : "error",
@@ -674,11 +751,30 @@ async function main() {
 
   await syncReaders();
   setInterval(() => {
-    void syncReaders().catch((error) => logError("Ошибка синхронизации reader-аккаунтов", error));
+    void syncReaders().catch((error) => {
+      logError("Ошибка синхронизации reader-аккаунтов", error);
+      void sendAdminAlert(
+        "RIVN Leads reader sync failed",
+        [
+          `Reason: ${error instanceof Error ? error.message : String(error)}`,
+          "Action: check rivn-leads-reader PM2 logs and Supabase connectivity.",
+        ],
+        "reader-sync-failed"
+      );
+    });
   }, config.syncIntervalMs);
 }
 
 main().catch((error) => {
   logError("RIVN Leads reader worker упал при запуске", error);
-  process.exit(1);
+  void sendAdminAlert(
+    "RIVN Leads reader worker crashed on startup",
+    [
+      `Reason: ${error instanceof Error ? error.message : String(error)}`,
+      "Action: check .env.production and restart PM2 process.",
+    ],
+    "reader-startup-crash"
+  ).finally(() => {
+    process.exit(1);
+  });
 });
