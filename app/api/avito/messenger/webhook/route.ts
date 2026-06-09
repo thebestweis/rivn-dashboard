@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
+import { ApiAccessError } from "@/app/api/_guards";
+import { readJsonWithLimit } from "@/app/api/_request";
 import { POST as saveCrmDialog } from "@/app/api/crm/dialogs/route";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +36,19 @@ type NormalizedWebhookValue = NonNullable<
   NonNullable<AvitoWebhookBody["payload"]>["value"]
 >;
 
+type WebhookRecord = Record<string, unknown>;
+type AvitoLinkedClient = {
+  workspace_id?: string | null;
+  name?: string | null;
+};
+type AvitoAccount = {
+  id?: string | null;
+  name?: string | null;
+  avito_client_id?: string | null;
+  avito_client_secret?: string | null;
+  crm_dialogs_enabled?: boolean | null;
+  avito_report_clients?: AvitoLinkedClient | AvitoLinkedClient[] | null;
+};
 type ServiceSupabase = ReturnType<typeof getSupabase>;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -107,16 +122,24 @@ function pickString(...values: unknown[]) {
 }
 
 function normalizeWebhookValue(body: AvitoWebhookBody): NormalizedWebhookValue {
-  const payloadValue = (body.payload?.value ?? {}) as Record<string, any>;
+  const payloadValue = (body.payload?.value ?? {}) as WebhookRecord;
   const message = (payloadValue.message ??
     payloadValue.last_message ??
     payloadValue.value ??
-    {}) as Record<string, any>;
-  const chat = (payloadValue.chat ?? message.chat ?? {}) as Record<string, any>;
+    {}) as WebhookRecord;
+  const chat = (payloadValue.chat ?? message.chat ?? {}) as WebhookRecord;
   const rawContent = (message.content ?? payloadValue.content ?? {}) as Record<
     string,
-    any
+    unknown
   >;
+  const rawItem =
+    typeof rawContent.item === "object" && rawContent.item
+      ? (rawContent.item as WebhookRecord)
+      : null;
+  const rawItemId =
+    typeof rawItem?.id === "string" || typeof rawItem?.id === "number"
+      ? rawItem.id
+      : null;
   const content = rawContent as NormalizedWebhookValue["content"];
 
   return {
@@ -143,12 +166,12 @@ function normalizeWebhookValue(body: AvitoWebhookBody): NormalizedWebhookValue {
       payloadValue.dialog_id,
       payloadValue.conversation_id
     ),
-    item_id:
-      message.item_id ??
-      payloadValue.item_id ??
-      chat.item_id ??
-      rawContent.item?.id ??
-      null,
+    item_id: pickString(
+      message.item_id,
+      payloadValue.item_id,
+      chat.item_id,
+      rawItemId
+    ) || null,
     type: pickString(message.type, payloadValue.type, body.payload?.type),
     content,
     created:
@@ -161,14 +184,14 @@ function normalizeWebhookValue(body: AvitoWebhookBody): NormalizedWebhookValue {
   };
 }
 
-function getLinkedClient(account: any) {
+function getLinkedClient(account: AvitoAccount | null) {
   return Array.isArray(account?.avito_report_clients)
     ? account.avito_report_clients[0]
     : account?.avito_report_clients;
 }
 
 async function getAvitoChatItem(params: {
-  account: any;
+  account: AvitoAccount | null;
   avitoUserId: string;
   chatId: string;
 }) {
@@ -247,7 +270,7 @@ async function findAvitoAccount(params: {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json().catch(() => ({}))) as AvitoWebhookBody;
+    const body = await readJsonWithLimit<AvitoWebhookBody>(request, 512 * 1024);
     const value = normalizeWebhookValue(body);
 
     if (!value?.user_id || !value.chat_id || !value.id) {
@@ -367,7 +390,7 @@ export async function POST(request: Request) {
             ? error.message
             : "Avito messenger webhook failed",
       },
-      { status: 500 }
+      { status: error instanceof ApiAccessError ? error.status : 500 }
     );
   }
 }

@@ -35,12 +35,12 @@ export function ExpenseBreakdownDonut({
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    <div className="rivn-panel p-5">
       <div className="flex items-center justify-between">
         <div>
         </div>
 
-        <span className="rounded-full bg-rose-500/15 px-3 py-1 text-xs text-rose-300">
+        <span className="rounded-full border border-[#f7b955]/20 bg-[#f7b955]/12 px-3 py-1 text-xs text-[#ffd487]">
           Категории расходов
         </span>
       </div>
@@ -94,7 +94,7 @@ export function ExpenseBreakdownDonut({
             return (
               <div
                 key={expenseCategoryMap[item.name] ?? item.name}
-                className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3"
+                className="flex items-center justify-between rivn-panel-inner px-4 py-3"
               >
                 <div className="flex items-center gap-3">
                   <span

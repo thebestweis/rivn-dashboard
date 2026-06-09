@@ -101,7 +101,8 @@ function useResolvedPageAccess(
     permissions: memberPermissions,
   });
 
-  const canInteract = hasAccess && (!isBillingReadOnly || section === "billing");
+  const canInteract =
+    hasAccess && (!isBillingReadOnly || section === "billing" || section === "tasks");
 
   const shouldBlockOnPermissions =
     !isReady &&

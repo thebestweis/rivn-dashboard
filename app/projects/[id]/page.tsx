@@ -582,10 +582,10 @@ export default function ProjectPage() {
 
   return (
     <>
-      <main className="flex-1 px-6 py-6 md:px-8">
-        <div className="flex w-full flex-col gap-6">
+      <main className="rivn-scope flex-1">
+        <div className="rivn-page-shell mx-3 my-3 flex w-auto flex-col gap-5 px-4 py-4 sm:mx-4 sm:my-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
           {isLoading ? (
-            <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+            <section className="rivn-card p-4">
               <div className="overflow-x-auto">
                 <div className="grid min-w-[1680px] grid-cols-7 gap-4">
                   {Array.from({ length: 7 }).map((_, dayIndex) => (
@@ -595,14 +595,14 @@ export default function ProjectPage() {
                         <Skeleton className="mt-2 h-5 w-28" />
                       </div>
 
-                      <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-3">
+                      <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-3">
                         <Skeleton className="h-11 w-full" />
 
                         <div className="mt-3 space-y-3">
                           {Array.from({ length: 3 }).map((_, cardIndex) => (
                             <div
                               key={cardIndex}
-                              className="rounded-[20px] border border-white/10 bg-[#121826] p-4"
+                              className="rounded-[20px] border border-white/10 bg-white/[0.04] p-4"
                             >
                               <Skeleton className="h-3 w-12" />
                               <Skeleton className="mt-3 h-5 w-5/6" />
@@ -629,45 +629,45 @@ export default function ProjectPage() {
             </div>
           ) : project ? (
             <>
-              <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+              <section className="rivn-card rivn-card-interactive p-4 sm:p-5">
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_1fr_0.8fr]">
                   <div>
-                    <div className="text-sm text-white/40">Паспорт проекта</div>
+                    <div className="text-xs uppercase tracking-[0.22em] text-[#43ffc2]">Паспорт проекта</div>
 
-                    <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
+                    <h1 className="mt-2 text-3xl font-medium tracking-[-0.05em] text-white sm:text-4xl">
                       {project.name}
                     </h1>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-white/60">
-                      <span>Клиент: {clientName}</span>
-                      <span className="text-white/25">•</span>
-                      <span>Дата старта: {formatDate(project.start_date)}</span>
-                      <span className="text-white/25">•</span>
-                      <span>Ответственный: {assignedEmployeeName}</span>
+                    <div className="mt-4 grid grid-cols-1 gap-2 text-sm text-white/60 sm:grid-cols-2 2xl:grid-cols-3">
+                      {clientId ? (
+                        <Link
+                          href={`/clients/${clientId}`}
+                          className="rivn-pill inline-flex h-11 w-full items-center justify-center truncate px-4 text-center text-xs font-medium transition hover:border-[#00f5a8]/30 hover:bg-[#00f5a8]/10 hover:text-white"
+                        >
+                          Клиент: {clientName}
+                        </Link>
+                      ) : (
+                        <span className="rivn-pill inline-flex h-11 w-full items-center justify-center truncate px-4 text-center text-xs font-medium">
+                          Клиент: {clientName}
+                        </span>
+                      )}
+                      <span className="rivn-pill inline-flex h-11 w-full items-center justify-center truncate px-4 text-center text-xs font-medium">Старт: {formatDate(project.start_date)}</span>
+                      <span className="rivn-pill inline-flex h-11 w-full items-center justify-center truncate px-4 text-center text-xs font-medium">Ответственный: {assignedEmployeeName}</span>
                     </div>
 
-                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-3">
                       <span
-                        className={`inline-flex rounded-full border px-4 py-2 text-sm font-medium ${getStatusClasses(
+                        className={`inline-flex h-11 w-full items-center justify-center rounded-full border px-4 text-center text-xs font-medium ${getStatusClasses(
                           project.status
                         )}`}
                       >
                         {getStatusLabel(project.status)}
                       </span>
 
-                      {clientId ? (
-                        <Link
-                          href="/clients"
-                          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                        >
-                          Открыть клиента
-                        </Link>
-                      ) : null}
-
                       <button
                         type="button"
                         onClick={() => setIsProjectChatOpen(true)}
-                        className="inline-flex items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/15"
+                        className="rivn-button rivn-button-primary h-11 w-full justify-center px-4 text-xs font-semibold"
                       >
                         <MessageCircle className="h-4 w-4" />
                         Чат проекта
@@ -682,7 +682,7 @@ export default function ProjectPage() {
                         <button
                           type="button"
                           onClick={() => setIsEditProjectModalOpen(true)}
-                          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                          className="rivn-button h-11 w-full justify-center px-4 text-xs font-medium"
                         >
                           Редактировать паспорт
                         </button>
@@ -690,7 +690,7 @@ export default function ProjectPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+                  <div className="rivn-panel-soft p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="text-sm text-white/45">
                         Основная информация по проекту
@@ -720,7 +720,7 @@ export default function ProjectPage() {
                           }
                           rows={10}
                           placeholder="Добавь основную информацию по проекту"
-                          className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30"
+                          className="rivn-field rivn-textarea w-full leading-6 placeholder:text-white/30"
                         />
 
                         <div className="mt-4 flex justify-end gap-3">
@@ -734,7 +734,7 @@ export default function ProjectPage() {
                               );
                               setIsEditingOverview(false);
                             }}
-                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+                            className="rivn-button px-4 py-2 text-sm font-medium"
                           >
                             Отмена
                           </button>
@@ -743,7 +743,7 @@ export default function ProjectPage() {
                             type="button"
                             onClick={handleSaveOverview}
                             disabled={updateProjectMutation.isPending}
-                            className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
+                            className="rivn-button rivn-button-primary px-4 py-2 text-sm font-semibold disabled:opacity-60"
                           >
                             {updateProjectMutation.isPending
                               ? "Сохраняем..."
@@ -752,7 +752,7 @@ export default function ProjectPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
+                      <div className="mt-4 rivn-panel-inner px-4 py-4">
                         <div className="max-h-[192px] overflow-y-auto whitespace-pre-line pr-2 text-sm leading-6 text-white/90 scrollbar-thin">
                           {project.project_overview?.trim() ||
                             project.description?.trim() ||
@@ -762,7 +762,7 @@ export default function ProjectPage() {
                     )}
                   </div>
 
-                  <div className="rounded-[24px] border border-white/10 bg-[#0F1724] p-5">
+                  <div className="rivn-panel-soft p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="text-sm text-white/45">Важные ссылки</div>
 
@@ -784,7 +784,7 @@ export default function ProjectPage() {
                           onChange={(event) => setLinksDraft(event.target.value)}
                           rows={10}
                           placeholder="Вставь ссылки через новую строку"
-                          className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30"
+                          className="rivn-field rivn-textarea w-full leading-6 placeholder:text-white/30"
                         />
 
                         <div className="mt-4 flex justify-end gap-3">
@@ -794,7 +794,7 @@ export default function ProjectPage() {
                               setLinksDraft(project.important_links ?? "");
                               setIsEditingLinks(false);
                             }}
-                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+                            className="rivn-button px-4 py-2 text-sm font-medium"
                           >
                             Отмена
                           </button>
@@ -803,7 +803,7 @@ export default function ProjectPage() {
                             type="button"
                             onClick={handleSaveLinks}
                             disabled={updateProjectMutation.isPending}
-                            className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
+                            className="rivn-button rivn-button-primary px-4 py-2 text-sm font-semibold disabled:opacity-60"
                           >
                             {updateProjectMutation.isPending
                               ? "Сохраняем..."
@@ -821,14 +821,14 @@ export default function ProjectPage() {
                                 href={link.href}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="block rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/85 transition hover:bg-white/[0.06] hover:text-white"
+                                className="block rivn-panel-inner px-4 py-3 text-sm text-white/85 transition hover:-translate-y-0.5 hover:border-[#00f5a8]/25 hover:bg-white/[0.07] hover:text-white"
                               >
                                 {link.label}
                               </a>
                             ))}
                           </div>
                         ) : (
-                          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-4 text-sm text-white/35">
+                          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.025] px-4 py-4 text-sm text-white/35">
                             Ссылки пока не добавлены
                           </div>
                         )}
@@ -838,9 +838,9 @@ export default function ProjectPage() {
                 </div>
               </section>
 
-              <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+              <section className="rivn-card rivn-card-flat p-4 sm:p-5">
                 <div className="mb-6">
-                  <div className="text-sm text-white/45">Задачи проекта</div>
+                  <div className="text-xs uppercase tracking-[0.22em] text-white/38">Задачи проекта</div>
                   <div className="mt-2 text-sm text-white/65">
                     Управляй задачами по проекту в формате kanban-доски.
                   </div>
@@ -871,7 +871,7 @@ export default function ProjectPage() {
             onClick={() => setIsProjectChatOpen(false)}
           >
             <motion.aside
-              className="absolute right-0 top-0 flex h-full w-full max-w-[540px] flex-col border-l border-white/10 bg-[#0F1724] shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+              className="absolute right-0 top-0 flex h-full w-full max-w-[540px] flex-col border-l border-white/10 bg-[#07111f]/95 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}

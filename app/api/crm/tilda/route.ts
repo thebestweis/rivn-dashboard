@@ -1,3 +1,10 @@
+import { ApiAccessError } from "@/app/api/_guards";
+import {
+  assertContentLengthLimit,
+  readJsonWithLimit,
+  readTextWithLimit,
+} from "@/app/api/_request";
+
 export const dynamic = "force-dynamic";
 
 type TildaPayload = Record<string, unknown>;
@@ -47,13 +54,14 @@ async function readPayload(request: Request): Promise<TildaPayload> {
   const contentType = request.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
-    return (await request.json()) as TildaPayload;
+    return await readJsonWithLimit<TildaPayload>(request, 256 * 1024);
   }
 
   if (
     contentType.includes("application/x-www-form-urlencoded") ||
     contentType.includes("multipart/form-data")
   ) {
+    assertContentLengthLimit(request, 512 * 1024);
     const formData = await request.formData();
     return Object.fromEntries(
       Array.from(formData.entries()).map(([key, value]) => [
@@ -63,7 +71,7 @@ async function readPayload(request: Request): Promise<TildaPayload> {
     );
   }
 
-  const text = await request.text();
+  const text = await readTextWithLimit(request, 256 * 1024);
   const params = new URLSearchParams(text);
 
   return Object.fromEntries(params.entries());
@@ -189,7 +197,7 @@ export async function POST(request: Request) {
             ? error.message
             : "Tilda CRM webhook failed",
       },
-      { status: 500 }
+      { status: error instanceof ApiAccessError ? error.status : 500 }
     );
   }
 }

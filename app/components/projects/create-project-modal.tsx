@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { CustomSelect } from "../ui/custom-select";
+import { RivnDatePicker } from "../ui/rivn-date-picker";
 import type { Project, ProjectStatus } from "../../lib/supabase/projects";
 
 type ClientOption = {
@@ -218,8 +219,8 @@ export function CreateProjectModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 px-3 py-4 sm:items-center sm:px-4 sm:py-6">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:p-6">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-[#030914]/70 px-3 py-4 backdrop-blur-xl sm:items-center sm:px-4 sm:py-6">
+      <div className="rivn-panel max-h-[92vh] w-full max-w-2xl overflow-y-auto p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-white sm:text-3xl">{title}</h2>
@@ -245,14 +246,14 @@ export function CreateProjectModal({
                 value={form.name}
                 onChange={(event) => updateField("name", event.target.value)}
                 placeholder="Например: Авито продвижение"
-                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="rivn-field"
               />
             </label>
 
             <label className="block">
               <div className="mb-2 text-sm text-white/65">Клиент</div>
               {clients.length === 0 ? (
-                <div className="flex h-11 w-full items-center rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white/40">
+                <div className="rivn-field flex items-center text-white/40">
                   Нет доступных клиентов
                 </div>
               ) : (
@@ -291,13 +292,10 @@ export function CreateProjectModal({
 
             <label className="block">
               <div className="mb-2 text-sm text-white/65">Дата начала</div>
-              <input
-                type="date"
+              <RivnDatePicker
                 value={form.start_date ?? ""}
-                onChange={(event) =>
-                  updateField("start_date", event.target.value || null)
-                }
-                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none"
+                onChange={(value) => updateField("start_date", value || null)}
+                placeholder="Дата начала"
               />
             </label>
 
@@ -311,7 +309,7 @@ export function CreateProjectModal({
                   updateField("revenue", normalizeNumericInput(event.target.value))
                 }
                 placeholder="Введите сумму"
-                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="rivn-field"
               />
             </label>
 
@@ -325,7 +323,7 @@ export function CreateProjectModal({
                   updateField("profit", normalizeNumericInput(event.target.value))
                 }
                 placeholder="Введите сумму"
-                className="h-11 w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="rivn-field"
               />
             </label>
           </div>
@@ -337,7 +335,7 @@ export function CreateProjectModal({
               onChange={(event) => updateField("description", event.target.value)}
               rows={4}
               placeholder="Коротко опиши суть проекта, важные договорённости или контекст"
-              className="w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+              className="min-h-[120px] w-full rounded-[22px] border border-white/10 bg-white/[0.045] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 hover:border-white/15 hover:bg-white/[0.06] focus:border-[#00f5a8]/55 focus:shadow-[0_0_0_4px_rgba(0,245,168,0.08)]"
             />
           </label>
 
@@ -350,7 +348,7 @@ export function CreateProjectModal({
               }
               rows={4}
               placeholder="Важные вводные по проекту, формат работы, особенности, доступы, организационные детали"
-              className="w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+              className="min-h-[120px] w-full rounded-[22px] border border-white/10 bg-white/[0.045] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 hover:border-white/15 hover:bg-white/[0.06] focus:border-[#00f5a8]/55 focus:shadow-[0_0_0_4px_rgba(0,245,168,0.08)]"
             />
           </label>
 
@@ -363,7 +361,7 @@ export function CreateProjectModal({
               }
               rows={4}
               placeholder="Вставь ссылки через новую строку"
-              className="w-full rounded-2xl border border-white/10 bg-[#0F1724] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+              className="min-h-[120px] w-full rounded-[22px] border border-white/10 bg-white/[0.045] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 hover:border-white/15 hover:bg-white/[0.06] focus:border-[#00f5a8]/55 focus:shadow-[0_0_0_4px_rgba(0,245,168,0.08)]"
             />
           </label>
 
@@ -385,7 +383,7 @@ export function CreateProjectModal({
 
             <button
               type="submit"
-              className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rivn-button-primary rounded-2xl px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isSubmitting || clients.length === 0}
             >
               {submitLabel}

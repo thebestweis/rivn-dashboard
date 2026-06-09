@@ -1,4 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
+import { ApiAccessError } from "@/app/api/_guards";
+import { readJsonWithLimit } from "@/app/api/_request";
+import { matchesAnySecret } from "@/app/api/_secrets";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +19,7 @@ type LeadPayload = {
   description?: string | null;
 };
 
-type ServiceSupabase = any;
+type ServiceSupabase = ReturnType<typeof getSupabase>;
 type AssignmentRuleRow = {
   source_kind: string | null;
   mode: "manual" | "round_robin" | "least_loaded" | "fixed_manager";
@@ -70,9 +73,7 @@ function verifyWebhookSecret(request: Request) {
     throw new Error("CRM webhook secret is not configured");
   }
 
-  return [querySecret, bearerSecret, headerSecret].some((secret) =>
-    expectedSecrets.includes(secret ?? "")
-  );
+  return matchesAnySecret([querySecret, bearerSecret, headerSecret], expectedSecrets);
 }
 
 function normalizeText(value: unknown) {
@@ -350,7 +351,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const payload = (await request.json()) as LeadPayload;
+    const payload = await readJsonWithLimit<LeadPayload>(request, 256 * 1024);
     const workspaceId = normalizeText(payload.workspaceId);
     const sourceKind = normalizeText(payload.sourceKind) || "manual";
     const sourceName = normalizeText(payload.sourceName) || sourceKind;
@@ -478,7 +479,7 @@ export async function POST(request: Request) {
         ok: false,
         error: error instanceof Error ? error.message : "CRM lead create failed",
       },
-      { status: 500 }
+      { status: error instanceof ApiAccessError ? error.status : 500 }
     );
   }
 }

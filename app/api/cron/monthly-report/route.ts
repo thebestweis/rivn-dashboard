@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendTelegramMessage } from "@/lib/notifications/telegram";
+import { verifyCronSecret } from "../verify-cron-secret";
 
 function parseRubAmount(value: string | number | null | undefined) {
   if (typeof value === "number") return value;
@@ -66,7 +67,11 @@ function formatMonthLabel(date: Date) {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!verifyCronSecret(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

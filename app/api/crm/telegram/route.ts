@@ -1,3 +1,6 @@
+import { ApiAccessError } from "@/app/api/_guards";
+import { readJsonWithLimit } from "@/app/api/_request";
+
 export const dynamic = "force-dynamic";
 
 type TelegramUpdate = {
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const update = (await request.json()) as TelegramUpdate;
+    const update = await readJsonWithLimit<TelegramUpdate>(request, 256 * 1024);
     const message = update.message ?? update.edited_message ?? null;
 
     if (!message?.chat?.id) {
@@ -147,7 +150,7 @@ export async function POST(request: Request) {
             ? error.message
             : "Telegram CRM webhook failed",
       },
-      { status: 500 }
+      { status: error instanceof ApiAccessError ? error.status : 500 }
     );
   }
 }

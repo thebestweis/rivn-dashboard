@@ -47,7 +47,6 @@ type AppContextState = {
 };
 
 const APP_CONTEXT_CACHE_KEY = "app_context_cache";
-const QUERY_CACHE_KEY = "RIVN_OS_QUERY_CACHE";
 const APP_CONTEXT_CACHE_TTL_MS = 5 * 60 * 1000;
 const AUTH_EXPIRED_PATHS = [
   "/dashboard",
@@ -124,7 +123,7 @@ function readCachedAppContext(): AppContextCache | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const raw = localStorage.getItem(APP_CONTEXT_CACHE_KEY);
+    const raw = sessionStorage.getItem(APP_CONTEXT_CACHE_KEY);
 
     if (!raw) return null;
 
@@ -141,7 +140,7 @@ function readCachedAppContext(): AppContextCache | null {
     const isFresh = Date.now() - parsed.timestamp < APP_CONTEXT_CACHE_TTL_MS;
 
     if (!isFresh) {
-      localStorage.removeItem(APP_CONTEXT_CACHE_KEY);
+      sessionStorage.removeItem(APP_CONTEXT_CACHE_KEY);
       return null;
     }
 
@@ -155,7 +154,9 @@ function writeCachedAppContext(cache: AppContextCache) {
   if (typeof window === "undefined") return;
 
   try {
-    localStorage.setItem(APP_CONTEXT_CACHE_KEY, JSON.stringify(cache));
+    localStorage.removeItem(APP_CONTEXT_CACHE_KEY);
+    localStorage.removeItem("RIVN_OS_QUERY_CACHE");
+    sessionStorage.setItem(APP_CONTEXT_CACHE_KEY, JSON.stringify(cache));
   } catch {}
 }
 
@@ -163,8 +164,9 @@ function clearCachedAppContext() {
   if (typeof window === "undefined") return;
 
   try {
+    sessionStorage.removeItem(APP_CONTEXT_CACHE_KEY);
     localStorage.removeItem(APP_CONTEXT_CACHE_KEY);
-    localStorage.removeItem(QUERY_CACHE_KEY);
+    localStorage.removeItem("RIVN_OS_QUERY_CACHE");
   } catch {}
 }
 

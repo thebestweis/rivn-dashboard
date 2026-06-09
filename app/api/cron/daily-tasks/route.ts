@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/app/lib/supabase/server";
+import { verifyCronSecret } from "../verify-cron-secret";
 
 function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -36,7 +37,11 @@ async function sendTelegramMessage(params: {
   return response.json();
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!verifyCronSecret(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const supabase = await createClient();
 

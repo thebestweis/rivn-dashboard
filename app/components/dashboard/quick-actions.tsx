@@ -17,29 +17,30 @@ export function QuickActions({ actions }: QuickActionsProps) {
 
   function getToneClasses(tone: QuickActionItem["tone"], isDisabled: boolean) {
     if (isDisabled) {
-      return "cursor-not-allowed bg-white/[0.04] text-white/35";
+      return "cursor-not-allowed border-[#2D342A] bg-[#0A0B09] text-[#AEAFB2]/35";
     }
 
     if (tone === "emerald") {
-      return "bg-emerald-400/15 text-emerald-300 hover:bg-emerald-400/20";
+      return "border-[#99D32A]/25 bg-[#99D32A]/10 text-[#B7EA55] hover:bg-[#99D32A]/14";
     }
 
     if (tone === "violet") {
-      return "bg-violet-400/15 text-violet-300 hover:bg-violet-400/20";
+      return "border-[#70855C]/28 bg-[#70855C]/12 text-[#CECED0] hover:bg-[#70855C]/16";
     }
 
     if (tone === "rose") {
-      return "bg-rose-400/15 text-rose-300 hover:bg-rose-400/20";
+      return "border-[#E87979]/25 bg-[#E87979]/10 text-[#F39B9B] hover:bg-[#E87979]/14";
     }
 
-    return "bg-amber-400/15 text-amber-300 hover:bg-amber-400/20";
+    return "border-[#D8C45E]/25 bg-[#D8C45E]/10 text-[#E3D47C] hover:bg-[#D8C45E]/14";
   }
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
-      <div className="text-sm text-white/50">Быстрые действия</div>
+    <div className="relative overflow-hidden rounded-[22px] border border-[#2D342A] bg-[#11130F] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.16)]">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-[#99D32A]/45 via-[#70855C]/20 to-transparent" />
+      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#AEAFB2]/70">Быстрые действия</div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-1">
+      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-1">
         {actions.length > 0 ? (
           actions.map((action) => {
             const isDisabled = !action.href;
@@ -54,7 +55,7 @@ export function QuickActions({ actions }: QuickActionsProps) {
                     router.push(action.href);
                   }
                 }}
-                className={`min-h-[58px] rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${getToneClasses(
+                className={`min-h-[46px] rounded-[14px] border px-3.5 py-2.5 text-left text-sm font-medium transition ${getToneClasses(
                   action.tone,
                   isDisabled
                 )}`}
@@ -64,7 +65,7 @@ export function QuickActions({ actions }: QuickActionsProps) {
             );
           })
         ) : (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-white/35">
+          <div className="rounded-2xl border border-dashed border-[#2D342A] bg-[#0A0B09] px-4 py-6 text-sm text-[#AEAFB2]/45">
             Быстрые действия сейчас недоступны.
           </div>
         )}

@@ -1,4 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
+import { ApiAccessError } from "@/app/api/_guards";
+import { readJsonWithLimit } from "@/app/api/_request";
+import { matchesAnySecret } from "@/app/api/_secrets";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +26,7 @@ type DialogPayload = {
   createdAt?: string;
 };
 
-type ServiceSupabase = any;
+type ServiceSupabase = ReturnType<typeof getSupabase>;
 type AssignmentRuleRow = {
   source_kind: string | null;
   mode: "manual" | "round_robin" | "least_loaded" | "fixed_manager";
@@ -88,9 +91,7 @@ function verifyWebhookSecret(request: Request) {
     throw new Error("CRM webhook secret is not configured");
   }
 
-  return [querySecret, bearerSecret, headerSecret].some((secret) =>
-    expectedSecrets.includes(secret ?? "")
-  );
+  return matchesAnySecret([querySecret, bearerSecret, headerSecret], expectedSecrets);
 }
 
 function normalizeText(value: unknown) {
@@ -191,7 +192,7 @@ async function resolveSalesPipeline(params: {
   supabase: ServiceSupabase;
   workspaceId: string;
 }) {
-  let { data: pipeline, error: pipelineError } = await params.supabase
+  const { data: initialPipeline, error: pipelineError } = await params.supabase
     .from("crm_pipelines")
     .select("*")
     .eq("workspace_id", params.workspaceId)
@@ -204,6 +205,8 @@ async function resolveSalesPipeline(params: {
   if (pipelineError) {
     throw new Error(`CRM pipeline lookup failed: ${pipelineError.message}`);
   }
+
+  let pipeline = initialPipeline;
 
   if (!pipeline) {
     const { data: createdPipeline, error: createPipelineError } = await params.supabase
@@ -227,7 +230,7 @@ async function resolveSalesPipeline(params: {
     pipeline = createdPipeline;
   }
 
-  let { data: stage, error: stageError } = await params.supabase
+  const { data: initialStage, error: stageError } = await params.supabase
     .from("crm_pipeline_stages")
     .select("*")
     .eq("workspace_id", params.workspaceId)
@@ -240,6 +243,8 @@ async function resolveSalesPipeline(params: {
   if (stageError) {
     throw new Error(`CRM stage lookup failed: ${stageError.message}`);
   }
+
+  let stage = initialStage;
 
   if (!stage) {
     const { error: createStagesError } = await params.supabase
@@ -518,7 +523,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const payload = (await request.json()) as DialogPayload;
+    const payload = await readJsonWithLimit<DialogPayload>(request, 512 * 1024);
     const workspaceId = normalizeText(payload.workspaceId);
     const channel = payload.channel || "avito";
     const rawExternalDialogId = normalizeText(payload.externalDialogId);
@@ -732,7 +737,7 @@ export async function POST(request: Request) {
         error:
           error instanceof Error ? error.message : "CRM dialog sync failed",
       },
-      { status: 500 }
+      { status: error instanceof ApiAccessError ? error.status : 500 }
     );
   }
 }

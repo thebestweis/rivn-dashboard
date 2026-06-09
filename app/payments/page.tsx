@@ -15,6 +15,7 @@ import { EditPaymentModal } from "../components/payments/edit-payment-modal";
 import { EmptyState } from "../components/ui/empty-state";
 import { Skeleton } from "../components/ui/skeleton";
 import { useConfirmDialog } from "../components/ui/confirm-dialog-provider";
+import { RivnDateRangePicker } from "../components/ui/rivn-date-picker";
 
 import { AccessDenied } from "../components/access/access-denied";
 import { usePageAccess } from "../lib/use-page-access";
@@ -23,7 +24,7 @@ import {
   sendInvoiceCreatedNotification,
   sendPaymentReceivedNotification,
 } from "../lib/notifications-client";
-import { parseRubAmount } from "../lib/storage";
+import { formatDisplayDate, parseRubAmount } from "../lib/storage";
 import type { PaymentFormData } from "../lib/types/payment";
 import type {
   PaymentSortDirection,
@@ -83,10 +84,12 @@ interface PlannedPaymentRow {
 }
 
 type PaymentClientMap = Record<string, string>;
-type DatePreset = "month" | "7d" | "30d" | "all";
+type DatePreset = "month" | "7d" | "30d" | "all" | "custom";
 
 function toInputDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
 }
 
 function getCurrentMonthRange() {
@@ -102,7 +105,7 @@ function getCurrentMonthRange() {
 function getPresetRange(preset: DatePreset) {
   const now = new Date();
 
-  if (preset === "all") {
+  if (preset === "all" || preset === "custom") {
     return { from: "", to: "" };
   }
 
@@ -120,6 +123,10 @@ function getPresetRange(preset: DatePreset) {
   };
 }
 
+function formatPeriodDate(value: string) {
+  return value ? formatDisplayDate(value) : "";
+}
+
 function toSupabaseDate(value: string) {
   if (!value) return "";
 
@@ -134,14 +141,7 @@ function toSupabaseDate(value: string) {
 
 function fromSupabaseDate(value: string | null) {
   if (!value) return "";
-
-  if (value.includes("-")) {
-    const [year, month, day] = value.split("-");
-    if (!day || !month || !year) return value;
-    return `${day}.${month}.${year}`;
-  }
-
-  return value;
+  return formatDisplayDate(value);
 }
 
 function getPlannedStatus(payment: {
@@ -180,7 +180,7 @@ function PaymentsStatsSkeleton() {
       {Array.from({ length: 3 }).map((_, index) => (
         <div
           key={index}
-          className="rounded-2xl border border-white/10 bg-[#121826] p-4"
+          className="rivn-card p-4"
         >
           <Skeleton className="h-3 w-24" />
           <Skeleton className="mt-3 h-8 w-36" />
@@ -192,7 +192,7 @@ function PaymentsStatsSkeleton() {
 
 function PaymentsTableSkeleton() {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+    <div className="rivn-card p-4 sm:p-5">
       <div className="mb-5 flex items-center justify-between gap-4 overflow-x-auto">
         <div className="flex gap-2">
           <Skeleton className="h-10 w-36 rounded-full" />
@@ -200,7 +200,7 @@ function PaymentsTableSkeleton() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-[24px] border border-white/8">
+      <div className="rivn-table-wrap overflow-x-auto">
         <div className="grid min-w-[760px] grid-cols-6 gap-4 bg-white/[0.04] px-4 py-3">
           {Array.from({ length: 6 }).map((_, index) => (
             <Skeleton key={index} className="h-4 w-full" />
@@ -210,7 +210,7 @@ function PaymentsTableSkeleton() {
         {Array.from({ length: 6 }).map((_, rowIndex) => (
           <div
             key={rowIndex}
-            className="grid min-w-[760px] grid-cols-6 gap-4 border-t border-white/6 px-4 py-4"
+            className="grid min-w-[760px] grid-cols-6 gap-4 border-t border-white/[0.055] px-4 py-4"
           >
             <Skeleton className="h-5 w-28" />
             <Skeleton className="h-5 w-24" />
@@ -455,6 +455,12 @@ export default function PaymentsPage() {
   function handleDateToChange(value: string) {
     setDatePreset("all");
     setDateTo(value);
+  }
+
+  function handleDateRangeChange(range: { from: string; to: string }) {
+    setDatePreset(range.from || range.to ? "custom" : "all");
+    setDateFrom(range.from);
+    setDateTo(range.to);
   }
 
   function handleSort(field: string) {
@@ -880,7 +886,7 @@ export default function PaymentsPage() {
       return;
     }
 
-    setMode("payment");
+    setMode("invoice");
     setIsCreateOpen(true);
   }
 
@@ -900,12 +906,14 @@ export default function PaymentsPage() {
 
   if (!isAccessLoading && !hasAccess) {
     return (
-      <main className="flex-1">
-        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
+      <main className="flex-1 px-3 py-3 sm:px-5 sm:py-5 lg:px-7">
+        <div className="rivn-page-shell overflow-visible px-4 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
+          <div className="relative z-10 space-y-5 lg:space-y-6">
           <AccessDenied
             title="Нет доступа к платежам"
             description="У тебя нет прав для просмотра этого раздела."
           />
+          </div>
         </div>
       </main>
     );
@@ -913,107 +921,90 @@ export default function PaymentsPage() {
 
   return (
     <>
-      <main className="flex-1">
-        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
+      <main className="flex-1 px-3 py-3 sm:px-5 sm:py-5 lg:px-7">
+        <div className="rivn-page-shell px-4 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
+          <div className="relative z-10 space-y-5 lg:space-y-6">
           <PaymentsPageHeader
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             canManage={canShowManageActions}
-            onCreateInvoice={handleOpenCreateInvoice}
             onCreatePayment={handleOpenCreatePayment}
           />
 
-          <div className="rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.24)]">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <div className="text-sm font-medium text-white/75">
-                  Период платежей
+          <div className="rivn-card p-3.5 sm:p-4">
+            <div className="grid gap-3 xl:grid-cols-[1.15fr_repeat(3,minmax(150px,0.5fr))] xl:items-center">
+              <div className="flex items-center justify-between gap-3 rounded-[24px] border border-white/10 bg-white/[0.035] px-4 py-3">
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">
+                    Период
+                  </div>
+                  <div className="mt-1 truncate text-sm font-medium text-white/78">
+                    {dateFrom || dateTo
+                      ? `${dateFrom ? formatPeriodDate(dateFrom) : "начало"} — ${
+                          dateTo ? formatPeriodDate(dateTo) : "конец"
+                        }`
+                      : "Все платежи"}
+                  </div>
                 </div>
-                <p className="mt-1 text-xs text-white/45">
-                  Для плановых счетов фильтр смотрит дату оплаты, для оплаченных — дату фактической оплаты.
-                </p>
-              </div>
 
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-                <label className="grid gap-1 text-xs text-white/45">
-                  С даты
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(event) => handleDateFromChange(event.target.value)}
-                    className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-emerald-400/50"
+                <div className="flex items-center gap-2">
+                  <RivnDateRangePicker
+                    from={dateFrom}
+                    to={dateTo}
+                    onChange={handleDateRangeChange}
+                    placeholder="Выбери период"
+                    iconOnly
                   />
-                </label>
 
-                <label className="grid gap-1 text-xs text-white/45">
-                  По дату
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(event) => handleDateToChange(event.target.value)}
-                    className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-emerald-400/50"
-                  />
-                </label>
-
-                <div className="grid grid-cols-4 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-                  {[
-                    ["month", "Месяц"],
-                    ["7d", "7 дн."],
-                    ["30d", "30 дн."],
-                    ["all", "Все"],
-                  ].map(([preset, label]) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => handleDatePresetChange(preset as DatePreset)}
-                      className={`rounded-xl px-3 py-2 text-xs font-medium transition ${
-                        datePreset === preset
-                          ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.28)]"
-                          : "text-white/55 hover:text-white"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  <div className="hidden grid-cols-4 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 sm:grid">
+                    {[
+                      ["month", "М"],
+                      ["7d", "7"],
+                      ["30d", "30"],
+                      ["all", "∞"],
+                    ].map(([preset, label]) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => handleDatePresetChange(preset as DatePreset)}
+                        className={`rounded-xl px-2.5 py-2 text-xs font-medium transition duration-300 active:scale-95 ${
+                          datePreset === preset
+                            ? "bg-[#00f5a8] text-[#06101d] shadow-[0_14px_34px_rgba(0,245,168,0.18)]"
+                            : "text-white/55 hover:bg-white/[0.06] hover:text-white"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
+
+              {[
+                ["Ожидается", plannedTotal, "text-white"],
+                ["Просрочено", overdueTotal, "text-rose-300"],
+                ["Получено", paidTotal, "text-[#43ffc2]"],
+              ].map(([label, value, tone]) => (
+                <div
+                  key={label}
+                  className="rounded-[24px] border border-white/10 bg-white/[0.035] px-4 py-3 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.055]"
+                >
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">
+                    {label}
+                  </div>
+                  {loadingPayments ? (
+                    <Skeleton className="mt-2 h-7 w-24 rounded-xl" />
+                  ) : (
+                    <div className={`mt-1 text-xl font-semibold tracking-[-0.04em] ${tone}`}>
+                      ₽{Number(value).toLocaleString("ru-RU")}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
-          {loadingPayments ? (
-            <PaymentsStatsSkeleton />
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-              <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-                <div className="text-xs uppercase tracking-wide text-white/40">
-                  Ожидается
-                </div>
-                <div className="mt-1 text-2xl font-semibold tracking-tight">
-                  ₽{plannedTotal.toLocaleString("ru-RU")}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-                <div className="text-xs uppercase tracking-wide text-white/40">
-                  Просрочено
-                </div>
-                <div className="mt-1 text-2xl font-semibold tracking-tight text-rose-400">
-                  ₽{overdueTotal.toLocaleString("ru-RU")}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-[#121826] p-4">
-                <div className="text-xs uppercase tracking-wide text-white/40">
-                  Получено
-                </div>
-                <div className="mt-1 text-2xl font-semibold tracking-tight text-emerald-400">
-                  ₽{paidTotal.toLocaleString("ru-RU")}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+          <div className="rivn-card p-4 sm:p-5">
             {activeTab === "planned" ? (
               loadingPayments ? (
                 <PaymentsTableSkeleton />
@@ -1034,8 +1025,8 @@ export default function PaymentsPage() {
                 <EmptyState
                   title="Плановых счетов пока нет"
                   description="Когда ты добавишь плановые счета, они появятся здесь."
-                  actionLabel={canShowManageActions ? "Выставить счёт" : undefined}
-                  onAction={canShowManageActions ? handleOpenCreateInvoice : undefined}
+                  actionLabel={canShowManageActions ? "Добавить оплату" : undefined}
+                  onAction={canShowManageActions ? handleOpenCreatePayment : undefined}
                 />
               )
             ) : loadingPayments ? (
@@ -1060,6 +1051,7 @@ export default function PaymentsPage() {
               />
             )}
           </div>
+          </div>
         </div>
 
         <CreatePaymentModal
@@ -1083,6 +1075,7 @@ export default function PaymentsPage() {
           documentUrl={newDocumentUrl}
           setDocumentUrl={setNewDocumentUrl}
           mode={mode}
+          setMode={setMode}
         />
 
         <EditPaymentModal

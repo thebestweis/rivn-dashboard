@@ -210,7 +210,7 @@ export function TeamAnalyticsTab({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel p-5">
           <div className="text-sm text-white/50">Выручка по месяцам</div>
           <div className="mt-4 space-y-3">
             {latestMonths.length > 0 ? (
@@ -235,7 +235,7 @@ export function TeamAnalyticsTab({
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel p-5">
           <div className="text-sm text-white/50">Прибыль по месяцам</div>
           <div className="mt-4 space-y-3">
             {latestMonths.length > 0 ? (
@@ -266,7 +266,7 @@ export function TeamAnalyticsTab({
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel p-5">
           <div className="text-sm text-white/50">Динамика месяца к месяцу</div>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/6 bg-white/[0.03] p-4">
@@ -305,7 +305,7 @@ export function TeamAnalyticsTab({
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel p-5">
           <div className="text-sm text-white/50">Расходы по месяцам</div>
           <div className="mt-4 space-y-3">
             {latestMonths.length > 0 ? (
@@ -333,7 +333,7 @@ export function TeamAnalyticsTab({
 
       <FinancialAnalyticsChart data={financialData} />
 
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="rivn-panel p-5">
         <div className="text-sm text-white/50">Сводка по месяцам</div>
 
         <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
@@ -397,7 +397,7 @@ export function TeamAnalyticsTab({
         <ExpenseBreakdownDonut data={safeBreakdownData} />
 
         <div className="grid gap-6">
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <div className="rivn-panel p-5">
             <div className="text-sm text-white/50">ROMI</div>
             <div className="mt-3 text-3xl font-semibold text-emerald-300">
               {romi}%
@@ -407,7 +407,7 @@ export function TeamAnalyticsTab({
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <div className="rivn-panel p-5">
             <div className="text-sm text-white/50">CAC</div>
             <div className="mt-3 text-3xl font-semibold text-violet-300">
               ₽{cac.toLocaleString("ru-RU")}
@@ -417,7 +417,7 @@ export function TeamAnalyticsTab({
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+          <div className="rivn-panel p-5">
             <div className="text-sm text-white/50">LTV</div>
             <div className="mt-3 text-3xl font-semibold text-amber-300">
               ₽{ltv.toLocaleString("ru-RU")}

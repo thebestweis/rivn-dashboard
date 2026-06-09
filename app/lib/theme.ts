@@ -1,13 +1,31 @@
-export type AppTheme = "dark" | "light";
+export type AppTheme =
+  | "classic"
+  | "black"
+  | "white"
+  | "legacy-dark"
+  | "legacy-light";
 
 const THEME_KEY = "app_theme";
+const LEGACY_THEME_MAP: Record<string, AppTheme> = {
+  dark: "legacy-dark",
+  light: "legacy-light",
+  classic: "classic",
+  black: "black",
+  white: "white",
+  "legacy-dark": "legacy-dark",
+  "legacy-light": "legacy-light",
+};
 
 export function applyTheme(theme: AppTheme) {
   if (typeof window === "undefined") return;
 
   const root = document.documentElement;
+  const isDarkTheme =
+    theme === "classic" || theme === "black" || theme === "legacy-dark";
 
-  if (theme === "dark") {
+  root.dataset.rivnTheme = theme;
+
+  if (isDarkTheme) {
     root.classList.add("dark");
   } else {
     root.classList.remove("dark");
@@ -17,10 +35,10 @@ export function applyTheme(theme: AppTheme) {
 }
 
 export function getStoredTheme(): AppTheme {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "classic";
 
   const saved = localStorage.getItem(THEME_KEY);
-  return saved === "light" ? "light" : "dark";
+  return LEGACY_THEME_MAP[saved ?? ""] ?? "classic";
 }
 
 export function initTheme() {
@@ -29,8 +47,7 @@ export function initTheme() {
   return theme;
 }
 
-export function toggleTheme(current: AppTheme): AppTheme {
-  const next = current === "dark" ? "light" : "dark";
-  applyTheme(next);
-  return next;
+export function setTheme(theme: AppTheme): AppTheme {
+  applyTheme(theme);
+  return theme;
 }

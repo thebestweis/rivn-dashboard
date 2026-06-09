@@ -1,4 +1,7 @@
 import { apiFailure, apiSuccess } from "@/app/lib/api/errors";
+import { ApiAccessError } from "@/app/api/_guards";
+import { readJsonWithLimit } from "@/app/api/_request";
+import { safeEqualSecret } from "@/app/api/_secrets";
 import { processRivnLeadsMessage } from "@/app/lib/rivn-leads/processor";
 import { createServiceRoleClient } from "@/app/lib/supabase/service-role";
 
@@ -17,10 +20,13 @@ function getRequestSecret(request: Request, body: Record<string, unknown> | null
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const body = await readJsonWithLimit<Record<string, unknown>>(
+      request,
+      256 * 1024
+    );
     const expectedSecret = getExpectedSecret();
 
-    if (!expectedSecret || getRequestSecret(request, body) !== expectedSecret) {
+    if (!safeEqualSecret(getRequestSecret(request, body), expectedSecret)) {
       return apiFailure({ error: new Error("Нет доступа"), status: 403, code: "FORBIDDEN" });
     }
 
@@ -55,6 +61,14 @@ export async function POST(request: Request) {
 
     return apiSuccess({ result });
   } catch (error) {
+    if (error instanceof ApiAccessError) {
+      return apiFailure({
+        error,
+        status: error.status,
+        code: "VALIDATION_ERROR",
+      });
+    }
+
     return apiFailure({ error, code: "INTERNAL_ERROR" });
   }
 }

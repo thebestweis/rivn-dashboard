@@ -1,3 +1,5 @@
+import { matchesAnySecret } from "@/app/api/_secrets";
+
 export function verifyCronSecret(request: Request) {
   const url = new URL(request.url);
   const secret = url.searchParams.get("secret");
@@ -5,6 +7,7 @@ export function verifyCronSecret(request: Request) {
   const bearerSecret = authorization?.startsWith("Bearer ")
     ? authorization.slice("Bearer ".length)
     : null;
+  const headerSecret = request.headers.get("x-cron-secret");
   const expectedSecrets = [
     process.env.CRON_SECRET,
     process.env.VERCEL_CRON_SECRET,
@@ -16,10 +19,7 @@ export function verifyCronSecret(request: Request) {
     );
   }
 
-  if (
-    !expectedSecrets.includes(secret ?? "") &&
-    !expectedSecrets.includes(bearerSecret ?? "")
-  ) {
+  if (!matchesAnySecret([secret, bearerSecret, headerSecret], expectedSecrets)) {
     return false;
   }
 

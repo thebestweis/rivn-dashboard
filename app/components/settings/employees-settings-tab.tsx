@@ -238,7 +238,7 @@ export function EmployeesSettingsTab() {
 
   return (
     <>
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="rivn-card rivn-card-interactive p-5 sm:p-6">
         <BillingAccessBanner
           isLoading={isAppContextLoading}
           isBillingReadOnly={isBillingReadOnly}
@@ -250,8 +250,8 @@ export function EmployeesSettingsTab() {
 
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm text-white/50">Пользователи</div>
-            <h2 className="mt-1 text-xl font-semibold">
+            <div className="text-xs uppercase tracking-[0.18em] text-[#43ffc2]">Пользователи</div>
+            <h2 className="mt-2 text-2xl font-medium tracking-[-0.04em]">
               Payroll-настройки пользователей
             </h2>
             <div className="mt-2 text-sm text-white/55">
@@ -264,9 +264,9 @@ export function EmployeesSettingsTab() {
           </div>
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
+        <div className="rivn-table-wrap mt-5">
           <table className="w-full text-left text-sm">
-            <thead className="bg-white/[0.04] text-white/45">
+            <thead className="rivn-table-head">
               <tr>
                 <th className="px-4 py-3 font-medium">Пользователь</th>
                 <th className="px-4 py-3 font-medium">Роль</th>
@@ -293,7 +293,7 @@ export function EmployeesSettingsTab() {
                 sortedMembers.map((item) => (
                   <tr
                     key={item.id}
-                    className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
+                    className="rivn-table-row bg-transparent"
                   >
                     <td className="px-4 py-3 font-medium">
                       {getWorkspaceMemberDisplayName(item)}
@@ -334,7 +334,7 @@ export function EmployeesSettingsTab() {
                           type="button"
                           onClick={() => openEditModal(item)}
                           disabled={!canManageMembersPayroll}
-                          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rivn-button px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Редактировать
                         </button>
@@ -358,8 +358,8 @@ export function EmployeesSettingsTab() {
       </div>
 
       {isModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-[560px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm">
+          <div className="rivn-card w-full max-w-[560px] p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-sm text-white/50">Пользователь</div>
@@ -371,7 +371,7 @@ export function EmployeesSettingsTab() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+                className="rivn-button px-3 py-2 text-sm"
                 disabled={isSaving}
               >
                 Закрыть
@@ -413,7 +413,7 @@ export function EmployeesSettingsTab() {
                       payType: e.target.value as WorkspaceMemberPayType,
                     }))
                   }
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                  className="rivn-field"
                 >
                   <option value="fixed_per_paid_project">
                     За оплаченный проект
@@ -551,7 +551,7 @@ export function EmployeesSettingsTab() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                className="rivn-button px-4 py-3 text-sm"
                 disabled={isSaving}
               >
                 Отмена
@@ -561,7 +561,7 @@ export function EmployeesSettingsTab() {
                 type="button"
                 onClick={handleSaveMemberPayroll}
                 disabled={isSaving}
-                className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:opacity-60"
+                className="rivn-button rivn-button-primary px-4 py-3 text-sm font-semibold disabled:opacity-60"
               >
                 {isSaving ? "Сохраняем..." : "Сохранить"}
               </button>

@@ -152,7 +152,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     .maybeSingle();
 
   if (firstProjectError) {
-    throw new Error(`РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРіРѕС‚РѕРІРёС‚СЊ РїРѕСЂСЏРґРѕРє РїСЂРѕРµРєС‚Р°: ${firstProjectError.message}`);
+    throw new Error(`Не удалось подготовить порядок проекта: ${firstProjectError.message}`);
   }
 
   const firstSortOrder = Number(firstProject?.sort_order ?? 0);
@@ -328,11 +328,11 @@ export async function updateProjectOrder(
       );
 
   if (existingProjectsError) {
-    throw new Error(`РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕРІРµСЂРёС‚СЊ РїСЂРѕРµРєС‚С‹: ${existingProjectsError.message}`);
+    throw new Error(`Не удалось проверить проекты: ${existingProjectsError.message}`);
   }
 
   if ((existingProjects ?? []).length !== normalizedUpdates.length) {
-    throw new Error("РћРґРёРЅ РёР· РїСЂРѕРµРєС‚РѕРІ РЅРµ РЅР°Р№РґРµРЅ РІ С‚РµРєСѓС‰РµРј РєР°Р±РёРЅРµС‚Рµ");
+    throw new Error("Один из проектов не найден в текущем кабинете");
   }
 
   const results = await Promise.all(
@@ -348,6 +348,6 @@ export async function updateProjectOrder(
   const failedResult = results.find((result) => result.error);
 
   if (failedResult?.error) {
-    throw new Error(`РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїРѕСЂСЏРґРѕРє РїСЂРѕРµРєС‚РѕРІ: ${failedResult.error.message}`);
+    throw new Error(`Не удалось сохранить порядок проектов: ${failedResult.error.message}`);
   }
 }

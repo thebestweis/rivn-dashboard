@@ -267,7 +267,7 @@ export function AccessSettingsTab() {
 
   return (
     <>
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="rivn-card rivn-card-interactive p-5 sm:p-6">
         <BillingAccessBanner
           isLoading={isAppContextLoading}
           isBillingReadOnly={isBillingReadOnly}
@@ -279,8 +279,8 @@ export function AccessSettingsTab() {
 
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm text-white/50">Доступы</div>
-            <h2 className="mt-1 text-xl font-semibold">Права участников</h2>
+            <div className="text-xs uppercase tracking-[0.18em] text-[#43ffc2]">Доступы</div>
+            <h2 className="mt-2 text-2xl font-medium tracking-[-0.04em]">Права участников</h2>
             <div className="mt-2 text-sm text-white/55">
               Здесь можно вручную настраивать доступ к разделам и управлению для
               каждого участника кабинета.
@@ -293,11 +293,11 @@ export function AccessSettingsTab() {
         </div>
 
         {isLoadingMembers ? (
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/45">
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-white/45">
             Загружаем участников...
           </div>
         ) : activeMembers.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/45">
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-white/45">
             Нет участников кабинета для настройки доступов.
           </div>
         ) : (
@@ -314,21 +314,21 @@ export function AccessSettingsTab() {
                     value: member.id,
                     label: getMemberLabel(member),
                   }))}
-                  buttonClassName="h-[48px] bg-[#0F1524] dark:bg-[#0F1524]"
+                  buttonClassName="h-[48px] bg-white/[0.04] dark:bg-white/[0.04]"
                 />
               </div>
 
               <div>
                 <label className="mb-2 block text-sm text-white/55">Роль</label>
-                <div className="flex h-[48px] items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/85">
+                <div className="flex h-[48px] items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                   {selectedMember ? getRoleLabel(selectedMember.role) : "—"}
                 </div>
               </div>
             </div>
 
-            <div className="mt-6 overflow-hidden rounded-[24px] border border-white/8">
+            <div className="rivn-table-wrap mt-6">
               <table className="w-full text-left text-sm">
-                <thead className="bg-white/[0.04] text-white/45">
+                <thead className="rivn-table-head">
                   <tr>
                     <th className="px-4 py-3 font-medium">Раздел</th>
                     <th className="px-4 py-3 font-medium">Просмотр</th>
@@ -343,7 +343,7 @@ export function AccessSettingsTab() {
                     return (
                       <tr
                         key={section.key}
-                        className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
+                        className="rivn-table-row bg-transparent"
                       >
                         <td className="px-4 py-3 font-medium text-white">
                           {section.label}
@@ -366,7 +366,7 @@ export function AccessSettingsTab() {
                                   checked: e.target.checked,
                                 })
                               }
-                              className="h-4 w-4 rounded border-white/20 bg-transparent"
+                              className="h-4 w-4 rounded border-white/20 bg-transparent accent-[#00f5a8]"
                             />
                             <span className="text-white/75">
                               {savingKey === `${section.key}_view`
@@ -395,7 +395,7 @@ export function AccessSettingsTab() {
                                   checked: e.target.checked,
                                 })
                               }
-                              className="h-4 w-4 rounded border-white/20 bg-transparent"
+                              className="h-4 w-4 rounded border-white/20 bg-transparent accent-[#00f5a8]"
                             />
                             <span className="text-white/75">
                               {savingKey === `${section.key}_manage`

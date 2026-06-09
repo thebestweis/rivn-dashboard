@@ -20,17 +20,17 @@ interface TopClientsChartProps {
 
 export function TopClientsChart({ data }: TopClientsChartProps) {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    <div className="rivn-panel p-5">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="mt-1 text-xl font-semibold">Выручка и прибыль по клиентам</h2>
         </div>
 
         <div className="flex gap-2 text-xs">
-          <span className="rounded-full bg-violet-500/15 px-3 py-1 text-violet-300">
+          <span className="rounded-full bg-[#7B61FF]/15 px-3 py-1 text-[#b8adff]">
             Выручка
           </span>
-          <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-300">
+          <span className="rounded-full bg-[#00f5a8]/15 px-3 py-1 text-[#43ffc2]">
             Прибыль
           </span>
         </div>
@@ -59,6 +59,10 @@ export function TopClientsChart({ data }: TopClientsChartProps) {
               width={110}
             />
             <Tooltip
+              formatter={(value, name) => [
+                value,
+                name === "revenue" ? "Выручка" : name === "profit" ? "Прибыль" : name,
+              ]}
               contentStyle={{
                 background: "#0F1524",
                 border: "1px solid rgba(255,255,255,0.08)",

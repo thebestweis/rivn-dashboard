@@ -1,4 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import {
+  apiAccessErrorResponse,
+  requireAuthenticatedUser,
+  requireWorkspaceMember,
+} from "@/app/api/_guards";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -24,6 +29,12 @@ export async function GET(request: Request) {
 
   try {
     const supabase = getSupabase();
+    const user = await requireAuthenticatedUser();
+    await requireWorkspaceMember({
+      serviceSupabase: supabase,
+      workspaceId,
+      userId: user.id,
+    });
 
     const { data: clients, error: clientsError } = await supabase
       .from("avito_report_clients")
@@ -92,15 +103,6 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return Response.json(
-      {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Avito report monitoring failed",
-      },
-      { status: 500 }
-    );
+    return apiAccessErrorResponse(error);
   }
 }

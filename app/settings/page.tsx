@@ -80,8 +80,9 @@ function SettingsPageContent() {
   }, [activeTab]);
 
   return (
-    <main className="flex-1">
-      <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
+    <main className="flex-1 px-3 py-3 sm:px-5 sm:py-5 lg:px-7">
+      <div className="rivn-page-shell px-4 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
+        <div className="relative z-10 space-y-5 lg:space-y-6">
         {!hasAccess && activeTab !== "profile" && !isLoading ? (
           <AccessDenied
             title="Нет доступа к настройкам"
@@ -96,6 +97,7 @@ function SettingsPageContent() {
             {tabContent}
           </>
         )}
+        </div>
       </div>
     </main>
   );
@@ -103,9 +105,9 @@ function SettingsPageContent() {
 
 function SettingsPageFallback() {
   return (
-    <main className="flex-1">
-      <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-8">
+    <main className="flex-1 px-3 py-3 sm:px-5 sm:py-5 lg:px-7">
+      <div className="rivn-page-shell px-4 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
+        <div className="rivn-card p-4 text-white/60 sm:p-8">
           Загружаем настройки...
         </div>
       </div>

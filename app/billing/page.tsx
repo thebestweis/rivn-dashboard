@@ -1,19 +1,76 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Check, Crown, Gem, Shield, Sparkles, Users } from "lucide-react";
 import { AccessDenied } from "../components/access/access-denied";
 import { AppToast } from "../components/ui/app-toast";
 import { EmptyState } from "../components/ui/empty-state";
 import { Skeleton } from "../components/ui/skeleton";
 import { useAppContextState } from "../providers/app-context-provider";
-import { calculatePlanPrice } from "../lib/supabase/billing";
 import {
-  useBillingPlansQuery,
   useBillingTransactionsQuery,
   useWorkspaceBalanceQuery,
 } from "../lib/queries/use-billing-query";
 
 const TELEGRAM_URL = "https://t.me/thebestweis";
+const EXTRA_MEMBER_PRICE = 170;
+
+type PlanCode = "base" | "team" | "strategy";
+
+type Tariff = {
+  code: PlanCode;
+  name: string;
+  price: number;
+  accent: "emerald" | "violet" | "gold";
+  description: string;
+  features: string[];
+  icon: typeof Shield;
+};
+
+const tariffs: Tariff[] = [
+  {
+    code: "base",
+    name: "BASE",
+    price: 990,
+    accent: "emerald",
+    icon: Shield,
+    description: "Стартовый тариф для одного владельца или соло-специалиста.",
+    features: [
+      "1 рабочее место",
+      "Основные разделы RIVN OS",
+      "Клиенты, проекты, задачи и финансы",
+    ],
+  },
+  {
+    code: "team",
+    name: "TEAM",
+    price: 4990,
+    accent: "violet",
+    icon: Users,
+    description: "Полный доступ к RIVN OS для команды агентства.",
+    features: [
+      "Включено до 10 человек",
+      "Возможность расширения команды до 25 человек",
+      `Каждый дополнительный человек: +${EXTRA_MEMBER_PRICE} ₽/мес`,
+      "Полный доступ к функционалу",
+    ],
+  },
+  {
+    code: "strategy",
+    name: "STRATEGY",
+    price: 9990,
+    accent: "gold",
+    icon: Crown,
+    description: "Максимальный тариф для масштабирования команды и лидогенерации.",
+    features: [
+      "Включено 50 рабочих мест",
+      "Возможность расширения команды до 250 сотрудников",
+      `Каждый дополнительный человек: +${EXTRA_MEMBER_PRICE} ₽/мес`,
+      "Модуль RIVN LEADS",
+      "Поиск и доставка заявок из Telegram",
+    ],
+  },
+];
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("ru-RU", {
@@ -23,11 +80,10 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null | undefined) {
   if (!value) return "—";
 
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return "—";
 
   return date.toLocaleDateString("ru-RU", {
@@ -40,7 +96,7 @@ function formatDate(value: string | null) {
 function getStatusLabel(status: string | null | undefined) {
   switch (status) {
     case "trial":
-      return "Триал";
+      return "Пробный период";
     case "active":
       return "Активна";
     case "past_due":
@@ -54,22 +110,6 @@ function getStatusLabel(status: string | null | undefined) {
   }
 }
 
-function getStatusTone(status: string | null | undefined) {
-  switch (status) {
-    case "trial":
-      return "bg-violet-500/15 text-violet-300";
-    case "active":
-      return "bg-emerald-500/15 text-emerald-300";
-    case "past_due":
-      return "bg-amber-500/15 text-amber-300";
-    case "canceled":
-    case "expired":
-      return "bg-rose-500/15 text-rose-300";
-    default:
-      return "bg-white/10 text-white/60";
-  }
-}
-
 function getTransactionLabel(type: string) {
   switch (type) {
     case "deposit":
@@ -77,7 +117,7 @@ function getTransactionLabel(type: string) {
     case "subscription_charge":
       return "Списание за тариф";
     case "manual_adjustment":
-      return "Ручная корректировка";
+      return "Корректировка";
     case "refund":
       return "Возврат";
     default:
@@ -85,30 +125,49 @@ function getTransactionLabel(type: string) {
   }
 }
 
-function getPlanActionLabel(params: {
-  isCurrentPlan: boolean;
-  isReadOnly: boolean;
-}) {
-  if (params.isCurrentPlan && params.isReadOnly) {
-    return "Продлить через Telegram";
+function getCurrentEndDate(billing: ReturnType<typeof useAppContextState>["billing"]) {
+  if (!billing) return null;
+  return billing.subscription_status === "trial"
+    ? billing.trial_ends_at
+    : billing.subscription_ends_at;
+}
+
+function getPlanLabel(code: string | null | undefined) {
+  if (!code) return "—";
+  if (code === "trial") return "TRIAL";
+  return code.toUpperCase();
+}
+
+function getAccentClasses(accent: Tariff["accent"]) {
+  if (accent === "violet") {
+    return {
+      border: "border-violet-400/24",
+      glow: "shadow-[0_0_70px_rgba(123,97,255,0.12)]",
+      badge: "bg-violet-400/15 text-violet-200",
+      icon: "bg-violet-400/16 text-violet-200",
+    };
   }
 
-  if (params.isCurrentPlan) {
-    return "Продлить через Telegram";
+  if (accent === "gold") {
+    return {
+      border: "border-amber-300/24",
+      glow: "shadow-[0_0_80px_rgba(245,180,72,0.12)]",
+      badge: "bg-amber-300/15 text-amber-200",
+      icon: "bg-amber-300/16 text-amber-200",
+    };
   }
 
-  return "Подключить через Telegram";
+  return {
+    border: "border-[#00f5a8]/20",
+    glow: "shadow-[0_0_70px_rgba(0,245,168,0.10)]",
+    badge: "bg-[#00f5a8]/14 text-[#80ffd5]",
+    icon: "bg-[#00f5a8]/14 text-[#80ffd5]",
+  };
 }
 
 export default function BillingPage() {
   const { role, billing, billingAccess, isLoading: isAppContextLoading } =
     useAppContextState();
-
-  const [selectedExtraMembers, setSelectedExtraMembers] = useState(0);
-  const [selectedPeriod, setSelectedPeriod] = useState<"monthly" | "yearly">(
-    "monthly"
-  );
-
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
     "info"
@@ -118,16 +177,10 @@ export default function BillingPage() {
   const canLoadBilling = !isAppContextLoading && canViewBilling;
 
   const {
-    data: plans = [],
-    isLoading: isPlansLoading,
-    error: plansError,
-  } = useBillingPlansQuery(canLoadBilling);
-
-  const {
     data: transactions = [],
     isLoading: isTransactionsLoading,
     error: transactionsError,
-  } = useBillingTransactionsQuery(canLoadBilling, 100);
+  } = useBillingTransactionsQuery(canLoadBilling, 80);
 
   const {
     data: balance = 0,
@@ -138,88 +191,46 @@ export default function BillingPage() {
   useEffect(() => {
     if (!toastMessage) return;
 
-    const timer = setTimeout(() => {
-      setToastMessage("");
-    }, 2200);
-
+    const timer = setTimeout(() => setToastMessage(""), 2200);
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
   useEffect(() => {
-    const error = plansError || transactionsError || balanceError;
+    const error = transactionsError || balanceError;
     if (!error) return;
 
     console.error(error);
     setToastType("error");
     setToastMessage(
-      error instanceof Error ? error.message : "Не удалось загрузить данные биллинга"
+      error instanceof Error
+        ? error.message
+        : "Не удалось загрузить данные биллинга"
     );
-  }, [plansError, transactionsError, balanceError]);
+  }, [transactionsError, balanceError]);
 
-  const currentPlanName = useMemo(() => {
-    if (!billing?.plan_code) return "—";
-    if (billing.plan_code === "trial") return "TRIAL";
-    return billing.plan_code.toUpperCase();
-  }, [billing]);
+  const currentEndDate = useMemo(() => getCurrentEndDate(billing), [billing]);
+  const currentPlan = getPlanLabel(billing?.plan_code);
+  const currentSeats =
+    billingAccess?.totalAllowedMembers ??
+    (billing
+      ? Number(billing.included_members ?? 0) + Number(billing.extra_members ?? 0)
+      : 0);
 
-  const currentEndDate = useMemo(() => {
-    if (!billing) return null;
+  const recentTransactions = transactions.slice(0, 8);
 
-    if (billing.subscription_status === "trial") {
-      return billing.trial_ends_at;
-    }
-
-    return billing.subscription_ends_at;
-  }, [billing]);
-
-  const selectedTeamPreview = useMemo(() => {
-    const currentPlan = plans.find((item) => item.code === "team");
-    if (!currentPlan) return null;
-
-    return calculatePlanPrice({
-      plan: currentPlan,
-      billingPeriod: selectedPeriod,
-      extraMembers: selectedExtraMembers,
-    });
-  }, [plans, selectedPeriod, selectedExtraMembers]);
-
-  const showInitialLoading =
-    (isAppContextLoading && !billingAccess) ||
-    (isPlansLoading && plans.length === 0);
-
-  if (showInitialLoading) {
+  if (isAppContextLoading) {
     return (
-      <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="mt-2 h-8 w-40" />
-            <Skeleton className="mt-3 h-4 w-80" />
-            <Skeleton className="mt-5 h-12 w-48 rounded-2xl" />
+      <main className="flex-1 px-5 py-6 lg:px-8">
+        <div className="rivn-page-shell space-y-6 p-4 sm:p-5">
+          <div className="rivn-card p-5">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="mt-2 h-9 w-56" />
+            <Skeleton className="mt-4 h-24 w-full rounded-[24px]" />
           </div>
-
           <div className="grid gap-4 xl:grid-cols-3">
-            <Skeleton className="h-52 rounded-[28px]" />
-            <Skeleton className="h-52 rounded-[28px]" />
-            <Skeleton className="h-52 rounded-[28px]" />
-          </div>
-
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            <Skeleton className="h-6 w-56" />
-            <div className="mt-5 grid gap-4 xl:grid-cols-3">
-              <Skeleton className="h-80 rounded-[24px]" />
-              <Skeleton className="h-80 rounded-[24px]" />
-              <Skeleton className="h-80 rounded-[24px]" />
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            <Skeleton className="h-6 w-40" />
-            <div className="mt-5 space-y-3">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <Skeleton key={index} className="h-14 w-full rounded-2xl" />
-              ))}
-            </div>
+            <Skeleton className="h-96 rounded-[28px]" />
+            <Skeleton className="h-96 rounded-[28px]" />
+            <Skeleton className="h-96 rounded-[28px]" />
           </div>
         </div>
       </main>
@@ -228,8 +239,8 @@ export default function BillingPage() {
 
   if (!canViewBilling) {
     return (
-      <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
+      <main className="flex-1 px-5 py-6 lg:px-8">
+        <div className="rivn-page-shell space-y-6 p-4 sm:p-5">
           <AccessDenied
             title="Нет доступа к тарифам"
             description="Просматривать биллинг кабинета могут только owner и admin."
@@ -241,323 +252,178 @@ export default function BillingPage() {
 
   return (
     <>
-      <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <div className="text-sm text-white/50">Раздел</div>
-                <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-                  Тарифы
+      <main className="flex-1 px-5 py-6 lg:px-8">
+        <div className="rivn-page-shell space-y-6 p-4 sm:p-5">
+          <section className="rivn-card p-5 sm:p-6">
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch xl:justify-between">
+              <div className="max-w-2xl">
+                <div className="text-xs uppercase tracking-[0.24em] text-[#43ffc2]">
+                  Биллинг
+                </div>
+                <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl">
+                  Тариф и подписка
                 </h1>
-                <p className="mt-2 text-sm text-white/55">
-                  Просмотр тарифа, статуса подписки, баланса кабинета и истории
-                  операций.
+                <p className="mt-3 text-sm leading-6 text-white/55">
+                  Управляй текущим тарифом, балансом кабинета и сроком подписки.
+                  Подключение и продление проходят через Telegram.
                 </p>
               </div>
 
+              <div className="grid gap-3 md:grid-cols-3 xl:min-w-[720px]">
+                <div className="rivn-panel-inner p-4">
+                  <div className="text-xs uppercase tracking-[0.16em] text-white/35">
+                    Текущий тариф
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-white">
+                    {currentPlan}
+                  </div>
+                  <div className="mt-3 inline-flex rounded-full bg-[#00f5a8]/12 px-3 py-1 text-xs text-[#80ffd5]">
+                    {getStatusLabel(billing?.subscription_status)}
+                  </div>
+                </div>
+
+                <div className="rivn-panel-inner p-4">
+                  <div className="text-xs uppercase tracking-[0.16em] text-white/35">
+                    Баланс
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-[#80ffd5]">
+                    {isBalanceLoading ? "..." : formatMoney(balance)}
+                  </div>
+                  <div className="mt-3 text-xs text-white/45">
+                    Доступно для списаний
+                  </div>
+                </div>
+
+                <div className="rivn-panel-inner p-4">
+                  <div className="text-xs uppercase tracking-[0.16em] text-white/35">
+                    Подписка до
+                  </div>
+                  <div className="mt-2 text-xl font-semibold text-white">
+                    {formatDate(currentEndDate)}
+                  </div>
+                  <div className="mt-3 text-xs text-white/45">
+                    Мест доступно: {currentSeats || "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {billingAccess?.isReadOnly ? (
+              <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                Подписка неактивна. Кабинет работает в режиме просмотра до
+                продления тарифа.
+              </div>
+            ) : null}
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-3">
+            {tariffs.map((tariff) => {
+              const accent = getAccentClasses(tariff.accent);
+              const Icon = tariff.icon;
+              const isCurrentPlan =
+                billing?.plan_code === tariff.code ||
+                (billing?.plan_code === "trial" && tariff.code === "base");
+
+              return (
+                <article
+                  key={tariff.code}
+                  className={`rivn-card rivn-card-interactive relative flex h-full min-h-[520px] flex-col overflow-hidden p-5 sm:p-6 ${accent.border} ${accent.glow}`}
+                >
+                  <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#00f5a8]/10 blur-3xl" />
+                  <div className="pointer-events-none absolute -bottom-20 left-1/3 h-44 w-44 rounded-full bg-violet-500/10 blur-3xl" />
+
+                  <div className="relative flex items-start justify-between gap-4">
+                    <div
+                      className={`flex h-12 w-12 items-center justify-center rounded-2xl ${accent.icon}`}
+                    >
+                      <Icon className="h-5 w-5" />
+                    </div>
+
+                    {isCurrentPlan ? (
+                      <span className={`rounded-full px-3 py-1 text-xs ${accent.badge}`}>
+                        Текущий
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="relative mt-5">
+                    <h2 className="text-2xl font-semibold tracking-[-0.03em] text-white">
+                      {tariff.name}
+                    </h2>
+                    <p className="mt-2 min-h-[48px] text-sm leading-6 text-white/55">
+                      {tariff.description}
+                    </p>
+                  </div>
+
+                  <div className="relative mt-6 flex items-end gap-2">
+                    <div className="text-4xl font-semibold tracking-[-0.05em] text-white">
+                      {formatMoney(tariff.price)}
+                    </div>
+                    <div className="pb-1 text-sm text-white/45">/ месяц</div>
+                  </div>
+
+                  <div className="relative mt-5 flex-1 space-y-3">
+                    {tariff.features.map((feature) => (
+                      <div
+                        key={feature}
+                        className="flex items-start gap-3 text-sm leading-5 text-white/70"
+                      >
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#00f5a8]/14 text-[#80ffd5]">
+                          <Check className="h-3.5 w-3.5" />
+                        </span>
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <a
+                    href={TELEGRAM_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => {
+                      setToastType("info");
+                      setToastMessage(`Открываем Telegram для тарифа ${tariff.name}`);
+                    }}
+                    className="rivn-button-primary relative mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Подключить через Telegram
+                  </a>
+                </article>
+              );
+            })}
+          </section>
+
+          <section className="rivn-card p-5 sm:p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="text-xs uppercase tracking-[0.22em] text-white/35">
+                  Операции
+                </div>
+                <h2 className="mt-1 text-xl font-semibold text-white">
+                  История баланса
+                </h2>
+              </div>
               <a
                 href={TELEGRAM_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-200 transition hover:bg-sky-500/15"
+                className="rivn-button px-4 py-2 text-sm"
               >
                 Пополнить баланс
               </a>
             </div>
-          </div>
 
-          {billingAccess?.isReadOnly ? (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              Подписка неактивна. Кабинет работает в режиме только просмотра до
-              продления тарифа.
-            </div>
-          ) : null}
-
-          <div className="grid gap-4 xl:grid-cols-3">
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              <div className="text-sm text-white/50">Текущий тариф</div>
-              <div className="mt-2 text-2xl font-semibold text-white">
-                {currentPlanName}
-              </div>
-              <div className="mt-3">
-                <span
-                  className={`rounded-full px-3 py-1 text-xs ${getStatusTone(
-                    billing?.subscription_status
-                  )}`}
-                >
-                  {getStatusLabel(billing?.subscription_status)}
-                </span>
-              </div>
-              <div className="mt-4 text-sm text-white/60">
-                Действует до:{" "}
-                <span className="text-white">{formatDate(currentEndDate)}</span>
-              </div>
-              <div className="mt-2 text-sm text-white/60">
-                Период:{" "}
-                <span className="text-white">
-                  {billing?.billing_period === "yearly"
-                    ? "Годовая подписка"
-                    : "Месячная подписка"}
-                </span>
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              <div className="text-sm text-white/50">Баланс</div>
-              <div className="mt-2 text-2xl font-semibold text-emerald-300">
-                {isBalanceLoading ? "Загрузка..." : formatMoney(balance)}
-              </div>
-              <div className="mt-4 text-sm text-white/60">
-                Баланс временно пополняется вручную со стороны администрации
-                сервиса после подтверждения оплаты.
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-              <div className="text-sm text-white/50">Возможности кабинета</div>
-              <div className="mt-4 space-y-2 text-sm text-white/70">
-                <div>
-                  Команда:{" "}
-                  <span className="text-white">
-                    {billingAccess?.teamEnabled ? "включена" : "отключена"}
-                  </span>
-                </div>
-                <div>
-                  Доступно мест:{" "}
-                  <span className="text-white">
-                    {billingAccess?.totalAllowedMembers ?? 0}
-                  </span>
-                </div>
-                <div>
-                  AI:{" "}
-                  <span className="text-white">
-                    {billingAccess?.aiEnabled ? "включён" : "отключён"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <div className="text-sm text-white/50">Тарифы</div>
-                <h2 className="mt-1 text-xl font-semibold tracking-tight">
-                  Выбор и продление подписки
-                </h2>
-                <p className="mt-2 text-sm text-white/55">
-                  Подключение и продление тарифа проходит через Telegram:
-                  напиши нам, и мы быстро поможем выбрать подходящий вариант.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPeriod("monthly")}
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
-                    selectedPeriod === "monthly"
-                      ? "bg-white text-[#0B0F1A]"
-                      : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white"
-                  }`}
-                >
-                  За месяц
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedPeriod("yearly")}
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
-                    selectedPeriod === "yearly"
-                      ? "bg-white text-[#0B0F1A]"
-                      : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white"
-                  }`}
-                >
-                  За год
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-4 xl:grid-cols-3">
-              {plans
-                .filter((plan) => plan.code !== "trial")
-                .map((plan) => {
-                  const preview = calculatePlanPrice({
-                    plan,
-                    billingPeriod: selectedPeriod,
-                    extraMembers:
-                      plan.code === "team" || plan.code === "strategy"
-                        ? selectedExtraMembers
-                        : 0,
-                  });
-
-                  const isCurrentPlan = billing?.plan_code === plan.code;
-
-                  return (
-                    <div
-                      key={plan.code}
-                      className={`group relative flex h-full flex-col rounded-[24px] border bg-[#0F1524] p-5 transition-all duration-300 ease-out ${
-                        isCurrentPlan
-                          ? "border-emerald-500/20 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]"
-                          : "border-white/10 hover:border-violet-400/35 hover:bg-[#131C2E] hover:shadow-[0_0_0_1px_rgba(123,97,255,0.18),0_20px_60px_rgba(0,0,0,0.35)]"
-                      }`}
-                    >
-                      <div className="pointer-events-none absolute inset-0 rounded-[24px] bg-white/[0.02] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
-                      <div className="relative flex items-center justify-between gap-3">
-                        <div className="text-lg font-semibold text-white transition-colors duration-200 group-hover:text-white">
-                          {plan.name}
-                        </div>
-
-                        {isCurrentPlan ? (
-                          <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs text-emerald-300">
-                            Текущий
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-4 text-3xl font-semibold text-white transition-transform duration-200 group-hover:scale-[1.01]">
-                        {formatMoney(preview.totalPrice)}
-                      </div>
-
-                      <div className="mt-2 text-sm text-white/55">
-                        {selectedPeriod === "yearly" ? "за год" : "за месяц"}
-                      </div>
-
-                      <div className="relative mt-4 space-y-2 text-sm text-white/70">
-                        <div>
-                          Включено мест:{" "}
-                          <span className="text-white">
-                            {plan.included_members}
-                          </span>
-                        </div>
-                        <div>
-                          Максимум мест:{" "}
-                          <span className="text-white">
-                            {plan.max_members ?? "Без лимита"}
-                          </span>
-                        </div>
-                        <div>
-                          Команда:{" "}
-                          <span className="text-white">
-                            {plan.team_enabled ? "да" : "нет"}
-                          </span>
-                        </div>
-                        <div>
-                          AI:{" "}
-                          <span className="text-white">
-                            {plan.ai_enabled ? "да" : "нет"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 h-[92px]">
-                        {plan.code === "team" || plan.code === "strategy" ? (
-                          <>
-                            <div className="mb-2 text-xs text-white/45">
-                              Дополнительные места
-                            </div>
-                            <input
-                              type="number"
-                              min={0}
-                              max={
-                                plan.max_members
-                                  ? Math.max(0, plan.max_members - plan.included_members)
-                                  : 200
-                              }
-                              value={selectedExtraMembers}
-                              onChange={(e) =>
-                                setSelectedExtraMembers(
-                                  Math.max(0, Number(e.target.value) || 0)
-                                )
-                              }
-                              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none"
-                            />
-                          </>
-                        ) : (
-                          <div>
-                            <div className="mb-2 text-xs text-white/45">
-                              Дополнительные места
-                            </div>
-                            <input
-                              type="text"
-                              value="Отсутствуют"
-                              readOnly
-                              className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/40 outline-none"
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-auto flex flex-col gap-4 pt-6">
-                        <a
-                          href={TELEGRAM_URL}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={() => {
-                            setToastType("info");
-                            setToastMessage(
-                              `Открываем Telegram для подключения тарифа ${plan.name}`
-                            );
-                          }}
-                          className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition-all duration-300 group-hover:bg-emerald-400/20 group-hover:shadow-[0_0_30px_rgba(16,185,129,0.24)]"
-                        >
-                          {getPlanActionLabel({
-                            isCurrentPlan,
-                            isReadOnly: !!billingAccess?.isReadOnly,
-                          })}
-                        </a>
-
-                        <div className="text-xs text-white/40">
-                          После обращения в Telegram мы проверим оплату и
-                          активируем тариф в кабинете.
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-
-            {selectedTeamPreview ? (
-              <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/65">
-                Пример расчёта TEAM: база{" "}
-                <span className="text-white">
-                  {formatMoney(selectedTeamPreview.basePrice)}
-                </span>
-                , доп. места{" "}
-                <span className="text-white">
-                  {selectedTeamPreview.extraMembers}
-                </span>
-                , итог{" "}
-                <span className="font-medium text-white">
-                  {formatMoney(selectedTeamPreview.totalPrice)}
-                </span>
-                .
-              </div>
-            ) : null}
-          </div>
-
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="text-sm text-white/50">История операций</div>
-                <h2 className="mt-1 text-xl font-semibold tracking-tight">
-                  Транзакции
-                </h2>
-              </div>
-            </div>
-
-            <div className="mt-5 overflow-x-auto rounded-[24px] border border-white/8">
-              {isTransactionsLoading && transactions.length === 0 ? (
+            <div className="rivn-table-wrap mt-5 overflow-x-auto">
+              {isTransactionsLoading && recentTransactions.length === 0 ? (
                 <div className="space-y-3 p-4">
                   {Array.from({ length: 4 }).map((_, index) => (
                     <Skeleton key={index} className="h-14 w-full rounded-2xl" />
                   ))}
                 </div>
-              ) : transactions.length > 0 ? (
-                <table className="w-full min-w-[720px] text-left text-sm">
-                  <thead className="bg-white/[0.04] text-white/45">
+              ) : recentTransactions.length > 0 ? (
+                <table className="w-full min-w-[720px] text-center text-sm">
+                  <thead className="rivn-table-head">
                     <tr>
                       <th className="px-4 py-3 font-medium">Тип</th>
                       <th className="px-4 py-3 font-medium">Описание</th>
@@ -566,26 +432,23 @@ export default function BillingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.map((item) => {
+                    {recentTransactions.map((item) => {
                       const isPositive = item.amount >= 0;
 
                       return (
-                        <tr
-                          key={item.id}
-                          className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
-                        >
+                        <tr key={item.id} className="rivn-table-row bg-transparent">
                           <td className="px-4 py-3 text-white/75">
                             {getTransactionLabel(item.transaction_type)}
                           </td>
-                          <td className="px-4 py-3 text-white/75">
+                          <td className="px-4 py-3 text-white/65">
                             {item.description || "—"}
                           </td>
-                          <td className="px-4 py-3 text-white/75">
+                          <td className="px-4 py-3 text-white/65">
                             {formatDate(item.created_at)}
                           </td>
                           <td
                             className={`px-4 py-3 font-medium ${
-                              isPositive ? "text-emerald-300" : "text-rose-300"
+                              isPositive ? "text-[#80ffd5]" : "text-rose-300"
                             }`}
                           >
                             {isPositive ? "+" : ""}
@@ -600,12 +463,12 @@ export default function BillingPage() {
                 <div className="p-4">
                   <EmptyState
                     title="Транзакций пока нет"
-                    description="Когда появятся пополнения и списания, они будут отображаться здесь."
+                    description="Когда появятся пополнения или списания, они будут отображаться здесь."
                   />
                 </div>
               )}
             </div>
-          </div>
+          </section>
         </div>
       </main>
 

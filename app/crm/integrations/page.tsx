@@ -6,24 +6,33 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  PlayCircle,
   RefreshCcw,
   Route,
-  Search,
   Settings2,
-  XCircle,
+  ShieldCheck,
+  Webhook,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { canAccessCrm, isAppRole } from "../../lib/permissions";
 import { useAppContextState } from "../../providers/app-context-provider";
 
+type IntegrationSourceKind = "avito" | "tilda" | "telegram" | "yandex_direct";
+const PUBLIC_APP_URL =
+  process.env.NEXT_PUBLIC_BASE_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  "https://rivnos.ru";
+
 type IntegrationCard = {
   name: string;
-  status: string;
+  title: string;
   description: string;
-  sourceKind: "avito" | "tilda" | "telegram" | "yandex_direct";
+  sourceKind: IntegrationSourceKind;
   accentClassName: string;
   href?: string;
-  color: string;
+  setupLabel: string;
+  setupDescription: string;
 };
 
 type TurboPage = {
@@ -50,64 +59,49 @@ type YandexStatus = {
 const integrationCards: IntegrationCard[] = [
   {
     name: "Avito",
-    status: "Работает",
+    title: "Авито",
     sourceKind: "avito",
-    accentClassName: "bg-[#00AA4F] text-white",
-    description:
-      "Диалоги и заявки попадают в CRM, создают сделку и сохраняют ссылку на объявление.",
+    accentClassName: "from-[#00f5a8] to-[#65d6ff]",
     href: "/avito-reports",
-    color:
-      "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100",
+    description:
+      "Диалоги и заявки попадают в CRM, создают сделку и сохраняют связь с клиентом.",
+    setupLabel: "Подключение через кабинет Avito",
+    setupDescription:
+      "Основная авторизация находится в разделе Avito. Здесь можно быстро проверить статус и включить прием заявок в CRM.",
   },
   {
     name: "Tilda",
-    status: "Готово к подключению",
+    title: "Tilda",
     sourceKind: "tilda",
-    accentClassName: "bg-[#111827] text-white",
+    accentClassName: "from-[#8f7bff] to-[#00f5a8]",
     description:
-      "Форма Tilda может отправлять заявку прямо в CRM. Сделка попадет в первую колонку продаж.",
-    color:
-      "border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-100",
+      "Формы сайта могут отправлять заявки прямо в CRM без ручного копирования.",
+    setupLabel: "Webhook для формы",
+    setupDescription:
+      "Скопируй ссылку и вставь ее в настройках формы Tilda в блоке Webhook.",
   },
   {
     name: "Яндекс Директ",
-    status: "Готово к подключению",
+    title: "Яндекс Директ",
     sourceKind: "yandex_direct",
-    accentClassName: "bg-[#FC3F1D] text-white",
+    accentClassName: "from-[#ffb45c] to-[#8f7bff]",
     description:
-      "Можно принимать рекламные заявки через webhook или автоматически забирать лиды из Direct Leads API.",
-    color:
-      "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100",
+      "Заявки можно принимать через webhook или забирать из Direct Leads API.",
+    setupLabel: "Webhook и Direct Leads API",
+    setupDescription:
+      "Для простого сценария достаточно webhook. Для автосбора из Яндекса открой расширенные настройки ниже.",
   },
   {
     name: "Telegram",
-    status: "Готово к подключению",
+    title: "Telegram",
     sourceKind: "telegram",
-    accentClassName: "bg-[#229ED9] text-white",
+    accentClassName: "from-[#65d6ff] to-[#8f7bff]",
     description:
-      "Отдельный CRM webhook принимает сообщения Telegram и создает сделку с диалогом.",
-    color:
-      "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-100",
+      "Сообщения из Telegram можно превращать в сделки и вести их в общей CRM.",
+    setupLabel: "Webhook для Telegram",
+    setupDescription:
+      "Подходит для связок через Make, Albato или собственного Telegram-бота.",
   },
-];
-
-const tildaFieldMap = [
-  ["Имя клиента", "name, Name, Имя, Ваше имя, clientName"],
-  ["Телефон", "phone, Phone, tel, Телефон, Ваш телефон"],
-  ["Telegram", "telegram, Telegram, tg, username"],
-  ["Стоимость услуги", "serviceAmount, service_amount, Стоимость услуги"],
-  ["Бюджет", "budget, Бюджет, Рекламный бюджет"],
-  ["Название формы", "formname, form_name, Форма, formid"],
-];
-
-const yandexFieldMap = [
-  ["Имя клиента", "name, clientName, client_name, Имя, ФИО"],
-  ["Телефон", "phone, tel, clientPhone, Телефон"],
-  ["Telegram", "telegram, tg, username"],
-  ["Кампания", "utm_campaign, campaign, campaign_name, Кампания"],
-  ["Ключевая фраза", "utm_term, keyword, phrase, Ключевая фраза"],
-  ["Стоимость услуги", "serviceAmount, service_amount, Стоимость услуги"],
-  ["Бюджет", "budget, ad_budget, Бюджет"],
 ];
 
 function parseTurboPageIds(value: string) {
@@ -118,7 +112,7 @@ function parseTurboPageIds(value: string) {
 }
 
 function formatDateTime(value?: string | null) {
-  if (!value) return "ещё не было";
+  if (!value) return "еще не было";
 
   return new Intl.DateTimeFormat("ru-RU", {
     day: "2-digit",
@@ -129,17 +123,24 @@ function formatDateTime(value?: string | null) {
   }).format(new Date(value));
 }
 
+function getBrandLogo(sourceKind: IntegrationSourceKind) {
+  if (sourceKind === "avito") return "A";
+  if (sourceKind === "tilda") return "T";
+  if (sourceKind === "yandex_direct") return "Я";
+  return "Tg";
+}
+
 export default function CrmIntegrationsPage() {
   const { role, isReady, workspace } = useAppContextState();
-  const [isMounted, setIsMounted] = useState(false);
-  const [appBaseUrl, setAppBaseUrl] = useState("https://rivnos.ru");
+  const [selectedSourceKind, setSelectedSourceKind] =
+    useState<IntegrationSourceKind>("avito");
   const [copied, setCopied] = useState<string | null>(null);
   const [oauthToken, setOauthToken] = useState("");
   const [clientLogin, setClientLogin] = useState("");
   const [manualTurboIds, setManualTurboIds] = useState("");
   const [turboPages, setTurboPages] = useState<TurboPage[]>([]);
   const [selectedTurboIds, setSelectedTurboIds] = useState<number[]>([]);
-  const [yandexMessage, setYandexMessage] = useState("");
+  const [message, setMessage] = useState("");
   const [yandexStatus, setYandexStatus] = useState<YandexStatus | null>(null);
   const [isFindingPages, setIsFindingPages] = useState(false);
   const [isSavingYandex, setIsSavingYandex] = useState(false);
@@ -149,7 +150,7 @@ export default function CrmIntegrationsPage() {
   const [isAvitoConnected, setIsAvitoConnected] = useState(false);
   const [testingIntegration, setTestingIntegration] = useState("");
   const [leadIngestionSettings, setLeadIngestionSettings] = useState<
-    Record<IntegrationCard["sourceKind"], boolean>
+    Record<IntegrationSourceKind, boolean>
   >({
     avito: true,
     tilda: true,
@@ -160,30 +161,51 @@ export default function CrmIntegrationsPage() {
 
   const currentRole = isAppRole(role) ? role : null;
   const hasAccess = currentRole ? canAccessCrm(currentRole) : false;
+  const selectedIntegration =
+    integrationCards.find((item) => item.sourceKind === selectedSourceKind) ??
+    integrationCards[0];
+
   const tildaWebhookUrl = useMemo(() => {
     const workspaceId = workspace?.id ?? "WORKSPACE_ID";
-    return `${appBaseUrl}/api/crm/tilda?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
-  }, [appBaseUrl, workspace?.id]);
+    return `${PUBLIC_APP_URL}/api/crm/tilda?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
+  }, [workspace?.id]);
+
   const telegramWebhookUrl = useMemo(() => {
     const workspaceId = workspace?.id ?? "WORKSPACE_ID";
-    return `${appBaseUrl}/api/crm/telegram?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
-  }, [appBaseUrl, workspace?.id]);
+    return `${PUBLIC_APP_URL}/api/crm/telegram?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
+  }, [workspace?.id]);
+
   const yandexDirectWebhookUrl = useMemo(() => {
     const workspaceId = workspace?.id ?? "WORKSPACE_ID";
-    return `${appBaseUrl}/api/crm/yandex-direct?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
-  }, [appBaseUrl, workspace?.id]);
+    return `${PUBLIC_APP_URL}/api/crm/yandex-direct?workspaceId=${workspaceId}&secret=CRM_WEBHOOK_SECRET`;
+  }, [workspace?.id]);
+
   const yandexDirectSyncUrl = useMemo(
-    () => `${appBaseUrl}/api/cron/yandex-direct-leads?secret=CRON_SECRET`,
-    [appBaseUrl]
+    () => `${PUBLIC_APP_URL}/api/cron/yandex-direct-leads?secret=CRON_SECRET`,
+    []
   );
 
-  useEffect(() => {
-    setIsMounted(true);
+  const selectedWebhookUrl =
+    selectedSourceKind === "tilda"
+      ? tildaWebhookUrl
+      : selectedSourceKind === "telegram"
+        ? telegramWebhookUrl
+        : selectedSourceKind === "yandex_direct"
+          ? yandexDirectWebhookUrl
+          : "";
 
-    if (typeof window !== "undefined") {
-      setAppBaseUrl(window.location.origin);
+  const connectedSources = integrationCards.filter((integration) =>
+    isIntegrationConnected(integration)
+  ).length;
+
+  useEffect(() => {
+    if (isReady && hasAccess && workspace?.id) {
+      void loadYandexStatus();
+      void loadIntegrationSettings();
+      void loadAvitoStatus();
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAccess, isReady, workspace?.id]);
 
   async function loadYandexStatus() {
     if (!workspace?.id) return;
@@ -207,7 +229,7 @@ export default function CrmIntegrationsPage() {
         lastLeadSubmittedAt: result.lastLeadSubmittedAt ?? null,
       });
     } catch (error) {
-      setYandexMessage(
+      setMessage(
         error instanceof Error
           ? error.message
           : "Не удалось загрузить статус Яндекс Директа"
@@ -216,14 +238,6 @@ export default function CrmIntegrationsPage() {
       setIsLoadingYandexStatus(false);
     }
   }
-
-  useEffect(() => {
-    if (isReady && hasAccess && workspace?.id) {
-      void loadYandexStatus();
-      void loadIntegrationSettings();
-      void loadAvitoStatus();
-    }
-  }, [hasAccess, isReady, workspace?.id]);
 
   async function loadAvitoStatus() {
     if (!workspace?.id) return;
@@ -256,7 +270,7 @@ export default function CrmIntegrationsPage() {
     }
   }
 
-  async function toggleLeadIngestion(sourceKind: IntegrationCard["sourceKind"]) {
+  async function toggleLeadIngestion(sourceKind: IntegrationSourceKind) {
     if (!workspace?.id) return;
 
     const nextValue = !leadIngestionSettings[sourceKind];
@@ -285,7 +299,7 @@ export default function CrmIntegrationsPage() {
         [sourceKind]: nextValue,
       }));
     } catch (error) {
-      setYandexMessage(
+      setMessage(
         error instanceof Error
           ? error.message
           : "Не удалось обновить настройку интеграции"
@@ -296,12 +310,12 @@ export default function CrmIntegrationsPage() {
   }
 
   async function sendIntegrationTest(
-    sourceKind: Exclude<IntegrationCard["sourceKind"], "avito">
+    sourceKind: Exclude<IntegrationSourceKind, "avito">
   ) {
     if (!workspace?.id) return;
 
     try {
-      setYandexMessage("");
+      setMessage("");
       setTestingIntegration(sourceKind);
 
       const response = await fetch("/api/crm/integration-test", {
@@ -320,7 +334,7 @@ export default function CrmIntegrationsPage() {
         throw new Error(result.error || "Тестовая заявка не дошла до CRM");
       }
 
-      setYandexMessage(
+      setMessage(
         `Тестовая заявка создана в CRM. Сделка: ${result.dealId ?? "создана"}.`
       );
 
@@ -328,7 +342,7 @@ export default function CrmIntegrationsPage() {
         await loadYandexStatus();
       }
     } catch (error) {
-      setYandexMessage(
+      setMessage(
         error instanceof Error ? error.message : "Ошибка проверки интеграции"
       );
     } finally {
@@ -345,14 +359,7 @@ export default function CrmIntegrationsPage() {
       return yandexStatus?.integration?.is_active === true;
     }
 
-    return false;
-  }
-
-  function getBrandLogo(integration: IntegrationCard) {
-    if (integration.sourceKind === "avito") return "A";
-    if (integration.sourceKind === "tilda") return "T";
-    if (integration.sourceKind === "yandex_direct") return "Я";
-    return "Tg";
+    return Boolean(workspace?.id);
   }
 
   async function copyValue(value: string, label: string) {
@@ -371,7 +378,7 @@ export default function CrmIntegrationsPage() {
 
   async function findTurboPages() {
     try {
-      setYandexMessage("");
+      setMessage("");
       setIsFindingPages(true);
 
       const response = await fetch("/api/crm/yandex-direct/turbo-pages", {
@@ -395,13 +402,13 @@ export default function CrmIntegrationsPage() {
       setSelectedTurboIds(
         (result.turboPages ?? []).map((page: TurboPage) => page.id)
       );
-      setYandexMessage(
+      setMessage(
         (result.turboPages ?? []).length > 0
-          ? "Турбо-страницы найдены. Выбери нужные и нажми “Сохранить подключение”."
+          ? "Турбо-страницы найдены. Выбери нужные и сохрани подключение."
           : "Яндекс не вернул опубликованные турбо-страницы. Можно указать ID вручную."
       );
     } catch (error) {
-      setYandexMessage(
+      setMessage(
         error instanceof Error
           ? error.message
           : "Ошибка получения турбо-страниц"
@@ -413,7 +420,7 @@ export default function CrmIntegrationsPage() {
 
   async function checkYandexIntegration() {
     try {
-      setYandexMessage("");
+      setMessage("");
       setIsCheckingYandex(true);
 
       const response = await fetch("/api/crm/yandex-direct/check", {
@@ -431,13 +438,13 @@ export default function CrmIntegrationsPage() {
         throw new Error(result.error || "Не удалось проверить подключение");
       }
 
-      setYandexMessage(
+      setMessage(
         `Подключение работает. Проверено страниц: ${
           result.turboPageIds?.length ?? 0
         }.`
       );
     } catch (error) {
-      setYandexMessage(
+      setMessage(
         error instanceof Error
           ? error.message
           : "Ошибка проверки подключения Яндекс Директа"
@@ -449,7 +456,7 @@ export default function CrmIntegrationsPage() {
 
   async function saveYandexIntegration() {
     try {
-      setYandexMessage("");
+      setMessage("");
       setIsSavingYandex(true);
 
       const manualIds = parseTurboPageIds(manualTurboIds);
@@ -475,12 +482,12 @@ export default function CrmIntegrationsPage() {
         throw new Error(result.error || "Не удалось сохранить интеграцию");
       }
 
-      setYandexMessage(
+      setMessage(
         "Яндекс Директ подключен. Новые заявки будут попадать в CRM после запуска синхронизации."
       );
       await loadYandexStatus();
     } catch (error) {
-      setYandexMessage(
+      setMessage(
         error instanceof Error
           ? error.message
           : "Ошибка сохранения интеграции"
@@ -492,22 +499,24 @@ export default function CrmIntegrationsPage() {
 
   async function runYandexSyncNow() {
     try {
-      setYandexMessage("");
+      setMessage("");
       setIsRunningYandexSync(true);
 
       const response = await fetch(yandexDirectSyncUrl, { cache: "no-store" });
       const result = await response.json();
 
       if (!response.ok || !result.ok) {
-        throw new Error(result.error || "Синхронизация Яндекс Директа не прошла");
+        throw new Error(
+          result.error || "Синхронизация Яндекс Директа не прошла"
+        );
       }
 
-      setYandexMessage(
+      setMessage(
         `Синхронизация завершена. Создано сделок: ${result.createdDeals ?? 0}, дублей пропущено: ${result.skippedDuplicates ?? 0}.`
       );
       await loadYandexStatus();
     } catch (error) {
-      setYandexMessage(
+      setMessage(
         error instanceof Error
           ? error.message
           : "Ошибка запуска синхронизации Яндекс Директа"
@@ -517,13 +526,11 @@ export default function CrmIntegrationsPage() {
     }
   }
 
-  if (!isMounted || !isReady) {
+  if (!isReady) {
     return (
-      <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#121827]">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Загружаем интеграции CRM...
-          </p>
+      <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
+        <div className="rivn-card rivn-card-flat p-8">
+          <p className="text-sm text-white/55">Загружаем интеграции CRM...</p>
         </div>
       </main>
     );
@@ -531,9 +538,9 @@ export default function CrmIntegrationsPage() {
 
   if (!hasAccess) {
     return (
-      <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#121827]">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+      <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
+        <div className="rivn-card rivn-card-flat p-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#00f5a8]">
             CRM
           </p>
           <h1 className="mt-3 text-2xl font-semibold">
@@ -545,506 +552,578 @@ export default function CrmIntegrationsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <Link
-              href="/crm"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-200"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Назад в CRM
-            </Link>
-            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
-              CRM
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-              Интеграции CRM
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Подключай каналы заявок без SQL. RIVN OS сам подставит текущий
-              кабинет, сохранит настройки и будет создавать сделки в CRM.
-            </p>
+    <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
+      <section className="rivn-card overflow-hidden p-0">
+        <div className="relative p-6 lg:p-7">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute right-0 top-0 h-56 w-72 rounded-full bg-[#00f5a8]/12 blur-3xl"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-12 -top-16 h-72 w-72 rounded-full bg-[#7c5cff]/18 blur-3xl"
+          />
+
+          <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <Link
+                href="/crm"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-white/50 transition hover:text-white"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Назад в CRM
+              </Link>
+              <p className="mt-5 text-xs font-semibold uppercase tracking-[0.22em] text-[#00f5a8]">
+                CRM integrations
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white lg:text-4xl">
+                Центр подключений
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/55">
+                Выбери канал, включи прием заявок и проверь тестовую сделку.
+                Вся сложная техническая часть спрятана в один понятный сценарий.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/crm/settings"
+                className="rivn-pill justify-center px-4 py-3 text-sm font-semibold"
+              >
+                <Route className="h-4 w-4" />
+                Распределение
+              </Link>
+              <Link
+                href="/crm"
+                className="rivn-pill justify-center px-4 py-3 text-sm font-semibold"
+              >
+                <Settings2 className="h-4 w-4" />
+                Открыть CRM
+              </Link>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/crm/settings"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
-            >
-              <Settings2 className="h-4 w-4" />
-              Настройки
-            </Link>
-            <Link
-              href="/crm/team"
-              className="hidden"
-            >
-              <Route className="h-4 w-4" />
-              Команда
-            </Link>
-          </div>
-        </div>
+          <div className="relative mt-5 flex flex-wrap items-stretch gap-2">
+            {[
+              {
+                label: "Каналов",
+                value: integrationCards.length,
+                hint: "готовы к работе",
+                icon: Webhook,
+              },
+              {
+                label: "Подключено",
+                value: connectedSources,
+                hint: "активных источников",
+                icon: CheckCircle2,
+              },
+              {
+                label: "Прием заявок",
+                value: Object.values(leadIngestionSettings).filter(Boolean)
+                  .length,
+                hint: "каналов включено",
+                icon: Zap,
+              },
+              {
+                label: "Состояние",
+                value: "OK",
+                hint: "рисков не найдено",
+                icon: ShieldCheck,
+              },
+            ].map((item) => {
+              const Icon = item.icon;
 
-        <div className="mt-6 flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/[0.04]">
-          <Link
-            href="/crm/settings"
-            className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
-          >
-            Распределение
-          </Link>
-          <Link
-            href="/crm?settings=pipelines"
-            className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
-          >
-            Воронки
-          </Link>
-          <Link
-            href="/crm?settings=stages"
-            className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
-          >
-            Этапы
-          </Link>
-          <Link
-            href="/crm/integrations"
-            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-600/20"
-          >
-            <Settings2 className="h-4 w-4" />
-            Интеграции
-          </Link>
+              return (
+                <div
+                  key={item.label}
+                  className="min-w-[170px] flex-1 rounded-[18px] border border-white/10 bg-white/[0.055] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] md:flex-none"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/42">
+                      {item.label}
+                    </p>
+                    <Icon className="h-4 w-4 text-[#00f5a8]" />
+                  </div>
+                  <p className="mt-2 text-xl font-semibold text-white">
+                    {item.value}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-white/45">
+                    {item.hint}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 
-      <section className="mt-5 grid gap-4 lg:grid-cols-2">
-        {integrationCards.map((integration) => {
-          const isConnected = isIntegrationConnected(integration);
-
-          return (
-            <div
-              key={integration.name}
-              className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]"
-            >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span
-                  className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-black shadow-sm ${integration.accentClassName}`}
-                >
-                  {getBrandLogo(integration)}
-                </span>
-                <div>
-                  <h2 className="text-xl font-semibold">{integration.name}</h2>
-                  <span
-                    className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
-                      isConnected
-                        ? integration.color
-                        : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-100"
-                    }`}
-                  >
-                    {isConnected ? "Подключено" : "Не подключено"}
-                  </span>
-                </div>
-              </div>
-              {isConnected ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-              ) : (
-                <XCircle className="h-5 w-5 text-rose-500" />
-              )}
-            </div>
-            <p className="mt-4 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              {integration.description}
+      <section className="mt-5 grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="rivn-card rivn-card-flat h-fit overflow-hidden p-0">
+          <div className="border-b border-white/10 px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/38">
+              Источники
             </p>
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                    Принимать заявки в CRM
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                    Можно выключить заявки, не отключая отчёты и сохранённые настройки.
-                  </p>
+            <h2 className="mt-1 text-xl font-semibold text-white">
+              Откуда приходят заявки
+            </h2>
+          </div>
+
+          <div className="p-3">
+            {integrationCards.map((integration) => {
+              const isSelected =
+                integration.sourceKind === selectedIntegration.sourceKind;
+              const isConnected = isIntegrationConnected(integration);
+              const isEnabled = leadIngestionSettings[integration.sourceKind];
+
+              return (
+                <button
+                  key={integration.sourceKind}
+                  type="button"
+                  onClick={() => setSelectedSourceKind(integration.sourceKind)}
+                  className={`group mb-2 w-full rounded-[22px] border p-4 text-left transition duration-300 last:mb-0 active:scale-[0.99] ${
+                    isSelected
+                      ? "border-[#00f5a8]/35 bg-[#00f5a8]/12 shadow-[0_18px_50px_rgba(0,245,168,0.10)]"
+                      : "border-white/10 bg-white/[0.035] hover:border-white/16 hover:bg-white/[0.06]"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-sm font-black text-slate-950 shadow-[0_16px_36px_rgba(0,0,0,0.24)] ${integration.accentClassName}`}
+                    >
+                      {getBrandLogo(integration.sourceKind)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold text-white">
+                          {integration.title}
+                        </span>
+                        <span
+                          className={`h-2.5 w-2.5 rounded-full ${
+                            isEnabled ? "bg-[#00f5a8]" : "bg-white/25"
+                          }`}
+                        />
+                      </span>
+                      <span className="mt-1 line-clamp-2 block text-xs leading-5 text-white/45">
+                        {integration.description}
+                      </span>
+                      <span className="mt-3 flex flex-wrap gap-1.5">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            isConnected
+                              ? "bg-[#00f5a8]/12 text-[#9fffe3]"
+                              : "bg-white/[0.055] text-white/42"
+                          }`}
+                        >
+                          {isConnected ? "готово" : "требует настройки"}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            isEnabled
+                              ? "bg-[#7c5cff]/16 text-[#c7bcff]"
+                              : "bg-white/[0.055] text-white/42"
+                          }`}
+                        >
+                          {isEnabled ? "прием включен" : "прием выключен"}
+                        </span>
+                      </span>
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          <section className="rivn-card overflow-hidden p-0">
+            <div className="border-b border-white/10 px-5 py-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex items-start gap-4">
+                  <span
+                    className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-[24px] bg-gradient-to-br text-base font-black text-slate-950 shadow-[0_20px_45px_rgba(0,0,0,0.28)] ${selectedIntegration.accentClassName}`}
+                  >
+                    {getBrandLogo(selectedIntegration.sourceKind)}
+                  </span>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00f5a8]">
+                      Настройка канала
+                    </p>
+                    <h2 className="mt-1 text-2xl font-semibold text-white">
+                      {selectedIntegration.title}
+                    </h2>
+                    <p className="mt-1 max-w-2xl text-sm leading-6 text-white/48">
+                      {selectedIntegration.description}
+                    </p>
+                  </div>
                 </div>
+
                 <button
                   type="button"
-                  onClick={() => void toggleLeadIngestion(integration.sourceKind)}
-                  disabled={updatingLeadIngestion === integration.sourceKind}
-                  className={`h-7 w-12 rounded-full p-1 transition disabled:opacity-50 ${
-                    leadIngestionSettings[integration.sourceKind]
-                      ? "bg-emerald-500"
-                      : "bg-slate-300 dark:bg-white/15"
+                  onClick={() =>
+                    void toggleLeadIngestion(selectedIntegration.sourceKind)
+                  }
+                  disabled={
+                    updatingLeadIngestion === selectedIntegration.sourceKind
+                  }
+                  className={`inline-flex h-12 items-center gap-3 rounded-full border px-3 pl-4 text-sm font-semibold transition disabled:opacity-50 ${
+                    leadIngestionSettings[selectedIntegration.sourceKind]
+                      ? "border-[#00f5a8]/25 bg-[#00f5a8]/12 text-[#9fffe3]"
+                      : "border-white/10 bg-white/[0.055] text-white/55"
                   }`}
-                  aria-label="Переключить приём заявок"
                 >
+                  Принимать заявки
                   <span
-                    className={`block h-5 w-5 rounded-full bg-white shadow-sm transition ${
-                      leadIngestionSettings[integration.sourceKind]
-                        ? "translate-x-5"
-                        : "translate-x-0"
+                    className={`relative h-7 w-12 rounded-full p-1 transition ${
+                      leadIngestionSettings[selectedIntegration.sourceKind]
+                        ? "bg-[#00f5a8]"
+                        : "bg-white/15"
                     }`}
-                  />
+                  >
+                    <span
+                      className={`block h-5 w-5 rounded-full bg-white shadow-sm transition ${
+                        leadIngestionSettings[selectedIntegration.sourceKind]
+                          ? "translate-x-5"
+                          : "translate-x-0"
+                      }`}
+                    />
+                  </span>
                 </button>
               </div>
             </div>
-            {integration.href ? (
-              <Link
-                href={integration.href}
-                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500"
-              >
-                Открыть подключение
-                <ExternalLink className="h-4 w-4" />
-              </Link>
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  void sendIntegrationTest(
-                    integration.sourceKind as Exclude<
-                      IntegrationCard["sourceKind"],
-                      "avito"
-                    >
-                  )
-                }
-                disabled={
-                  testingIntegration === integration.sourceKind ||
-                  !leadIngestionSettings[integration.sourceKind]
-                }
-                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50"
-              >
-                {testingIntegration === integration.sourceKind
-                  ? "Проверяем..."
-                  : "Создать тестовую заявку"}
-              </button>
-            )}
-          </div>
-          );
-        })}
-      </section>
 
-      <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
-              Tilda
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold">
-              Webhook для заявок с сайта
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Вставь эту ссылку в настройки формы Tilda. После отправки формы
-              заявка появится в CRM как новая сделка.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void copyValue(tildaWebhookUrl, "tilda")}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white transition hover:bg-violet-500"
-          >
-            <Copy className="h-4 w-4" />
-            {copied === "tilda" ? "Скопировано" : "Скопировать webhook"}
-          </button>
-        </div>
-
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-6 text-slate-700 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-200">
-          {tildaWebhookUrl}
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr]">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              Как подключить Tilda
-            </p>
-            <ol className="mt-3 space-y-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              <li>1. Открой форму в Tilda и перейди в приём данных.</li>
-              <li>2. Выбери Webhook и вставь ссылку выше.</li>
-              <li>3. В полях формы используй понятные названия: name, phone, telegram, budget.</li>
-              <li>4. Нажми “Создать тестовую заявку” в карточке Tilda сверху.</li>
-            </ol>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              Как поля Tilda попадут в сделку
-            </p>
-            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
-              {tildaFieldMap.map(([label, fields]) => (
-                <div
-                  key={label}
-                  className="grid gap-2 border-b border-slate-200 px-3 py-2 text-xs last:border-b-0 dark:border-white/10 sm:grid-cols-[150px_1fr]"
-                >
-                  <span className="font-semibold text-slate-800 dark:text-white">
-                    {label}
+            <div className="grid gap-4 p-5 lg:grid-cols-[1fr_1fr]">
+              <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#00f5a8]/12 text-[#00f5a8]">
+                    <Webhook className="h-5 w-5" />
                   </span>
-                  <span className="text-slate-500 dark:text-slate-400">
-                    {fields}
-                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-white">
+                      {selectedIntegration.setupLabel}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-white/45">
+                      {selectedIntegration.setupDescription}
+                    </p>
+                  </div>
                 </div>
-              ))}
+
+                {selectedIntegration.sourceKind === "avito" ? (
+                  <Link
+                    href={selectedIntegration.href ?? "/avito-reports"}
+                    className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#00f5a8] px-4 text-sm font-semibold text-slate-950 shadow-[0_16px_40px_rgba(0,245,168,0.20)] transition hover:-translate-y-0.5 hover:bg-[#2fffc0]"
+                  >
+                    Открыть подключение
+                    <ExternalLink className="h-4 w-4" />
+                  </Link>
+                ) : (
+                  <>
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-[#08111f]/75 p-3 font-mono text-xs leading-6 text-white/72">
+                      {selectedWebhookUrl}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void copyValue(
+                            selectedWebhookUrl,
+                            selectedIntegration.sourceKind
+                          )
+                        }
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white/78 transition hover:border-[#00f5a8]/28 hover:bg-[#00f5a8]/10 hover:text-white"
+                      >
+                        <Copy className="h-4 w-4" />
+                        {copied === selectedIntegration.sourceKind
+                          ? "Скопировано"
+                          : "Скопировать ссылку"}
+                      </button>
+                      {selectedIntegration.sourceKind === "telegram" ? (
+                        <a
+                          href="https://t.me/BotFather"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-[#65d6ff]/20 bg-[#65d6ff]/10 px-4 text-sm font-semibold text-[#b9efff] transition hover:border-[#65d6ff]/40 hover:bg-[#65d6ff]/14"
+                        >
+                          Открыть BotFather
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      ) : null}
+                    </div>
+                    {selectedIntegration.sourceKind === "telegram" ? (
+                      <div className="mt-4 rounded-2xl border border-[#65d6ff]/18 bg-[#65d6ff]/8 p-4 text-xs leading-5 text-white/58">
+                        <p className="font-semibold text-white">
+                          Как подключить Telegram
+                        </p>
+                        <ol className="mt-2 space-y-1">
+                          <li>1. Создай или открой бота через BotFather.</li>
+                          <li>
+                            2. Вставь ссылку webhook в свой обработчик бота,
+                            Make или Albato.
+                          </li>
+                          <li>
+                            3. Передавай в webhook текст сообщения, chat id и
+                            username отправителя.
+                          </li>
+                        </ol>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+
+              <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#7c5cff]/16 text-[#c7bcff]">
+                    <PlayCircle className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-white">
+                      Проверка без риска
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-white/45">
+                      Создай тестовую заявку и проверь, что она появляется в CRM
+                      с нужным источником.
+                    </p>
+                  </div>
+                </div>
+
+                {selectedIntegration.sourceKind === "avito" ? (
+                  <div className="mt-5 rounded-2xl border border-[#00f5a8]/20 bg-[#00f5a8]/10 p-4 text-sm leading-6 text-[#9fffe3]">
+                    Avito проверяется через активную интеграцию кабинета и
+                    входящие диалоги. Если статус подключен, заявки будут
+                    попадать в CRM.
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void sendIntegrationTest(
+                        selectedIntegration.sourceKind as Exclude<
+                          IntegrationSourceKind,
+                          "avito"
+                        >
+                      )
+                    }
+                    disabled={
+                      testingIntegration === selectedIntegration.sourceKind ||
+                      !leadIngestionSettings[selectedIntegration.sourceKind]
+                    }
+                    className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#7c5cff] px-4 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(124,92,255,0.22)] transition hover:-translate-y-0.5 hover:bg-[#9177ff] disabled:translate-y-0 disabled:opacity-50"
+                  >
+                    <PlayCircle className="h-4 w-4" />
+                    {testingIntegration === selectedIntegration.sourceKind
+                      ? "Проверяем..."
+                      : "Создать тестовую заявку"}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">
-              Telegram
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold">
-              Webhook для CRM-диалогов
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Это отдельная ссылка для CRM. Текущий бот Avito-отчетов эта
-              настройка не меняет.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void copyValue(telegramWebhookUrl, "telegram")}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-500"
-          >
-            <Copy className="h-4 w-4" />
-            {copied === "telegram" ? "Скопировано" : "Скопировать webhook"}
-          </button>
-        </div>
-
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-6 text-slate-700 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-200">
-          {telegramWebhookUrl}
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr]">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              Как работает Telegram
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Когда внешний Telegram-бот или связка через Make/Albato отправит
-              сообщение на этот webhook, RIVN OS создаст диалог и сделку в CRM.
-              Повторные сообщения из того же чата попадут в ту же сделку.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              Что передавать в Telegram webhook
-            </p>
-            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 font-mono text-xs leading-6 text-slate-700 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-200">
-              message.text, message.chat.id, message.message_id, message.from.username
-            </div>
-            <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Для быстрой проверки нажми “Создать тестовую заявку” в карточке Telegram сверху.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">
-              Яндекс Директ
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold">
-              Заявки из рекламы в CRM
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Введи OAuth-токен Яндекса, найди турбо-страницы автоматически и
-              сохрани подключение. Workspace ID система подставляет сама.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void copyValue(yandexDirectWebhookUrl, "yandex")}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-semibold text-white transition hover:bg-amber-400"
-          >
-            <Copy className="h-4 w-4" />
-            {copied === "yandex" ? "Скопировано" : "Скопировать webhook"}
-          </button>
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1.15fr]">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-[#0B0F1A]">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              Webhook для внешних форм
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Подходит для квизов, Tilda, Roistat, Albato, Make и любых форм,
-              которые умеют отправлять заявку по ссылке.
-            </p>
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 font-mono text-xs leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-200">
-              {yandexDirectWebhookUrl}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
-            <div className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
-              <RefreshCcw className="h-4 w-4" />
-              Автосбор через Direct Leads API
-            </div>
-            <div className="mt-4 grid gap-3 rounded-2xl border border-amber-200 bg-white/70 p-4 text-sm text-amber-950 dark:border-amber-500/20 dark:bg-black/10 dark:text-amber-100">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          {selectedIntegration.sourceKind === "yandex_direct" ? (
+            <section className="rivn-card rivn-card-flat p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <p className="font-semibold">
-                    {yandexStatus?.integration
-                      ? "Интеграция сохранена"
-                      : "Интеграция ещё не сохранена"}
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ffcf8a]">
+                    Direct Leads API
                   </p>
-                  <p className="mt-1 text-xs leading-5 opacity-70">
-                    {isLoadingYandexStatus
-                      ? "Проверяем статус..."
-                      : yandexStatus?.integration
-                        ? `Страниц: ${
-                            yandexStatus.integration.turbo_page_ids?.length ?? 0
-                          } · заявок импортировано: ${yandexStatus.importsCount}`
-                        : "Сохрани подключение, чтобы RIVN OS начал забирать заявки."}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 opacity-70">
-                    Последняя синхронизация:{" "}
-                    {formatDateTime(yandexStatus?.integration?.last_synced_at)}
+                  <h3 className="mt-1 text-xl font-semibold text-white">
+                    Расширенная настройка Яндекса
+                  </h3>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-white/45">
+                    Нужна только если заявки надо автоматически забирать из
+                    турбо-страниц Яндекс Директа без внешнего webhook.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={checkYandexIntegration}
                   disabled={isCheckingYandex || !yandexStatus?.integration}
-                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-3 text-xs font-semibold text-amber-900 transition hover:border-amber-300 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-500/20 dark:bg-white/10 dark:text-amber-100 dark:hover:bg-white/15"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white/72 transition hover:border-[#ffcf8a]/35 hover:text-white disabled:opacity-45"
                 >
                   <CheckCircle2 className="h-4 w-4" />
-                  {isCheckingYandex ? "Проверяем..." : "Проверить подключение"}
+                  {isCheckingYandex ? "Проверяем..." : "Проверить"}
                 </button>
               </div>
-            </div>
-            <div className="mt-4 grid gap-3">
-              <label className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-800 dark:text-amber-100/70">
-                OAuth-токен Яндекса
-                <input
-                  value={oauthToken}
-                  onChange={(event) => setOauthToken(event.target.value)}
-                  type="password"
-                  placeholder="Вставь OAuth-токен"
-                  className="mt-2 h-11 w-full rounded-xl border border-amber-200 bg-white px-4 text-sm normal-case tracking-normal text-slate-900 outline-none transition focus:border-amber-400 dark:border-amber-500/20 dark:bg-black/10 dark:text-white"
-                />
-              </label>
-              <label className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-800 dark:text-amber-100/70">
-                Client-Login, если аккаунт агентский
-                <input
-                  value={clientLogin}
-                  onChange={(event) => setClientLogin(event.target.value)}
-                  placeholder="Можно оставить пустым"
-                  className="mt-2 h-11 w-full rounded-xl border border-amber-200 bg-white px-4 text-sm normal-case tracking-normal text-slate-900 outline-none transition focus:border-amber-400 dark:border-amber-500/20 dark:bg-black/10 dark:text-white"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={findTurboPages}
-                disabled={isFindingPages || !oauthToken.trim()}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-semibold text-white transition hover:bg-amber-400 disabled:opacity-50"
-              >
-                <Search className="h-4 w-4" />
-                {isFindingPages ? "Ищем..." : "Найти турбо-страницы"}
-              </button>
-            </div>
 
-            {turboPages.length > 0 ? (
-              <div className="mt-4 space-y-2">
-                {turboPages.map((page) => (
-                  <label
-                    key={page.id}
-                    className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-white/70 p-3 text-sm text-amber-950 dark:border-amber-500/20 dark:bg-black/10 dark:text-amber-100"
-                  >
+              <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_360px]">
+                <div className="space-y-3">
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
                     <input
-                      type="checkbox"
-                      checked={selectedTurboIds.includes(page.id)}
-                      onChange={() => toggleTurboPage(page.id)}
-                      className="mt-1"
+                      value={oauthToken}
+                      onChange={(event) => setOauthToken(event.target.value)}
+                      type="password"
+                      placeholder="OAuth-токен Яндекса"
+                      className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.055] px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#00f5a8]/40"
                     />
-                    <span>
-                      <span className="block font-semibold">{page.name}</span>
-                      <span className="block text-xs opacity-70">
-                        ID: {page.id}
-                        {page.href ? ` · ${page.href}` : ""}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-amber-800 dark:text-amber-100/70">
-                ID турбо-страниц вручную
-                <input
-                  value={manualTurboIds}
-                  onChange={(event) => setManualTurboIds(event.target.value)}
-                  placeholder="Например: 123456789, 987654321"
-                  className="mt-2 h-11 w-full rounded-xl border border-amber-200 bg-white px-4 text-sm normal-case tracking-normal text-slate-900 outline-none transition focus:border-amber-400 dark:border-amber-500/20 dark:bg-black/10 dark:text-white"
-                />
-              </label>
-            )}
-
-            <button
-              type="button"
-              onClick={saveYandexIntegration}
-              disabled={
-                isSavingYandex ||
-                !oauthToken.trim() ||
-                (selectedTurboIds.length === 0 && !manualTurboIds.trim())
-              }
-              className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-950"
-            >
-              {isSavingYandex ? "Сохраняем..." : "Сохранить подключение"}
-            </button>
-
-            <div className="mt-4 rounded-xl border border-amber-200 bg-white/70 p-3 font-mono text-xs leading-6 text-amber-900 dark:border-amber-500/20 dark:bg-black/10 dark:text-amber-100">
-              {yandexDirectSyncUrl}
-            </div>
-
-            <div className="mt-4 grid gap-3 rounded-2xl border border-amber-200 bg-white/70 p-4 text-sm text-amber-950 dark:border-amber-500/20 dark:bg-black/10 dark:text-amber-100">
-              <p className="font-semibold">Автосинхронизация</p>
-              <p className="text-xs leading-5 opacity-70">
-                Эту ссылку можно поставить в cron-job.org, чтобы RIVN OS сам
-                забирал новые заявки из Яндекс Директа. Для активных рекламных
-                кампаний оптимально запускать каждые 10-15 минут.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void copyValue(yandexDirectSyncUrl, "yandex-sync")}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-3 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 dark:border-amber-500/20 dark:bg-white/10 dark:text-amber-100"
-                >
-                  <Copy className="h-4 w-4" />
-                  {copied === "yandex-sync" ? "Скопировано" : "Скопировать ссылку"}
-                </button>
-                <button
-                  type="button"
-                  onClick={runYandexSyncNow}
-                  disabled={isRunningYandexSync || !yandexStatus?.integration}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-amber-500 px-3 text-xs font-semibold text-white transition hover:bg-amber-400 disabled:opacity-50"
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                  {isRunningYandexSync ? "Запускаем..." : "Запустить сейчас"}
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-white/70 p-4 text-sm text-amber-950 dark:border-amber-500/20 dark:bg-black/10 dark:text-amber-100">
-              <p className="font-semibold">Как поля Яндекса попадут в сделку</p>
-              <div className="mt-3 overflow-hidden rounded-xl border border-amber-200 dark:border-amber-500/20">
-                {yandexFieldMap.map(([label, fields]) => (
-                  <div
-                    key={label}
-                    className="grid gap-2 border-b border-amber-200 px-3 py-2 text-xs last:border-b-0 dark:border-amber-500/20 sm:grid-cols-[150px_1fr]"
-                  >
-                    <span className="font-semibold">{label}</span>
-                    <span className="opacity-75">{fields}</span>
+                    <a
+                      href="https://yandex.ru/dev/direct/doc/start/token.html"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#ffcf8a]/22 bg-[#ffcf8a]/10 px-4 text-sm font-semibold text-[#ffe0ac] transition hover:border-[#ffcf8a]/40 hover:bg-[#ffcf8a]/14"
+                    >
+                      Где взять
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+                    <input
+                      value={clientLogin}
+                      onChange={(event) => setClientLogin(event.target.value)}
+                      placeholder="Client-Login, если аккаунт агентский"
+                      className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.055] px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#00f5a8]/40"
+                    />
+                    <a
+                      href="https://yandex.ru/support/direct/ru/agency/clients"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.055] px-4 text-sm font-semibold text-white/68 transition hover:border-white/20 hover:text-white"
+                    >
+                      Про Client-Login
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={findTurboPages}
+                      disabled={isFindingPages || !oauthToken.trim()}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#ffb45c] px-4 text-sm font-semibold text-slate-950 transition hover:-translate-y-0.5 hover:bg-[#ffc986] disabled:translate-y-0 disabled:opacity-50"
+                    >
+                      <Route className="h-4 w-4" />
+                      {isFindingPages ? "Ищем..." : "Найти страницы"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveYandexIntegration}
+                      disabled={
+                        isSavingYandex ||
+                        !oauthToken.trim() ||
+                        (selectedTurboIds.length === 0 &&
+                          !manualTurboIds.trim())
+                      }
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#00f5a8] px-4 text-sm font-semibold text-slate-950 transition hover:-translate-y-0.5 hover:bg-[#2fffc0] disabled:translate-y-0 disabled:opacity-50"
+                    >
+                      {isSavingYandex ? "Сохраняем..." : "Сохранить"}
+                    </button>
+                  </div>
 
-            {yandexMessage ? (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-white/70 p-3 text-sm leading-6 text-amber-900 dark:border-amber-500/20 dark:bg-black/10 dark:text-amber-100">
-                {yandexMessage}
+                  {turboPages.length > 0 ? (
+                    <div className="grid gap-2">
+                      {turboPages.map((page) => (
+                        <label
+                          key={page.id}
+                          className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.045] p-3 text-sm text-white/78 transition hover:bg-white/[0.065]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedTurboIds.includes(page.id)}
+                            onChange={() => toggleTurboPage(page.id)}
+                            className="mt-1"
+                          />
+                          <span>
+                            <span className="block font-semibold">
+                              {page.name}
+                            </span>
+                            <span className="block text-xs text-white/42">
+                              ID: {page.id}
+                              {page.href ? ` · ${page.href}` : ""}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+                      <input
+                        value={manualTurboIds}
+                        onChange={(event) =>
+                          setManualTurboIds(event.target.value)
+                        }
+                        placeholder="ID турбо-страниц вручную: 123456789, 987654321"
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.055] px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#00f5a8]/40"
+                      />
+                      <a
+                        href="https://yandex.ru/support/direct/ru/efficiency/turbo-pages"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.055] px-4 text-sm font-semibold text-white/68 transition hover:border-white/20 hover:text-white"
+                      >
+                        Про страницы
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
+                  <p className="text-sm font-semibold text-white">
+                    Статус подключения
+                  </p>
+                  <div className="mt-4 space-y-3 text-sm text-white/55">
+                    <div className="flex justify-between gap-4">
+                      <span>Интеграция</span>
+                      <span className="font-semibold text-white">
+                        {yandexStatus?.integration ? "сохранена" : "не настроена"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span>Страниц</span>
+                      <span className="font-semibold text-white">
+                        {yandexStatus?.integration?.turbo_page_ids?.length ?? 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span>Импортировано</span>
+                      <span className="font-semibold text-white">
+                        {yandexStatus?.importsCount ?? 0}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block">Последняя синхронизация</span>
+                      <span className="mt-1 block font-semibold text-white">
+                        {isLoadingYandexStatus
+                          ? "проверяем..."
+                          : formatDateTime(
+                              yandexStatus?.integration?.last_synced_at
+                            )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={runYandexSyncNow}
+                    disabled={
+                      isRunningYandexSync || !yandexStatus?.integration
+                    }
+                    className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white/72 transition hover:border-[#ffcf8a]/35 hover:text-white disabled:opacity-45"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                    {isRunningYandexSync ? "Запускаем..." : "Запустить сбор"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void copyValue(yandexDirectSyncUrl, "yandex-sync")
+                    }
+                    className="mt-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white/60 transition hover:border-white/20 hover:text-white"
+                  >
+                    <Copy className="h-4 w-4" />
+                    {copied === "yandex-sync"
+                      ? "Скопировано"
+                      : "Скопировать cron-ссылку"}
+                  </button>
+                </div>
               </div>
-            ) : null}
-          </div>
+            </section>
+          ) : null}
+
+          {message ? (
+            <div className="rivn-card rivn-card-flat border-[#00f5a8]/20 bg-[#00f5a8]/10 p-4 text-sm leading-6 text-[#9fffe3]">
+              {message}
+            </div>
+          ) : null}
         </div>
       </section>
     </main>

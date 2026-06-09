@@ -5,13 +5,12 @@ import { EmptyState } from "../components/ui/empty-state";
 import { AppToast } from "../components/ui/app-toast";
 import { AccessDenied } from "../components/access/access-denied";
 import { ExpensesPageHeader } from "../components/expenses/expenses-page-header";
-import { ExpensesSummary } from "../components/expenses/expenses-summary";
 import { ExpensesTable } from "../components/expenses/expenses-table";
 import { CreateExpenseModal } from "../components/expenses/create-expense-modal";
 import { EditExpenseModal } from "../components/expenses/edit-expense-modal";
 import { Skeleton } from "../components/ui/skeleton";
 import { useConfirmDialog } from "../components/ui/confirm-dialog-provider";
-import { formatRub, parseRubAmount } from "../lib/storage";
+import { parseRubAmount } from "../lib/storage";
 import type { ExpenseFormData } from "../lib/types/expense";
 import { usePageAccess } from "../lib/use-page-access";
 import { useSectionPermission } from "../lib/use-section-permission";
@@ -79,6 +78,10 @@ export default function ExpensesPage() {
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [sortBy, setSortBy] = useState<
+    "title" | "category" | "date" | "client" | "amount"
+  >("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -181,7 +184,7 @@ export default function ExpensesPage() {
   }, [clients, expensesData]);
 
   const filteredExpenses = useMemo(() => {
-    return mappedExpenses.filter((item) => {
+    const filtered = mappedExpenses.filter((item) => {
       const matchesSearch =
         !search ||
         item.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -191,28 +194,37 @@ export default function ExpensesPage() {
 
       return matchesSearch && matchesCategory;
     });
-  }, [mappedExpenses, search, category]);
 
-  const totals = useMemo(() => {
-    const total = mappedExpenses.reduce(
-      (sum, item) => sum + parseRubAmount(item.amount),
-      0
-    );
+    return [...filtered].sort((a, b) => {
+      let first: string | number = "";
+      let second: string | number = "";
 
-    const marketing = mappedExpenses
-      .filter((item) => item.category === "marketing")
-      .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
+      if (sortBy === "amount") {
+        first = parseRubAmount(a.amount);
+        second = parseRubAmount(b.amount);
+      } else if (sortBy === "date") {
+        first = new Date(toSupabaseDate(a.date)).getTime();
+        second = new Date(toSupabaseDate(b.date)).getTime();
+      } else {
+        first = String(a[sortBy] ?? "").toLowerCase();
+        second = String(b[sortBy] ?? "").toLowerCase();
+      }
 
-    const operations = mappedExpenses
-      .filter((item) => item.category !== "marketing" && item.category !== "tax")
-      .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
+      if (first < second) return sortDirection === "asc" ? -1 : 1;
+      if (first > second) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [mappedExpenses, search, category, sortBy, sortDirection]);
 
-    return {
-      total: formatRub(total),
-      marketing: formatRub(marketing),
-      operations: formatRub(operations),
-    };
-  }, [mappedExpenses]);
+  function handleSort(field: "title" | "category" | "date" | "client" | "amount") {
+    if (sortBy === field) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortBy(field);
+    setSortDirection(field === "date" || field === "amount" ? "desc" : "asc");
+  }
 
   function getClientNameById(id: string) {
     const client = clients.find((c) => c.id === id);
@@ -425,9 +437,10 @@ export default function ExpensesPage() {
 
   if (showInitialLoading) {
     return (
-      <main className="flex-1">
-        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+      <main className="flex-1 px-3 py-3 sm:px-5 sm:py-5 lg:px-7">
+        <div className="rivn-page-shell px-4 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
+          <div className="relative z-10 space-y-5 lg:space-y-6">
+          <div className="rivn-card p-4 sm:p-5">
             <Skeleton className="h-4 w-16" />
             <Skeleton className="mt-2 h-8 w-40" />
             <Skeleton className="mt-3 h-4 w-full max-w-80" />
@@ -444,7 +457,7 @@ export default function ExpensesPage() {
             <Skeleton className="h-28 rounded-[28px]" />
           </div>
 
-          <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+          <div className="rivn-card p-4 sm:p-5">
             <Skeleton className="h-5 w-32" />
 
             <div className="mt-5 space-y-3">
@@ -453,6 +466,7 @@ export default function ExpensesPage() {
               ))}
             </div>
           </div>
+          </div>
         </div>
       </main>
     );
@@ -460,12 +474,14 @@ export default function ExpensesPage() {
 
   if (!hasAccess) {
     return (
-      <main className="flex-1">
-        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
+      <main className="flex-1 px-3 py-3 sm:px-5 sm:py-5 lg:px-7">
+        <div className="rivn-page-shell px-4 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
+          <div className="relative z-10 space-y-5 lg:space-y-6">
           <AccessDenied
             title="Нет доступа к расходам"
             description="У тебя нет прав для просмотра этого раздела."
           />
+          </div>
         </div>
       </main>
     );
@@ -473,8 +489,9 @@ export default function ExpensesPage() {
 
   return (
     <>
-      <main className="flex-1">
-        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:space-y-6 lg:px-8">
+      <main className="flex-1 px-3 py-3 sm:px-5 sm:py-5 lg:px-7">
+        <div className="rivn-page-shell px-4 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
+          <div className="relative z-10 space-y-5 lg:space-y-6">
           <ExpensesPageHeader
             search={search}
             setSearch={setSearch}
@@ -484,17 +501,14 @@ export default function ExpensesPage() {
             canAddExpense={canManageExpenses}
           />
 
-          <ExpensesSummary
-            total={totals.total}
-            marketing={totals.marketing}
-            operations={totals.operations}
-          />
-
           {filteredExpenses.length > 0 ? (
             <ExpensesTable
               items={filteredExpenses}
               onEdit={handleStartEdit}
               onDelete={handleDeleteExpense}
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+              onSort={handleSort}
               canManageExpenses={canManageExpenses}
               isDeletingExpense={deleteExpenseMutation.isPending}
               deletingExpenseId={deleteExpenseMutation.variables ?? null}
@@ -523,6 +537,7 @@ export default function ExpensesPage() {
               }
             />
           )}
+          </div>
         </div>
 
         <CreateExpenseModal

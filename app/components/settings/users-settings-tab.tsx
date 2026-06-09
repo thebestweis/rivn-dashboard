@@ -592,7 +592,7 @@ export function UsersSettingsTab() {
 
   return (
     <>
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="rivn-card rivn-card-interactive p-5 sm:p-6">
         <BillingAccessBanner
           isLoading={isAppContextLoading}
           isBillingReadOnly={isBillingReadOnly}
@@ -604,8 +604,8 @@ export function UsersSettingsTab() {
 
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm text-white/50">Users</div>
-            <h2 className="mt-1 text-xl font-semibold">Участники кабинета</h2>
+            <div className="text-xs uppercase tracking-[0.18em] text-[#43ffc2]">Users</div>
+            <h2 className="mt-2 text-2xl font-medium tracking-[-0.04em]">Участники кабинета</h2>
             <div className="mt-2 text-sm text-white/55">
               Добавляй пользователей в текущий кабинет, меняй им роли и управляй
               доступом.
@@ -618,7 +618,7 @@ export function UsersSettingsTab() {
         </div>
 
         <div className="mt-5 space-y-4">
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <div className="text-sm text-white/50">Лимит участников</div>
@@ -635,7 +635,7 @@ export function UsersSettingsTab() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white/70">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/70">
                 Свободно мест:{" "}
                 <span className="font-medium text-white">
                   {limitState?.seatsAvailable ?? 0}
@@ -657,7 +657,7 @@ export function UsersSettingsTab() {
             ) : null}
           </div>
 
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
             <div className="grid gap-3 md:grid-cols-[1fr_220px_180px]">
               <div>
                 <label className="mb-2 block text-sm text-white/55">
@@ -669,7 +669,7 @@ export function UsersSettingsTab() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Например: user@gmail.com"
                   disabled={!canManageMembers}
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rivn-field placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
 
@@ -689,7 +689,7 @@ export function UsersSettingsTab() {
                   type="button"
                   onClick={handleAddUser}
                   disabled={addButtonDisabled}
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rivn-button rivn-button-primary h-[48px] w-full px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSubmitting ? "Создаём..." : "Создать приглашение"}
                 </button>
@@ -709,13 +709,13 @@ export function UsersSettingsTab() {
               в существующий и сразу попадёт в этот кабинет.
             </div>
             <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-xs text-white/75">
+              <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs text-white/75">
                 <div className="truncate">{lastInviteUrl}</div>
               </div>
               <button
                 type="button"
                 onClick={() => handleCopyInviteUrl(lastInviteUrl)}
-                className="h-[44px] rounded-2xl border border-emerald-300/20 bg-emerald-400/15 px-4 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/20"
+                className="rivn-button rivn-button-primary h-[44px] px-4 text-sm font-semibold"
               >
                 Скопировать ссылку
               </button>
@@ -724,7 +724,7 @@ export function UsersSettingsTab() {
         ) : null}
 
         {canManageMembers ? (
-          <div className="mt-5 rounded-[24px] border border-white/8 bg-white/[0.025] p-4">
+          <div className="mt-5 rounded-[24px] border border-white/10 bg-white/[0.035] p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-sm font-semibold text-white">
@@ -742,7 +742,7 @@ export function UsersSettingsTab() {
 
             <div className="mt-4 space-y-3">
               {isInvitationsLoading ? (
-                <div className="rounded-2xl border border-white/8 bg-[#0F1524] px-4 py-4 text-sm text-white/45">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-sm text-white/45">
                   Загружаем приглашения...
                 </div>
               ) : pendingInvitations.length > 0 ? (
@@ -753,7 +753,7 @@ export function UsersSettingsTab() {
                   return (
                     <div
                       key={item.id}
-                      className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-[#0F1524] px-4 py-3 lg:flex-row lg:items-center lg:justify-between"
+                      className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06] lg:flex-row lg:items-center lg:justify-between"
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-white">
@@ -781,7 +781,7 @@ export function UsersSettingsTab() {
                           type="button"
                           onClick={() => handleRefreshInvitationLink(item.id)}
                           disabled={isRefreshingLink || isCanceling}
-                          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/75 transition hover:bg-white/[0.07] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rivn-button px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {isRefreshingLink ? "Создаём..." : "Новая ссылка"}
                         </button>
@@ -789,7 +789,7 @@ export function UsersSettingsTab() {
                           type="button"
                           onClick={() => handleCancelInvitation(item.id)}
                           disabled={isCanceling || isRefreshingLink}
-                          className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-100 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-100 transition duration-300 hover:-translate-y-0.5 hover:bg-rose-500/15 active:translate-y-0 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {isCanceling ? "Отменяем..." : "Отменить"}
                         </button>
@@ -798,7 +798,7 @@ export function UsersSettingsTab() {
                   );
                 })
               ) : (
-                <div className="rounded-2xl border border-white/8 bg-[#0F1524] px-4 py-4 text-sm text-white/45">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-sm text-white/45">
                   Активных приглашений пока нет.
                 </div>
               )}
@@ -806,9 +806,9 @@ export function UsersSettingsTab() {
           </div>
         ) : null}
 
-        <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
+        <div className="rivn-table-wrap mt-5">
           <table className="w-full text-left text-sm">
-            <thead className="bg-white/[0.04] text-white/45">
+            <thead className="rivn-table-head">
               <tr>
                 <th className="px-4 py-3 font-medium">Пользователь</th>
                 <th className="px-4 py-3 font-medium">Роль</th>
@@ -837,7 +837,7 @@ export function UsersSettingsTab() {
                   return (
                     <tr
                       key={item.id}
-                      className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
+                      className="rivn-table-row bg-transparent"
                     >
                       <td className="px-4 py-3">
                         <div className="font-medium text-white/90">
@@ -860,7 +860,7 @@ export function UsersSettingsTab() {
                           disabled={
                             isCurrentUser || isUpdating || !canManageMembers
                           }
-                          className="h-[40px] rounded-xl border border-white/10 bg-[#0F1524] px-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                          className="h-[40px] rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[#00f5a8]/40 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {roleOptions.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -903,7 +903,7 @@ export function UsersSettingsTab() {
                             type="button"
                             onClick={() => openPayrollModal(item)}
                             disabled={!canManageMembers}
-                            className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rivn-button px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Настроить
                           </button>
@@ -917,7 +917,7 @@ export function UsersSettingsTab() {
                               type="button"
                               onClick={() => handleRemove(item.id)}
                               disabled={isRemoving || !canManageMembers}
-                              className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 transition duration-300 hover:-translate-y-0.5 hover:bg-rose-500/15 active:translate-y-0 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {isRemoving ? "Удаляем..." : "Удалить"}
                             </button>
@@ -943,8 +943,8 @@ export function UsersSettingsTab() {
       </div>
 
       {isPayrollModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-[560px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm">
+          <div className="rivn-card w-full max-w-[560px] p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-sm text-white/50">Пользователь</div>
@@ -956,7 +956,7 @@ export function UsersSettingsTab() {
               <button
                 type="button"
                 onClick={closePayrollModal}
-                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+                className="rivn-button px-3 py-2 text-sm"
                 disabled={isSavingPayroll}
               >
                 Закрыть
@@ -977,7 +977,7 @@ export function UsersSettingsTab() {
                     }))
                   }
                   placeholder="Например: Дмитрий"
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                  className="rivn-field placeholder:text-white/30"
                 />
               </div>
 
@@ -993,7 +993,7 @@ export function UsersSettingsTab() {
                       payType: e.target.value as WorkspaceMemberPayType,
                     }))
                   }
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                  className="rivn-field"
                 >
                   {payTypeOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1016,7 +1016,7 @@ export function UsersSettingsTab() {
                     }))
                   }
                   placeholder={defaultEmployeePay}
-                  className={`h-[48px] w-full rounded-2xl border bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 ${
+                  className={`rivn-field placeholder:text-white/30 ${
                     payrollErrors.payValue
                       ? "border-rose-500/50"
                       : "border-white/10"
@@ -1040,7 +1040,7 @@ export function UsersSettingsTab() {
                     }))
                   }
                   placeholder="Например: ₽40,000"
-                  className={`h-[48px] w-full rounded-2xl border bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 ${
+                  className={`rivn-field placeholder:text-white/30 ${
                     payrollErrors.fixedSalary
                       ? "border-rose-500/50"
                       : "border-white/10"
@@ -1068,7 +1068,7 @@ export function UsersSettingsTab() {
                       payoutDay: e.target.value,
                     }))
                   }
-                  className={`h-[48px] w-full rounded-2xl border bg-white/[0.04] px-4 text-sm text-white outline-none ${
+                  className={`rivn-field ${
                     payrollErrors.payoutDay
                       ? "border-rose-500/50"
                       : "border-white/10"
@@ -1094,7 +1094,7 @@ export function UsersSettingsTab() {
                         isPayrollActive: true,
                       }))
                     }
-                    className={`rounded-xl px-4 py-2 text-sm transition ${
+                    className={`rounded-2xl px-4 py-2 text-sm transition duration-300 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.985] ${
                       payrollForm.isPayrollActive
                         ? "bg-emerald-500/20 text-emerald-300"
                         : "bg-white/[0.04] text-white/60 hover:text-white"
@@ -1111,7 +1111,7 @@ export function UsersSettingsTab() {
                         isPayrollActive: false,
                       }))
                     }
-                    className={`rounded-xl px-4 py-2 text-sm transition ${
+                    className={`rounded-2xl px-4 py-2 text-sm transition duration-300 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.985] ${
                       !payrollForm.isPayrollActive
                         ? "bg-amber-500/20 text-amber-300"
                         : "bg-white/[0.04] text-white/60 hover:text-white"
@@ -1127,7 +1127,7 @@ export function UsersSettingsTab() {
               <button
                 type="button"
                 onClick={closePayrollModal}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                className="rivn-button px-4 py-3 text-sm"
                 disabled={isSavingPayroll}
               >
                 Отмена
@@ -1137,7 +1137,7 @@ export function UsersSettingsTab() {
                 type="button"
                 onClick={handleSavePayrollSettings}
                 disabled={isSavingPayroll}
-                className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:opacity-60"
+                className="rivn-button rivn-button-primary px-4 py-3 text-sm font-semibold disabled:opacity-60"
               >
                 {isSavingPayroll ? "Сохраняем..." : "Сохранить"}
               </button>

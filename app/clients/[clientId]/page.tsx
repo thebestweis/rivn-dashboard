@@ -7,6 +7,7 @@ import { AppToast } from "../../components/ui/app-toast";
 
 import {
   CLIENT_STATUS_LABELS,
+  formatDisplayDate,
   parseRubAmount,
   formatRub,
   type StoredClient,
@@ -21,7 +22,10 @@ import { fetchEmployeesFromSupabase } from "../../lib/supabase/employees";
 import { getPaymentsFromSupabase } from "../../lib/supabase/payments";
 import { getExpensesFromSupabase } from "../../lib/supabase/expenses";
 import { fetchPayrollAccrualsFromSupabase } from "../../lib/supabase/payroll";
-import { ClientFinancialChart } from "../../components/clients/client-financial-chart";
+import {
+  ClientFinancialChart,
+  type ClientMetricSeries,
+} from "../../components/clients/client-financial-chart";
 import {
   canEditClients,
   canManageFinance,
@@ -90,12 +94,7 @@ function parseDisplayDateToDate(value: string) {
 }
 
 function formatSupabaseDateToDisplay(value: string | null) {
-  if (!value) return "";
-
-  const [year, month, day] = value.split("-");
-  if (!day || !month || !year) return value;
-
-  return `${day}.${month}.${year}`;
+  return value ? formatDisplayDate(value) : "";
 }
 
 function groupChartData(items: Array<{ label: string; amount: number }>) {
@@ -105,10 +104,16 @@ function groupChartData(items: Array<{ label: string; amount: number }>) {
     grouped.set(item.label, (grouped.get(item.label) ?? 0) + item.amount);
   });
 
-  return Array.from(grouped.entries()).map(([label, amount]) => ({
-    label,
-    amount,
-  }));
+  return Array.from(grouped.entries())
+    .map(([label, amount]) => ({
+      label,
+      amount,
+    }))
+    .sort((a, b) => {
+      const first = parseDisplayDateToDate(a.label)?.getTime() ?? 0;
+      const second = parseDisplayDateToDate(b.label)?.getTime() ?? 0;
+      return first - second;
+    });
 }
 
 export default function ClientDetailsPage() {
@@ -353,27 +358,119 @@ export default function ClientDetailsPage() {
     return groupChartData(prepared);
   }, [linkedPayments, chartPeriod]);
 
-  const expensesChartData = useMemo(() => {
-    const directExpensesPrepared = linkedExpenses.map((expense) => ({
-      label: formatSupabaseDateToDisplay(expense.expense_date),
-      amount: Number(expense.amount || 0),
-    }));
+  const directExpensesChartData = useMemo(() => {
+    const prepared = linkedExpenses
+      .map((expense) => ({
+        label: formatSupabaseDateToDisplay(expense.expense_date),
+        amount: Number(expense.amount || 0),
+      }))
+      .filter((item) => item.label && isDateInChartPeriod(item.label));
 
-    const payrollPrepared = linkedPayrollAccruals.map((item) => ({
-      label: item.date,
-      amount: parseRubAmount(item.amount),
-    }));
+    return groupChartData(prepared);
+  }, [linkedExpenses, chartPeriod]);
 
-    const merged = [...directExpensesPrepared, ...payrollPrepared].filter(
-      (item) => item.label && isDateInChartPeriod(item.label)
-    );
+  const fotChartData = useMemo(() => {
+    const prepared = linkedPayrollAccruals
+      .map((item) => ({
+        label: formatDisplayDate(item.date),
+        amount: parseRubAmount(item.amount),
+      }))
+      .filter((item) => item.label && isDateInChartPeriod(item.label));
 
-    if (merged.length === 0) {
-      return [{ label: "Нет затрат", amount: 0 }];
+    return groupChartData(prepared);
+  }, [linkedPayrollAccruals, chartPeriod]);
+
+  const clientChartData = useMemo(() => {
+    const byLabel = new Map<string, ClientMetricSeries>();
+    const invoiceValue = parseRubAmount(editAmount || client?.amount || "0");
+
+    function ensureLabel(label: string) {
+      const existing = byLabel.get(label);
+      if (existing) return existing;
+
+      const next: ClientMetricSeries = {
+        revenue: 0,
+        profit: 0,
+        expenses: 0,
+        fot: 0,
+        tax: 0,
+        invoice: invoiceValue,
+      };
+
+      byLabel.set(label, next);
+      return next;
     }
 
-    return groupChartData(merged);
-  }, [linkedExpenses, linkedPayrollAccruals, chartPeriod]);
+    paymentsChartData.forEach((item) => {
+      if (item.label.startsWith("Нет ")) return;
+      const target = ensureLabel(item.label);
+      target.revenue += item.amount;
+      target.tax += item.amount * 0.07;
+    });
+
+    directExpensesChartData.forEach((item) => {
+      if (item.label.startsWith("Нет ")) return;
+      ensureLabel(item.label).expenses += item.amount;
+    });
+
+    fotChartData.forEach((item) => {
+      if (item.label.startsWith("Нет ")) return;
+      ensureLabel(item.label).fot += item.amount;
+    });
+
+    const rows = Array.from(byLabel.entries())
+      .map(([label, values]) => ({
+        label,
+        ...values,
+        profit:
+          values.revenue - values.expenses - values.fot - values.tax,
+      }))
+      .sort((a, b) => {
+        const first = parseDisplayDateToDate(a.label)?.getTime() ?? 0;
+        const second = parseDisplayDateToDate(b.label)?.getTime() ?? 0;
+        return first - second;
+      });
+
+    if (rows.length > 0) return rows;
+
+    return [
+      {
+        label: "Нет данных",
+        revenue: 0,
+        profit: 0,
+        expenses: 0,
+        fot: 0,
+        tax: 0,
+        invoice: invoiceValue,
+      },
+    ];
+  }, [
+    paymentsChartData,
+    directExpensesChartData,
+    fotChartData,
+    editAmount,
+    client?.amount,
+  ]);
+
+  const clientChartTotals = useMemo<ClientMetricSeries>(
+    () => ({
+      revenue: clientRevenueNumber,
+      profit: clientProfitNumber,
+      expenses: clientDirectExpensesNumber,
+      fot: clientFotNumber,
+      tax: clientTaxNumber,
+      invoice: parseRubAmount(editAmount || client?.amount || "0"),
+    }),
+    [
+      clientRevenueNumber,
+      clientProfitNumber,
+      clientDirectExpensesNumber,
+      clientFotNumber,
+      clientTaxNumber,
+      editAmount,
+      client?.amount,
+    ]
+  );
 
   const currentClient = useMemo(() => {
     return {
@@ -383,7 +480,7 @@ export default function ClientDetailsPage() {
       owner: editOwner || client?.owner || "—",
       ownerId: editOwnerId || client?.ownerId || null,
       model: editModel || client?.model || "—",
-      nextInvoice: editNextInvoice || client?.nextInvoice || "—",
+      nextInvoice: formatDisplayDate(editNextInvoice || client?.nextInvoice || ""),
       amount: editAmount || client?.amount || "—",
       revenue: formatRub(clientRevenueNumber),
       directExpenses: formatRub(clientDirectExpensesNumber),
@@ -530,33 +627,40 @@ export default function ClientDetailsPage() {
   return (
     <>
       <main className="flex-1">
-        <div className="space-y-6 px-5 py-6 lg:px-8">
+        <div className="rivn-page-shell mx-3 my-3 space-y-5 px-4 py-4 sm:mx-4 sm:my-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
           {!canManageClientDetails ? (
             <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
               У тебя доступ только на просмотр карточки клиента. Редактирование данных и заметок недоступно.
             </div>
           ) : null}
 
-          <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            <div className="mt-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight">
+          <section className="rivn-card rivn-card-interactive p-4 sm:p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="min-w-0">
+                <div className="text-xs uppercase tracking-[0.22em] text-[#43ffc2]">
+                  Паспорт клиента
+                </div>
+                <h1 className="mt-1 truncate text-3xl font-medium tracking-[-0.05em] text-white sm:text-4xl">
                   {currentClient.name}
                 </h1>
 
-                <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span
-                    className={`rounded-full px-3 py-1 text-sm ${statusTone}`}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusTone}`}
                   >
                     {CLIENT_STATUS_LABELS[currentClient.status]}
                   </span>
 
-                  <span className="rounded-full bg-white/5 px-3 py-1 text-sm text-white/70">
+                  <span className="rivn-pill text-xs">
                     Ответственный: {currentClient.owner}
                   </span>
 
-                  <span className="rounded-full bg-white/5 px-3 py-1 text-sm text-white/70">
+                  <span className="rivn-pill text-xs">
                     Модель: {currentClient.model}
+                  </span>
+
+                  <span className="rivn-pill text-xs">
+                    Оплата: {currentClient.nextInvoice}
                   </span>
                 </div>
               </div>
@@ -566,7 +670,7 @@ export default function ClientDetailsPage() {
                   <button
                     type="button"
                     onClick={() => setIsEditOpen(true)}
-                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                    className="rivn-button px-4 py-3 text-sm font-semibold"
                   >
                     Редактировать
                   </button>
@@ -576,7 +680,7 @@ export default function ClientDetailsPage() {
                   <button
                     type="button"
                     onClick={() => router.push("/payments")}
-                    className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
+                    className="rivn-button rivn-button-primary px-4 py-3 text-sm font-semibold"
                   >
                     Добавить оплату
                   </button>
@@ -585,52 +689,19 @@ export default function ClientDetailsPage() {
             </div>
           </section>
 
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-            {[
-              { label: "День оплаты", value: currentClient.nextInvoice },
-              { label: "Сумма счёта", value: currentClient.amount },
-              { label: "Выручка", value: currentClient.revenue },
-              { label: "Затраты", value: currentClient.totalCosts },
-              { label: "Налог", value: currentClient.tax },
-              {
-                label: "Прибыль",
-                value: currentClient.profit,
-                tone:
-                  clientProfitNumber >= 0 ? "text-emerald-300" : "text-rose-300",
-              },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.28)]"
-              >
-                <div className="text-sm text-white/55">{item.label}</div>
-                <div
-                  className={`mt-3 text-2xl font-semibold tracking-tight ${
-                    item.tone ?? ""
-                  }`}
-                >
-                  {item.value}
-                </div>
-              </div>
-            ))}
-          </section>
-
-          <section className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <div className="text-sm text-white/50">Графики клиента</div>
-                <div className="mt-1 text-sm text-white/70">
-                  Данные по оплатам и затратам. В затратах уже учтён ФОТ.
-                </div>
+          <section className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-white/54">
+                Динамика по оплатам, расходам, ФОТ, налогу и прибыли клиента.
               </div>
 
-              <div className="flex w-fit items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+              <div className="flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.055] p-1">
                 <button
                   type="button"
                   onClick={() => setChartPeriod("30d")}
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                     chartPeriod === "30d"
-                      ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+                      ? "bg-[#00f5a8] text-[#06101d] shadow-[0_0_24px_rgba(0,245,168,0.22)]"
                       : "text-white/60 hover:text-white"
                   }`}
                 >
@@ -640,9 +711,9 @@ export default function ClientDetailsPage() {
                 <button
                   type="button"
                   onClick={() => setChartPeriod("90d")}
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                     chartPeriod === "90d"
-                      ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+                      ? "bg-[#00f5a8] text-[#06101d] shadow-[0_0_24px_rgba(0,245,168,0.22)]"
                       : "text-white/60 hover:text-white"
                   }`}
                 >
@@ -652,9 +723,9 @@ export default function ClientDetailsPage() {
                 <button
                   type="button"
                   onClick={() => setChartPeriod("all")}
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                     chartPeriod === "all"
-                      ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
+                      ? "bg-[#00f5a8] text-[#06101d] shadow-[0_0_24px_rgba(0,245,168,0.22)]"
                       : "text-white/60 hover:text-white"
                   }`}
                 >
@@ -663,25 +734,23 @@ export default function ClientDetailsPage() {
               </div>
             </div>
 
-            <div className="mt-5">
-              <ClientFinancialChart
-                paymentsData={paymentsChartData}
-                expensesData={expensesChartData}
-              />
-            </div>
+            <ClientFinancialChart
+              data={clientChartData}
+              totals={clientChartTotals}
+            />
           </section>
 
           <section className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
             <div className="space-y-6">
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                <div className="text-sm text-white/50">История оплат</div>
+              <div className="rivn-card p-5">
+                <div className="text-xs uppercase tracking-[0.22em] text-white/38">История оплат</div>
 
                 <div className="mt-4 space-y-3">
                   {linkedPayments.length > 0 ? (
                     linkedPayments.map((payment) => (
                       <div
                         key={payment.id}
-                        className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3"
+                        className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3"
                       >
                         <div>
                           <div className="text-sm text-white/45">
@@ -703,15 +772,15 @@ export default function ClientDetailsPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="rounded-2xl bg-white/[0.04] px-4 py-6 text-sm text-white/45">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-6 text-sm text-white/45">
                       У этого клиента пока нет реальных оплат в системе.
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                <div className="text-sm text-white/50">Расходы по клиенту</div>
+              <div className="rivn-card p-5">
+                <div className="text-xs uppercase tracking-[0.22em] text-white/38">Расходы по клиенту</div>
 
                 <div className="mt-4 space-y-3">
                   {linkedExpenses.length > 0 || linkedPayrollAccruals.length > 0 ? (
@@ -719,7 +788,7 @@ export default function ClientDetailsPage() {
                       {linkedExpenses.map((expense) => (
                         <div
                           key={`expense_${expense.id}`}
-                          className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3"
+                          className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3"
                         >
                           <div>
                             <div className="text-sm text-white/45">
@@ -737,10 +806,10 @@ export default function ClientDetailsPage() {
                       {linkedPayrollAccruals.map((item) => (
                         <div
                           key={`fot_${item.id}`}
-                          className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3"
+                          className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3"
                         >
                           <div>
-                            <div className="text-sm text-white/45">{item.date}</div>
+                            <div className="text-sm text-white/45">{formatDisplayDate(item.date)}</div>
                             <div className="mt-1 font-medium">
                               ФОТ: {item.employee} / {item.project}
                             </div>
@@ -753,7 +822,7 @@ export default function ClientDetailsPage() {
                       ))}
                     </>
                   ) : (
-                    <div className="rounded-2xl bg-white/[0.04] px-4 py-6 text-sm text-white/45">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-6 text-sm text-white/45">
                       У этого клиента пока нет реальных расходов в системе.
                     </div>
                   )}
@@ -762,47 +831,9 @@ export default function ClientDetailsPage() {
             </div>
 
             <div className="space-y-6">
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-                <div className="text-sm text-white/50">
-                  Структура экономики клиента
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3">
-                    <span className="text-white/65">Прямые расходы</span>
-                    <span className="font-medium">
-                      {currentClient.directExpenses}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3">
-                    <span className="text-white/65">ФОТ</span>
-                    <span className="font-medium">{currentClient.fot}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3">
-                    <span className="text-white/65">Налог</span>
-                    <span className="font-medium">{currentClient.tax}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3">
-                    <span className="text-white/65">Прибыль за всё время</span>
-                    <span
-                      className={`font-medium ${
-                        clientProfitNumber >= 0
-                          ? "text-emerald-300"
-                          : "text-rose-300"
-                      }`}
-                    >
-                      {currentClient.profit}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+              <div className="rivn-card p-5">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm text-white/50">Заметки</div>
+                  <div className="text-xs uppercase tracking-[0.22em] text-white/38">Заметки</div>
 
                   {canManageClientDetails ? (
                     <button
@@ -812,7 +843,7 @@ export default function ClientDetailsPage() {
                       className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
                         isSavingNotes
                           ? "cursor-not-allowed bg-white/[0.04] text-white/35"
-                          : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
+                          : "rivn-button rivn-button-primary"
                       }`}
                     >
                       {isSavingNotes ? "Сохранение..." : "Сохранить"}
@@ -828,7 +859,7 @@ export default function ClientDetailsPage() {
                   placeholder="Добавь важную информацию о клиенте: договорённости, нюансы, риски, особенности коммуникации..."
                   rows={8}
                   readOnly={!canManageClientDetails}
-                  className="mt-4 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 read-only:cursor-default read-only:opacity-80"
+                  className="rivn-field rivn-textarea mt-4 min-h-[260px] leading-6 placeholder:text-white/30 read-only:cursor-default read-only:opacity-80"
                 />
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendTelegramMessage } from "@/lib/notifications/telegram";
+import { verifyCronSecret } from "../verify-cron-secret";
 
 function isWithinNextHour(date: Date, now: Date) {
   const diff = date.getTime() - now.getTime();
@@ -14,7 +15,11 @@ function formatTime(date: Date) {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!verifyCronSecret(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

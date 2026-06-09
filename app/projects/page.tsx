@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState, type DragEvent } from "react";
@@ -9,7 +9,6 @@ import {
 } from "../components/projects/create-project-modal";
 import { ProjectCard } from "../components/projects/project-card";
 import { ProjectsFilters } from "../components/projects/projects-filters";
-import { ProjectsStats } from "../components/projects/projects-stats";
 import { canEditProjects, isAppRole, type AppRole } from "../lib/permissions";
 import { useAppContextState } from "../providers/app-context-provider";
 
@@ -104,7 +103,6 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
   const deleteProjectMutation = useDeleteProjectMutation();
   const updateProjectOrderMutation = useUpdateProjectOrderMutation();
 
-  const isLoadingProjectStats = isProjectsLoading;
   const isLoadingProjectsList = isProjectsLoading || isClientsLoading;
 
   const combinedError = projectsError || clientsError;
@@ -145,13 +143,6 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
         return acc;
       }, {}),
     [clientsData]
-  );
-
-  const totalProjects = useMemo(() => projects.length, [projects]);
-
-  const activeProjects = useMemo(
-    () => projects.filter((project) => project.status === "active").length,
-    [projects]
   );
 
   const activeTaskCountByProjectId = useMemo(() => {
@@ -197,6 +188,11 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
 
   const hasActiveFilters =
     searchQuery.trim().length > 0 || statusFilter !== "all";
+
+  const activeProjectsCount = useMemo(
+    () => projects.filter((project) => project.status === "active").length,
+    [projects]
+  );
 
   const isSubmittingProject =
     createProjectMutation.isPending || updateProjectMutation.isPending;
@@ -362,15 +358,15 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїРѕСЂСЏРґРѕРє РїСЂРѕРµРєС‚РѕРІ"
+          : "Не удалось сохранить порядок проектов"
       );
     }
   }
 
   return (
     <>
-      <main className="flex-1 px-4 py-4 sm:px-5 sm:py-5 md:px-8">
-        <div className="flex w-full flex-col gap-5 sm:gap-6">
+      <main className="flex-1">
+        <div className="rivn-page-shell mx-3 my-3 flex w-auto flex-col gap-5 px-4 py-4 sm:mx-4 sm:my-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
           {isProjectsAccessResolved && !canManageProjects ? (
   <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
     У тебя доступ только на просмотр списка проектов. Создание,
@@ -378,65 +374,56 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
   </div>
 ) : null}
 
-          <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+          <section className="rivn-card rivn-card-interactive p-4 sm:p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="min-w-0">
+                <div className="text-xs uppercase tracking-[0.22em] text-[#43ffc2]">Рабочие направления</div>
+                <h1 className="mt-1 text-3xl font-medium tracking-[-0.05em] text-white sm:text-4xl">
                   Проекты
                 </h1>
-                <p className="mt-2 text-sm text-white/60">
+                <p className="mt-2 max-w-2xl text-sm text-white/55">
                   Управление проектами и рабочими направлениями по клиентам
                 </p>
               </div>
 
-              <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-center">
-                <Link
-                  href="/tasks"
-                  className="inline-flex justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                >
-                  Все задачи
-                </Link>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+
+                <ProjectsFilters
+                  searchQuery={searchQuery}
+                  statusFilter={statusFilter}
+                  isLoading={isLoadingProjectsList}
+                  resultsCount={filteredProjects.length}
+                  activeProjectsCount={activeProjectsCount}
+                  hasActiveFilters={hasActiveFilters}
+                  onSearchChange={setSearchQuery}
+                  onStatusChange={setStatusFilter}
+                  onReset={() => {
+                    setSearchQuery("");
+                    setStatusFilter("all");
+                  }}
+                />
 
                 {showManageProjectsActions ? (
   <button
     type="button"
     onClick={openCreateProjectFlow}
-    className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+    className="rivn-button rivn-button-primary h-11 px-4 text-sm font-semibold"
   >
     Добавить проект
   </button>
 ) : null}
               </div>
             </div>
+
           </section>
 
-          <ProjectsStats
-            totalProjects={totalProjects}
-            activeProjects={activeProjects}
-            isLoading={isLoadingProjectStats}
-          />
-
-          <ProjectsFilters
-            searchQuery={searchQuery}
-            statusFilter={statusFilter}
-            isLoading={isLoadingProjectsList}
-            resultsCount={filteredProjects.length}
-            hasActiveFilters={hasActiveFilters}
-            onSearchChange={setSearchQuery}
-            onStatusChange={setStatusFilter}
-            onReset={() => {
-              setSearchQuery("");
-              setStatusFilter("all");
-            }}
-          />
-
-          <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6">
+          <section className="rivn-card p-4 sm:p-5">
             {isLoadingProjectsList ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
                 {Array.from({ length: 10 }).map((_, index) => (
                   <div
                     key={index}
-                    className="min-h-[280px] rounded-[24px] border border-white/10 bg-[#0F1724] p-5"
+                    className="min-h-[280px] rounded-[24px] border border-white/10 bg-white/[0.04] p-5"
                   >
                     <Skeleton className="h-5 w-24" />
                     <Skeleton className="mt-4 h-7 w-3/4" />
@@ -489,7 +476,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
   <button
     type="button"
     onClick={openCreateProjectFlow}
-    className="mt-5 rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+    className="rivn-button rivn-button-primary mt-5 px-4 py-3 text-sm font-semibold"
   >
     Создать проект
   </button>
@@ -565,9 +552,9 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
   <button
     type="button"
     onClick={openCreateProjectFlow}
-    className="flex min-h-[280px] flex-col items-center justify-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-5 text-center transition hover:border-white/20 hover:bg-white/[0.04]"
+    className="group flex min-h-[280px] flex-col items-center justify-center rounded-[28px] border border-dashed border-white/12 bg-white/[0.035] p-5 text-center transition duration-300 hover:-translate-y-0.5 hover:border-[#00f5a8]/28 hover:bg-white/[0.055]"
   >
-    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80">
+    <div className="rivn-button px-4 py-2 text-sm font-medium group-hover:border-[#00f5a8]/28">
       Добавить проект
     </div>
     <div className="mt-4 text-sm text-white/55">
@@ -601,7 +588,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
 
       {isNoClientsModalOpen ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 px-4 py-6">
-          <div className="w-full max-w-xl rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+          <div className="rivn-panel w-full max-w-xl p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-semibold text-white">
@@ -615,7 +602,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
                     className="font-medium text-white underline underline-offset-4"
                     onClick={() => setIsNoClientsModalOpen(false)}
                   >
-                    сюда
+                    СЃСЋРґР°
                   </Link>
                   .
                 </p>
@@ -634,7 +621,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
               <Link
                 href="/clients"
                 onClick={() => setIsNoClientsModalOpen(false)}
-                className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+                className="rivn-button-primary rounded-2xl px-4 py-2 text-sm"
               >
                 Перейти к клиентам
               </Link>

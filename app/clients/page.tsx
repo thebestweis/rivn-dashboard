@@ -315,7 +315,7 @@ export default function ClientsPage() {
   return (
     <>
       <main className="flex-1">
-        <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
+        <div className="rivn-page-shell mx-3 my-3 space-y-5 px-4 py-4 sm:mx-4 sm:my-4 sm:px-5 sm:py-5 lg:px-7 lg:py-7">
           <BillingAccessBanner
             isLoading={isAppContextLoading}
             isBillingReadOnly={isBillingReadOnly}
@@ -350,7 +350,7 @@ export default function ClientsPage() {
           />
 
           {isLoadingClients ? (
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+            <div className="rivn-card p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <Skeleton className="h-4 w-16" />
@@ -362,7 +362,7 @@ export default function ClientsPage() {
 
               <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
                 <div className="bg-white/[0.04] px-4 py-3">
-                  <div className="grid grid-cols-8 gap-4">
+                  <div className="grid grid-cols-8 gap-4 text-center">
                     {Array.from({ length: 8 }).map((_, index) => (
                       <Skeleton key={index} className="h-4 w-full" />
                     ))}
@@ -373,7 +373,7 @@ export default function ClientsPage() {
                   {Array.from({ length: 6 }).map((_, rowIndex) => (
                     <div
                       key={rowIndex}
-                      className="grid grid-cols-8 gap-4 border-t border-white/6 px-4 py-4"
+                      className="grid grid-cols-8 gap-4 border-t border-white/6 px-4 py-4 text-center"
                     >
                       <Skeleton className="h-5 w-32" />
                       <Skeleton className="h-6 w-24 rounded-full" />

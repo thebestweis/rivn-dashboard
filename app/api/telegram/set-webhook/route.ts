@@ -40,6 +40,7 @@ async function setTelegramWebhook(request: Request) {
       url.searchParams.get("url") ||
       `${url.protocol}//${url.host}/api/telegram/webhook`;
     const dropPendingUpdates = url.searchParams.get("drop") === "1";
+    const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET;
 
     const telegramResponse = await fetch(
       `https://api.telegram.org/bot${token}/setWebhook`,
@@ -50,6 +51,7 @@ async function setTelegramWebhook(request: Request) {
           url: webhookUrl,
           drop_pending_updates: dropPendingUpdates,
           allowed_updates: ["message", "my_chat_member"],
+          ...(secretToken ? { secret_token: secretToken } : {}),
         }),
       }
     );

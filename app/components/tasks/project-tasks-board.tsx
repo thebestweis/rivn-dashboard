@@ -397,21 +397,21 @@ export function ProjectTasksBoard({
 
               handleDropTaskToColumn(taskId, column.key);
             }}
-            className={`rounded-[24px] border p-4 transition ${
+            className={`min-h-[560px] rounded-[24px] border p-4 transition ${
               dragOverColumn === column.key && canManageTasksWithBilling
-                ? "border-sky-400/40 bg-sky-400/[0.06]"
-                : "border-white/10 bg-[#0F1724]"
+                ? "border-[#00f5a8]/35 bg-[#00f5a8]/[0.055] shadow-[0_18px_48px_rgba(0,245,168,0.08)]"
+                : "border-white/10 bg-white/[0.035]"
             }`}
           >
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-medium text-white">{column.title}</div>
-              <div className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/50">
+              <div className="rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-xs text-white/55">
                 {columnTasks.length}
               </div>
             </div>
 
             <div className="mt-4">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+              <div className="rounded-[18px] border border-white/10 bg-white/[0.055] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                 <input
                   type="text"
                   value={draftByColumn[column.key]}
@@ -449,7 +449,7 @@ export function ProjectTasksBoard({
 
             <div className="mt-4 space-y-3">
               {columnTasks.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-white/35">
+                <div className="rounded-[18px] border border-dashed border-white/10 bg-white/[0.025] p-4 text-sm text-white/35">
                   Пока нет задач
                 </div>
               ) : null}
@@ -499,7 +499,7 @@ export function ProjectTasksBoard({
                         onTaskOpen(task.id);
                       }
                     }}
-                    className={`cursor-pointer rounded-[18px] border px-4 py-3 transition duration-200 hover:border-white/25 hover:bg-[#131c2a] ${
+                    className={`cursor-pointer rounded-[20px] border px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-[#00f5a8]/22 hover:bg-white/[0.065] ${
                       isCompletedFlashing
                         ? "scale-[0.99] ring-2 ring-emerald-400/45"
                         : ""
@@ -508,9 +508,9 @@ export function ProjectTasksBoard({
                         ? "opacity-60"
                         : ""
                     } ${
-                      deadline.isOverdue
-                        ? "border-red-500/20 bg-red-500/[0.03]"
-                        : "border-white/10 bg-[#121826]"
+                      deadline.isOverdue && task.status !== "done"
+                        ? "border-rose-400/20 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(244,63,94,0.055))]"
+                        : "border-white/10 bg-white/[0.045]"
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -540,9 +540,9 @@ export function ProjectTasksBoard({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-3">
                           <div
-                            className={`line-clamp-3 text-sm font-semibold leading-6 ${
-                              task.status === "done"
-                                ? "text-white/45 line-through"
+                            className={`rivn-strike-title line-clamp-3 text-sm font-semibold leading-6 transition-colors ${
+                              task.status === "done" || isCompletedFlashing
+                                ? "is-done text-white/45"
                                 : "text-white"
                             }`}
                           >
@@ -552,9 +552,9 @@ export function ProjectTasksBoard({
                           <div className="shrink-0">
                             <span
                               className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                                deadline.isOverdue
-                                  ? "border-red-500/20 bg-red-500/10 text-red-300"
-                                  : "border-white/10 bg-white/5 text-white/55"
+                                 deadline.isOverdue && task.status !== "done"
+                                   ? "border-red-500/20 bg-red-500/10 text-red-300"
+                                   : "border-white/10 bg-white/5 text-white/55"
                               }`}
                             >
                               {deadline.label}

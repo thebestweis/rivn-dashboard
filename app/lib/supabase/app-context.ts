@@ -9,7 +9,7 @@ export type AppContext = {
   isSuperAdmin: boolean;
 };
 
-const APP_CONTEXT_MEMORY_TTL_MS = 2000;
+const APP_CONTEXT_MEMORY_TTL_MS = 1000 * 60;
 
 let cachedAppContext:
   | {

@@ -16,45 +16,46 @@ interface AlertsPanelProps {
 export function AlertsPanel({ alerts }: AlertsPanelProps) {
   function getToneClasses(tone: AlertItem["tone"]) {
     if (tone === "danger") {
-      return "border-rose-500/20 bg-rose-500/10";
+      return "border-[#E87979]/20 bg-[#E87979]/8";
     }
 
     if (tone === "warning") {
-      return "border-amber-500/20 bg-amber-500/10";
+      return "border-[#D8C45E]/20 bg-[#D8C45E]/8";
     }
 
-    return "border-emerald-500/20 bg-emerald-500/10";
+    return "border-[#99D32A]/22 bg-[#99D32A]/9";
   }
 
   function getDotClasses(tone: AlertItem["tone"]) {
     if (tone === "danger") {
-      return "bg-rose-400";
+      return "bg-[#E87979]";
     }
 
     if (tone === "warning") {
-      return "bg-amber-400";
+      return "bg-[#D8C45E]";
     }
 
-    return "bg-emerald-400";
+    return "bg-[#99D32A]";
   }
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+    <div className="relative overflow-hidden rounded-[22px] border border-[#2D342A] bg-[#11130F] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.16)]">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-[#99D32A]/45 via-[#70855C]/20 to-transparent" />
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm text-white/50">Сигналы внимания</div>
-          <h2 className="mt-1 text-xl font-semibold">Что требует реакции</h2>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#AEAFB2]/70">Сигналы</div>
+          <h2 className="mt-1 text-lg font-semibold text-[#F4F5F1]">Что требует реакции</h2>
         </div>
       </div>
 
-      <div className="mt-5 space-y-3">
+      <div className="mt-4 space-y-2">
         {alerts.map((alert) => {
           const content = (
             <div
-              className={`rounded-[24px] border p-4 transition ${getToneClasses(
+              className={`rounded-[16px] border px-3 py-2.5 transition ${getToneClasses(
                 alert.tone
               )} ${
-                alert.href ? "hover:scale-[1.01] hover:border-white/20" : ""
+                alert.href ? "hover:border-[#99D32A]/28 hover:bg-[#99D32A]/6" : ""
               }`}
             >
               <div className="flex items-start gap-3">
@@ -64,8 +65,8 @@ export function AlertsPanel({ alerts }: AlertsPanelProps) {
                   )}`}
                 />
                 <div>
-                  <div className="font-medium text-white">{alert.title}</div>
-                  <div className="mt-1 text-sm leading-6 text-white/65">
+                  <div className="font-medium text-[#F4F5F1]">{alert.title}</div>
+                  <div className="mt-1 text-sm leading-5 text-[#AEAFB2]">
                     {alert.desc}
                   </div>
                 </div>

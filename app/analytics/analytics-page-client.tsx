@@ -90,6 +90,30 @@ function formatDelta(plan: number, fact: number) {
   return `${sign}${formatRub(Math.abs(diff))}`;
 }
 
+function buildMonthRangeKeys(startMonth: string, endMonth: string) {
+  if (!startMonth || !endMonth) return [];
+
+  const [startYear, startMonthIndex] = startMonth.split("-").map(Number);
+  const [endYear, endMonthIndex] = endMonth.split("-").map(Number);
+  if (!startYear || !startMonthIndex || !endYear || !endMonthIndex) return [];
+
+  const start = new Date(startYear, startMonthIndex - 1, 1);
+  const end = new Date(endYear, endMonthIndex - 1, 1);
+  const from = start <= end ? start : end;
+  const to = start <= end ? end : start;
+  const cursor = new Date(from);
+  const keys: string[] = [];
+
+  while (cursor <= to) {
+    keys.push(
+      `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`
+    );
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return keys;
+}
+
 function fromSupabaseDate(value: string | null) {
   if (!value) return "";
 
@@ -270,7 +294,7 @@ function isCurrentMonth(dateString: string) {
 
 function SectionSkeleton({ text }: { text: string }) {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-8 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+    <div className="rivn-panel p-8 text-white/60">
       {text}
     </div>
   );
@@ -509,28 +533,12 @@ export default function AnalyticsPage() {
     });
   }, [payments, selectedMonth]);
 
-  const planMonthPayments = useMemo(() => {
-    return payments.filter((p) => {
-      if (!p.paidAt) return false;
-      const date = toSupabaseLikeDate(p.paidAt);
-      return date.startsWith(planEditorMonth);
-    });
-  }, [payments, planEditorMonth]);
-
   const totalRevenueNumber = useMemo(() => {
     return filteredPayments.reduce(
       (sum, item) => sum + parseRubAmount(item.amount),
       0
     );
   }, [filteredPayments]);
-
-  const planMonthExpenses = useMemo(() => {
-    return expenses.filter((e) => {
-      if (!e.date) return false;
-      const date = toSupabaseLikeDate(e.date);
-      return date.startsWith(planEditorMonth);
-    });
-  }, [expenses, planEditorMonth]);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
@@ -576,64 +584,6 @@ export default function AnalyticsPage() {
   const totalTaxNumber = useMemo(() => {
     return totalRevenueNumber * 0.07;
   }, [totalRevenueNumber]);
-
-  const planMonthRevenueNumber = useMemo(() => {
-    return planMonthPayments.reduce(
-      (sum, item) => sum + parseRubAmount(item.amount),
-      0
-    );
-  }, [planMonthPayments]);
-
-  const planMonthExpensesNumber = useMemo(() => {
-    return planMonthExpenses.reduce(
-      (sum, item) => sum + parseRubAmount(item.amount),
-      0
-    );
-  }, [planMonthExpenses]);
-
-    const planMonthFotNumber = useMemo(() => {
-    const payoutsSum = (payrollPayouts as StoredPayrollPayout[])
-      .filter((p) => p.status === "paid")
-      .filter((p) => {
-        if (!p.payoutDate) return false;
-        return normalizePayrollPayoutMonth(p.payoutDate) === planEditorMonth;
-      })
-      .reduce(
-        (sum, item) => sum + parseRubAmount(String(item.amount ?? "")),
-        0
-      );
-
-    const extraSum = (extraPayments as ExtraPaymentRow[])
-      .filter((item) => {
-        if (!item.date) return false;
-        const date = toSupabaseLikeDate(item.date);
-        return date.startsWith(planEditorMonth);
-      })
-      .reduce(
-        (sum, item) => sum + parseRubAmount(String(item.amount ?? "")),
-        0
-      );
-
-    return payoutsSum + extraSum;
-  }, [payrollPayouts, extraPayments, planEditorMonth]);
-
-  const planMonthTaxNumber = useMemo(() => {
-    return planMonthRevenueNumber * 0.07;
-  }, [planMonthRevenueNumber]);
-
-  const planMonthProfitNumber = useMemo(() => {
-    return (
-      planMonthRevenueNumber -
-      planMonthExpensesNumber -
-      planMonthFotNumber -
-      planMonthTaxNumber
-    );
-  }, [
-    planMonthRevenueNumber,
-    planMonthExpensesNumber,
-    planMonthFotNumber,
-    planMonthTaxNumber,
-  ]);
 
   const totalProfitNumber = useMemo(() => {
     return (
@@ -1181,76 +1131,11 @@ export default function AnalyticsPage() {
     });
   }, [clientUnitEconomics, allPaymentRecords]);
 
-  const currentMonthPlan = useMemo(() => {
-    return (
-      monthlyPlans[planEditorMonth] ?? {
-        revenue: 500000,
-        profit: 220000,
-        expenses: 140000,
-        fot: 60000,
-      }
-    );
-  }, [monthlyPlans, planEditorMonth]);
+  const planFactRangeMonthKeys = useMemo(() => {
+    return buildMonthRangeKeys(planFactRangeStartMonth, planFactRangeEndMonth);
+  }, [planFactRangeEndMonth, planFactRangeStartMonth]);
 
-  const planFactRows = useMemo<PlanFactRow[]>(() => {
-    const rows: Array<{
-      key: PlanFactRow["key"];
-      label: string;
-      planNumber: number;
-      factNumber: number;
-    }> = [
-      {
-        key: "revenue",
-        label: "Выручка",
-        planNumber: currentMonthPlan.revenue,
-        factNumber: planMonthRevenueNumber,
-      },
-      {
-        key: "profit",
-        label: "Прибыль",
-        planNumber: currentMonthPlan.profit,
-        factNumber: planMonthProfitNumber,
-      },
-      {
-        key: "expenses",
-        label: "Расходы",
-        planNumber: currentMonthPlan.expenses,
-        factNumber: planMonthExpensesNumber,
-      },
-      {
-        key: "fot",
-        label: "ФОТ",
-        planNumber: currentMonthPlan.fot,
-        factNumber: planMonthFotNumber,
-      },
-    ];
-
-    return rows.map((row) => {
-      const progress =
-        row.planNumber > 0 ? (row.factNumber / row.planNumber) * 100 : 0;
-
-      return {
-        key: row.key,
-        label: row.label,
-        planNumber: row.planNumber,
-        factNumber: row.factNumber,
-        deltaNumber: row.factNumber - row.planNumber,
-        progress,
-        plan: formatRub(row.planNumber),
-        fact: formatRub(row.factNumber),
-        delta: formatDelta(row.planNumber, row.factNumber),
-        progressLabel: `${Math.round(progress)}%`,
-      };
-    });
-  }, [
-    currentMonthPlan,
-    planMonthRevenueNumber,
-    planMonthProfitNumber,
-    planMonthExpensesNumber,
-    planMonthFotNumber,
-  ]);
-
-  const planFactChartData = useMemo(() => {
+  const planFactMonthlyFactMap = useMemo(() => {
     const factMap = new Map<
       string,
       {
@@ -1269,7 +1154,7 @@ export default function AnalyticsPage() {
         })
         .reduce((sum, expense) => sum + parseRubAmount(expense.amount), 0);
 
-            const monthPayoutsFot = (payrollPayouts as StoredPayrollPayout[])
+      const monthPayoutsFot = (payrollPayouts as StoredPayrollPayout[])
         .filter((payout) => payout.status === "paid")
         .filter(
           (payout) => normalizePayrollPayoutMonth(payout.payoutDate) === item.month
@@ -1293,13 +1178,97 @@ export default function AnalyticsPage() {
       });
     });
 
+    return factMap;
+  }, [expenses, extraPayments, payrollPayouts, revenueDynamics]);
+
+  const planFactRows = useMemo<PlanFactRow[]>(() => {
+    const rows: Array<{
+      key: PlanFactRow["key"];
+      label: string;
+      planNumber: number;
+      factNumber: number;
+    }> = [
+      {
+        key: "revenue",
+        label: "Выручка",
+        planNumber: planFactRangeMonthKeys.reduce(
+          (sum, month) => sum + (monthlyPlans[month]?.revenue ?? 0),
+          0
+        ),
+        factNumber: planFactRangeMonthKeys.reduce(
+          (sum, month) => sum + (planFactMonthlyFactMap.get(month)?.revenue ?? 0),
+          0
+        ),
+      },
+      {
+        key: "profit",
+        label: "Прибыль",
+        planNumber: planFactRangeMonthKeys.reduce(
+          (sum, month) => sum + (monthlyPlans[month]?.profit ?? 0),
+          0
+        ),
+        factNumber: planFactRangeMonthKeys.reduce(
+          (sum, month) => sum + (planFactMonthlyFactMap.get(month)?.profit ?? 0),
+          0
+        ),
+      },
+      {
+        key: "expenses",
+        label: "Расходы",
+        planNumber: planFactRangeMonthKeys.reduce(
+          (sum, month) => sum + (monthlyPlans[month]?.expenses ?? 0),
+          0
+        ),
+        factNumber: planFactRangeMonthKeys.reduce(
+          (sum, month) => sum + (planFactMonthlyFactMap.get(month)?.expenses ?? 0),
+          0
+        ),
+      },
+      {
+        key: "fot",
+        label: "ФОТ",
+        planNumber: planFactRangeMonthKeys.reduce(
+          (sum, month) => sum + (monthlyPlans[month]?.fot ?? 0),
+          0
+        ),
+        factNumber: planFactRangeMonthKeys.reduce(
+          (sum, month) => sum + (planFactMonthlyFactMap.get(month)?.fot ?? 0),
+          0
+        ),
+      },
+    ];
+
+    return rows.map((row) => {
+      const progress =
+        row.planNumber > 0 ? (row.factNumber / row.planNumber) * 100 : 0;
+
+      return {
+        key: row.key,
+        label: row.label,
+        planNumber: row.planNumber,
+        factNumber: row.factNumber,
+        deltaNumber: row.factNumber - row.planNumber,
+        progress,
+        plan: formatRub(row.planNumber),
+        fact: formatRub(row.factNumber),
+        delta: formatDelta(row.planNumber, row.factNumber),
+        progressLabel: `${Math.round(progress)}%`,
+      };
+    });
+  }, [
+    monthlyPlans,
+    planFactMonthlyFactMap,
+    planFactRangeMonthKeys,
+  ]);
+
+  const planFactChartData = useMemo(() => {
     const allMonths = Array.from(
-      new Set([...Object.keys(monthlyPlans), ...Array.from(factMap.keys())])
+      new Set([...Object.keys(monthlyPlans), ...Array.from(planFactMonthlyFactMap.keys())])
     ).sort((a, b) => a.localeCompare(b));
 
     return allMonths.map((month) => {
       const fact =
-        factMap.get(month) ?? {
+        planFactMonthlyFactMap.get(month) ?? {
           revenue: 0,
           profit: 0,
           expenses: 0,
@@ -1322,11 +1291,8 @@ export default function AnalyticsPage() {
       };
     });
   }, [
-    revenueDynamics,
-    expenses,
-    payrollPayouts,
-    extraPayments,
     monthlyPlans,
+    planFactMonthlyFactMap,
     planMetric,
     planEditorMonth,
   ]);
@@ -1409,7 +1375,7 @@ export default function AnalyticsPage() {
 
   if (!isAccessLoading && !hasAnalyticsAccess) {
     return (
-      <main className="flex-1">
+      <main className="rivn-scope flex-1">
         <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
           <AccessDenied
             title="Нет доступа к аналитике"
@@ -1421,7 +1387,7 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <main className="flex-1">
+    <main className="rivn-scope flex-1">
       <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
         <AnalyticsPageHeader
           activeTab={activeTab}

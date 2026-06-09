@@ -109,7 +109,7 @@ export function FinancialAnalyticsChart({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="analytics-chart-plot-card rivn-panel p-5">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm text-white/50">Финансовая динамика</div>
@@ -131,7 +131,10 @@ export function FinancialAnalyticsChart({
         <div className="mt-6 h-[320px]">
           {hasRevenueChartData ? (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mergedChartData}>
+              <AreaChart
+                data={mergedChartData}
+                margin={{ top: 26, right: 18, left: 8, bottom: 6 }}
+              >
                 <defs>
                   <linearGradient
                     id="analyticsRevenueGradient"
@@ -172,6 +175,7 @@ export function FinancialAnalyticsChart({
                   axisLine={false}
                   tickLine={false}
                   width={64}
+                  domain={[0, "dataMax + 20000"]}
                   tickFormatter={(value) => formatRub(Number(value))}
                 />
                 <Tooltip
@@ -218,7 +222,7 @@ export function FinancialAnalyticsChart({
         </div>
       </div>
 
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="analytics-chart-plot-card rivn-panel p-5">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm text-white/50">Расходная нагрузка</div>
@@ -240,7 +244,11 @@ export function FinancialAnalyticsChart({
         <div className="mt-6 h-[320px]">
           {hasExpenseChartData ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={mergedChartData} barGap={10}>
+              <BarChart
+                data={mergedChartData}
+                barGap={10}
+                margin={{ top: 26, right: 18, left: 8, bottom: 6 }}
+              >
                 <CartesianGrid
                   stroke="rgba(255,255,255,0.06)"
                   vertical={false}
@@ -257,6 +265,7 @@ export function FinancialAnalyticsChart({
                   axisLine={false}
                   tickLine={false}
                   width={64}
+                  domain={[0, "dataMax + 20000"]}
                   tickFormatter={(value) => formatRub(Number(value))}
                 />
                 <Tooltip

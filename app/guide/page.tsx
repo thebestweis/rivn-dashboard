@@ -3,9 +3,10 @@ import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
+  Clock3,
   FileText,
   PlayCircle,
-  Search,
+  Sparkles,
 } from "lucide-react";
 import { guideArticles, quickStartSteps } from "./guide-content";
 
@@ -15,49 +16,59 @@ const QUICK_START_VIDEO_EMBED_URL =
 const categories = Array.from(
   new Set(guideArticles.map((article) => article.category))
 );
-// тест для сейва
+
+const accentClasses = {
+  mint: "border-[#00f5a8]/24 bg-[#00f5a8]/10 text-[#43ffc2]",
+  violet: "border-[#7c5cff]/26 bg-[#7c5cff]/12 text-[#b8a7ff]",
+  blue: "border-sky-400/24 bg-sky-400/10 text-sky-200",
+  amber: "border-amber-300/24 bg-amber-300/10 text-amber-200",
+} as const;
+
 export default function GuidePage() {
   return (
-    <main className="min-h-screen bg-[#0B0F1A] px-4 py-4 text-white sm:px-5 sm:py-6 lg:px-8">
-      <div className="mx-auto max-w-[1680px] space-y-5 lg:space-y-6">
-        <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.98),rgba(10,16,28,0.98))] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-6 lg:p-8">
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr] xl:items-center">
+    <main className="rivn-scope min-h-screen bg-[var(--rivn-app-bg)] px-4 py-5 text-[var(--rivn-text)] sm:px-5 lg:px-8">
+      <div className="mx-auto max-w-[1680px] space-y-5">
+        <section className="relative overflow-hidden rounded-[34px] border border-[var(--rivn-card-border)] bg-[var(--rivn-card-bg)] p-5 shadow-[var(--rivn-card-shadow)] sm:p-7 lg:p-8">
+          <div className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-[#00f5a8]/12 blur-3xl" />
+          <div className="pointer-events-none absolute right-0 top-0 h-80 w-80 rounded-full bg-[#7c5cff]/14 blur-3xl" />
+
+          <div className="relative grid gap-6 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#00f5a8]/20 bg-[#00f5a8]/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#43ffc2]">
                 <BookOpen className="h-4 w-4" />
-                Центр помощи RIVN OS
+                База знаний RIVN OS
               </div>
 
-              <h1 className="mt-5 max-w-4xl text-3xl font-semibold tracking-tight sm:text-4xl lg:text-6xl">
-                Простые инструкции по работе в RIVN OS
+              <h1 className="mt-5 max-w-4xl text-4xl font-semibold tracking-[-0.06em] sm:text-5xl lg:text-6xl">
+                Простые инструкции, чтобы быстро освоиться в системе
               </h1>
 
-              <p className="mt-5 max-w-3xl text-base leading-8 text-white/62 lg:text-lg">
-                Здесь собраны быстрый старт, видеоинструкция и база знаний по
-                основным разделам. Каждая статья объясняет не только куда
-                нажимать, но и зачем это нужно бизнесу.
+              <p className="mt-5 max-w-3xl text-base leading-8 text-[var(--rivn-muted)]">
+                Здесь собран быстрый старт и короткие инструкции по ключевым
+                разделам: клиенты, проекты, задачи, финансы, CRM, аналитика и
+                тарифы. Без перегруза, но с понятной логикой работы.
               </p>
 
-              <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
+              <div className="mt-6 flex flex-wrap gap-3">
                 <a
                   href="#quick-start"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-[#07120F] transition hover:bg-emerald-300"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--rivn-primary-bg)] px-5 py-3 text-sm font-semibold text-[var(--rivn-primary-text)] shadow-[0_18px_40px_rgba(0,245,168,0.20)] transition hover:-translate-y-0.5"
                 >
-                  Быстрый старт
+                  Начать за 20 минут
                   <ArrowRight className="h-4 w-4" />
                 </a>
                 <a
                   href="#knowledge-base"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07] hover:text-white"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--rivn-card-border)] bg-[var(--rivn-inner-bg)] px-5 py-3 text-sm font-semibold text-[var(--rivn-text)] transition hover:-translate-y-0.5"
                 >
-                  База знаний
-                  <Search className="h-4 w-4" />
+                  Открыть базу знаний
+                  <Sparkles className="h-4 w-4" />
                 </a>
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-white/10 bg-[#0F1524] p-3 sm:p-4">
-              <div className="overflow-hidden rounded-[22px] border border-white/10 bg-black shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+            <div className="rounded-[30px] border border-[var(--rivn-card-border)] bg-[var(--rivn-inner-bg)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] sm:p-4">
+              <div className="overflow-hidden rounded-[24px] border border-[var(--rivn-card-border)] bg-black shadow-[0_24px_90px_rgba(0,0,0,0.24)]">
                 <div className="relative aspect-video w-full">
                   <iframe
                     src={QUICK_START_VIDEO_EMBED_URL}
@@ -69,15 +80,15 @@ export default function GuidePage() {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-start gap-3 rounded-[22px] border border-emerald-400/15 bg-emerald-400/[0.06] p-4">
-                <PlayCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+              <div className="mt-4 flex items-start gap-3 rounded-[24px] border border-[#00f5a8]/16 bg-[#00f5a8]/8 p-4">
+                <PlayCircle className="mt-0.5 h-5 w-5 shrink-0 text-[#43ffc2]" />
                 <div>
-                  <div className="text-sm font-semibold text-white">
+                  <div className="text-sm font-semibold text-[var(--rivn-text)]">
                     Видео быстрого старта
                   </div>
-                  <p className="mt-1 text-sm leading-6 text-white/55">
-                    Посмотри короткий обзор, чтобы быстрее понять логику сервиса:
-                    кабинеты, клиенты, проекты, задачи, финансы, CRM и отчёты.
+                  <p className="mt-1 text-sm leading-6 text-[var(--rivn-muted)]">
+                    Посмотри короткий обзор, если хочешь понять общую логику
+                    платформы перед настройкой кабинета.
                   </p>
                 </div>
               </div>
@@ -87,26 +98,26 @@ export default function GuidePage() {
 
         <section
           id="quick-start"
-          className="scroll-mt-24 rounded-[34px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-6"
+          className="scroll-mt-24 rounded-[34px] border border-[var(--rivn-card-border)] bg-[var(--rivn-card-bg)] p-5 shadow-[var(--rivn-card-shadow)] sm:p-6"
         >
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-300">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#43ffc2]">
                 Быстрый старт
               </div>
-              <h2 className="mt-2 text-3xl font-semibold">
+              <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
                 Что сделать в первый день
               </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">
-                Этот сценарий помогает быстро собрать рабочую основу: команда,
-                клиенты, проекты, задачи, деньги и автоматизация.
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--rivn-muted)]">
+                Эти шаги превращают пустой кабинет в рабочую систему: сначала
+                основа, потом данные, потом ежедневная работа.
               </p>
             </div>
             <Link
               href="/guide/quick-start"
-              className="w-fit rounded-2xl border border-violet-400/20 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-200 transition hover:bg-violet-500/15"
+              className="w-fit rounded-full border border-[#7c5cff]/24 bg-[#7c5cff]/12 px-4 py-2 text-sm font-semibold text-[#b8a7ff] transition hover:-translate-y-0.5"
             >
-              Открыть полный гайд
+              Полный быстрый старт
             </Link>
           </div>
 
@@ -115,18 +126,18 @@ export default function GuidePage() {
               <Link
                 key={step.title}
                 href={step.href}
-                className="group rounded-[24px] border border-white/10 bg-white/[0.03] p-4 transition hover:border-emerald-400/20 hover:bg-emerald-400/[0.06] sm:p-5"
+                className="group rounded-[26px] border border-[var(--rivn-card-border)] bg-[var(--rivn-inner-bg)] p-4 transition hover:-translate-y-1 hover:border-[#00f5a8]/24 hover:shadow-[0_24px_70px_rgba(0,245,168,0.10)] sm:p-5"
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/12 text-sm font-semibold text-emerald-300">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--rivn-primary-bg)] text-sm font-semibold text-[var(--rivn-primary-text)]">
                   {index + 1}
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-white">
+                <h3 className="mt-4 text-lg font-semibold text-[var(--rivn-text)]">
                   {step.title}
                 </h3>
-                <p className="mt-2 text-sm leading-6 text-white/50">
+                <p className="mt-2 text-sm leading-6 text-[var(--rivn-muted)]">
                   {step.text}
                 </p>
-                <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-300">
+                <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#43ffc2]">
                   Перейти
                   <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
                 </div>
@@ -137,23 +148,23 @@ export default function GuidePage() {
 
         <section
           id="knowledge-base"
-          className="scroll-mt-24 rounded-[34px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-6"
+          className="scroll-mt-24 rounded-[34px] border border-[var(--rivn-card-border)] bg-[var(--rivn-card-bg)] p-5 shadow-[var(--rivn-card-shadow)] sm:p-6"
         >
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-300">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#43ffc2]">
                 База знаний
               </div>
-              <h2 className="mt-2 text-3xl font-semibold">
+              <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
                 Инструкции по разделам
               </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">
-                Статьи сделаны как отдельные страницы. На них можно ссылаться
-                из CRM, задач, Avito-отчётов, аналитики и других разделов.
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--rivn-muted)]">
+                Каждая статья объясняет назначение раздела, базовый сценарий и
+                несколько действий, которые важно сделать правильно.
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/55">
-              {guideArticles.length} статей
+            <div className="rounded-full border border-[var(--rivn-card-border)] bg-[var(--rivn-inner-bg)] px-4 py-2 text-sm text-[var(--rivn-muted)]">
+              {guideArticles.length} коротких статей
             </div>
           </div>
 
@@ -165,7 +176,7 @@ export default function GuidePage() {
 
               return (
                 <div key={category}>
-                  <div className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-white/35">
+                  <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--rivn-muted)]">
                     {category}
                   </div>
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -173,23 +184,26 @@ export default function GuidePage() {
                       <Link
                         key={article.slug}
                         href={`/guide/${article.slug}`}
-                        className="group rounded-[24px] border border-white/10 bg-white/[0.03] p-4 transition hover:border-violet-400/25 hover:bg-violet-500/[0.06] sm:p-5"
+                        className="group rounded-[26px] border border-[var(--rivn-card-border)] bg-[var(--rivn-inner-bg)] p-4 transition hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(0,0,0,0.16)] sm:p-5"
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/12 text-violet-200">
+                          <div
+                            className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${accentClasses[article.accent]}`}
+                          >
                             <FileText className="h-5 w-5" />
                           </div>
-                          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/40">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--rivn-card-border)] bg-[var(--rivn-panel-bg)] px-2.5 py-1 text-xs text-[var(--rivn-muted)]">
+                            <Clock3 className="h-3.5 w-3.5" />
                             {article.readTime}
                           </span>
                         </div>
-                        <h3 className="mt-4 text-lg font-semibold text-white">
+                        <h3 className="mt-4 text-lg font-semibold text-[var(--rivn-text)]">
                           {article.title}
                         </h3>
-                        <p className="mt-2 min-h-[72px] text-sm leading-6 text-white/50">
+                        <p className="mt-2 min-h-[72px] text-sm leading-6 text-[var(--rivn-muted)]">
                           {article.description}
                         </p>
-                        <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-violet-200">
+                        <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#43ffc2]">
                           Читать
                           <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
                         </div>
@@ -202,22 +216,22 @@ export default function GuidePage() {
           </div>
         </section>
 
-        <section className="rounded-[34px] border border-emerald-400/15 bg-emerald-400/[0.06] p-4 sm:p-6">
+        <section className="rounded-[34px] border border-[#00f5a8]/16 bg-[#00f5a8]/8 p-5 sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-300">
+              <div className="inline-flex items-center gap-2 text-sm font-semibold text-[#43ffc2]">
                 <CheckCircle2 className="h-4 w-4" />
-                Как использовать дальше
+                Лучший способ освоиться
               </div>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-                Когда появляется новая инструкция, добавляем её в базу знаний и
-                ставим ссылку из нужного раздела сервиса. Пользователь нажимает
-                «Помощь» и попадает сразу в правильную статью.
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--rivn-muted)]">
+                Открой быстрый старт, сделай первые шаги в своём кабинете и
+                возвращайся к отдельным статьям, когда понадобится конкретный
+                раздел.
               </p>
             </div>
             <Link
               href="/dashboard"
-              className="w-fit rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07]"
+              className="w-fit rounded-full border border-[var(--rivn-card-border)] bg-[var(--rivn-inner-bg)] px-5 py-3 text-sm font-semibold text-[var(--rivn-text)] transition hover:-translate-y-0.5"
             >
               Вернуться в сервис
             </Link>

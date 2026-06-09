@@ -7,6 +7,7 @@ import {
   enqueueAvitoReportRetryJob,
   loadAvitoReportSnapshot,
 } from "@/app/api/avito/report-reliability";
+import { verifyCronSecret } from "../../cron/verify-cron-secret";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -865,7 +866,11 @@ function buildWeeklyReport(params: {
   ].join("\n");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!verifyCronSecret(request)) {
+    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const supabase = getSupabase();
 

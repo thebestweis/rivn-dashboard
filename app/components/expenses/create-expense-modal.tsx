@@ -1,3 +1,6 @@
+import { CustomSelect } from "../ui/custom-select";
+import { RivnDatePicker } from "../ui/rivn-date-picker";
+
 type ExpenseCategory =
   | "marketing"
   | "contractor"
@@ -35,6 +38,14 @@ interface CreateExpenseModalProps {
   isSubmitting?: boolean;
 }
 
+const categoryOptions: Array<{ value: ExpenseCategory; label: string }> = [
+  { value: "marketing", label: "Маркетинг" },
+  { value: "contractor", label: "Подрядчик" },
+  { value: "service", label: "Услуги" },
+  { value: "tax", label: "Налоги" },
+  { value: "other", label: "Другое" },
+];
+
 export function CreateExpenseModal({
   isOpen,
   onClose,
@@ -57,6 +68,13 @@ export function CreateExpenseModal({
 
   const isDisabled = !canManageExpenses || isSubmitting;
   const isValid = Boolean(title.trim());
+  const clientOptions = [
+    { value: "", label: "Выбери клиента" },
+    ...clients.map((item) => ({
+      value: item.id,
+      label: item.name || item.clientName || item.title || "Без названия",
+    })),
+  ];
 
   async function handleCreate() {
     if (!canManageExpenses) return;
@@ -73,103 +91,100 @@ export function CreateExpenseModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_50px_rgba(0,0,0,0.45)] sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div className="text-sm text-white/50">Новый расход</div>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-              Добавить расход
-            </h2>
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-[#020611]/75 p-3 backdrop-blur-md sm:items-center sm:p-4">
+      <div className="rivn-card flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)]">
+        <div className="shrink-0 p-4 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-xs uppercase tracking-[0.2em] text-[#43ffc2]">
+                Новый расход
+              </div>
+              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">
+                Добавить расход
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="rivn-button w-full px-4 py-2 text-sm text-white/70 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              Закрыть
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          >
-            Закрыть
-          </button>
+          {!canManageExpenses ? (
+            <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              У вас нет прав на создание расходов. Доступен только просмотр.
+            </div>
+          ) : null}
         </div>
 
-        {!canManageExpenses ? (
-          <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-            У вас нет прав на создание расходов. Доступен только просмотр.
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6">
+          <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Название расхода"
+              disabled={isDisabled}
+              className="rivn-field disabled:cursor-not-allowed disabled:opacity-50"
+            />
+
+            <CustomSelect
+              value={category}
+              onChange={(value) => setCategory(value as ExpenseCategory)}
+              options={categoryOptions}
+              disabled={isDisabled}
+              buttonClassName="rivn-field h-[48px] shadow-none"
+            />
+
+            <input
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              placeholder="Сумма"
+              disabled={isDisabled}
+              className="rivn-field disabled:cursor-not-allowed disabled:opacity-50"
+            />
+
+            <RivnDatePicker
+              value={date}
+              onChange={setDate}
+              disabled={isDisabled}
+              placeholder="Дата расхода"
+            />
+
+            <CustomSelect
+              value={client}
+              onChange={setClient}
+              options={clientOptions}
+              disabled={isDisabled}
+              buttonClassName="rivn-field h-[48px] shadow-none"
+              className="md:col-span-2"
+            />
           </div>
-        ) : null}
-
-        <div className="mt-6 grid gap-3 sm:gap-4 md:grid-cols-2">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Название расхода"
-            disabled={isDisabled}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50"
-          />
-
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
-            disabled={isDisabled}
-            className="rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="marketing">Маркетинг</option>
-            <option value="contractor">Подрядчик</option>
-            <option value="service">Услуги</option>
-            <option value="tax">Налоги</option>
-            <option value="other">Другое</option>
-          </select>
-
-          <input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Сумма"
-            disabled={isDisabled}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50"
-          />
-
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            disabled={isDisabled}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
-          />
-
-          <select
-            value={client}
-            onChange={(e) => setClient(e.target.value)}
-            disabled={isDisabled}
-            className="md:col-span-2 w-full rounded-2xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">Выбери клиента</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name || c.clientName || c.title || "Без названия"}
-              </option>
-            ))}
-          </select>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:flex sm:items-center sm:justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Отмена
-          </button>
+        <div className="shrink-0 border-t border-white/10 bg-[#07111f]/70 p-4 backdrop-blur-xl sm:px-6">
+          <div className="grid gap-3 sm:flex sm:items-center sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="rivn-button px-4 py-3 text-sm text-white/80 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Отмена
+            </button>
 
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={isDisabled || !isValid}
-            className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? "Создание..." : "Создать расход"}
-          </button>
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={isDisabled || !isValid}
+              className="rivn-button rivn-button-primary px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? "Создание..." : "Создать расход"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

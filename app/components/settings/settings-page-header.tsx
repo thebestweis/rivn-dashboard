@@ -20,36 +20,33 @@ export function SettingsPageHeader({
   const { role, isLoading } = useAppContextState();
 
   function getTabClass(tab: SettingsTab) {
-    return `rounded-xl px-4 py-2 text-sm transition ${
+    return `relative overflow-hidden rounded-2xl px-4 py-2.5 text-sm font-medium transition duration-300 ease-out active:scale-[0.985] ${
       activeTab === tab
-        ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-        : "text-white/60 hover:text-white"
+        ? "bg-[#00f5a8] text-[#06101d] shadow-[0_18px_42px_rgba(0,245,168,0.20),inset_0_1px_0_rgba(255,255,255,0.42)]"
+        : "text-white/58 hover:-translate-y-0.5 hover:bg-white/[0.07] hover:text-white"
     }`;
   }
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+    <div className="rivn-card rivn-card-interactive p-4 sm:p-6">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="text-sm text-white/50">Раздел</div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+          <div className="text-xs uppercase tracking-[0.22em] text-[#43ffc2]">
+            RIVN OS Control
+          </div>
+          <h1 className="mt-2 text-3xl font-medium tracking-[-0.05em] text-white sm:text-4xl">
             Настройки
           </h1>
-          <p className="mt-2 text-sm text-white/55">
-            Профиль, пользователи, доступы, реферальная система, Telegram, системные
-            параметры и кабинеты.
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/52">
+            Настрой кабинет, команду, доступы, уведомления и системные правила в одном спокойном пространстве.
           </p>
-        </div>
-
-        <div className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)]">
-          Конфигурация системы
         </div>
       </div>
 
       {isLoading ? (
-        <div className="mt-5 h-[46px] rounded-2xl border border-white/10 bg-white/[0.04]" />
+        <div className="mt-6 h-[50px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />
       ) : (
-        <div className="mt-5 grid w-full grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1 sm:flex sm:w-fit sm:flex-wrap sm:items-center">
+        <div className="mt-6 grid w-full grid-cols-2 gap-2 rounded-[24px] border border-white/10 bg-white/[0.04] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:flex sm:w-fit sm:flex-wrap sm:items-center">
           <button
             type="button"
             onClick={() => setActiveTab("profile")}

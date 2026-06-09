@@ -8,9 +8,12 @@ import {
   History,
   Route,
   Settings2,
+  ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
+  Users,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   canAccessCrm,
   canManageCrmSettings,
@@ -23,10 +26,10 @@ import {
 } from "../../lib/queries/use-crm-query";
 import { useActiveWorkspaceMembers } from "../../lib/queries/use-workspace-members-query";
 import { useAppContextState } from "../../providers/app-context-provider";
-import { CustomSelect } from "../../components/ui/custom-select";
 import { getWorkspaceMemberDisplayName } from "../../lib/supabase/workspace-members";
 import type {
   CrmAssignmentMode,
+  CrmAssignmentRule,
   CrmAssignmentRuleSettings,
 } from "../../lib/supabase/crm";
 
@@ -36,37 +39,54 @@ type AssignmentDraft = {
   settings: CrmAssignmentRuleSettings;
 };
 
+type RuleRow = {
+  key: string;
+  kind: string | null;
+  name: string;
+  caption: string;
+  rule: CrmAssignmentRule | null;
+};
+
 const GLOBAL_RULE_KEY = "__global__";
 
 const modeOptions: Array<{
   value: CrmAssignmentMode;
   label: string;
+  shortLabel: string;
   description: string;
 }> = [
   {
     value: "manual",
     label: "Ручное назначение",
-    description: "Заявка создаётся без автоматического ответственного.",
+    shortLabel: "Ручной режим",
+    description: "Заявка создается без автоматического ответственного.",
   },
   {
     value: "fixed_manager",
-    label: "Закреплённые менеджеры",
+    label: "Закрепленные менеджеры",
+    shortLabel: "Закреплено",
     description: "Все заявки канала уходят выбранному менеджеру или группе.",
   },
   {
     value: "round_robin",
     label: "Равномерно по очереди",
-    description: "Система распределяет заявки между выбранными менеджерами 50/50 или равными долями.",
+    shortLabel: "По очереди",
+    description: "Система делит заявки между выбранными менеджерами ровными долями.",
   },
   {
     value: "least_loaded",
     label: "Кто свободнее",
+    shortLabel: "По нагрузке",
     description: "Новая заявка уходит менеджеру с меньшим числом открытых сделок.",
   },
 ];
 
 function getModeLabel(mode: CrmAssignmentMode) {
   return modeOptions.find((option) => option.value === mode)?.label ?? mode;
+}
+
+function getModeShortLabel(mode: CrmAssignmentMode) {
+  return modeOptions.find((option) => option.value === mode)?.shortLabel ?? mode;
 }
 
 function emptyDraft(): AssignmentDraft {
@@ -78,6 +98,16 @@ function emptyDraft(): AssignmentDraft {
       priority_member_ids: [],
       disabled_member_ids: [],
     },
+  };
+}
+
+function draftFromRule(rule: CrmAssignmentRule | null): AssignmentDraft {
+  if (!rule) return emptyDraft();
+
+  return {
+    mode: rule.mode,
+    target_member_ids: rule.target_member_ids,
+    settings: rule.settings,
   };
 }
 
@@ -100,25 +130,25 @@ function getPayloadStringArray(payload: Record<string, unknown>, key: string) {
 function getAssignmentReasonText(reason: string) {
   switch (reason) {
     case "fixed_manager":
-      return "канал закреплён за выбранными менеджерами";
+      return "канал закреплен за выбранными менеджерами";
     case "least_open_deals":
       return "выбран менеджер с меньшей нагрузкой";
     case "equal_distribution":
       return "заявки распределяются равномерно";
     case "selected_in_form":
-      return "ответственный выбран вручную при создании";
+      return "ответственный выбран вручную";
     case "limited_role_self_assignment":
       return "менеджер создал сделку для себя";
     case "manual_mode":
-      return "включён ручной режим";
+      return "включен ручной режим";
     case "rule_missing":
-      return "для канала нет правила";
+      return "для канала нет отдельного правила";
     case "target_members_missing":
       return "в правиле не выбраны менеджеры";
     case "all_managers_disabled":
-      return "все менеджеры в правиле временно выключены";
+      return "все менеджеры правила временно выключены";
     case "capacity_limit_overridden":
-      return "лимит загрузки достигнут, выбран наименее загруженный";
+      return "лимит достигнут, выбран наименее загруженный";
     default:
       return "сработало правило распределения";
   }
@@ -142,32 +172,18 @@ export default function CrmSettingsPage() {
   );
   const upsertRuleMutation = useUpsertCrmAssignmentRuleMutation();
   const [drafts, setDrafts] = useState<Record<string, AssignmentDraft>>({});
-  const sources = data?.sources ?? [];
-  const assignmentRules = data?.assignmentRules ?? [];
-  const sourceRows = useMemo(() => {
-    const uniqueSources = Array.from(
-      new Map(sources.map((source) => [source.kind, source])).values()
-    );
+  const [selectedKey, setSelectedKey] = useState(GLOBAL_RULE_KEY);
 
-    return [
-      {
-        key: GLOBAL_RULE_KEY,
-        kind: null,
-        name: "Все источники без отдельного правила",
-      },
-      ...uniqueSources.map((source) => ({
-        key: source.kind,
-        kind: source.kind,
-        name: source.name,
-      })),
-    ];
-  }, [sources]);
-  const activeRules = assignmentRules.filter((rule) => rule.is_active);
-  const defaultRule = activeRules.find((rule) => !rule.source_kind);
-  const sourceRuleCount = activeRules.filter((rule) => rule.source_kind).length;
-  const riskyRuleCount = activeRules.filter(
-    (rule) => rule.mode !== "manual" && rule.target_member_ids.length === 0
-  ).length;
+  const sources = useMemo(() => data?.sources ?? [], [data?.sources]);
+  const assignmentRules = useMemo(
+    () => data?.assignmentRules ?? [],
+    [data?.assignmentRules]
+  );
+  const activeRules = useMemo(
+    () => assignmentRules.filter((rule) => rule.is_active),
+    [assignmentRules]
+  );
+  const defaultRule = activeRules.find((rule) => !rule.source_kind) ?? null;
   const memberNameById = useMemo(
     () =>
       new Map(
@@ -179,33 +195,96 @@ export default function CrmSettingsPage() {
     [activeMembers]
   );
 
-  useEffect(() => {
-    setDrafts((current) => {
-      const next = { ...current };
+  const rows: RuleRow[] = useMemo(() => {
+    const uniqueSources = Array.from(
+      new Map(sources.map((source) => [source.kind, source])).values()
+    );
 
-      for (const row of sourceRows) {
-        const rule = assignmentRules.find((item) =>
-          row.kind ? item.source_kind === row.kind : !item.source_kind
-        );
+    return [
+      {
+        key: GLOBAL_RULE_KEY,
+        kind: null,
+        name: "Правило по умолчанию",
+        caption: "Сработает, если для канала нет отдельного правила",
+        rule: defaultRule,
+      },
+      ...uniqueSources.map((source) => {
+        const rule =
+          activeRules.find((item) => item.source_kind === source.kind) ?? null;
 
-        next[row.key] = rule
-          ? {
-              mode: rule.mode,
-              target_member_ids: rule.target_member_ids,
-              settings: rule.settings,
-            }
-          : next[row.key] ?? emptyDraft();
-      }
+        return {
+          key: source.kind,
+          kind: source.kind,
+          name: source.name,
+          caption: `Источник: ${source.kind}`,
+          rule,
+        };
+      }),
+    ];
+  }, [activeRules, defaultRule, sources]);
 
-      return next;
-    });
-  }, [assignmentRules, sourceRows]);
+  const selectedRow = rows.find((row) => row.key === selectedKey) ?? rows[0];
+  const selectedDraft =
+    drafts[selectedRow?.key ?? GLOBAL_RULE_KEY] ??
+    draftFromRule(selectedRow?.rule ?? null);
+  const sourceRuleCount = activeRules.filter((rule) => rule.source_kind).length;
+  const riskyRuleCount = rows.filter((row) => {
+    const draft = drafts[row.key] ?? draftFromRule(row.rule);
+    return draft.mode !== "manual" && draft.target_member_ids.length === 0;
+  }).length;
+  const selectedMembers = activeMembers.filter((member) =>
+    selectedDraft.target_member_ids.includes(member.id)
+  );
+  const selectedDisabledIds = selectedDraft.settings.disabled_member_ids ?? [];
+  const selectedPriorityIds = [
+    ...new Set([
+      ...(selectedDraft.settings.priority_member_ids ?? []),
+      ...selectedDraft.target_member_ids,
+    ]),
+  ].filter((id) => selectedDraft.target_member_ids.includes(id));
+  const headerStats = [
+    {
+      label: "Источников",
+      value: sources.length,
+      hint: "каналы входящих заявок",
+      icon: Route,
+    },
+    {
+      label: "Правил",
+      value: sourceRuleCount,
+      hint: "отдельно по источникам",
+      icon: SlidersHorizontal,
+    },
+    {
+      label: "Команда",
+      value: activeMembers.length,
+      hint: "активных сотрудников",
+      icon: Users,
+    },
+    {
+      label: "Состояние",
+      value: riskyRuleCount > 0 ? riskyRuleCount : "OK",
+      hint:
+        riskyRuleCount > 0
+          ? "правил требуют внимания"
+          : "рисков не найдено",
+      icon: riskyRuleCount > 0 ? AlertTriangle : ShieldCheck,
+      danger: riskyRuleCount > 0,
+    },
+  ];
+
+  function getDraft(row: RuleRow) {
+    return drafts[row.key] ?? draftFromRule(row.rule);
+  }
 
   function updateDraft(key: string, patch: Partial<AssignmentDraft>) {
-    setDrafts((current) => ({
-      ...current,
+    const row = rows.find((item) => item.key === key);
+    const current = row ? getDraft(row) : drafts[key] ?? emptyDraft();
+
+    setDrafts((previous) => ({
+      ...previous,
       [key]: {
-        ...(current[key] ?? emptyDraft()),
+        ...current,
         ...patch,
       },
     }));
@@ -215,24 +294,24 @@ export default function CrmSettingsPage() {
     key: string,
     patch: Partial<CrmAssignmentRuleSettings>
   ) {
-    setDrafts((current) => {
-      const draft = current[key] ?? emptyDraft();
+    const row = rows.find((item) => item.key === key);
+    const current = row ? getDraft(row) : drafts[key] ?? emptyDraft();
 
-      return {
+    setDrafts((previous) => ({
+      ...previous,
+      [key]: {
         ...current,
-        [key]: {
-          ...draft,
-          settings: {
-            ...draft.settings,
-            ...patch,
-          },
+        settings: {
+          ...current.settings,
+          ...patch,
         },
-      };
-    });
+      },
+    }));
   }
 
   function toggleMember(key: string, memberId: string) {
-    const draft = drafts[key] ?? emptyDraft();
+    const row = rows.find((item) => item.key === key);
+    const draft = row ? getDraft(row) : drafts[key] ?? emptyDraft();
     const exists = draft.target_member_ids.includes(memberId);
     const nextTargetIds = exists
       ? draft.target_member_ids.filter((id) => id !== memberId)
@@ -253,7 +332,8 @@ export default function CrmSettingsPage() {
   }
 
   function toggleDisabledMember(key: string, memberId: string) {
-    const draft = drafts[key] ?? emptyDraft();
+    const row = rows.find((item) => item.key === key);
+    const draft = row ? getDraft(row) : drafts[key] ?? emptyDraft();
     const disabledIds = draft.settings.disabled_member_ids ?? [];
     const exists = disabledIds.includes(memberId);
 
@@ -265,7 +345,8 @@ export default function CrmSettingsPage() {
   }
 
   function movePriorityMember(key: string, memberId: string, direction: -1 | 1) {
-    const draft = drafts[key] ?? emptyDraft();
+    const row = rows.find((item) => item.key === key);
+    const draft = row ? getDraft(row) : drafts[key] ?? emptyDraft();
     const orderedIds = [
       ...new Set([
         ...(draft.settings.priority_member_ids ?? []),
@@ -282,8 +363,8 @@ export default function CrmSettingsPage() {
     updateDraftSettings(key, { priority_member_ids: nextIds });
   }
 
-  async function saveRule(row: { key: string; kind: string | null }) {
-    const draft = drafts[row.key] ?? emptyDraft();
+  async function saveRule(row: RuleRow) {
+    const draft = getDraft(row);
 
     await upsertRuleMutation.mutateAsync({
       source_kind: row.kind,
@@ -293,15 +374,19 @@ export default function CrmSettingsPage() {
       settings: draft.settings,
       is_active: true,
     });
+
+    setDrafts((previous) => {
+      const next = { ...previous };
+      delete next[row.key];
+      return next;
+    });
   }
 
   if (!isReady || isLoading) {
     return (
-      <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#121827]">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Загружаем настройки CRM...
-          </p>
+      <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
+        <div className="rivn-card p-8">
+          <p className="text-sm text-white/55">Загружаем настройки CRM...</p>
         </div>
       </main>
     );
@@ -309,15 +394,15 @@ export default function CrmSettingsPage() {
 
   if (!hasAccess || !canManageSettings) {
     return (
-      <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#121827]">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+      <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
+        <div className="rivn-card p-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#00f5a8]">
             CRM
           </p>
           <h1 className="mt-3 text-2xl font-semibold">
             Нет доступа к настройкам CRM
           </h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-2 text-sm text-white/55">
             Настраивать распределение заявок может владелец, администратор,
             менеджер или руководитель отдела продаж.
           </p>
@@ -327,453 +412,457 @@ export default function CrmSettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <Link
-              href="/crm"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-200"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Назад в CRM
-            </Link>
-            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
-              CRM
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-              Распределение заявок
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Настрой, кому будут попадать новые заявки из Авито, Tilda,
-              Яндекс Директа и других каналов. Это помогает быстро отвечать
-              клиентам и не терять продажи из-за ручной передачи лидов.
-            </p>
-          </div>
-
-          <Link
-            href="/crm/analytics"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
-          >
-            <Route className="h-4 w-4" />
-            Аналитика CRM
-          </Link>
-        </div>
-
-        <div className="mt-6 flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/[0.04]">
-          <Link
-            href="/crm/settings"
-            className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-600/20"
-          >
-            Распределение
-          </Link>
-          <Link
-            href="/crm?settings=pipelines"
-            className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
-          >
-            Воронки
-          </Link>
-          <Link
-            href="/crm?settings=stages"
-            className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
-          >
-            Этапы
-          </Link>
-          <Link
-            href="/crm/integrations"
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-white/60 dark:hover:text-white"
-          >
-            <Settings2 className="h-4 w-4" />
-            Интеграции
-          </Link>
-        </div>
-
-        <div className="mt-6 grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-500/20 dark:bg-violet-500/10">
-            <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
-              Канал → менеджеры
-            </p>
-            <p className="mt-2 text-sm text-violet-700 dark:text-violet-200">
-              Для Авито можно выбрать одну команду, для Tilda другую.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-            <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-              Равные доли
-            </p>
-            <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-200">
-              Если менеджеров несколько, заявки будут делиться равномерно.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-              Защита от перегруза
-            </p>
-            <p className="mt-2 text-sm text-amber-700 dark:text-amber-200">
-              Режим “кто свободнее” отдаёт лиды менеджеру с меньшей нагрузкой.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.04]">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Источники
-            </p>
-            <p className="mt-2 text-2xl font-semibold">{sources.length}</p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Каналы, откуда могут приходить заявки
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.04]">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Настроено
-            </p>
-            <p className="mt-2 text-2xl font-semibold">{sourceRuleCount}</p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Отдельных правил по каналам
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.04]">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              По умолчанию
-            </p>
-            <p className="mt-2 text-sm font-semibold">
-              {defaultRule ? getModeLabel(defaultRule.mode) : "Ручное назначение"}
-            </p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Сработает, если у канала нет своего правила
-            </p>
-          </div>
+    <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
+      <section className="rivn-card overflow-hidden p-0">
+        <div className="relative p-6 lg:p-7">
           <div
-            className={`rounded-2xl border p-4 ${
-              riskyRuleCount > 0
-                ? "border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10"
-                : "border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10"
-            }`}
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Контроль
-            </p>
-            <p className="mt-2 text-sm font-semibold">
-              {riskyRuleCount > 0 ? "Есть риск" : "Всё спокойно"}
-            </p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {riskyRuleCount > 0
-                ? "В некоторых правилах не выбраны менеджеры"
-                : "Правила не оставляют заявки без исполнителей"}
-            </p>
+            aria-hidden="true"
+            className="pointer-events-none absolute right-0 top-0 h-56 w-72 rounded-full bg-[#00f5a8]/12 blur-3xl"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-12 -top-16 h-72 w-72 rounded-full bg-[#7c5cff]/18 blur-3xl"
+          />
+
+          <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <Link
+                href="/crm"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-white/50 transition hover:text-white"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Назад в CRM
+              </Link>
+              <p className="mt-5 text-xs font-semibold uppercase tracking-[0.22em] text-[#00f5a8]">
+                CRM control
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white lg:text-4xl">
+                Пульт распределения заявок
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/55">
+                Настрой, куда попадут новые заявки из Авито, Tilda, Telegram и
+                других каналов. Сначала работает правило конкретного источника,
+                а если его нет, система использует правило по умолчанию.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 xl:min-w-[720px]">
+              <div className="grid gap-2 sm:grid-cols-2 xl:ml-auto xl:w-[360px]">
+                <Link
+                  href="/crm/analytics"
+                  className="rivn-pill justify-center px-4 py-3 text-sm font-semibold"
+                >
+                  <Route className="h-4 w-4" />
+                  Аналитика CRM
+                </Link>
+                <Link
+                  href="/crm/integrations"
+                  className="rivn-pill justify-center px-4 py-3 text-sm font-semibold"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  Интеграции
+                </Link>
+              </div>
+              <div className="hidden grid-cols-4 gap-2 xl:grid">
+                {headerStats.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <div
+                      key={item.label}
+                      className={`rounded-[18px] border px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${
+                        item.danger
+                          ? "border-amber-400/25 bg-amber-400/10"
+                          : "border-white/10 bg-white/[0.055]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/42">
+                          {item.label}
+                        </p>
+                        <Icon
+                          className={`h-4 w-4 ${
+                            item.danger ? "text-amber-200" : "text-[#00f5a8]"
+                          }`}
+                        />
+                      </div>
+                      <p className="mt-2 text-xl font-semibold text-white">
+                        {item.value}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-white/45">
+                        {item.hint}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="relative mt-5 flex flex-wrap items-stretch gap-2 xl:hidden">
+            {headerStats.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <div
+                  key={item.label}
+                  className={`min-w-[170px] flex-1 rounded-[18px] border px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] md:flex-none ${
+                    item.danger
+                      ? "border-amber-400/25 bg-amber-400/10"
+                      : "border-white/10 bg-white/[0.055]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/42">
+                      {item.label}
+                    </p>
+                    <Icon
+                      className={`h-4 w-4 ${
+                        item.danger ? "text-amber-200" : "text-[#00f5a8]"
+                      }`}
+                    />
+                  </div>
+                  <p className="mt-2 text-xl font-semibold text-white">
+                    {item.value}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-white/45">{item.hint}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      <section className="mt-5 grid gap-4">
-        {sourceRows.map((row) => {
-          const draft = drafts[row.key] ?? emptyDraft();
-          const selectedMembers = activeMembers.filter((member) =>
-            draft.target_member_ids.includes(member.id)
-          );
-          const needsManagers =
-            draft.mode !== "manual" && draft.target_member_ids.length === 0;
+      <section className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="rivn-card overflow-hidden p-0">
+          <div className="border-b border-white/10 px-5 py-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/38">
+                  Правила
+                </p>
+                <h2 className="mt-1 text-xl font-semibold text-white">
+                  Куда уходят новые заявки
+                </h2>
+              </div>
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[#00f5a8]/20 bg-[#00f5a8]/10 px-3 py-1.5 text-xs font-semibold text-[#9fffe3]">
+                <Sparkles className="h-3.5 w-3.5" />
+                Выбери строку для настройки
+              </div>
+            </div>
+          </div>
 
-          return (
-            <div
-              key={row.key}
-              className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#121827]"
-            >
-              <div className="grid gap-5 xl:grid-cols-[1fr_280px]">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-200">
-                      <SlidersHorizontal className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <h2 className="text-lg font-semibold">{row.name}</h2>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        {row.kind
-                          ? `Источник: ${row.kind}`
-                          : "Используется, если для источника нет отдельного правила"}
-                        </p>
-                    </div>
-                    <span
-                      className={`ml-auto inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
-                        needsManagers
-                          ? "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-100"
-                          : draft.mode === "manual"
-                            ? "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300"
-                            : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-100"
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+              <thead className="border-b border-white/10 text-xs uppercase tracking-[0.14em] text-white/35">
+                <tr>
+                  <th className="px-5 py-4 font-semibold">Источник</th>
+                  <th className="px-5 py-4 font-semibold">Режим</th>
+                  <th className="px-5 py-4 font-semibold">Менеджеры</th>
+                  <th className="px-5 py-4 font-semibold">Лимит</th>
+                  <th className="px-5 py-4 text-right font-semibold">
+                    Статус
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {rows.map((row) => {
+                  const draft = getDraft(row);
+                  const managerNames = draft.target_member_ids.map(
+                    (id) => memberNameById.get(id) ?? "Сотрудник"
+                  );
+                  const isSelected = row.key === selectedRow.key;
+                  const needsManagers =
+                    draft.mode !== "manual" &&
+                    draft.target_member_ids.length === 0;
+
+                  return (
+                    <tr
+                      key={row.key}
+                      onClick={() => setSelectedKey(row.key)}
+                      className={`cursor-pointer transition duration-300 ${
+                        isSelected
+                          ? "bg-[#00f5a8]/10"
+                          : "hover:bg-white/[0.045]"
                       }`}
                     >
-                      {needsManagers
-                        ? "Нужны менеджеры"
-                        : getModeLabel(draft.mode)}
-                    </span>
-                  </div>
-
-                  <div className="mt-5 grid gap-3 lg:grid-cols-2">
-                    {modeOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() =>
-                          updateDraft(row.key, { mode: option.value })
-                        }
-                        className={`rounded-2xl border p-4 text-left transition ${
-                          draft.mode === option.value
-                            ? "border-violet-300 bg-violet-50 text-violet-900 shadow-sm dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-100"
-                            : "border-slate-200 bg-slate-50 text-slate-700 hover:border-violet-200 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-300"
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <CheckCircle2
-                            className={`mt-0.5 h-5 w-5 ${
-                              draft.mode === option.value
-                                ? "text-violet-600 dark:text-violet-200"
-                                : "text-slate-300"
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              needsManagers
+                                ? "bg-amber-300"
+                                : draft.mode === "manual"
+                                  ? "bg-white/28"
+                                  : "bg-[#00f5a8]"
                             }`}
                           />
-                          <div>
-                            <p className="text-sm font-semibold">
-                              {option.label}
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-white">
+                              {row.name}
                             </p>
-                            <p className="mt-1 text-xs leading-5 opacity-75">
-                              {option.description}
+                            <p className="mt-0.5 truncate text-xs text-white/40">
+                              {row.caption}
                             </p>
                           </div>
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-[#0B0F1A]">
-                  <p className="text-sm font-semibold">Менеджеры</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Выбери людей, между которыми система будет распределять
-                    заявки.
-                  </p>
-
-                  <div className="mt-4 space-y-2">
-                    {activeMembers.map((member) => {
-                      const isSelected = draft.target_member_ids.includes(
-                        member.id
-                      );
-
-                      return (
-                        <button
-                          key={member.id}
-                          type="button"
-                          onClick={() => toggleMember(row.key, member.id)}
-                          disabled={draft.mode === "manual"}
-                          className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                            isSelected
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-violet-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-xs font-semibold text-white/78">
+                          {getModeShortLabel(draft.mode)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-white/65">
+                        {draft.mode === "manual"
+                          ? "не назначаются автоматически"
+                          : managerNames.length > 0
+                            ? managerNames.join(", ")
+                            : "не выбраны"}
+                      </td>
+                      <td className="px-5 py-4 text-white/65">
+                        {draft.settings.max_open_deals_per_manager
+                          ? `${draft.settings.max_open_deals_per_manager} сделок`
+                          : "без лимита"}
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold ${
+                            needsManagers
+                              ? "bg-amber-400/14 text-amber-100"
+                              : "bg-[#00f5a8]/12 text-[#9fffe3]"
                           }`}
                         >
-                          <span className="truncate">
-                            {getWorkspaceMemberDisplayName(member)}
-                          </span>
-                          <span className="text-xs opacity-60">
-                            {isSelected ? "выбран" : "добавить"}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          {needsManagers ? "нужна команда" : "готово"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-                  <div className="mt-4">
-                    <CustomSelect
-                      value={draft.mode}
-                      onChange={(value) =>
-                        updateDraft(row.key, {
-                          mode: value as CrmAssignmentMode,
-                        })
-                      }
-                      options={modeOptions.map((option) => ({
-                        value: option.value,
-                        label: option.label,
-                      }))}
-                      buttonClassName="rounded-xl font-semibold"
+        {selectedRow ? (
+          <aside className="rivn-card rivn-card-flat sticky top-6 h-fit overflow-hidden p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00f5a8]">
+                  Настройка правила
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">
+                  {selectedRow.name}
+                </h2>
+                <p className="mt-1 text-sm text-white/45">
+                  {selectedRow.caption}
+                </p>
+              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-white/70">
+                <SlidersHorizontal className="h-5 w-5" />
+              </span>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {modeOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() =>
+                    updateDraft(selectedRow.key, { mode: option.value })
+                  }
+                  className={`w-full rounded-[20px] border p-4 text-left transition duration-300 active:scale-[0.99] ${
+                    selectedDraft.mode === option.value
+                      ? "border-[#00f5a8]/45 bg-[#00f5a8]/14 text-white shadow-[0_18px_44px_rgba(0,245,168,0.10)]"
+                      : "border-white/10 bg-white/[0.045] text-white/68 hover:border-white/18 hover:bg-white/[0.07] hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2
+                      className={`mt-0.5 h-5 w-5 ${
+                        selectedDraft.mode === option.value
+                          ? "text-[#00f5a8]"
+                          : "text-white/28"
+                      }`}
                     />
-                  </div>
-
-                  <div className="mt-4 rounded-xl bg-white p-3 text-xs text-slate-500 dark:bg-white/[0.04] dark:text-slate-400">
-                    Сейчас выбрано:{" "}
-                    <span className="font-semibold text-slate-800 dark:text-white">
-                      {draft.mode === "manual"
-                        ? "ручное назначение"
-                        : selectedMembers.length > 0
-                          ? selectedMembers
-                              .map((member) =>
-                                getWorkspaceMemberDisplayName(member)
-                              )
-                              .join(", ")
-                          : "менеджеры не выбраны"}
-                    </span>
-                  </div>
-
-                  {draft.mode !== "manual" ? (
-                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/[0.04]">
-                      <p className="text-sm font-semibold">
-                        Лимиты и приоритеты
+                    <div>
+                      <p className="text-sm font-semibold">{option.label}</p>
+                      <p className="mt-1 text-xs leading-5 opacity-70">
+                        {option.description}
                       </p>
-                      <label className="mt-3 block text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        Максимум открытых сделок на менеджера
-                        <input
-                          type="number"
-                          min={0}
-                          value={
-                            draft.settings.max_open_deals_per_manager ?? ""
-                          }
-                          onChange={(event) =>
-                            updateDraftSettings(row.key, {
-                              max_open_deals_per_manager: event.target.value
-                                ? Number(event.target.value)
-                                : null,
-                            })
-                          }
-                          className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-white dark:focus:ring-violet-500/15"
-                          placeholder="Без лимита"
-                        />
-                      </label>
-
-                      <div className="mt-3 space-y-2">
-                        {selectedMembers.length === 0 ? (
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Выбери менеджеров выше, чтобы настроить приоритеты.
-                          </p>
-                        ) : (
-                          selectedMembers.map((member) => {
-                            const isDisabled = (
-                              draft.settings.disabled_member_ids ?? []
-                            ).includes(member.id);
-                            const orderedIds = [
-                              ...new Set([
-                                ...(draft.settings.priority_member_ids ?? []),
-                                ...draft.target_member_ids,
-                              ]),
-                            ].filter((id) => draft.target_member_ids.includes(id));
-                            const priorityIndex = orderedIds.indexOf(member.id);
-
-                            return (
-                              <div
-                                key={member.id}
-                                className="rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-white/10 dark:bg-[#0B0F1A]"
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold">
-                                      {getWorkspaceMemberDisplayName(member)}
-                                    </p>
-                                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                      Приоритет: {priorityIndex + 1}
-                                    </p>
-                                  </div>
-                                  <div className="flex shrink-0 gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        movePriorityMember(row.key, member.id, -1)
-                                      }
-                                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:text-slate-300"
-                                    >
-                                      ↑
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        movePriorityMember(row.key, member.id, 1)
-                                      }
-                                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:text-slate-300"
-                                    >
-                                      ↓
-                                    </button>
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    toggleDisabledMember(row.key, member.id)
-                                  }
-                                  className={`mt-2 w-full rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
-                                    isDisabled
-                                      ? "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-100"
-                                      : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-100"
-                                  }`}
-                                >
-                                  {isDisabled
-                                    ? "Не участвует в распределении"
-                                    : "Участвует в распределении"}
-                                </button>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
                     </div>
-                  ) : null}
+                  </div>
+                </button>
+              ))}
+            </div>
 
-                  {needsManagers ? (
-                    <div className="mt-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>
-                        Выбран автоматический режим, но менеджеры не указаны.
-                        Сохрани правило после выбора команды.
-                      </span>
-                    </div>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    onClick={() => void saveRule(row)}
-                    disabled={
-                      upsertRuleMutation.isPending ||
-                      (draft.mode !== "manual" &&
-                        draft.target_member_ids.length === 0)
-                    }
-                    className="mt-4 h-11 w-full rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {upsertRuleMutation.isPending
-                      ? "Сохраняем..."
-                      : "Сохранить правило"}
-                  </button>
+            <div className="mt-5 rounded-[22px] border border-white/10 bg-white/[0.045] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">
+                    Команда правила
+                  </p>
+                  <p className="mt-1 text-xs text-white/42">
+                    Кто может получать заявки по этому правилу
+                  </p>
                 </div>
+                <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold text-white/55">
+                  {selectedMembers.length}
+                </span>
+              </div>
+
+              <div className="mt-4 max-h-64 space-y-2 overflow-y-auto pr-1">
+                {activeMembers.map((member) => {
+                  const isSelected = selectedDraft.target_member_ids.includes(
+                    member.id
+                  );
+                  const isDisabled = selectedDisabledIds.includes(member.id);
+                  const priorityIndex = selectedPriorityIds.indexOf(member.id);
+
+                  return (
+                    <div
+                      key={member.id}
+                      className={`rounded-2xl border p-2.5 transition ${
+                        isSelected
+                          ? "border-[#00f5a8]/28 bg-[#00f5a8]/10"
+                          : "border-white/10 bg-white/[0.035]"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleMember(selectedRow.key, member.id)}
+                        disabled={selectedDraft.mode === "manual"}
+                        className="flex w-full items-center justify-between gap-3 text-left disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <span className="truncate text-sm font-semibold text-white/85">
+                          {getWorkspaceMemberDisplayName(member)}
+                        </span>
+                        <span className="text-xs text-white/42">
+                          {isSelected ? "выбран" : "добавить"}
+                        </span>
+                      </button>
+
+                      {isSelected && selectedDraft.mode !== "manual" ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              movePriorityMember(selectedRow.key, member.id, -1)
+                            }
+                            className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-semibold text-white/62 transition hover:text-white"
+                          >
+                            выше
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              movePriorityMember(selectedRow.key, member.id, 1)
+                            }
+                            className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-semibold text-white/62 transition hover:text-white"
+                          >
+                            ниже
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleDisabledMember(selectedRow.key, member.id)
+                            }
+                            className={`rounded-lg px-2 py-1 text-xs font-semibold transition ${
+                              isDisabled
+                                ? "bg-amber-400/14 text-amber-100"
+                                : "bg-[#00f5a8]/12 text-[#9fffe3]"
+                            }`}
+                          >
+                            {isDisabled ? "пауза" : "активен"}
+                          </button>
+                          <span className="ml-auto text-xs text-white/35">
+                            #{priorityIndex + 1}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          );
-        })}
+
+            <div className="mt-4 rounded-[22px] border border-white/10 bg-white/[0.045] p-4">
+              <p className="text-sm font-semibold text-white">
+                Лимит нагрузки
+              </p>
+              <p className="mt-1 text-xs text-white/42">
+                Можно не заполнять, если менеджеры могут брать любое количество
+                открытых сделок.
+              </p>
+              <input
+                type="number"
+                min={0}
+                value={selectedDraft.settings.max_open_deals_per_manager ?? ""}
+                onChange={(event) =>
+                  updateDraftSettings(selectedRow.key, {
+                    max_open_deals_per_manager: event.target.value
+                      ? Number(event.target.value)
+                      : null,
+                  })
+                }
+                disabled={selectedDraft.mode === "manual"}
+                className="rivn-field mt-3 h-12"
+                placeholder="Без лимита"
+              />
+            </div>
+
+            {selectedDraft.mode !== "manual" &&
+            selectedDraft.target_member_ids.length === 0 ? (
+              <div className="mt-4 flex gap-2 rounded-[20px] border border-amber-400/25 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  Автоматический режим включен, но команда не выбрана. Добавь
+                  хотя бы одного менеджера, чтобы сохранить правило.
+                </span>
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => void saveRule(selectedRow)}
+              disabled={
+                upsertRuleMutation.isPending ||
+                (selectedDraft.mode !== "manual" &&
+                  selectedDraft.target_member_ids.length === 0)
+              }
+              className="mt-5 h-12 w-full rounded-full bg-[#00f5a8] px-5 text-sm font-semibold text-[#05111d] shadow-[0_18px_46px_rgba(0,245,168,0.22)] transition duration-300 hover:-translate-y-0.5 hover:bg-[#37ffc0] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {upsertRuleMutation.isPending
+                ? "Сохраняем..."
+                : "Сохранить правило"}
+            </button>
+          </aside>
+        ) : null}
       </section>
 
-      <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <section className="rivn-card mt-5 p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/38">
               Контроль
             </p>
-            <h2 className="mt-2 text-2xl font-semibold">
-              Журнал распределения заявок
+            <h2 className="mt-1 text-xl font-semibold text-white">
+              Последние распределения
             </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Здесь видно, какой алгоритм сработал и почему заявка попала
-              конкретному менеджеру. Это помогает РОПу быстро проверять
-              справедливость распределения.
-            </p>
           </div>
-          <span className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
+          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-white/55">
             <History className="h-4 w-4" />
-            Последние {assignmentLogs.length}
+            {assignmentLogs.length} событий
           </span>
         </div>
 
-        <div className="mt-5 space-y-3">
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
           {assignmentLogs.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
-              Журнал пока пустой. Он начнёт заполняться, когда в CRM появятся
+            <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.035] p-5 text-sm text-white/45">
+              Журнал пока пустой. Он начнет заполняться, когда в CRM появятся
               новые заявки или диалоги.
             </div>
           ) : (
-            assignmentLogs.map((log) => {
+            assignmentLogs.slice(0, 6).map((log) => {
               const payload = log.payload ?? {};
               const selectedMemberIds = getPayloadStringArray(
                 payload,
@@ -798,47 +887,49 @@ export default function CrmSettingsPage() {
               );
               const sourceName =
                 getPayloadString(payload, "source_name") ||
-                getPayloadString(payload, "source_kind", "Источник не указан");
+                getPayloadString(
+                  payload,
+                  "source_kind",
+                  "Источник не указан"
+                );
 
               return (
                 <div
                   key={log.id}
-                  className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-[#0B0F1A] lg:grid-cols-[1fr_260px]"
+                  className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4"
                 >
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-100">
-                        {sourceName}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-[#00f5a8]/12 px-3 py-1 text-xs font-semibold text-[#9fffe3]">
+                      {sourceName}
+                    </span>
+                    <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold text-white/55">
+                      {getModeLabel(mode as CrmAssignmentMode)}
+                    </span>
+                  </div>
+                  <p className="mt-3 truncate text-sm font-semibold text-white">
+                    {dealTitle}
+                  </p>
+                  <p className="mt-1 text-sm text-white/48">
+                    Причина: {getAssignmentReasonText(reason)}
+                  </p>
+                  <div className="mt-3 grid gap-2 rounded-2xl bg-white/[0.04] p-3 text-xs text-white/45">
+                    <p>
+                      Назначено:{" "}
+                      <span className="font-semibold text-white/82">
+                        {selectedNames.length > 0
+                          ? selectedNames.join(", ")
+                          : "без ответственного"}
                       </span>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-white/[0.06] dark:text-slate-300">
-                        {getModeLabel(mode as CrmAssignmentMode)}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-sm font-semibold text-slate-950 dark:text-white">
-                      {dealTitle}
                     </p>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      Причина: {getAssignmentReasonText(reason)}
-                    </p>
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">
+                    <p>
                       Команда правила:{" "}
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="font-semibold text-white/72">
                         {targetNames.length > 0
                           ? targetNames.join(", ")
                           : "не выбрана"}
                       </span>
                     </p>
-                  </div>
-                  <div className="rounded-xl bg-white p-3 text-sm dark:bg-white/[0.04]">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                      Назначено
-                    </p>
-                    <p className="mt-2 font-semibold text-slate-950 dark:text-white">
-                      {selectedNames.length > 0
-                        ? selectedNames.join(", ")
-                        : "Без ответственного"}
-                    </p>
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    <p>
                       {new Date(log.created_at).toLocaleString("ru-RU", {
                         day: "2-digit",
                         month: "2-digit",

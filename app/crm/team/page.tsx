@@ -115,7 +115,7 @@ export default function CrmTeamPage() {
 
   if (!isReady || isLoading) {
     return (
-      <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
+      <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
         <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#121827]">
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Загружаем отчёт по команде CRM...
@@ -127,7 +127,7 @@ export default function CrmTeamPage() {
 
   if (!hasAccess || !canViewAllDeals) {
     return (
-      <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
+      <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
         <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#121827]">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
             CRM
@@ -144,7 +144,7 @@ export default function CrmTeamPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
+    <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>

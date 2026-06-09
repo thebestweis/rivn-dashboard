@@ -21,42 +21,94 @@ interface ExpensesTableProps {
   items: ExpenseRow[];
   onEdit?: (expense: ExpenseRow) => void;
   onDelete?: (expenseId: string) => void;
+  sortBy: "title" | "category" | "date" | "client" | "amount";
+  sortDirection: "asc" | "desc";
+  onSort: (field: "title" | "category" | "date" | "client" | "amount") => void;
   canManageExpenses?: boolean;
   isDeletingExpense?: boolean;
   deletingExpenseId?: string | null;
+}
+
+function SortHeader({
+  field,
+  label,
+  sortBy,
+  sortDirection,
+  onSort,
+}: {
+  field: "title" | "category" | "date" | "client" | "amount";
+  label: string;
+  sortBy: "title" | "category" | "date" | "client" | "amount";
+  sortDirection: "asc" | "desc";
+  onSort: (field: "title" | "category" | "date" | "client" | "amount") => void;
+}) {
+  const isActive = sortBy === field;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(field)}
+      className="inline-flex items-center justify-center gap-1 text-center font-medium transition duration-300 hover:text-white"
+    >
+      <span>{label}</span>
+      <span className={isActive ? "text-[#00f5a8]" : "text-white/25"}>
+        {isActive ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
+      </span>
+    </button>
+  );
 }
 
 export function ExpensesTable({
   items,
   onEdit,
   onDelete,
+  sortBy,
+  sortDirection,
+  onSort,
   canManageExpenses = false,
   isDeletingExpense = false,
   deletingExpenseId = null,
 }: ExpensesTableProps) {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+    <div className="rivn-card p-4 sm:p-5">
       <div className="flex items-center justify-between gap-4">
-        <div className="text-sm text-white/50">Список расходов</div>
+        <div>
+          <div className="text-xs uppercase tracking-[0.18em] text-white/35">
+            Детализация
+          </div>
+          <div className="mt-1 text-lg font-semibold tracking-[-0.03em] text-white">
+            Список расходов
+          </div>
+        </div>
 
         {!canManageExpenses ? (
-          <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/50">
+          <div className="rivn-pill px-3 py-1 text-xs text-white/50">
             Только просмотр
           </div>
         ) : null}
       </div>
 
-      <div className="mt-5 overflow-x-auto rounded-[24px] border border-white/8">
-        <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="bg-white/[0.04] text-white/45">
+      <div className="rivn-table-wrap mt-5">
+        <table className="w-full min-w-[760px] text-center text-sm">
+          <thead className="rivn-table-head">
             <tr>
-              <th className="px-4 py-3 font-medium">Расход</th>
-              <th className="px-4 py-3 font-medium">Категория</th>
-              <th className="px-4 py-3 font-medium">Дата</th>
-              <th className="px-4 py-3 font-medium">Клиент</th>
-              <th className="px-4 py-3 font-medium">Сумма</th>
+              <th className="px-4 py-3 text-center">
+                <SortHeader field="title" label="Расход" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
+              <th className="px-4 py-3 text-center">
+                <SortHeader field="category" label="Категория" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
+              <th className="px-4 py-3 text-center">
+                <SortHeader field="date" label="Дата" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
+              <th className="px-4 py-3 text-center">
+                <SortHeader field="client" label="Клиент" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
+              <th className="px-4 py-3 text-center">
+                <SortHeader field="amount" label="Сумма" sortBy={sortBy} sortDirection={sortDirection} onSort={onSort} />
+              </th>
               {canManageExpenses ? (
-                <th className="px-4 py-3 font-medium">Действия</th>
+                <th className="px-4 py-3 text-center font-medium">Действия</th>
               ) : null}
             </tr>
           </thead>
@@ -68,7 +120,7 @@ export function ExpensesTable({
               return (
                 <tr
                   key={item.id}
-                  className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
+                  className="rivn-table-row border-t border-white/[0.06]"
                 >
                   <td className="px-4 py-3 font-medium">{item.title}</td>
 
@@ -100,12 +152,12 @@ export function ExpensesTable({
 
                   {canManageExpenses ? (
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap justify-center gap-2">
                         <button
                           type="button"
                           onClick={() => onEdit?.(item)}
                           disabled={isDeletingExpense}
-                          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rivn-button px-3 py-2 text-xs text-white/80 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Редактировать
                         </button>
@@ -114,7 +166,7 @@ export function ExpensesTable({
                           type="button"
                           onClick={() => onDelete?.(item.id)}
                           disabled={isDeletingExpense}
-                          className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 transition duration-300 hover:-translate-y-0.5 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {isDeleting ? "Удаляем..." : "Удалить"}
                         </button>

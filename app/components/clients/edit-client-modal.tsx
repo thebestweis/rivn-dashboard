@@ -1,4 +1,5 @@
 import { CustomSelect } from "../ui/custom-select";
+import { RivnDatePicker } from "../ui/rivn-date-picker";
 
 interface EmployeeItem {
   id: string;
@@ -88,8 +89,8 @@ export function EditClientModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_50px_rgba(0,0,0,0.45)] sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#030914]/70 p-3 backdrop-blur-xl sm:items-center sm:p-4">
+      <div className="rivn-panel max-h-[92vh] w-full max-w-2xl overflow-y-auto p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-sm text-white/50">Редактирование</div>
@@ -111,7 +112,7 @@ export function EditClientModal({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Название клиента"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+            className="rivn-field"
           />
 
           <CustomSelect
@@ -133,7 +134,7 @@ export function EditClientModal({
             value={model}
             onChange={(e) => setModel(e.target.value)}
             placeholder="Модель оплаты"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+            className="rivn-field"
           />
 
           <CustomSelect
@@ -146,18 +147,17 @@ export function EditClientModal({
             buttonClassName="bg-white/[0.04] dark:bg-white/[0.04]"
           />
 
-          <input
+          <RivnDatePicker
             value={nextInvoice}
-            onChange={(e) => setNextInvoice(e.target.value)}
+            onChange={setNextInvoice}
             placeholder="День оплаты"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
           />
 
           <input
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Потенциальный доход"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+            className="rivn-field"
           />
 
           <input
@@ -195,7 +195,7 @@ export function EditClientModal({
                 profit,
               });
             }}
-            className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)]"
+            className="rivn-button-primary rounded-2xl px-4 py-3 text-sm"
           >
             Сохранить изменения
           </button>

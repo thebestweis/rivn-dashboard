@@ -60,47 +60,27 @@ export function ExpensesPageHeader({
   }
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="text-sm text-white/50">Раздел</div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+    <div className="rivn-card rivn-card-interactive p-4 sm:p-5">
+      <div className="grid gap-3 xl:grid-cols-[minmax(220px,0.9fr)_minmax(260px,1.15fr)_220px_auto] xl:items-end">
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-[0.22em] text-[#43ffc2]">Финансы</div>
+          <h1 className="mt-1 text-3xl font-medium tracking-[-0.05em] text-white sm:text-4xl">
             Расходы
           </h1>
-          <p className="mt-2 text-sm text-white/55">
-            Учёт расходов, категорий затрат, маркетинга и влияния на прибыль.
-          </p>
         </div>
 
-        {canAddExpense ? (
-          <button
-            type="button"
-            onClick={handleAddExpense}
-            disabled={!canAddExpense}
-            className="w-full rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          >
-            Добавить расход
-          </button>
-        ) : (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/55">
-            Режим просмотра
-          </div>
-        )}
-      </div>
-
-      <div className="mt-5 grid gap-3 md:grid-cols-[1.2fr_220px]">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Поиск по расходам"
-          className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+          className="rivn-field h-12"
         />
 
         <div className="relative" ref={categoryMenuRef}>
           <button
             type="button"
             onClick={() => setIsCategoryMenuOpen((prev) => !prev)}
-            className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white transition hover:border-white/20 hover:bg-white/[0.06]"
+            className="rivn-field flex h-12 w-full items-center justify-between"
           >
             <span className="truncate">{selectedCategoryLabel}</span>
             <span className="ml-3 text-white/45">
@@ -109,7 +89,7 @@ export function ExpensesPageHeader({
           </button>
 
           {isCategoryMenuOpen ? (
-            <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-full overflow-hidden rounded-2xl border border-white/10 bg-[#121826] shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+            <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0b1424] shadow-[0_20px_70px_rgba(0,0,0,0.55)]">
               <div className="max-h-[260px] overflow-y-auto p-2">
                 {expenseCategoryOptions.map((option) => {
                   const isActive = category === option.value;
@@ -124,8 +104,8 @@ export function ExpensesPageHeader({
                       }}
                       className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition ${
                         isActive
-                          ? "bg-violet-500/20 text-violet-300"
-                          : "text-white/75 hover:bg-white/[0.05] hover:text-white"
+                          ? "bg-[#00f5a8] text-[#06101d]"
+                          : "text-white/75 hover:bg-white/[0.06] hover:text-white"
                       }`}
                     >
                       {option.label}
@@ -136,6 +116,21 @@ export function ExpensesPageHeader({
             </div>
           ) : null}
         </div>
+
+        {canAddExpense ? (
+          <button
+            type="button"
+            onClick={handleAddExpense}
+            disabled={!canAddExpense}
+            className="rivn-button rivn-button-primary w-full px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            Добавить расход
+          </button>
+        ) : (
+          <div className="rivn-pill px-4 py-3 text-sm text-white/55">
+            Режим просмотра
+          </div>
+        )}
       </div>
     </div>
   );

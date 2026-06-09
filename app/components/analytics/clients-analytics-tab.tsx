@@ -240,7 +240,7 @@ const inactiveClients = clientsWithoutPayments.length;
       <TopClientsChart data={chartData} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-[24px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel-soft p-4 text-center">
           <div className="text-xs uppercase tracking-wide text-white/40">
             Средняя выручка на клиента за всё время
           </div>
@@ -249,7 +249,7 @@ const inactiveClients = clientsWithoutPayments.length;
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel-soft p-4 text-center">
           <div className="text-xs uppercase tracking-wide text-white/40">
             Средняя прибыль на клиента за всё время
           </div>
@@ -258,57 +258,57 @@ const inactiveClients = clientsWithoutPayments.length;
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel-soft p-4 text-center">
           <div className="text-xs uppercase tracking-wide text-white/40">
             Доля топ-3 клиентов
           </div>
           <div className="mt-2 text-2xl font-semibold tracking-tight text-white">
             {top3Share}%
           </div>
-          <div className="mt-1 text-sm text-white/45">Доля в общей выручке</div>
+          <div className="hidden">Доля в общей выручке</div>
         </div>
 
-        <div className="rounded-[24px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel-soft p-4 text-center">
           <div className="text-xs uppercase tracking-wide text-white/40">
             Риск-клиенты
           </div>
           <div className="mt-2 text-2xl font-semibold tracking-tight text-white">
             {problemClientsCount + pausedClientsCount}
           </div>
-          <div className="mt-1 text-sm text-white/45">
+          <div className="hidden">
             Проблемные и на паузе
           </div>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-[24px] border border-white/10 bg-[#121826] p-5">
+        <div className="rivn-panel-soft p-4 text-center">
           <div className="text-xs text-white/40">Активные клиенты</div>
           <div className="mt-2 text-2xl font-semibold text-white">
             {activeClients}
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-white/10 bg-[#121826] p-5">
+        <div className="rivn-panel-soft p-4 text-center">
           <div className="text-xs text-white/40">Без оплат</div>
           <div className="mt-2 text-2xl font-semibold text-white">
             {inactiveClients}
           </div>
-          <div className="mt-1 text-sm text-white/45">
+          <div className="hidden">
             {clientsWithoutPayments.length > 0
               ? clientsWithoutPayments.slice(0, 3).map((c) => c.name).join(", ")
               : "Все клиенты с оплатами"}
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-white/10 bg-[#121826] p-5">
+        <div className="rivn-panel-soft p-4 text-center">
           <div className="text-xs text-white/40">Ожидаемые деньги</div>
           <div className="mt-2 text-2xl font-semibold text-white">
             ₽{pendingRevenue.toLocaleString("ru-RU")}
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-white/10 bg-[#121826] p-5">
+        <div className="rivn-panel-soft p-4 text-center">
           <div className="text-xs text-white/40">Просрочено</div>
           <div className="mt-2 text-2xl font-semibold text-rose-300">
             ₽{overdueRevenue.toLocaleString("ru-RU")}
@@ -317,7 +317,7 @@ const inactiveClients = clientsWithoutPayments.length;
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel p-5">
           <div className="text-sm text-white/50">Контроль долгов</div>
           <h2 className="mt-1 text-xl font-semibold">Клиенты с просрочками</h2>
 
@@ -420,7 +420,7 @@ const inactiveClients = clientsWithoutPayments.length;
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel p-5">
           <div className="text-sm text-white/50">Топ-5 клиентов по выручке</div>
 
           <div className="mt-4 space-y-3">
@@ -450,7 +450,7 @@ const inactiveClients = clientsWithoutPayments.length;
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel p-5">
           <div className="text-sm text-white/50">Клиенты с низкой маржой</div>
 
           <div className="mt-4 space-y-3">
@@ -483,7 +483,7 @@ const inactiveClients = clientsWithoutPayments.length;
         </div>
       </div>
 
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="rivn-panel p-5">
         <div className="text-sm text-white/50">Аналитика клиентов</div>
         <h2 className="mt-1 text-xl font-semibold">Клиенты и прибыльность</h2>
 
@@ -563,7 +563,7 @@ const inactiveClients = clientsWithoutPayments.length;
         </div>
       </div>
 
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="rivn-panel p-5">
         <div className="text-sm text-white/50">Юнит-экономика</div>
         <h2 className="mt-1 text-xl font-semibold">
           Рейтинг клиентов по прибыли
@@ -638,7 +638,7 @@ const inactiveClients = clientsWithoutPayments.length;
             </tbody>
           </table>
         </div>
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-panel p-5">
   <div className="text-sm text-white/50">Рекомендации</div>
   <h2 className="mt-1 text-xl font-semibold">Что делать по клиентам</h2>
 

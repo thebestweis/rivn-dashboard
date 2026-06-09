@@ -9,6 +9,7 @@ import {
 } from "react";
 import { FinancialAnalyticsChart } from "./financial-analytics-chart";
 import { ExpenseBreakdownDonut } from "./expense-breakdown-donut";
+import { RivnDateRangePicker } from "../ui/rivn-date-picker";
 import { parseRubAmount, formatRub } from "../../lib/storage";
 
 import { ensureSystemSettings } from "../../lib/supabase/system-settings";
@@ -92,7 +93,7 @@ function StatCard({
   valueClassName = "text-white",
 }: StatCardProps) {
   return (
-    <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
+    <div className="rivn-panel-inner p-4 transition duration-300 hover:-translate-y-0.5 hover:border-[#00f5a8]/25 hover:bg-white/[0.065]">
       <div className="text-sm text-white/50">{label}</div>
       <div className={`mt-2 text-2xl font-semibold ${valueClassName}`}>
         {value}
@@ -177,6 +178,57 @@ function toSupabaseLikeDate(value: string) {
   return value;
 }
 
+function normalizeDateToDayKey(value: string | null | undefined) {
+  if (!value) return "";
+
+  const normalized = toSupabaseLikeDate(value);
+  if (!normalized) return "";
+
+  return normalized.slice(0, 10);
+}
+
+function getDateRangeForPeriod(
+  period: "current_month" | "last_3_months" | "last_6_months" | "all_time"
+) {
+  if (period === "all_time") {
+    return { from: "", to: "" };
+  }
+
+  const today = new Date();
+  const from = new Date(today);
+
+  if (period === "current_month") {
+    from.setDate(1);
+  } else {
+    from.setMonth(today.getMonth() - (period === "last_3_months" ? 2 : 5), 1);
+  }
+
+  const format = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+      date.getDate()
+    ).padStart(2, "0")}`;
+
+  return { from: format(from), to: format(today) };
+}
+
+function formatDateRangeLabel(from: string, to: string) {
+  if (!from && !to) return "Всё время";
+
+  const format = (value: string) => {
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toLocaleDateString("ru-RU", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  if (from && to) return `${format(from)} - ${format(to)}`;
+  return from ? `С ${format(from)}` : `До ${format(to)}`;
+}
+
 function normalizePayrollPayoutMonth(value: string) {
   if (!value) return "";
 
@@ -200,27 +252,6 @@ function normalizePayrollPayoutMonth(value: string) {
   return "";
 }
 
-function getMonthsForPeriod(
-  period: "current_month" | "last_3_months" | "last_6_months" | "all_time"
-) {
-  if (period === "all_time") return null;
-
-  const now = new Date();
-  const monthsCount =
-    period === "current_month" ? 1 : period === "last_3_months" ? 3 : 6;
-
-  const result: string[] = [];
-
-  for (let i = 0; i < monthsCount; i++) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    result.push(
-      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-    );
-  }
-
-  return result;
-}
-
 const monthNamesRu = [
   "Январь",
   "Февраль",
@@ -241,10 +272,14 @@ function buildMonthValue(year: number, monthIndex: number) {
 }
 
 function SectionCard({ eyebrow, title, children }: SectionCardProps) {
+  if (title.includes("Ключевые показатели")) {
+    return null;
+  }
+
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-      <div className="text-sm text-white/50">{eyebrow}</div>
-      <h2 className="mt-1 text-xl font-semibold text-white">{title}</h2>
+    <div className="rivn-panel p-6">
+      {eyebrow ? <div className="text-sm text-white/50">{eyebrow}</div> : null}
+      {title ? <h2 className={eyebrow ? "mt-1 text-xl font-semibold text-white" : "text-xl font-semibold text-white"}>{title}</h2> : null}
       {children}
     </div>
   );
@@ -269,16 +304,17 @@ export function FinancialAnalyticsTab({
   growthPlan,
   ceoSummary,
 }: FinancialAnalyticsTabProps) {
-  const [period, setPeriod] = useState<
-    "current_month" | "last_3_months" | "last_6_months" | "all_time"
-  >("current_month");
+  const [summaryDateRange, setSummaryDateRange] = useState(() =>
+    getDateRangeForPeriod("current_month")
+  );
   const [isPnlDetailsOpen, setIsPnlDetailsOpen] = useState(false);
 
   const [expensePeriod, setExpensePeriod] = useState<"month" | "year">("month");
 
-  const activePeriodMonths = useMemo(() => {
-  return getMonthsForPeriod(period);
-}, [period]);
+const summaryRangeLabel = useMemo(
+  () => formatDateRangeLabel(summaryDateRange.from, summaryDateRange.to),
+  [summaryDateRange]
+);
 
 const normalizedExpenses = useMemo(() => {
   return expenses
@@ -397,6 +433,7 @@ useEffect(() => {
     ) {
       setIsChartRangeEndMenuOpen(false);
     }
+
   }
 
   document.addEventListener("mousedown", handleClickOutside);
@@ -487,20 +524,30 @@ const extraFot = safeExtraPayments
   revenueDynamics,
 ]);
 
+  const isInSummaryDateRange = (value: string | null | undefined) => {
+    if (!summaryDateRange.from && !summaryDateRange.to) return true;
+
+    const dayKey = normalizeDateToDayKey(value);
+    if (!dayKey) return false;
+
+    const from = summaryDateRange.from || dayKey;
+    const to = summaryDateRange.to || summaryDateRange.from || dayKey;
+    const normalizedFrom = from <= to ? from : to;
+    const normalizedTo = from <= to ? to : from;
+
+    return dayKey >= normalizedFrom && dayKey <= normalizedTo;
+  };
+
   const totalRevenue = payments
   .filter((item) => {
-    if (period === "all_time") return true;
     if (!item.paidAt) return false;
-
-    const monthKey = normalizeDateToMonthKey(item.paidAt);
-    return activePeriodMonths?.includes(monthKey);
+    return isInSummaryDateRange(item.paidAt);
   })
   .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
 
   const totalExpenses = normalizedExpenses
   .filter((item) => {
-    if (period === "all_time") return true;
-    return activePeriodMonths?.includes(item.monthKey);
+    return isInSummaryDateRange(item.rawDate);
   })
   .reduce((sum, item) => sum + item.amountNumber, 0);
 
@@ -511,21 +558,15 @@ const extraFot = safeExtraPayments
     const payoutsSum = safePayrollPayouts
       .filter((item) => item.status === "paid")
       .filter((item) => {
-        if (period === "all_time") return true;
         if (!item.payoutDate) return false;
-
-        const monthKey = normalizePayrollPayoutMonth(item.payoutDate);
-        return activePeriodMonths?.includes(monthKey);
+        return isInSummaryDateRange(item.payoutDate);
       })
       .reduce((sum, item) => sum + parseRubAmount(String(item.amount ?? "")), 0);
 
     const extraSum = safeExtraPayments
       .filter((item) => {
-        if (period === "all_time") return true;
         if (!item.date) return false;
-
-        const monthKey = toSupabaseLikeDate(item.date).slice(0, 7);
-        return activePeriodMonths?.includes(monthKey);
+        return isInSummaryDateRange(item.date);
       })
       .reduce((sum, item) => sum + parseRubAmount(String(item.amount ?? "")), 0);
 
@@ -563,20 +604,10 @@ useEffect(() => {
   const [selectedExpenseYear, selectedExpenseMonth] = expenseSelectedMonth.split("-");
 
 const filteredExpenses = normalizedExpenses.filter((expense) => {
-  const [expenseYear, expenseMonth] = expense.monthKey.split("-");
-
-  if (!expenseYear || !expenseMonth) {
-    return false;
-  }
-
-  if (expensePeriod === "month") {
-    return (
-      expenseYear === selectedExpenseYear &&
-      expenseMonth === selectedExpenseMonth
-    );
-  }
-
-  return expenseYear === selectedExpenseYear;
+  return (
+    expense.monthKey >= normalizedChartRangeStart &&
+    expense.monthKey <= normalizedChartRangeEnd
+  );
 });
 
 const grouped = filteredExpenses.reduce<Record<string, number>>((acc, expense) => {
@@ -602,6 +633,12 @@ const expenseBreakdownData = Object.entries(grouped).map(([name, value]) => ({
 
   const romi =
     totalExpenses > 0 ? Math.round((totalProfit / totalExpenses) * 100) : 0;
+  const syncedExpensePeriodLabel =
+    normalizedChartRangeStart === normalizedChartRangeEnd
+      ? formatMonthLabel(normalizedChartRangeStart)
+      : `${formatMonthLabel(normalizedChartRangeStart)} - ${formatMonthLabel(
+          normalizedChartRangeEnd
+        )}`;
 
   const uniqueClients = new Set(
     payments.map((payment) => payment.client).filter(Boolean)
@@ -649,64 +686,22 @@ const taxYTD = monthlyTaxRows
 
   return (
     <div className="space-y-6">
-      <SectionCard eyebrow="Сводка" title="Финансовая сводка">
-  <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-    <div className="text-xs text-white/40">
-      {period === "current_month"
-        ? "Показатели за текущий месяц (с 1 числа)"
-        : period === "last_3_months"
-        ? "Показатели за последние 3 месяца"
-        : period === "last_6_months"
-        ? "Показатели за последние 6 месяцев"
-        : "Показатели за всё время"}
-    </div>
-
-    <div className="flex rounded-full border border-white/10 bg-black/20 p-1">
-      {[
-        { key: "current_month", label: "Месяц" },
-        { key: "last_3_months", label: "3 мес" },
-        { key: "last_6_months", label: "6 мес" },
-        { key: "all_time", label: "Всё" },
-      ].map((item) => (
-        <button
-          key={item.key}
-          type="button"
-          onClick={() =>
-            setPeriod(
-              item.key as
-                | "current_month"
-                | "last_3_months"
-                | "last_6_months"
-                | "all_time"
-            )
-          }
-          className={`rounded-full px-3 py-1 text-xs transition ${
-            period === item.key
-              ? "bg-violet-500/20 text-violet-300"
-              : "text-white/45 hover:text-white"
-          }`}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  </div>
-
-        <div className="mt-5 rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(16,185,129,0.10)_0%,rgba(123,97,255,0.08)_55%,rgba(255,255,255,0.03)_100%)] p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="text-sm text-white/50">P&L по агентству</div>
-              <div className="mt-1 text-2xl font-semibold text-white">
-                Финансовый результат
+      <SectionCard eyebrow="" title="">
+        <div className="rivn-panel-soft p-5">
+          <div className="flex flex-wrap items-stretch justify-between gap-4">
+            <div className="flex min-w-[240px] flex-1 flex-col justify-center">
+              <div className="text-xs uppercase tracking-[0.22em] text-[#43ffc2]">
+                Финансы
               </div>
-              <div className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
-                P&L показывает, сколько остаётся после операционных расходов,
-                ФОТ и налога. Это главный быстрый индикатор здоровья бизнеса за
-                выбранный период.
+              <div className="mt-1 text-2xl font-semibold text-white">
+                Финансовая сводка
+              </div>
+              <div className="mt-2 max-w-md text-sm text-white/50">
+                Быстрый срез выручки, расходов, ФОТ, налога и итоговой прибыли.
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-right">
+            <div className="rivn-panel-inner min-w-[210px] px-4 py-3 text-right">
               <div className="text-xs uppercase tracking-[0.14em] text-white/35">
                 Итог P&L
               </div>
@@ -719,10 +714,27 @@ const taxYTD = monthlyTaxRows
               </div>
               <div className="mt-1 text-xs text-white/45">{pnlStatus}</div>
             </div>
+
+            <div className="rivn-panel-inner flex min-h-[104px] min-w-[260px] flex-col justify-center gap-2 p-3">
+              <div className="text-xs uppercase tracking-[0.14em] text-white/35">
+                Период
+              </div>
+              <div className="text-sm font-medium text-white/80">
+                {summaryRangeLabel}
+              </div>
+              <RivnDateRangePicker
+                from={summaryDateRange.from}
+                to={summaryDateRange.to}
+                onChange={(range) => {
+                  setSummaryDateRange(range);
+                }}
+                className="w-full"
+              />
+            </div>
           </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+            <div className="rivn-panel-inner px-4 py-3">
               <div className="text-xs uppercase tracking-[0.12em] text-white/35">
                 Выручка
               </div>
@@ -731,7 +743,7 @@ const taxYTD = monthlyTaxRows
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+            <div className="rivn-panel-inner px-4 py-3">
               <div className="text-xs uppercase tracking-[0.12em] text-white/35">
                 Расходы
               </div>
@@ -740,7 +752,7 @@ const taxYTD = monthlyTaxRows
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+            <div className="rivn-panel-inner px-4 py-3">
               <div className="text-xs uppercase tracking-[0.12em] text-white/35">
                 ФОТ
               </div>
@@ -749,7 +761,7 @@ const taxYTD = monthlyTaxRows
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+            <div className="rivn-panel-inner px-4 py-3">
               <div className="text-xs uppercase tracking-[0.12em] text-white/35">
                 Налог
               </div>
@@ -758,7 +770,7 @@ const taxYTD = monthlyTaxRows
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+            <div className="rivn-panel-inner px-4 py-3">
               <div className="text-xs uppercase tracking-[0.12em] text-white/35">
                 Маржа P&L
               </div>
@@ -772,7 +784,40 @@ const taxYTD = monthlyTaxRows
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <StatCard
+              label="Стабильная выручка"
+              value={formatRub(stableRevenue)}
+              hint="Клиенты, которые платили два последних месяца подряд"
+            />
+            <StatCard
+              label="Средний чек"
+              value={formatRub(averageCheck)}
+              hint="Средняя сумма одной оплаты"
+            />
+            <StatCard
+              label="Средняя выручка"
+              value={formatRub(forecastMetrics.avgRevenue)}
+              hint="Средняя выручка за месяц"
+            />
+            <StatCard
+              label="Средняя прибыль"
+              value={formatRub(forecastMetrics.avgProfit)}
+              hint="Средняя прибыль за месяц"
+            />
+            <StatCard
+              label="Доход на клиента"
+              value={formatRub(revenuePerClient)}
+              hint="Средняя выручка на одного клиента"
+            />
+            <StatCard
+              label="LTV"
+              value={formatRub(ltvAdvanced)}
+              hint="Lifetime value по фактическим оплатам"
+            />
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rivn-panel-inner px-4 py-3">
             <div className="text-sm text-white/55">
               Всего расходов за период:{" "}
               <span className="font-medium text-white/80">
@@ -783,14 +828,14 @@ const taxYTD = monthlyTaxRows
             <button
               type="button"
               onClick={() => setIsPnlDetailsOpen((prev) => !prev)}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-white/65 transition hover:bg-white/[0.08] hover:text-white"
+            className="rivn-button px-4 py-2 text-xs font-medium"
             >
               {isPnlDetailsOpen ? "Скрыть" : "Подробнее"}
             </button>
           </div>
 
           {isPnlDetailsOpen ? (
-            <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-6 text-white/55">
+            <div className="mt-3 rivn-panel-inner px-4 py-3 text-sm leading-6 text-white/55">
               Формула: выручка {formatRub(totalRevenue)} − расходы{" "}
               {formatRub(totalExpenses)} − ФОТ {formatRub(totalFot)} − налог{" "}
               {formatRub(totalTax)} ={" "}
@@ -842,6 +887,7 @@ const taxYTD = monthlyTaxRows
       </SectionCard>
 
       <SectionCard eyebrow="" title="">
+        <div className="analytics-chart-range-card">
   <div className="space-y-6">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
@@ -854,7 +900,7 @@ const taxYTD = monthlyTaxRows
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="relative" ref={chartRangeStartMenuRef}>
-          <div className="mb-2 text-xs uppercase tracking-[0.12em] text-white/35">
+          <div className="hidden">
             С месяца
           </div>
 
@@ -868,7 +914,7 @@ const taxYTD = monthlyTaxRows
           >
             <span>{formatMonthLabel(chartRangeStartMonth)}</span>
             <span className="ml-3 text-white/35">
-              {isChartRangeStartMenuOpen ? "−" : "+"}
+              {isChartRangeStartMenuOpen ? "в€’" : "+"}
             </span>
           </button>
 
@@ -880,7 +926,7 @@ const taxYTD = monthlyTaxRows
                   onClick={() => setChartRangeStartPickerYear((prev) => prev - 1)}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
                 >
-                  ←
+                  в†ђ
                 </button>
 
                 <div className="text-sm font-semibold text-white">
@@ -892,7 +938,7 @@ const taxYTD = monthlyTaxRows
                   onClick={() => setChartRangeStartPickerYear((prev) => prev + 1)}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
                 >
-                  →
+                  в†’
                 </button>
               </div>
 
@@ -928,7 +974,7 @@ const taxYTD = monthlyTaxRows
         </div>
 
         <div className="relative" ref={chartRangeEndMenuRef}>
-          <div className="mb-2 text-xs uppercase tracking-[0.12em] text-white/35">
+          <div className="hidden">
             По месяц
           </div>
 
@@ -942,7 +988,7 @@ const taxYTD = monthlyTaxRows
           >
             <span>{formatMonthLabel(chartRangeEndMonth)}</span>
             <span className="ml-3 text-white/35">
-              {isChartRangeEndMenuOpen ? "−" : "+"}
+              {isChartRangeEndMenuOpen ? "в€’" : "+"}
             </span>
           </button>
 
@@ -954,7 +1000,7 @@ const taxYTD = monthlyTaxRows
                   onClick={() => setChartRangeEndPickerYear((prev) => prev - 1)}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
                 >
-                  ←
+                  в†ђ
                 </button>
 
                 <div className="text-sm font-semibold text-white">
@@ -966,7 +1012,7 @@ const taxYTD = monthlyTaxRows
                   onClick={() => setChartRangeEndPickerYear((prev) => prev + 1)}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
                 >
-                  →
+                  в†’
                 </button>
               </div>
 
@@ -1013,11 +1059,11 @@ const taxYTD = monthlyTaxRows
   <div className="flex items-start justify-between gap-4">
   <div className="flex items-center gap-2">
   <div className="text-sm text-white/50">Структура расходов</div>
-  <div className="text-white/20">•</div>
-  <div className="text-sm text-white/50">{expensePeriodLabel}</div>
+  <div className="text-white/20">?</div>
+  <div className="text-sm text-white/50">{syncedExpensePeriodLabel}</div>
 </div>
 
-  <div className="flex items-center gap-3">
+  <div className="hidden">
     <div className="flex items-center rounded-full border border-white/10 bg-black/20 p-1">
       <button
         type="button"
@@ -1030,7 +1076,7 @@ const taxYTD = monthlyTaxRows
         className="rounded-full px-3 py-1 text-xs text-white/45 transition hover:text-white disabled:opacity-30"
         disabled={expenseMonths.indexOf(expenseSelectedMonth) <= 0}
       >
-        ←
+        в†ђ
       </button>
 
       <div className="px-2 text-xs text-white/60">
@@ -1048,7 +1094,7 @@ const taxYTD = monthlyTaxRows
         className="rounded-full px-3 py-1 text-xs text-white/45 transition hover:text-white disabled:opacity-30"
         disabled={expenseMonths.indexOf(expenseSelectedMonth) === expenseMonths.length - 1}
       >
-        →
+        в†’
       </button>
     </div>
 
@@ -1173,11 +1219,12 @@ const taxYTD = monthlyTaxRows
   </div>
 </div>
           </div>
+  </div>
         </div>
       </SectionCard>
 
       <SectionCard
-  eyebrow="Эффективность и рост"
+  eyebrow=""
   title="Прогнозы и окупаемость"
 >
   <div className="mt-5 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
@@ -1202,7 +1249,7 @@ const taxYTD = monthlyTaxRows
     </div>
 
     <div className="grid gap-4 md:grid-cols-3">
-  <div className="h-[374px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.02)_100%)] p-5">
+  <div className="h-[374px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.02)_100%)] p-5" title="Средняя выручка считается по фактическим оплатам за последние 3 месяца. Средняя прибыль считается как выручка минус расходы, ФОТ и налог.">
     <div className="grid h-full grid-rows-[64px_1fr_148px]">
       <div className="flex flex-col items-center justify-center text-center">
         <div className="text-[13px] font-medium text-white/45">
@@ -1237,7 +1284,7 @@ const taxYTD = monthlyTaxRows
     </div>
   </div>
 
-  <div className="h-[374px] rounded-[24px] border border-violet-400/20 bg-[linear-gradient(180deg,rgba(139,92,246,0.10)_0%,rgba(255,255,255,0.02)_100%)] p-5">
+  <div className="h-[374px] rounded-[24px] border border-violet-400/20 bg-[linear-gradient(180deg,rgba(139,92,246,0.10)_0%,rgba(255,255,255,0.02)_100%)] p-5" title="Реалистичный сценарий использует средние показатели последних месяцев без ускорения роста.">
     <div className="grid h-full grid-rows-[64px_1fr_148px]">
       <div className="flex flex-col items-center justify-center text-center">
         <div className="text-[13px] font-medium text-violet-200/75">
@@ -1270,7 +1317,7 @@ const taxYTD = monthlyTaxRows
     </div>
   </div>
 
-  <div className="h-[374px] rounded-[24px] border border-emerald-400/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.10)_0%,rgba(255,255,255,0.02)_100%)] p-5">
+  <div className="h-[374px] rounded-[24px] border border-emerald-400/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.10)_0%,rgba(255,255,255,0.02)_100%)] p-5" title="Агрессивный сценарий учитывает текущий темп роста или падения за последние месяцы и переносит его на прогноз.">
     <div className="grid h-full grid-rows-[64px_1fr_148px]">
       <div className="flex flex-col items-center justify-center text-center">
         <div className="text-[13px] font-medium text-emerald-200/75">

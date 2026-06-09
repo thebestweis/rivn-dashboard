@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import { Search } from "lucide-react";
 import { CustomSelect } from "../ui/custom-select";
 
 type StatusFilter = "all" | "active" | "paused" | "completed";
@@ -7,32 +11,60 @@ type ProjectsFiltersProps = {
   statusFilter: StatusFilter;
   isLoading: boolean;
   resultsCount: number;
+  activeProjectsCount: number;
   hasActiveFilters: boolean;
   onSearchChange: (value: string) => void;
   onStatusChange: (value: StatusFilter) => void;
   onReset: () => void;
 };
 
+function formatProjectsCount(count: number) {
+  const abs = Math.abs(count);
+  const lastTwo = abs % 100;
+  const last = abs % 10;
+
+  if (lastTwo >= 11 && lastTwo <= 14) {
+    return `${count} проектов`;
+  }
+
+  if (last === 1) {
+    return `${count} проект`;
+  }
+
+  if (last >= 2 && last <= 4) {
+    return `${count} проекта`;
+  }
+
+  return `${count} проектов`;
+}
+
 export function ProjectsFilters({
   searchQuery,
   statusFilter,
   isLoading,
   resultsCount,
+  activeProjectsCount,
   hasActiveFilters,
   onSearchChange,
   onStatusChange,
   onReset,
 }: ProjectsFiltersProps) {
+  const [isActiveCountVisible, setIsActiveCountVisible] = useState(false);
+  const displayedCount = isActiveCountVisible ? activeProjectsCount : resultsCount;
+
   return (
-    <section className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
-      <div className="flex flex-col gap-3 md:flex-row md:gap-4">
-        <input
-          type="text"
-          placeholder="Поиск по проекту или клиенту"
-          value={searchQuery}
-          onChange={(event) => onSearchChange(event.target.value)}
-          className="h-11 flex-1 rounded-2xl border border-white/10 bg-[#0F1724] px-4 text-sm text-white outline-none placeholder:text-white/35"
-        />
+    <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center">
+      <div className="contents">
+        <label className="rivn-field flex h-11 items-center gap-3 lg:w-[300px] xl:w-[340px]">
+          <Search className="h-4 w-4 shrink-0 text-white/35" />
+          <input
+            type="text"
+            placeholder="Поиск по проекту или клиенту"
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
+            className="h-full min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+          />
+        </label>
 
         <CustomSelect
           value={statusFilter}
@@ -43,26 +75,33 @@ export function ProjectsFilters({
             { value: "paused", label: "На паузе" },
             { value: "completed", label: "Завершён" },
           ]}
-          className="w-full md:w-[220px]"
-          buttonClassName="bg-[#0F1724] dark:bg-[#0F1724]"
+          className="w-full lg:w-[190px]"
+          buttonClassName="h-11 bg-white/[0.045] dark:bg-white/[0.045]"
         />
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-white/45">
-          {isLoading ? "Загружаем проекты..." : `Найдено проектов: ${resultsCount}`}
-        </div>
 
         {hasActiveFilters ? (
           <button
             type="button"
             onClick={onReset}
-            className="text-sm font-medium text-white/65 transition hover:text-white"
+            className="rivn-button h-11 px-4 text-sm font-semibold"
           >
-            Сбросить фильтры
+            Сбросить
           </button>
-        ) : null}
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsActiveCountVisible((value) => !value)}
+            className="rivn-pill hidden h-11 min-w-[132px] items-center justify-center px-4 text-sm transition hover:border-[#00f5a8]/30 hover:text-white xl:inline-flex"
+            title={
+              isActiveCountVisible
+                ? "Показать все проекты"
+                : "Показать активные проекты"
+            }
+          >
+            {isLoading ? "Загружаем..." : formatProjectsCount(displayedCount)}
+          </button>
+        )}
       </div>
-    </section>
+    </div>
   );
 }

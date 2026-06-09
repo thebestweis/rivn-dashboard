@@ -17,6 +17,7 @@ import { type Task, type TaskStatus } from "../lib/supabase/tasks";
 import { BillingAccessBanner } from "../components/ui/billing-access-banner";
 import { useProjectsQuery } from "../lib/queries/use-projects-query";
 import {
+  patchTaskStatusInCaches,
   syncTaskAcrossCaches,
   useCreateTaskMutation,
   useTasksQuery,
@@ -422,12 +423,14 @@ export default function TasksPage() {
       if (nextStatus === "done") {
         flashTaskComplete(task.id);
       }
+      patchTaskStatusInCaches(queryClient, task, nextStatus);
 
       await updateTaskStatusMutation.mutateAsync({
         task,
         nextStatus,
       });
     } catch (error) {
+      patchTaskStatusInCaches(queryClient, task, task.status);
       console.error(error);
       setToastType("error");
       setToastMessage(getBillingErrorMessage(error));
@@ -879,7 +882,14 @@ export default function TasksPage() {
                                         {formatTaskTime(task.deadline_at)}
                                       </div>
 
-                                      <div className="mt-2 line-clamp-3 text-sm font-semibold leading-6 text-white">
+                                      <div
+                                        className={`rivn-strike-title mt-2 line-clamp-3 text-sm font-semibold leading-6 transition-colors ${
+                                          task.status === "done" ||
+                                          isCompletedFlashing
+                                            ? "is-done text-white/45"
+                                            : "text-white"
+                                        }`}
+                                      >
                                         {task.title}
                                       </div>
 
@@ -903,12 +913,20 @@ export default function TasksPage() {
                                     {canManageTasksWithBilling ? (
                                       <button
                                         type="button"
+                                        aria-label={
+                                          task.status === "done"
+                                            ? "Вернуть задачу в работу"
+                                            : "Закрыть задачу"
+                                        }
+                                        onMouseDown={(event) => {
+                                          event.stopPropagation();
+                                        }}
                                         onClick={(event) => {
                                           event.stopPropagation();
-                                          handleQuickToggle(task);
+                                          void handleQuickToggle(task);
                                         }}
                                         disabled={updatingTaskId === task.id}
-                                        className={`mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
+                                        className={`mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition active:scale-95 ${
                                           task.status === "done" ||
                                           isCompletedFlashing
                                             ? "border-emerald-400 bg-emerald-400"

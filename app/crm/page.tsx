@@ -56,6 +56,7 @@ import {
 import { useClientsQuery } from "../lib/queries/use-clients-query";
 import { useActiveWorkspaceMembers } from "../lib/queries/use-workspace-members-query";
 import { CustomSelect } from "../components/ui/custom-select";
+import { RivnDatePicker } from "../components/ui/rivn-date-picker";
 import { useAppContextState } from "../providers/app-context-provider";
 import { getWorkspaceMemberDisplayName } from "../lib/supabase/workspace-members";
 import { formatChatAttachmentSize } from "../lib/supabase/project-comments";
@@ -109,6 +110,18 @@ const emptyDealForm: DealFormState = {
   description: "",
   assignee_ids: [],
 };
+
+function getLocalDatePart(value: string | null | undefined) {
+  return value ? value.slice(0, 10) : "";
+}
+
+function getLocalTimePart(value: string | null | undefined) {
+  return value && value.length >= 16 ? value.slice(11, 16) : "";
+}
+
+function combineLocalDateTime(date: string, time: string) {
+  return date ? `${date}T${time || "12:00"}` : "";
+}
 
 const stageAccentClasses = [
   "border-t-amber-400",
@@ -166,7 +179,7 @@ function isDealPanelTab(value: string | null): value is DealPanelTab {
   );
 }
 
-function getDealSignal(deal: CrmDeal) {
+function getDealSignal(deal: CrmDeal, currentTimeMs: number | null) {
   if (deal.status === "won") {
     return {
       label: "Оплачено",
@@ -193,7 +206,11 @@ function getDealSignal(deal: CrmDeal) {
 
   const nextContactTime = new Date(deal.next_contact_at).getTime();
 
-  if (Number.isFinite(nextContactTime) && nextContactTime < Date.now()) {
+  if (
+    currentTimeMs !== null &&
+    Number.isFinite(nextContactTime) &&
+    nextContactTime < currentTimeMs
+  ) {
     return {
       label: "Контакт просрочен",
       className:
@@ -208,7 +225,11 @@ function getDealSignal(deal: CrmDeal) {
   };
 }
 
-function getDealTaskTiming(task: CrmDealTask) {
+function getDealTaskTiming(
+  task: CrmDealTask,
+  currentTimeMs: number | null,
+  endOfTodayMs: number | null
+) {
   if (task.status === "done") {
     return {
       label: "Выполнено",
@@ -226,11 +247,11 @@ function getDealTaskTiming(task: CrmDealTask) {
   }
 
   const dueTime = new Date(task.due_at).getTime();
-  const now = Date.now();
-  const endOfToday = new Date();
-  endOfToday.setHours(23, 59, 59, 999);
-
-  if (Number.isFinite(dueTime) && dueTime < now) {
+  if (
+    currentTimeMs !== null &&
+    Number.isFinite(dueTime) &&
+    dueTime < currentTimeMs
+  ) {
     return {
       label: "Просрочено",
       className:
@@ -238,7 +259,11 @@ function getDealTaskTiming(task: CrmDealTask) {
     };
   }
 
-  if (Number.isFinite(dueTime) && dueTime <= endOfToday.getTime()) {
+  if (
+    endOfTodayMs !== null &&
+    Number.isFinite(dueTime) &&
+    dueTime <= endOfTodayMs
+  ) {
     return {
       label: "Сегодня",
       className:
@@ -342,20 +367,23 @@ const DealCard = memo(function DealCard({
   deal,
   assigneeProfiles,
   sourceName,
+  currentTimeMs,
   onEdit,
 }: {
   deal: CrmDeal;
   assigneeProfiles: MemberProfilePreview[];
   sourceName: string;
+  currentTimeMs: number | null;
   onEdit: () => void;
 }) {
   const clientName = deal.client_name || "Клиент пока не создан";
   const initials = getInitials(clientName || deal.title) || "R";
-  const signal = getDealSignal(deal);
+  const signal = getDealSignal(deal, currentTimeMs);
   const isNextContactOverdue =
+    currentTimeMs !== null &&
     deal.status === "open" &&
     Boolean(deal.next_contact_at) &&
-    new Date(deal.next_contact_at ?? "").getTime() < Date.now();
+    new Date(deal.next_contact_at ?? "").getTime() < currentTimeMs;
 
   return (
     <button
@@ -569,11 +597,28 @@ function CrmPageContent() {
     Record<string, AssignmentRuleDraft>
   >({});
   const [isCrmLoadingSlow, setIsCrmLoadingSlow] = useState(false);
+  const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null);
+  const [endOfTodayMs, setEndOfTodayMs] = useState<number | null>(null);
 
   const {
     data: selectedDealDetails,
     isLoading: isDealDetailsLoading,
   } = useCrmDealDetailsQuery(selectedDealId, isReady && hasAccess);
+
+  useEffect(() => {
+    const updateTimeMarkers = () => {
+      const now = new Date();
+      const endOfToday = new Date(now);
+      endOfToday.setHours(23, 59, 59, 999);
+      setCurrentTimeMs(now.getTime());
+      setEndOfTodayMs(endOfToday.getTime());
+    };
+
+    updateTimeMarkers();
+    const intervalId = window.setInterval(updateTimeMarkers, 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     if (!isReady || isLoading) {
@@ -826,13 +871,13 @@ function CrmPageContent() {
 
   const listDeals = useMemo(
     () => {
-      const now = Date.now();
       const filteredDeals = activeDeals.filter((deal) => {
         if (qualityFilter === "overdue") {
           return (
+            currentTimeMs !== null &&
             deal.status === "open" &&
             Boolean(deal.next_contact_at) &&
-            new Date(deal.next_contact_at ?? "").getTime() < now
+            new Date(deal.next_contact_at ?? "").getTime() < currentTimeMs
           );
         }
 
@@ -848,7 +893,7 @@ function CrmPageContent() {
           new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
     },
-    [activeDeals, qualityFilter]
+    [activeDeals, currentTimeMs, qualityFilter]
   );
 
   const sourceOverview = useMemo(
@@ -876,12 +921,12 @@ function CrmPageContent() {
   );
 
   const qualitySignals = useMemo(() => {
-    const now = Date.now();
     const openDeals = activeDeals.filter((deal) => deal.status === "open");
     const overdueContacts = openDeals.filter(
       (deal) =>
+        currentTimeMs !== null &&
         deal.next_contact_at &&
-        new Date(deal.next_contact_at).getTime() < now
+        new Date(deal.next_contact_at).getTime() < currentTimeMs
     );
     const withoutNextContact = openDeals.filter((deal) => !deal.next_contact_at);
     const waitingDialogs = inboxItems.filter(
@@ -895,7 +940,7 @@ function CrmPageContent() {
       total:
         overdueContacts.length + withoutNextContact.length + waitingDialogs.length,
     };
-  }, [activeDeals, inboxItems]);
+  }, [activeDeals, currentTimeMs, inboxItems]);
 
   useEffect(() => {
     if (dealPanelTab !== "dialogs" || !selectedDealId) return;
@@ -1065,6 +1110,17 @@ function CrmPageContent() {
     });
   }
 
+  function getNextStagePosition(stageId: string) {
+    return (
+      Math.max(
+        0,
+        ...deals
+          .filter((item) => item.stage_id === stageId)
+          .map((item) => item.position ?? 0)
+      ) + 10
+    );
+  }
+
   async function moveDealToStage(dealId: string, stage: CrmStage) {
     const deal = deals.find((item) => item.id === dealId);
     if (!deal || !activePipeline) return;
@@ -1080,7 +1136,7 @@ function CrmPageContent() {
       dealId,
       pipelineId: activePipeline.id,
       stageId: stage.id,
-      position: Date.now(),
+      position: getNextStagePosition(stage.id),
       status: getStageStatus(stage),
     });
 
@@ -1100,7 +1156,7 @@ function CrmPageContent() {
       dealId: pendingLostMove.dealId,
       pipelineId: activePipeline.id,
       stageId: pendingLostMove.stage.id,
-      position: Date.now(),
+      position: getNextStagePosition(pendingLostMove.stage.id),
       status: "lost",
       loss_reason_id: selectedLossReasonId || null,
       loss_comment: lossComment.trim() || null,
@@ -1400,7 +1456,9 @@ function CrmPageContent() {
     );
   }
 
-  const selectedDealSignal = selectedDeal ? getDealSignal(selectedDeal) : null;
+  const selectedDealSignal = selectedDeal
+    ? getDealSignal(selectedDeal, currentTimeMs)
+    : null;
   const selectedDealAssigneeProfiles = selectedDeal
     ? getDealAssigneeProfiles(selectedDeal)
     : [];
@@ -1408,14 +1466,17 @@ function CrmPageContent() {
     active: selectedDealTasks.filter((task) => task.status !== "done").length,
     overdue: selectedDealTasks.filter((task) => {
       if (task.status === "done" || !task.due_at) return false;
-      return new Date(task.due_at).getTime() < Date.now();
+      return (
+        currentTimeMs !== null &&
+        new Date(task.due_at).getTime() < currentTimeMs
+      );
     }).length,
     done: selectedDealTasks.filter((task) => task.status === "done").length,
   };
 
   if (!isReady || isLoading) {
     return (
-      <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
+      <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
         <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#121827]">
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Загружаем CRM...
@@ -1443,7 +1504,7 @@ function CrmPageContent() {
 
   if (!hasAccess) {
     return (
-      <main className="min-h-screen bg-[#F5F7FB] px-5 py-6 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:px-8">
+      <main className="rivn-scope min-h-screen px-5 py-6 text-slate-950 dark:text-white lg:px-8">
         <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#121827]">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
             CRM
@@ -1463,7 +1524,7 @@ function CrmPageContent() {
   );
 
   return (
-    <main className="min-h-screen bg-[#F5F7FB] text-slate-950 dark:bg-[#0B0F1A] dark:text-white">
+    <main className="rivn-scope min-h-screen text-slate-950 dark:text-white">
       <div className="border-b border-slate-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-[#101827] sm:px-5 lg:px-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative w-full max-w-xl">
@@ -1727,73 +1788,8 @@ function CrmPageContent() {
             </div>
           </div>
 
-          {workspaceView === "pipeline" ? (
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setQualityFilter("overdue");
-                  setStatusFilter("open");
-                  setViewMode("list");
-                  setSelectedPipelineId("all");
-                }}
-                className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-left shadow-sm transition hover:border-rose-300 dark:border-rose-500/20 dark:bg-rose-500/10"
-              >
-                <p className="text-xs font-semibold text-rose-600 dark:text-rose-200">
-                  Просрочен контакт
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-rose-700 dark:text-rose-100">
-                  {qualitySignals.overdueContacts.length}
-                </p>
-                <p className="mt-1 text-xs text-rose-600/80 dark:text-rose-200/80">
-                  Нужно срочно вернуться к клиентам
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setQualityFilter("without_next_contact");
-                  setStatusFilter("open");
-                  setViewMode("list");
-                  setSelectedPipelineId("all");
-                }}
-                className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left shadow-sm transition hover:border-amber-300 dark:border-amber-500/20 dark:bg-amber-500/10"
-              >
-                <p className="text-xs font-semibold text-amber-700 dark:text-amber-200">
-                  Нет следующего шага
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-amber-800 dark:text-amber-100">
-                  {qualitySignals.withoutNextContact.length}
-                </p>
-                <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-200/80">
-                  Риск потерять сделку без плана
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setWorkspaceView("inbox");
-                  setInboxFilter("needs_reply");
-                }}
-                className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left shadow-sm transition hover:border-emerald-300 dark:border-emerald-500/20 dark:bg-emerald-500/10"
-              >
-                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">
-                  Клиент ждёт 30+ минут
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-emerald-800 dark:text-emerald-100">
-                  {qualitySignals.waitingDialogs.length}
-                </p>
-                <p className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-200/80">
-                  Быстрый ответ повышает конверсию
-                </p>
-              </button>
-            </div>
-          ) : null}
-
           <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
               <button
                 type="button"
                 onClick={() => setWorkspaceView("pipeline")}
@@ -1826,71 +1822,71 @@ function CrmPageContent() {
                   </span>
                 ) : null}
               </button>
-            </div>
-          </div>
 
-          {workspaceView === "pipeline" ? (
-          <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
-              <button
-                type="button"
-                onClick={() => setSelectedPipelineId("all")}
-                className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                  isAllPipelinesSelected
-                    ? "bg-violet-600 text-white shadow-lg shadow-violet-500/20"
-                    : "border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
-                }`}
-              >
-                Все сделки
-              </button>
-              {pipelines.map((pipeline) => {
-                const isActive =
-                  !isAllPipelinesSelected && pipeline.id === activePipeline?.id;
-
-                return (
+              {workspaceView === "pipeline" ? (
+                <>
                   <button
-                    key={pipeline.id}
                     type="button"
-                    onClick={() => setSelectedPipelineId(pipeline.id)}
+                    onClick={() => setSelectedPipelineId("all")}
                     className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                      isActive
+                      isAllPipelinesSelected
                         ? "bg-violet-600 text-white shadow-lg shadow-violet-500/20"
                         : "border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
                     }`}
                   >
-                    {pipeline.name}
+                    Все сделки
                   </button>
-                );
-              })}
+                  {pipelines.map((pipeline) => {
+                    const isActive =
+                      !isAllPipelinesSelected && pipeline.id === activePipeline?.id;
+
+                    return (
+                      <button
+                        key={pipeline.id}
+                        type="button"
+                        onClick={() => setSelectedPipelineId(pipeline.id)}
+                        className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                          isActive
+                            ? "bg-violet-600 text-white shadow-lg shadow-violet-500/20"
+                            : "border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                        }`}
+                      >
+                        {pipeline.name}
+                      </button>
+                    );
+                  })}
+                </>
+              ) : null}
             </div>
 
-            <div className="flex items-center gap-4 text-sm">
-              <button
-                type="button"
-                onClick={() => setViewMode("board")}
-                disabled={isAllPipelinesSelected}
-                className={`pb-2 font-semibold transition ${
-                  displayMode === "board"
-                    ? "border-b-2 border-violet-600 text-violet-700 dark:text-violet-300"
-                    : "text-slate-500 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:text-white"
-                }`}
-              >
-                Доска
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={`pb-2 font-semibold transition ${
-                  displayMode === "list"
-                    ? "border-b-2 border-violet-600 text-violet-700 dark:text-violet-300"
-                    : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                }`}
-              >
-                Список
-              </button>
-            </div>
+            {workspaceView === "pipeline" ? (
+              <div className="flex shrink-0 items-center gap-4 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("board")}
+                  disabled={isAllPipelinesSelected}
+                  className={`pb-2 font-semibold transition ${
+                    displayMode === "board"
+                      ? "border-b-2 border-violet-600 text-violet-700 dark:text-violet-300"
+                      : "text-slate-500 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  Доска
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  className={`pb-2 font-semibold transition ${
+                    displayMode === "list"
+                      ? "border-b-2 border-violet-600 text-violet-700 dark:text-violet-300"
+                      : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  Список
+                </button>
+              </div>
+            ) : null}
           </div>
-          ) : null}
 
           {error ? (
             <div className="mt-5 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
@@ -2096,18 +2092,37 @@ function CrmPageContent() {
 
                       <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                         Следующий контакт
-                        <input
-                          type="datetime-local"
-                          value={item.deal.next_contact_at?.slice(0, 16) ?? ""}
-                          onChange={(event) =>
-                            void updateInboxDealNextContact(
-                              item.deal,
-                              event.target.value
-                            )
-                          }
-                          disabled={updateDealMutation.isPending}
-                          className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-emerald-300 disabled:opacity-60 dark:border-white/10 dark:bg-[#0B0F1A] dark:text-slate-200"
-                        />
+                        <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_96px]">
+                          <RivnDatePicker
+                            value={getLocalDatePart(item.deal.next_contact_at)}
+                            onChange={(value) =>
+                              void updateInboxDealNextContact(
+                                item.deal,
+                                combineLocalDateTime(
+                                  value,
+                                  getLocalTimePart(item.deal.next_contact_at)
+                                )
+                              )
+                            }
+                            disabled={updateDealMutation.isPending}
+                            placeholder="Дата"
+                          />
+                          <input
+                            type="time"
+                            value={getLocalTimePart(item.deal.next_contact_at)}
+                            onChange={(event) =>
+                              void updateInboxDealNextContact(
+                                item.deal,
+                                combineLocalDateTime(
+                                  getLocalDatePart(item.deal.next_contact_at),
+                                  event.target.value
+                                )
+                              )
+                            }
+                            disabled={updateDealMutation.isPending}
+                            className="rivn-field h-10 rounded-xl"
+                          />
+                        </div>
                       </label>
 
                       <button
@@ -2164,7 +2179,13 @@ function CrmPageContent() {
           </section>
         ) : displayMode === "board" ? (
         <section className="overflow-x-auto pb-4">
-          <div className="grid min-h-[calc(100vh-290px)] gap-4 lg:grid-flow-col lg:auto-cols-[minmax(280px,320px)]">
+          <div
+            className="grid min-h-[calc(100vh-290px)] gap-4"
+            style={{
+              gridTemplateColumns: `repeat(${Math.max(activeStages.length, 1)}, minmax(240px, 1fr))`,
+              minWidth: `${Math.max(activeStages.length, 1) * 256}px`,
+            }}
+          >
             {activeStages.map((stage, index) => {
               const stageDeals = dealsByStage.get(stage.id) ?? [];
               const stageTotal = stageDealCounts[stage.id] ?? stageDeals.length;
@@ -2179,7 +2200,7 @@ function CrmPageContent() {
                     const dealId = event.dataTransfer.getData("text/plain");
                     void moveDealToStage(dealId, stage);
                   }}
-                  className={`flex min-h-[520px] flex-col rounded-2xl border border-slate-200 border-t-4 bg-[#F0F3F8] p-3 ${stageAccentClasses[index % stageAccentClasses.length]} dark:border-white/10 dark:bg-[#111827]`}
+                  className={`flex min-h-[520px] flex-col rounded-[24px] border border-white/10 border-t-4 bg-[linear-gradient(145deg,rgba(20,43,58,0.68),rgba(18,24,43,0.74))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${stageAccentClasses[index % stageAccentClasses.length]}`}
                 >
                   <div className="mb-3 flex items-center justify-between gap-3 px-1">
                     <div className="min-w-0">
@@ -2188,7 +2209,7 @@ function CrmPageContent() {
                         <h2 className="truncate text-sm font-semibold">
                           {stage.name}
                         </h2>
-                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-500 shadow-sm dark:bg-white/10 dark:text-slate-300">
+                        <span className="rounded-full border border-white/10 bg-white/10 px-2 py-0.5 text-xs font-semibold text-white/70 shadow-sm">
                           {stageDeals.length}
                           {hasHiddenDeals ? ` / ${stageTotal}` : ""}
                         </span>
@@ -2201,7 +2222,7 @@ function CrmPageContent() {
                     <button
                       type="button"
                       onClick={openCreateForm}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white hover:text-violet-700 dark:hover:bg-white/10 dark:hover:text-white"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white/45 transition hover:bg-white/10 hover:text-white"
                       title="Добавить сделку"
                     >
                       <Plus className="h-4 w-4" />
@@ -2225,12 +2246,13 @@ function CrmPageContent() {
                             : "Источник не указан"
                         }
                         assigneeProfiles={getDealAssigneeProfiles(deal)}
+                        currentTimeMs={currentTimeMs}
                         onEdit={() => openDealPanel(deal)}
                       />
                     ))}
 
                     {stageDeals.length === 0 ? (
-                      <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white/50 p-6 text-center text-sm text-slate-400 dark:border-white/10 dark:bg-white/[0.03]">
+                      <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.025] p-6 text-center text-sm text-white/35">
                         Перетащи сделку сюда
                       </div>
                     ) : null}
@@ -3170,12 +3192,30 @@ function CrmPageContent() {
                       className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
                       placeholder="Например: отправить КП"
                     />
-                    <input
-                      type="datetime-local"
-                      value={newDealTaskDueAt}
-                      onChange={(event) => setNewDealTaskDueAt(event.target.value)}
-                      className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
-                    />
+                    <div className="grid gap-2 sm:grid-cols-[1fr_112px]">
+                      <RivnDatePicker
+                        value={getLocalDatePart(newDealTaskDueAt)}
+                        onChange={(value) =>
+                          setNewDealTaskDueAt(
+                            combineLocalDateTime(value, getLocalTimePart(newDealTaskDueAt))
+                          )
+                        }
+                        placeholder="Дата следующего шага"
+                      />
+                      <input
+                        type="time"
+                        value={getLocalTimePart(newDealTaskDueAt)}
+                        onChange={(event) =>
+                          setNewDealTaskDueAt(
+                            combineLocalDateTime(
+                              getLocalDatePart(newDealTaskDueAt),
+                              event.target.value
+                            )
+                          )
+                        }
+                        className="rivn-field"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => void addDealTask()}
@@ -3192,7 +3232,11 @@ function CrmPageContent() {
 
                 <div className="space-y-2">
                   {selectedDealTasks.map((task) => {
-                    const timing = getDealTaskTiming(task);
+                    const timing = getDealTaskTiming(
+                      task,
+                      currentTimeMs,
+                      endOfTodayMs
+                    );
                     const assigneeName = task.assignee_member_id
                       ? memberNameById.get(task.assignee_member_id)
                       : null;
@@ -3657,17 +3701,35 @@ function CrmPageContent() {
 
               <label className="space-y-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
                 Следующий контакт
-                <input
-                  type="datetime-local"
-                  value={form.next_contact_at}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      next_contact_at: event.target.value,
-                    }))
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 dark:border-white/10 dark:bg-[#0B0F1A] dark:focus:ring-violet-500/15"
-                />
+                <div className="grid gap-2 sm:grid-cols-[1fr_112px]">
+                  <RivnDatePicker
+                    value={getLocalDatePart(form.next_contact_at)}
+                    onChange={(value) =>
+                      setForm((current) => ({
+                        ...current,
+                        next_contact_at: combineLocalDateTime(
+                          value,
+                          getLocalTimePart(current.next_contact_at)
+                        ),
+                      }))
+                    }
+                    placeholder="Дата контакта"
+                  />
+                  <input
+                    type="time"
+                    value={getLocalTimePart(form.next_contact_at)}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        next_contact_at: combineLocalDateTime(
+                          getLocalDatePart(current.next_contact_at),
+                          event.target.value
+                        ),
+                      }))
+                    }
+                    className="rivn-field"
+                  />
+                </div>
               </label>
 
               <div className="space-y-2 text-sm font-semibold text-slate-600 dark:text-slate-300">

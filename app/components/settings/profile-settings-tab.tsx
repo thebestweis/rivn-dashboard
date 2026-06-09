@@ -131,7 +131,7 @@ export function ProfileSettingsTab() {
 
   if (isLoading || !currentMember) {
     return (
-      <section className="rounded-[28px] border border-white/10 bg-[#121826] p-6 text-white/60">
+      <section className="rivn-card p-6 text-white/60">
         Загружаем профиль...
       </section>
     );
@@ -139,18 +139,18 @@ export function ProfileSettingsTab() {
 
   return (
     <>
-      <section className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.24)]">
-          <p className="text-sm font-semibold text-white/50">Карточка профиля</p>
+      <section className="grid gap-5 xl:grid-cols-[0.82fr_1.18fr]">
+        <div className="rivn-card rivn-card-interactive p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#43ffc2]">Карточка профиля</p>
           <div className="mt-5 flex items-center gap-4">
             {avatarPreviewSrc ? (
               <img
                 src={avatarPreviewSrc}
                 alt={previewName}
-                className="h-20 w-20 rounded-2xl object-cover"
+                className="h-20 w-20 rounded-3xl border border-white/10 object-cover shadow-[0_18px_45px_rgba(0,0,0,0.28)]"
               />
             ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-emerald-400 text-2xl font-bold text-white">
+              <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-white/12 bg-[radial-gradient(circle_at_30%_25%,#7dffd6,#00f5a8_48%,#7c5cff)] text-2xl font-bold text-[#06101d] shadow-[0_20px_55px_rgba(0,245,168,0.16),inset_0_1px_0_rgba(255,255,255,0.42)]">
                 {initials}
               </div>
             )}
@@ -163,7 +163,7 @@ export function ProfileSettingsTab() {
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+          <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.045] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
             <p className="text-sm leading-6 text-white/65">
               {form.profileDescription.trim() ||
                 "Здесь будет короткое описание сотрудника: зона ответственности, сильные стороны и полезная информация для команды."}
@@ -171,10 +171,10 @@ export function ProfileSettingsTab() {
           </div>
 
           <div className="mt-4 grid gap-3 text-sm text-white/60">
-            <div className="rounded-2xl bg-white/[0.04] px-4 py-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 transition duration-300 hover:bg-white/[0.065]">
               Телефон: {form.phone.trim() || "не указан"}
             </div>
-            <div className="rounded-2xl bg-white/[0.04] px-4 py-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 transition duration-300 hover:bg-white/[0.065]">
               Telegram: {form.telegram.trim() || "не указан"}
             </div>
           </div>
@@ -182,11 +182,11 @@ export function ProfileSettingsTab() {
 
         <form
           onSubmit={submitProfile}
-          className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.24)]"
+          className="rivn-card p-6"
         >
           <div>
-            <p className="text-sm font-semibold text-white/50">Мои данные</p>
-            <h2 className="mt-1 text-2xl font-semibold">Профиль сотрудника</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#43ffc2]">Мои данные</p>
+            <h2 className="mt-2 text-2xl font-medium tracking-[-0.04em]">Профиль сотрудника</h2>
             <p className="mt-2 text-sm leading-6 text-white/55">
               Эти данные будут использоваться в CRM, задачах, чатах и командных блоках.
             </p>
@@ -203,7 +203,7 @@ export function ProfileSettingsTab() {
                     displayName: event.target.value,
                   }))
                 }
-                className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-white outline-none transition focus:border-violet-400"
+                className="rivn-field mt-2"
                 placeholder="Например: Иван Петров"
               />
             </label>
@@ -218,15 +218,15 @@ export function ProfileSettingsTab() {
                     profileTitle: event.target.value,
                   }))
                 }
-                className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-white outline-none transition focus:border-violet-400"
+                className="rivn-field mt-2"
                 placeholder="Например: Менеджер по продажам"
               />
             </label>
 
             <label className="text-sm font-semibold text-white/60 md:col-span-2">
               Аватарка
-              <div className="mt-2 flex flex-col gap-3 rounded-xl border border-white/10 bg-[#0B0F1A] p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/50">
+              <div className="mt-2 flex flex-col gap-3 rounded-[22px] border border-white/10 bg-white/[0.04] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/50">
                   {avatarPreviewSrc ? (
                     <img
                       src={avatarPreviewSrc}
@@ -258,7 +258,7 @@ export function ProfileSettingsTab() {
                   <button
                     type="button"
                     onClick={() => avatarInputRef.current?.click()}
-                    className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/[0.08]"
+                    className="rivn-button px-3 py-2 text-xs font-semibold"
                   >
                     <Upload className="h-4 w-4" />
                     Загрузить
@@ -274,7 +274,7 @@ export function ProfileSettingsTab() {
                           avatarInputRef.current.value = "";
                         }
                       }}
-                      className="inline-flex items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/15"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition duration-300 hover:-translate-y-0.5 hover:bg-rose-400/15 active:translate-y-0 active:scale-[0.985]"
                     >
                       <X className="h-4 w-4" />
                       Убрать
@@ -298,7 +298,7 @@ export function ProfileSettingsTab() {
                       avatarUrl: event.target.value,
                     }))
                   }
-                  className="w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-white outline-none transition focus:border-violet-400"
+                  className="rivn-field"
                   placeholder="https://..."
                 />
               </div>
@@ -311,7 +311,7 @@ export function ProfileSettingsTab() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, phone: event.target.value }))
                 }
-                className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-white outline-none transition focus:border-violet-400"
+                className="rivn-field mt-2"
                 placeholder="+7..."
               />
             </label>
@@ -326,7 +326,7 @@ export function ProfileSettingsTab() {
                     telegram: event.target.value,
                   }))
                 }
-                className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-white outline-none transition focus:border-violet-400"
+                className="rivn-field mt-2"
                 placeholder="@username"
               />
             </label>
@@ -342,7 +342,7 @@ export function ProfileSettingsTab() {
                   }))
                 }
                 rows={5}
-                className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-white outline-none transition focus:border-violet-400"
+                className="rivn-field rivn-textarea mt-2"
                 placeholder="Коротко: чем занимается сотрудник, за что отвечает, какие клиенты или процессы ведёт."
               />
             </label>
@@ -352,7 +352,7 @@ export function ProfileSettingsTab() {
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-60"
+              className="rivn-button rivn-button-primary px-5 py-3 text-sm font-semibold disabled:opacity-60"
             >
               <Save className="h-4 w-4" />
               {isSaving ? "Сохраняем..." : "Сохранить профиль"}

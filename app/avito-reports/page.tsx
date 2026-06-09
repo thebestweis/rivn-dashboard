@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AvitoChart } from "@/app/components/avito/avito-chart";
 import { useConfirmDialog } from "@/app/components/ui/confirm-dialog-provider";
+import { RivnDatePicker } from "@/app/components/ui/rivn-date-picker";
 import { useAppContextState } from "@/app/providers/app-context-provider";
 
 type AvitoMetric = {
@@ -1959,31 +1960,31 @@ setIntegrations(integrationsData.integrations ?? []);
           <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
             <div>
               <label className="text-sm text-white/60">С даты</label>
-              <input
-                type="date"
+              <RivnDatePicker
                 value={metricsPeriod.from}
-                onChange={(event) =>
+                onChange={(value) =>
                   setMetricsPeriod((current) => ({
                     ...current,
-                    from: event.target.value,
+                    from: value,
                   }))
                 }
-                className="mt-2 h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                placeholder="Начало периода"
+                className="mt-2"
               />
             </div>
 
             <div>
               <label className="text-sm text-white/60">По дату</label>
-              <input
-                type="date"
+              <RivnDatePicker
                 value={metricsPeriod.to}
-                onChange={(event) =>
+                onChange={(value) =>
                   setMetricsPeriod((current) => ({
                     ...current,
-                    to: event.target.value,
+                    to: value,
                   }))
                 }
-                className="mt-2 h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                placeholder="Конец периода"
+                className="mt-2"
               />
             </div>
 

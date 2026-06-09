@@ -891,7 +891,7 @@ async function fetchAggregateStatsFromAvito(params: {
           },
           body: JSON.stringify(body),
         },
-        "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ Р°РіСЂРµРіРёСЂРѕРІР°РЅРЅРѕР№ СЃС‚Р°С‚РёСЃС‚РёРєРё"
+        "Ошибка получения агрегированной статистики"
       );
 
       const parsed = parseAggregateStatsResponse(data);

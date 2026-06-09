@@ -1,4 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
+import { ApiAccessError } from "@/app/api/_guards";
+import { readJsonWithLimit } from "@/app/api/_request";
+import { safeEqualSecret } from "@/app/api/_secrets";
 
 type TelegramUpdate = {
   message?: {
@@ -305,7 +308,19 @@ async function linkChatToRivnLeadsProject(params: {
 
 export async function POST(req: Request) {
   try {
-    const update = (await req.json()) as TelegramUpdate;
+    const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    const shouldEnforceSecret =
+      process.env.TELEGRAM_WEBHOOK_SECRET_ENFORCED === "true";
+
+    if (shouldEnforceSecret) {
+      const receivedSecret = req.headers.get("x-telegram-bot-api-secret-token");
+
+      if (!safeEqualSecret(receivedSecret, expectedSecret)) {
+        return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
+    const update = await readJsonWithLimit<TelegramUpdate>(req, 256 * 1024);
     await saveTelegramChatFromUpdate(update);
 
     const message = update.message;
@@ -489,6 +504,13 @@ export async function POST(req: Request) {
     return Response.json({ ok: true });
   } catch (error) {
     console.error(error);
+
+    if (error instanceof ApiAccessError) {
+      return Response.json(
+        { ok: false, error: error.message },
+        { status: error.status }
+      );
+    }
 
     return Response.json({
       ok: false,

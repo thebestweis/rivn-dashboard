@@ -296,11 +296,11 @@ export function TelegramSettingsTab() {
   return (
     <>
       <div className="grid gap-6 xl:grid-cols-2">
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+        <div className="rivn-card rivn-card-interactive p-5 sm:p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-sm text-white/50">Telegram bot</div>
-              <h2 className="mt-1 text-xl font-semibold">
+              <div className="text-xs uppercase tracking-[0.18em] text-[#43ffc2]">Telegram bot</div>
+              <h2 className="mt-2 text-2xl font-medium tracking-[-0.04em]">
                 Интеграция Telegram
               </h2>
             </div>
@@ -312,7 +312,7 @@ export function TelegramSettingsTab() {
             </div>
           </div>
 
-          <div className="mt-4 rounded-[24px] border border-violet-400/15 bg-violet-500/[0.08] p-4">
+          <div className="mt-5 rounded-[24px] border border-[#7c5cff]/20 bg-[#7c5cff]/10 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
             <div className="text-sm font-medium text-violet-200">
               Быстрое подключение
             </div>
@@ -348,7 +348,7 @@ export function TelegramSettingsTab() {
           </div>
 
           <div className="mt-5 space-y-4">
-            <div className="rounded-2xl bg-white/[0.04] p-4">
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
               <label className="text-sm text-white/50">Bot token</label>
               <input
                 type="password"
@@ -357,7 +357,7 @@ export function TelegramSettingsTab() {
                   updateField("bot_token", event.target.value)
                 }
                 placeholder="Вставь токен бота из BotFather"
-                className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
+                className="rivn-field mt-2 placeholder:text-white/30"
                 disabled={isBusy}
               />
 
@@ -366,7 +366,7 @@ export function TelegramSettingsTab() {
                   href="https://t.me/BotFather"
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+                  className="rivn-button px-4 py-3 text-sm font-medium"
                 >
                   Открыть BotFather
                 </a>
@@ -375,7 +375,7 @@ export function TelegramSettingsTab() {
                   type="button"
                   onClick={handleDiscoverChatId}
                   disabled={isBusy || !trimmedBotToken}
-                  className="rounded-2xl border border-violet-400/20 bg-violet-500/15 px-4 py-3 text-sm font-medium text-violet-200 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rivn-button px-4 py-3 text-sm font-medium text-violet-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isDiscoveringChat
                     ? "Проверяем бота и ищем chat_id..."
@@ -388,7 +388,7 @@ export function TelegramSettingsTab() {
                       href={discoveryResult?.botLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded-2xl border border-emerald-400/20 bg-emerald-500/12 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/18"
+                      className="rivn-button rivn-button-primary px-4 py-3 text-sm font-semibold"
                     >
                       Открыть бота в Telegram
                     </a>
@@ -397,7 +397,7 @@ export function TelegramSettingsTab() {
                       type="button"
                       onClick={handleCopyBotLink}
                       disabled={isBusy}
-                      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rivn-button px-4 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Скопировать ссылку
                     </button>
@@ -412,7 +412,7 @@ export function TelegramSettingsTab() {
             </div>
 
             {discoveryResult?.tokenValid ? (
-              <div className="rounded-2xl border border-violet-400/10 bg-violet-500/[0.05] p-4">
+              <div className="rounded-[24px] border border-[#7c5cff]/18 bg-[#7c5cff]/8 p-4">
                 <div className="text-sm font-medium text-violet-200">
                   Информация о боте
                 </div>
@@ -447,7 +447,7 @@ export function TelegramSettingsTab() {
               </div>
             ) : null}
 
-            <details className="rounded-2xl bg-white/[0.04] p-4">
+            <details className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
               <summary className="cursor-pointer text-sm text-white/60">
                 Расширенные настройки (chat_id)
               </summary>
@@ -461,7 +461,7 @@ export function TelegramSettingsTab() {
                     updateField("chat_id", event.target.value)
                   }
                   placeholder="Например: 511872773"
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B0F1A] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
+                  className="rivn-field mt-2 placeholder:text-white/30"
                   disabled={isBusy}
                 />
 
@@ -473,7 +473,7 @@ export function TelegramSettingsTab() {
             </details>
 
             {discoveryResult?.chatId ? (
-              <div className="rounded-2xl border border-emerald-400/10 bg-emerald-400/[0.06] p-4">
+              <div className="rounded-[24px] border border-[#00f5a8]/16 bg-[#00f5a8]/8 p-4">
                 <div className="text-sm font-medium text-emerald-200">
                   Найденный чат
                 </div>
@@ -530,7 +530,7 @@ export function TelegramSettingsTab() {
               </div>
             ) : null}
 
-            <div className="rounded-2xl bg-white/[0.04] p-4">
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="text-sm text-white/80">
@@ -547,7 +547,7 @@ export function TelegramSettingsTab() {
                     updateField("is_enabled", !settings.is_enabled)
                   }
                   disabled={isBusy}
-                  className={`rounded-full px-4 py-2 text-xs font-medium transition ${
+                  className={`rounded-full px-4 py-2 text-xs font-medium transition duration-300 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.97] ${
                     settings.is_enabled
                       ? "bg-emerald-500/15 text-emerald-300"
                       : "bg-white/10 text-white/50"
@@ -563,7 +563,7 @@ export function TelegramSettingsTab() {
                 type="button"
                 onClick={handleSave}
                 disabled={isBusy}
-                className="rounded-2xl border border-emerald-400/20 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rivn-button rivn-button-primary px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? "Сохраняем..." : "Сохранить"}
               </button>
@@ -572,7 +572,7 @@ export function TelegramSettingsTab() {
                 type="button"
                 onClick={handleSendTest}
                 disabled={isBusy}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rivn-button px-5 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSendingTest ? "Отправляем..." : "Отправить тест"}
               </button>
@@ -580,9 +580,9 @@ export function TelegramSettingsTab() {
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
-          <div className="text-sm text-white/50">Notifications</div>
-          <h2 className="mt-1 text-xl font-semibold">Типы уведомлений</h2>
+        <div className="rivn-card rivn-card-interactive p-5 sm:p-6">
+          <div className="text-xs uppercase tracking-[0.18em] text-[#43ffc2]">Notifications</div>
+          <h2 className="mt-2 text-2xl font-medium tracking-[-0.04em]">Типы уведомлений</h2>
 
           <div className="mt-5 space-y-3">
             {notificationItems.map((item) => {
@@ -591,7 +591,7 @@ export function TelegramSettingsTab() {
               return (
                 <div
                   key={item.key}
-                  className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3"
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.065]"
                 >
                   <span className="max-w-[70%] text-sm text-white/80">
                     {item.label}
@@ -606,7 +606,7 @@ export function TelegramSettingsTab() {
                       )
                     }
                     disabled={isBusy}
-                    className={`rounded-full px-3 py-1 text-xs transition ${
+                    className={`rounded-full px-3 py-1 text-xs transition duration-300 active:scale-[0.97] ${
                       enabled
                         ? "bg-emerald-500/15 text-emerald-300"
                         : "bg-white/10 text-white/50"

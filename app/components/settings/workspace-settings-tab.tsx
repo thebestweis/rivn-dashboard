@@ -206,11 +206,11 @@ export function WorkspaceSettingsTab() {
 
   return (
     <>
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="rivn-card rivn-card-interactive p-5 sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm text-white/50">Workspace</div>
-            <h2 className="mt-1 text-xl font-semibold">Кабинеты</h2>
+            <div className="text-xs uppercase tracking-[0.18em] text-[#43ffc2]">Workspace</div>
+            <h2 className="mt-2 text-2xl font-medium tracking-[-0.04em]">Кабинеты</h2>
             <div className="mt-2 text-sm text-white/55">
               Здесь ты можешь создавать новые кабинеты, редактировать их параметры и разделять работу по разным бизнес-направлениям.
             </div>
@@ -219,15 +219,15 @@ export function WorkspaceSettingsTab() {
           <button
             type="button"
             onClick={openCreateModal}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+            className="rivn-button rivn-button-primary px-4 py-2.5 text-sm font-semibold"
           >
             Создать кабинет
           </button>
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-[24px] border border-white/8">
+        <div className="rivn-table-wrap mt-5">
           <table className="w-full text-left text-sm">
-            <thead className="bg-white/[0.04] text-white/45">
+            <thead className="rivn-table-head">
               <tr>
                 <th className="px-4 py-3 font-medium">Название</th>
                 <th className="px-4 py-3 font-medium">Адрес кабинета</th>
@@ -249,7 +249,7 @@ export function WorkspaceSettingsTab() {
                 sortedWorkspaces.map((workspace) => (
                   <tr
                     key={workspace.id}
-                    className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
+                    className="rivn-table-row bg-transparent"
                   >
                     <td className="px-4 py-3 font-medium text-white">{workspace.name}</td>
                     <td className="px-4 py-3 text-white/75">
@@ -271,7 +271,7 @@ export function WorkspaceSettingsTab() {
                       <button
                         type="button"
                         onClick={() => openEditModal(workspace)}
-                        className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white"
+                        className="rivn-button px-3 py-2 text-xs"
                       >
                         Редактировать
                       </button>
@@ -291,8 +291,8 @@ export function WorkspaceSettingsTab() {
       </div>
 
       {isModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-[640px] rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm">
+          <div className="rivn-card w-full max-w-[640px] p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-sm text-white/50">
@@ -306,7 +306,7 @@ export function WorkspaceSettingsTab() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70 transition hover:text-white"
+                className="rivn-button px-3 py-2 text-sm"
                 disabled={isSaving}
               >
                 Закрыть
@@ -326,7 +326,7 @@ export function WorkspaceSettingsTab() {
                     }))
                   }
                   placeholder="Например: RIVN Agency"
-                  className={`h-[48px] w-full rounded-2xl border bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 ${
+                  className={`rivn-field placeholder:text-white/30 ${
                     errors.name ? "border-rose-500/50" : "border-white/10"
                   }`}
                 />
@@ -343,7 +343,7 @@ export function WorkspaceSettingsTab() {
                     }))
                   }
                   placeholder="Например: rivn-agency"
-                  className={`h-[48px] w-full rounded-2xl border bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 ${
+                  className={`rivn-field placeholder:text-white/30 ${
                     errors.slug ? "border-rose-500/50" : "border-white/10"
                   }`}
                 />
@@ -362,7 +362,7 @@ export function WorkspaceSettingsTab() {
                       type: e.target.value as WorkspaceFormState["type"],
                     }))
                   }
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                  className="rivn-field"
                 >
                   <option value="agency">Агентство</option>
                   <option value="freelancer">Фрилансер</option>
@@ -383,7 +383,7 @@ export function WorkspaceSettingsTab() {
                     }))
                   }
                   placeholder="Например: 300k-500k"
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                  className="rivn-field placeholder:text-white/30"
                 />
               </div>
 
@@ -399,7 +399,7 @@ export function WorkspaceSettingsTab() {
                     }))
                   }
                   placeholder="Например: 1000000"
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                  className="rivn-field placeholder:text-white/30"
                 />
               </div>
             </div>
@@ -414,7 +414,7 @@ export function WorkspaceSettingsTab() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                className="rivn-button px-4 py-3 text-sm"
                 disabled={isSaving}
               >
                 Отмена
@@ -424,7 +424,7 @@ export function WorkspaceSettingsTab() {
                 type="button"
                 onClick={handleSaveWorkspace}
                 disabled={isSaving}
-                className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20 disabled:opacity-60"
+                className="rivn-button rivn-button-primary px-4 py-3 text-sm font-semibold disabled:opacity-60"
               >
                 {isSaving
                   ? form.id

@@ -26,6 +26,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { RivnDatePicker } from "../../components/ui/rivn-date-picker";
 import { canAccessCrm, isAppRole } from "../../lib/permissions";
 import {
   useCrmBootstrapQuery,
@@ -874,7 +875,7 @@ export default function CrmAnalyticsPage() {
 
   if (!isReady || isLoading) {
     return (
-      <main className="min-h-screen bg-slate-50 p-5 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:p-8">
+      <main className="rivn-scope min-h-screen p-5 text-slate-950 dark:text-white lg:p-8">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
           CRM-аналитика загружается...
         </div>
@@ -884,7 +885,7 @@ export default function CrmAnalyticsPage() {
 
   if (!hasAccess) {
     return (
-      <main className="min-h-screen bg-slate-50 p-5 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:p-8">
+      <main className="rivn-scope min-h-screen p-5 text-slate-950 dark:text-white lg:p-8">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
           Нет доступа к CRM-аналитике.
         </div>
@@ -893,7 +894,7 @@ export default function CrmAnalyticsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-5 text-slate-950 dark:bg-[#0B0F1A] dark:text-white lg:p-8">
+    <main className="rivn-scope min-h-screen p-5 text-slate-950 dark:text-white lg:p-8">
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121827]">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
@@ -921,20 +922,20 @@ export default function CrmAnalyticsPage() {
           <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#0B0F1A] sm:grid-cols-2">
             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               С даты
-              <input
-                type="date"
+              <RivnDatePicker
                 value={rangeFrom}
-                onChange={(event) => setRangeFrom(event.target.value)}
-                className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-400 dark:border-white/10 dark:bg-[#121827] dark:text-white"
+                onChange={setRangeFrom}
+                placeholder="Начало периода"
+                className="mt-2"
               />
             </label>
             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               По дату
-              <input
-                type="date"
+              <RivnDatePicker
                 value={rangeTo}
-                onChange={(event) => setRangeTo(event.target.value)}
-                className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-400 dark:border-white/10 dark:bg-[#121827] dark:text-white"
+                onChange={setRangeTo}
+                placeholder="Конец периода"
+                className="mt-2"
               />
             </label>
             <button

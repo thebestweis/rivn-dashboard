@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { RivnDatePicker } from "../components/ui/rivn-date-picker";
 
 type RewardStatus = "all" | "pending" | "approved" | "paid" | "canceled";
 
@@ -223,17 +224,15 @@ export function AdminReferralPayoutPanel() {
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.5fr_auto]">
-        <input
-          type="date"
+        <RivnDatePicker
           value={fromDate}
-          onChange={(event) => setFromDate(event.target.value)}
-          className="h-[44px] rounded-xl border border-white/10 bg-[#0F1524] px-3 text-white outline-none"
+          onChange={setFromDate}
+          placeholder="С даты"
         />
-        <input
-          type="date"
+        <RivnDatePicker
           value={toDate}
-          onChange={(event) => setToDate(event.target.value)}
-          className="h-[44px] rounded-xl border border-white/10 bg-[#0F1524] px-3 text-white outline-none"
+          onChange={setToDate}
+          placeholder="По дату"
         />
         <select
           value={status}

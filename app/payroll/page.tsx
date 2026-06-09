@@ -13,6 +13,10 @@ import { PayrollExtraTable } from "../components/payroll/payroll-extra-table";
 import { AppToast } from "../components/ui/app-toast";
 import { CustomSelect } from "../components/ui/custom-select";
 import { useConfirmDialog } from "../components/ui/confirm-dialog-provider";
+import {
+  RivnDatePicker,
+  RivnDateRangePicker,
+} from "../components/ui/rivn-date-picker";
 
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -227,7 +231,6 @@ const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null
     "success"
   );
 
-  const [isPeriodPickerOpen, setIsPeriodPickerOpen] = useState(false);
   const [periodPreset, setPeriodPreset] = useState<
     "last7" | "last30" | "last90" | "thisMonth" | "prevMonth" | "custom"
   >("last30");
@@ -324,7 +327,41 @@ useEffect(() => {
 
     async function loadPayrollData() {
       try {
-        setIsLoadingPayroll(true);
+        const cachedAccruals = workspace?.id
+          ? queryClient.getQueryData<StoredPayrollAccrual[]>(
+              queryKeys.payrollAccrualsByWorkspace(workspace.id)
+            )
+          : undefined;
+        const cachedPayouts = workspace?.id
+          ? queryClient.getQueryData<StoredPayrollPayout[]>(
+              queryKeys.payrollPayoutsByWorkspace(workspace.id)
+            )
+          : undefined;
+        const cachedExtraPayments = workspace?.id
+          ? queryClient.getQueryData<StoredPayrollExtraPayment[]>(
+              queryKeys.payrollExtraPaymentsByWorkspace(workspace.id)
+            )
+          : undefined;
+        const cachedMembers = workspace?.id
+          ? queryClient.getQueryData<WorkspaceMemberItem[]>(
+              queryKeys.workspaceMembersByWorkspace(workspace.id)
+            )
+          : undefined;
+        const hasCachedPayrollData =
+          cachedAccruals &&
+          cachedPayouts &&
+          cachedExtraPayments &&
+          cachedMembers;
+
+        if (hasCachedPayrollData) {
+          setAccruals(cachedAccruals);
+          setPayouts(cachedPayouts);
+          setExtraPayments(cachedExtraPayments);
+          setMembers(cachedMembers);
+          setIsLoadingPayroll(false);
+        } else {
+          setIsLoadingPayroll(true);
+        }
 
         const [
           accrualsData,
@@ -366,7 +403,7 @@ setSystemSettings(settingsData);
     return () => {
       isMounted = false;
     };
-  }, [isAppContextLoading, isAccessLoading, hasAccess]);
+  }, [isAppContextLoading, isAccessLoading, hasAccess, queryClient, workspace?.id]);
 
   const memberOptions = useMemo(() => {
     const options = members
@@ -422,6 +459,14 @@ setSystemSettings(settingsData);
     []
   );
 
+  const accrualStatusOptions = useMemo(
+    () => [
+      { value: "accrued", label: "Начислено" },
+      { value: "paid", label: "Выплачено" },
+    ],
+    []
+  );
+
   const projectOptions = useMemo(() => {
     return Array.from(
       new Set(
@@ -431,6 +476,14 @@ setSystemSettings(settingsData);
       )
     );
   }, [accruals]);
+
+  const projectSelectOptions = useMemo(
+    () => [
+      { value: "", label: "Выбери проект" },
+      ...projectOptions.map((project) => ({ value: project, label: project })),
+    ],
+    [projectOptions]
+  );
 
   const membersMap = useMemo(() => {
   return new Map(members.map((member) => [member.id, member]));
@@ -510,6 +563,11 @@ setSystemSettings(settingsData);
     if (!day || !month || !year) return value;
 
     return `${day}.${month}.${year}`;
+  }
+
+  function displayDateToPickerValue(value: string) {
+    const date = parseDisplayDateToDate(value);
+    return date ? formatDateToInputValue(date) : "";
   }
 
   async function reloadPayrollData() {
@@ -1618,7 +1676,7 @@ async function handleAccrueSalaries() {
 
 if (!isMounted || isAppContextLoading || isAccessLoading) {
   return (
-    <main className="flex-1">
+    <main className="rivn-scope flex-1">
       <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
         <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 text-white/60 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-8">
           Загрузка payroll...
@@ -1634,7 +1692,7 @@ if (!hasAccess) {
   return (
   <>
   
-    <main className="flex-1">
+    <main className="rivn-scope flex-1">
       <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5 lg:px-8">
                 {!isAppContextLoading && !canManagePayroll ? (
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
@@ -1645,6 +1703,30 @@ if (!hasAccess) {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           canManagePayroll={canManagePayroll}
+          search={search}
+          setSearch={setSearch}
+          employeeFilterControl={
+            <CustomSelect
+              value={employeeFilter}
+              onChange={setEmployeeFilter}
+              options={[
+                { value: "all", label: "Все пользователи" },
+                ...employeeFilterOptions.map((employee) => ({
+                  value: employee,
+                  label: employee,
+                })),
+              ]}
+              className="w-full"
+              buttonClassName="h-11"
+            />
+          }
+          searchPlaceholder={
+            activeTab === "accruals"
+              ? "Поиск по пользователю, клиенту, проекту..."
+              : activeTab === "payouts"
+                ? "Поиск по пользователю..."
+                : "Поиск по пользователю, причине..."
+          }
           onAccrueSalaries={handleAccrueSalaries}
           onAddPayout={() => {
             if (!canManagePayroll) {
@@ -1658,8 +1740,8 @@ if (!hasAccess) {
           }}
         />
 
-        <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="rivn-panel p-4 sm:p-5">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <div className="text-sm text-white/50">Сводка за период</div>
               <div className="mt-1 text-sm text-white/70">
@@ -1667,129 +1749,44 @@ if (!hasAccess) {
               </div>
             </div>
 
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsPeriodPickerOpen((prev) => !prev)}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
-              >
-                Изменить период
-              </button>
+            <RivnDateRangePicker
+              from={displayDateToPickerValue(customDateFrom)}
+              to={displayDateToPickerValue(customDateTo)}
+              onChange={({ from, to }) => {
+                if (!from && !to) {
+                  setPeriodPreset("last30");
+                  setCustomDateFrom("");
+                  setCustomDateTo("");
+                  return;
+                }
 
-              {isPeriodPickerOpen ? (
-                <div className="absolute right-0 top-[calc(100%+12px)] z-30 w-[min(86vw,360px)] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-                  <div className="text-sm text-white/50">Быстрый выбор</div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {[
-                      { key: "last7", label: "7 дней" },
-                      { key: "last30", label: "30 дней" },
-                      { key: "last90", label: "90 дней" },
-                      { key: "thisMonth", label: "Этот месяц" },
-                      { key: "prevMonth", label: "Прошлый месяц" },
-                      { key: "custom", label: "Свой период" },
-                    ].map((item) => (
-                      <button
-                        key={item.key}
-                        type="button"
-                        onClick={() =>
-                          setPeriodPreset(
-                            item.key as
-                              | "last7"
-                              | "last30"
-                              | "last90"
-                              | "thisMonth"
-                              | "prevMonth"
-                              | "custom"
-                          )
-                        }
-                        className={`rounded-xl px-3 py-2 text-sm transition ${
-                          periodPreset === item.key
-                            ? "bg-[#7B61FF] text-white shadow-[0_0_24px_rgba(123,97,255,0.35)]"
-                            : "bg-white/[0.04] text-white/70 hover:text-white"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {periodPreset === "custom" ? (
-                    <div className="mt-4 grid gap-3">
-                      <div>
-                        <label className="mb-2 block text-sm text-white/55">
-                          Дата от
-                        </label>
-                        <input
-                          type="date"
-                          value={
-                            customDateFrom
-                              ? formatDateToInputValue(
-                                  parseDisplayDateToDate(customDateFrom) ?? new Date()
-                                )
-                              : ""
-                          }
-                          onChange={(e) =>
-                            setCustomDateFrom(formatInputDateToDisplay(e.target.value))
-                          }
-                          className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm text-white/55">
-                          Дата до
-                        </label>
-                        <input
-                          type="date"
-                          value={
-                            customDateTo
-                              ? formatDateToInputValue(
-                                  parseDisplayDateToDate(customDateTo) ?? new Date()
-                                )
-                              : ""
-                          }
-                          onChange={(e) =>
-                            setCustomDateTo(formatInputDateToDisplay(e.target.value))
-                          }
-                          className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none"
-                        />
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="mt-4 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setIsPeriodPickerOpen(false)}
-                      className="rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] transition hover:bg-emerald-400/20"
-                    >
-                      Готово
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
+                setPeriodPreset("custom");
+                setCustomDateFrom(formatInputDateToDisplay(from));
+                setCustomDateTo(formatInputDateToDisplay(to));
+              }}
+              placeholder="Выбери период"
+              iconOnly
+            />
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-3 md:gap-4">
-            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-5">
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="rivn-panel-inner px-4 py-2.5">
               <div className="text-sm text-white/55">Начислено</div>
-              <div className="mt-3 text-2xl font-semibold tracking-tight text-violet-300">
+              <div className="mt-1 text-2xl font-semibold tracking-tight text-violet-300">
                 ₽{totalAccrued.toLocaleString("ru-RU")}
               </div>
             </div>
 
-            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-5">
+            <div className="rivn-panel-inner px-4 py-2.5">
               <div className="text-sm text-white/55">Выплачено</div>
-              <div className="mt-3 text-2xl font-semibold tracking-tight text-emerald-300">
+              <div className="mt-1 text-2xl font-semibold tracking-tight text-emerald-300">
                 ₽{totalPaid.toLocaleString("ru-RU")}
               </div>
             </div>
 
-            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.28)] sm:p-5">
+            <div className="rivn-panel-inner px-4 py-2.5">
               <div className="text-sm text-white/55">Внеплановые</div>
-              <div className="mt-3 text-2xl font-semibold tracking-tight text-amber-300">
+              <div className="mt-1 text-2xl font-semibold tracking-tight text-amber-300">
                 ₽{totalExtra.toLocaleString("ru-RU")}
               </div>
             </div>
@@ -1827,12 +1824,12 @@ if (!hasAccess) {
                   )}
                 </div>
 
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 xl:gap-4">
+                <div className="mt-4 grid gap-3">
                   {pendingEmployeePayouts.length > 0 ? (
                     pendingEmployeePayouts.map((item) => (
                       <div
                         key={item.employeeId || item.employee}
-                        className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
+                        className="rounded-[24px] border border-white/10 bg-white/[0.035] p-4 transition hover:border-[#00f5a8]/25 hover:bg-white/[0.055] md:grid md:grid-cols-[1fr_1fr_auto_auto] md:items-center md:gap-4"
                       >
                         <div className="text-sm text-white/45">Пользователь</div>
                         <div className="mt-1 text-lg font-semibold">
@@ -1872,7 +1869,7 @@ if (!hasAccess) {
                       </div>
                     ))
                   ) : (
-                    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/45 md:col-span-2 xl:col-span-3">
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-sm text-white/45">
                       Сейчас нет начислений со статусом «Начислено», готовых к
                       общей выплате.
                     </div>
@@ -1881,7 +1878,7 @@ if (!hasAccess) {
               </div>
             ) : null}
 
-            <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+            <div className="hidden">
               <div className="grid gap-3 xl:flex xl:items-center xl:overflow-x-auto">
                 <input
                   value={search}
@@ -1893,55 +1890,50 @@ if (!hasAccess) {
                       ? "Поиск по пользователю..."
                       : "Поиск по пользователю, причине..."
                   }
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 xl:min-w-[320px] xl:flex-[1.4]"
+                  className="hidden"
                 />
 
-                <select
+                <CustomSelect
                   value={employeeFilter}
-                  onChange={(e) => setEmployeeFilter(e.target.value)}
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none xl:min-w-[220px] xl:flex-1"
-                >
-                  <option value="all">Все пользователи</option>
-                  {employeeFilterOptions.map((employee) => (
-                    <option key={employee} value={employee}>
-                      {employee}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setEmployeeFilter}
+                  options={[
+                    { value: "all", label: "Все пользователи" },
+                    ...employeeFilterOptions.map((employee) => ({
+                      value: employee,
+                      label: employee,
+                    })),
+                  ]}
+                  className="xl:min-w-[220px] xl:flex-1"
+                  buttonClassName="h-[48px]"
+                />
 
-                <select
+                <CustomSelect
                   value={monthFilter}
-                  onChange={(e) => setMonthFilter(e.target.value)}
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none xl:min-w-[220px] xl:flex-1"
-                >
-                  <option value="all">Все месяцы</option>
-                  {monthFilterOptions.map((month) => (
-                    <option key={month} value={month}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setMonthFilter}
+                  options={[
+                    { value: "all", label: "Все месяцы" },
+                    ...monthFilterOptions.map((month) => ({
+                      value: month,
+                      label: month,
+                    })),
+                  ]}
+                  className="xl:min-w-[220px] xl:flex-1"
+                  buttonClassName="h-[48px]"
+                />
 
                 {activeTab === "accruals" || activeTab === "payouts" ? (
-                  <select
+                  <CustomSelect
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none xl:min-w-[190px] xl:flex-1"
-                  >
-                    <option value="all">Все статусы</option>
-
-                    {activeTab === "accruals" ? (
-                      <>
-                        <option value="accrued">Начислено</option>
-                        <option value="paid">Выплачено</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="scheduled">Запланировано</option>
-                        <option value="paid">Выплачено</option>
-                      </>
-                    )}
-                  </select>
+                    onChange={setStatusFilter}
+                    options={[
+                      { value: "all", label: "Все статусы" },
+                      ...(activeTab === "accruals"
+                        ? accrualStatusOptions
+                        : payoutStatusOptions),
+                    ]}
+                    className="xl:min-w-[190px] xl:flex-1"
+                    buttonClassName="h-[48px]"
+                  />
                 ) : null}
 
                 <button
@@ -1952,7 +1944,7 @@ if (!hasAccess) {
                     setMonthFilter("all");
                     setStatusFilter("all");
                   }}
-                  className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white xl:min-w-[180px]"
+                  className="rivn-button h-[48px] w-full px-4 text-sm xl:min-w-[180px]"
                 >
                   Сбросить
                 </button>
@@ -2011,71 +2003,55 @@ if (!hasAccess) {
 </div>
 
             <div className="mt-6 grid gap-3 sm:gap-4 md:grid-cols-2">
-              <select
-  value={editEmployeeId}
-  onChange={(e) => {
-    const nextEmployeeId = e.target.value;
-    const selectedMember = memberOptions.find(
-      (member) => member.id === nextEmployeeId
-    );
+              <CustomSelect
+                value={editEmployeeId}
+                options={memberSelectOptions}
+                onChange={(nextEmployeeId) => {
+                  const selectedMember = memberOptions.find(
+                    (member) => member.id === nextEmployeeId
+                  );
 
-    setEditEmployeeId(nextEmployeeId);
-    setEditEmployee(selectedMember?.name ?? "");
-  }}
-  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
->
-  <option value="">Выбери пользователя</option>
-  {memberOptions.map((member) => (
-    <option key={member.id} value={member.id}>
-      {member.name} — {member.role}
-    </option>
-  ))}
-</select>
+                  setEditEmployeeId(nextEmployeeId);
+                  setEditEmployee(selectedMember?.name ?? "");
+                }}
+                placeholder="Выбери пользователя"
+                buttonClassName="h-[48px]"
+              />
 
               <input
                 value={editClient}
                 onChange={(e) => setEditClient(e.target.value)}
                 placeholder="Клиент"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="rivn-field"
               />
 
-              <select
+              <CustomSelect
                 value={editProject}
-                onChange={(e) => setEditProject(e.target.value)}
-                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-              >
-                <option value="">Выбери проект</option>
-                {projectOptions.map((project) => (
-                  <option key={project} value={project}>
-                    {project}
-                  </option>
-                ))}
-              </select>
+                onChange={setEditProject}
+                options={projectSelectOptions}
+                placeholder="Выбери проект"
+                buttonClassName="h-[48px]"
+              />
 
               <input
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
                 placeholder="Сумма"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="rivn-field"
               />
 
-              <input
-                value={editDate}
-                onChange={(e) => setEditDate(e.target.value)}
+              <RivnDatePicker
+                value={displayDateToPickerValue(editDate)}
+                onChange={(value) => setEditDate(formatInputDateToDisplay(value))}
                 placeholder="Дата"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
               />
 
-              <select
+              <CustomSelect
                 value={editStatus}
-                onChange={(e) =>
-                  setEditStatus(e.target.value as "accrued" | "paid")
-                }
-                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
-              >
-                <option value="accrued">Начислено</option>
-                <option value="paid">Выплачено</option>
-              </select>
+                onChange={(value) => setEditStatus(value as "accrued" | "paid")}
+                options={accrualStatusOptions}
+                buttonClassName="h-[48px]"
+              />
             </div>
 
             <div className="mt-6 grid gap-3 sm:flex sm:justify-end">
@@ -2120,58 +2096,50 @@ if (!hasAccess) {
             </div>
 
             <div className="mt-6 grid gap-3 sm:gap-4 md:grid-cols-2">
-              <select
-  value={editPayoutEmployeeId}
-  onChange={(e) => {
-    const nextEmployeeId = e.target.value;
-    const selectedMember = memberOptions.find(
-      (member) => member.id === nextEmployeeId
-    );
+              <CustomSelect
+                value={editPayoutEmployeeId}
+                options={memberSelectOptions}
+                onChange={(nextEmployeeId) => {
+                  const selectedMember = memberOptions.find(
+                    (member) => member.id === nextEmployeeId
+                  );
 
-    setEditPayoutEmployeeId(nextEmployeeId);
-    setEditPayoutEmployee(selectedMember?.name ?? "");
-  }}
-  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
->
-  <option value="">Выбери пользователя</option>
-  {memberOptions.map((member) => (
-    <option key={member.id} value={member.id}>
-      {member.name} — {member.role}
-    </option>
-  ))}
-</select>
+                  setEditPayoutEmployeeId(nextEmployeeId);
+                  setEditPayoutEmployee(selectedMember?.name ?? "");
+                }}
+                placeholder="Выбери пользователя"
+                buttonClassName="h-[48px]"
+              />
 
               <input
                 value={editPayoutMonth}
                 onChange={(e) => setEditPayoutMonth(e.target.value)}
                 placeholder="Месяц"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="rivn-field"
               />
 
-              <input
-                value={editPayoutDate}
-                onChange={(e) => setEditPayoutDate(e.target.value)}
+              <RivnDatePicker
+                value={displayDateToPickerValue(editPayoutDate)}
+                onChange={(value) => setEditPayoutDate(formatInputDateToDisplay(value))}
                 placeholder="Дата выплаты"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
               />
 
               <input
                 value={editPayoutAmount}
                 onChange={(e) => setEditPayoutAmount(e.target.value)}
                 placeholder="Сумма"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="rivn-field"
               />
 
-              <select
+              <CustomSelect
                 value={editPayoutStatus}
-                onChange={(e) =>
-                  setEditPayoutStatus(e.target.value as "scheduled" | "paid")
+                onChange={(value) =>
+                  setEditPayoutStatus(value as "scheduled" | "paid")
                 }
-                className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none md:col-span-2"
-              >
-                <option value="scheduled">Запланировано</option>
-                <option value="paid">Выплачено</option>
-              </select>
+                options={payoutStatusOptions}
+                className="md:col-span-2"
+                buttonClassName="h-[48px]"
+              />
             </div>
 
             <div className="mt-6 grid gap-3 sm:flex sm:justify-end">
@@ -2216,46 +2184,39 @@ if (!hasAccess) {
             </div>
 
             <div className="mt-6 grid gap-3 sm:gap-4 md:grid-cols-2">
-              <select
-  value={editExtraEmployeeId}
-  onChange={(e) => {
-    const nextEmployeeId = e.target.value;
-    const selectedMember = memberOptions.find(
-      (member) => member.id === nextEmployeeId
-    );
+              <CustomSelect
+                value={editExtraEmployeeId}
+                options={memberSelectOptions}
+                onChange={(nextEmployeeId) => {
+                  const selectedMember = memberOptions.find(
+                    (member) => member.id === nextEmployeeId
+                  );
 
-    setEditExtraEmployeeId(nextEmployeeId);
-    setEditExtraEmployee(selectedMember?.name ?? "");
-  }}
-  className="h-[48px] rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
->
-  <option value="">Выбери пользователя</option>
-  {memberOptions.map((member) => (
-    <option key={member.id} value={member.id}>
-      {member.name} — {member.role}
-    </option>
-  ))}
-</select>
+                  setEditExtraEmployeeId(nextEmployeeId);
+                  setEditExtraEmployee(selectedMember?.name ?? "");
+                }}
+                placeholder="Выбери пользователя"
+                buttonClassName="h-[48px]"
+              />
 
-              <input
-                value={editExtraDate}
-                onChange={(e) => setEditExtraDate(e.target.value)}
+              <RivnDatePicker
+                value={displayDateToPickerValue(editExtraDate)}
+                onChange={(value) => setEditExtraDate(formatInputDateToDisplay(value))}
                 placeholder="Дата"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
               />
 
               <input
                 value={editExtraReason}
                 onChange={(e) => setEditExtraReason(e.target.value)}
                 placeholder="Причина"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 md:col-span-2"
+                className="rivn-field md:col-span-2"
               />
 
               <input
                 value={editExtraAmount}
                 onChange={(e) => setEditExtraAmount(e.target.value)}
                 placeholder="Сумма"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30 md:col-span-2"
+                className="rivn-field md:col-span-2"
               />
             </div>
 
@@ -2355,18 +2316,17 @@ if (!hasAccess) {
                 disabled={memberSelectOptions.length === 0}
               />
 
-              <input
-                value={createPayoutDate}
-                onChange={(e) => setCreatePayoutDate(e.target.value)}
+              <RivnDatePicker
+                value={displayDateToPickerValue(createPayoutDate)}
+                onChange={(value) => setCreatePayoutDate(formatInputDateToDisplay(value))}
                 placeholder="Дата"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
               />
 
               <input
                 value={createPayoutAmount}
                 onChange={(e) => setCreatePayoutAmount(e.target.value)}
                 placeholder="Сумма"
-                className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                className="rivn-field"
               />
 
               {createPayoutType === "payout" ? (
@@ -2374,14 +2334,14 @@ if (!hasAccess) {
                   value={createPayoutMonth}
                   onChange={(e) => setCreatePayoutMonth(e.target.value)}
                   placeholder="Месяц"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                  className="rivn-field"
                 />
               ) : (
                 <input
                   value={createExtraReason}
                   onChange={(e) => setCreateExtraReason(e.target.value)}
                   placeholder="Причина"
-                  className="h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                  className="rivn-field"
                 />
               )}
 

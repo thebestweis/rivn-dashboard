@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppContextState } from "../../providers/app-context-provider";
 import { AppToast } from "../ui/app-toast";
 import { BillingAccessBanner } from "../ui/billing-access-banner";
+import { RivnDatePicker } from "../ui/rivn-date-picker";
 import {
   createPersonalReferralLink,
   ensureMyStandardReferralLink,
@@ -389,7 +390,7 @@ export function ReferralSettingsTab() {
 
   return (
     <>
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-5 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="rivn-card rivn-card-interactive p-5 sm:p-6">
         <BillingAccessBanner
           isLoading={isAppContextLoading}
           isBillingReadOnly={isBillingReadOnly}
@@ -400,15 +401,15 @@ export function ReferralSettingsTab() {
         />
 
         <div>
-          <div className="text-sm text-white/50">Реферальная система</div>
-          <h2 className="mt-1 text-xl font-semibold">Партнёрская программа</h2>
+          <div className="text-xs uppercase tracking-[0.18em] text-[#43ffc2]">Реферальная система</div>
+          <h2 className="mt-2 text-2xl font-medium tracking-[-0.04em]">Партнёрская программа</h2>
           <div className="mt-2 text-sm text-white/55">
             Приглашай новых пользователей в RIVN OS и получай 25% от всех их
             оплат.
           </div>
         </div>
 
-        <div className="mt-5 rounded-[24px] border border-[#7B61FF]/20 bg-[#7B61FF]/10 p-4">
+        <div className="mt-5 rounded-[24px] border border-[#7c5cff]/20 bg-[#7c5cff]/10 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
           <div className="text-sm font-medium text-white">
             Хочешь лучшие условия по партнёрской программе?
           </div>
@@ -421,7 +422,7 @@ export function ReferralSettingsTab() {
             href="https://t.me/thebestweis"
             target="_blank"
             rel="noreferrer"
-            className="mt-4 inline-flex rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-white/85 transition hover:bg-white/[0.1] hover:text-white"
+            className="rivn-button mt-4 px-4 py-2 text-sm"
           >
             Обсудить сотрудничество
           </a>
@@ -434,35 +435,35 @@ export function ReferralSettingsTab() {
         ) : (
           <>
             <div className="mt-6 grid gap-3 md:grid-cols-5">
-              <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-3">
+              <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-3 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06]">
                 <div className="text-xs text-white/45">Приглашено</div>
                 <div className="mt-1 text-lg font-semibold text-white">
                   {stats?.totalReferrals ?? 0}
                 </div>
               </div>
 
-              <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-3">
+              <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-3 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06]">
                 <div className="text-xs text-white/45">Оборот оплат</div>
                 <div className="mt-1 text-lg font-semibold text-white">
                   {formatMoney(stats?.totalRevenueFromReferrals ?? 0)}
                 </div>
               </div>
 
-              <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-3">
+              <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-3 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06]">
                 <div className="text-xs text-white/45">Начислено</div>
                 <div className="mt-1 text-lg font-semibold text-white">
                   {formatMoney(stats?.totalApprovedRewards ?? 0)}
                 </div>
               </div>
 
-              <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-3">
+              <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-3 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06]">
                 <div className="text-xs text-white/45">Выплачено</div>
                 <div className="mt-1 text-lg font-semibold text-white">
                   {formatMoney(stats?.totalPaidRewards ?? 0)}
                 </div>
               </div>
 
-              <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-3">
+              <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-3 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06]">
                 <div className="text-xs text-white/45">Доступно к выплате</div>
                 <div className="mt-1 text-lg font-semibold text-white">
                   {formatMoney(
@@ -476,7 +477,7 @@ export function ReferralSettingsTab() {
               </div>
             </div>
 
-            <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+            <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="text-sm text-white/45">Моя основная ссылка</div>
@@ -495,14 +496,14 @@ export function ReferralSettingsTab() {
 
               {standardLink ? (
                 <div className="mt-4 flex flex-col gap-3 md:flex-row">
-                  <div className="flex-1 rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white/80">
+                  <div className="flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80">
                     {buildReferralUrl(standardLink.code)}
                   </div>
 
                   <button
                     type="button"
                     onClick={() => handleCopyLink(standardLink.code)}
-                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                    className="rivn-button px-4 py-3 text-sm"
                   >
                     Копировать
                   </button>
@@ -515,7 +516,7 @@ export function ReferralSettingsTab() {
             </div>
 
             {isSuperAdmin ? (
-              <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+              <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -532,7 +533,7 @@ export function ReferralSettingsTab() {
                       type="button"
                       onClick={handleCreatePersonalLink}
                       disabled={creatingPersonalLink || isBillingReadOnly}
-                      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rivn-button rivn-button-primary px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {creatingPersonalLink
                         ? "Создаём..."
@@ -550,7 +551,7 @@ export function ReferralSettingsTab() {
                         value={personalLinkLabel}
                         onChange={(e) => setPersonalLinkLabel(e.target.value)}
                         placeholder="Например: Иван / YouTube"
-                        className="h-[48px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                        className="rivn-field placeholder:text-white/30"
                       />
                     </div>
 
@@ -563,7 +564,7 @@ export function ReferralSettingsTab() {
                         onChange={(e) => setPersonalLinkComment(e.target.value)}
                         placeholder="Кому выдана ссылка, где будет размещаться, условия договорённости"
                         rows={2}
-                        className="min-h-[48px] w-full resize-none rounded-2xl border border-white/10 bg-[#0F1524] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+                        className="rivn-field rivn-textarea min-h-[70px] placeholder:text-white/30"
                       />
                     </div>
                   </div>
@@ -578,7 +579,7 @@ export function ReferralSettingsTab() {
                     personalLinks.map((link) => (
                       <div
                         key={link.id}
-                        className="rounded-2xl border border-white/10 bg-[#0F1524] p-4"
+                        className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06]"
                       >
                         {editingLinkId === link.id ? (
                           <div className="space-y-3">
@@ -593,7 +594,7 @@ export function ReferralSettingsTab() {
                                   onChange={(event) =>
                                     setEditingLinkLabel(event.target.value)
                                   }
-                                  className="h-[44px] w-full rounded-2xl border border-white/10 bg-[#0A1020] px-4 text-sm text-white outline-none placeholder:text-white/30"
+                                  className="rivn-field h-[44px] placeholder:text-white/30"
                                 />
                               </div>
 
@@ -607,7 +608,7 @@ export function ReferralSettingsTab() {
                                     setEditingLinkComment(event.target.value)
                                   }
                                   rows={2}
-                                  className="min-h-[44px] w-full resize-none rounded-2xl border border-white/10 bg-[#0A1020] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+                                  className="rivn-field rivn-textarea min-h-[70px] placeholder:text-white/30"
                                 />
                               </div>
                             </div>
@@ -617,7 +618,7 @@ export function ReferralSettingsTab() {
                                 type="button"
                                 onClick={() => handleSavePersonalLinkDetails(link)}
                                 disabled={savingLinkDetailsId === link.id}
-                                className="rounded-xl bg-emerald-400 px-3 py-2 text-xs font-medium text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="rivn-button rivn-button-primary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {savingLinkDetailsId === link.id
                                   ? "Сохраняем..."
@@ -627,7 +628,7 @@ export function ReferralSettingsTab() {
                               <button
                                 type="button"
                                 onClick={cancelEditingPersonalLink}
-                                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white"
+                                className="rivn-button px-3 py-2 text-xs"
                               >
                                 Отмена
                               </button>
@@ -660,7 +661,7 @@ export function ReferralSettingsTab() {
                               <button
                                 type="button"
                                 onClick={() => handleCopyLink(link.code)}
-                                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white"
+                                className="rivn-button px-3 py-2 text-xs"
                               >
                                 Копировать
                               </button>
@@ -668,7 +669,7 @@ export function ReferralSettingsTab() {
                               <button
                                 type="button"
                                 onClick={() => startEditingPersonalLink(link)}
-                                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white"
+                                className="rivn-button px-3 py-2 text-xs"
                               >
                                 Редактировать
                               </button>
@@ -677,7 +678,7 @@ export function ReferralSettingsTab() {
                                 type="button"
                                 onClick={() => handleToggleLink(link)}
                                 disabled={togglingLinkId === link.id}
-                                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white disabled:opacity-60"
+                                className="rivn-button px-3 py-2 text-xs disabled:opacity-60"
                               >
                                 {togglingLinkId === link.id
                                   ? "Сохраняем..."
@@ -696,7 +697,7 @@ export function ReferralSettingsTab() {
             ) : null}
 
             {isSuperAdmin ? (
-              <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+              <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                 <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                   <div>
                     <div className="text-sm text-white/45">
@@ -717,7 +718,7 @@ export function ReferralSettingsTab() {
                       setRewardPeriodFrom(formatDateInputValue(date));
                       setRewardPeriodTo(formatDateInputValue(new Date()));
                     }}
-                    className="w-fit rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/75 transition hover:bg-white/[0.07] hover:text-white"
+                    className="rivn-button w-fit px-3 py-2 text-xs"
                   >
                     Сбросить фильтр
                   </button>
@@ -731,7 +732,7 @@ export function ReferralSettingsTab() {
                       onChange={(event) =>
                         setSelectedRewardLinkId(event.target.value)
                       }
-                      className="h-[46px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                      className="rivn-field h-[46px]"
                     >
                       <option value="all">Все ссылки</option>
                       {personalLinks.map((link) => (
@@ -744,52 +745,46 @@ export function ReferralSettingsTab() {
 
                   <label className="space-y-2">
                     <div className="text-xs text-white/45">С даты</div>
-                    <input
-                      type="date"
+                    <RivnDatePicker
                       value={rewardPeriodFrom}
-                      onChange={(event) =>
-                        setRewardPeriodFrom(event.target.value)
-                      }
-                      className="h-[46px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                      onChange={setRewardPeriodFrom}
+                      placeholder="Начало периода"
                     />
                   </label>
 
                   <label className="space-y-2">
                     <div className="text-xs text-white/45">По дату</div>
-                    <input
-                      type="date"
+                    <RivnDatePicker
                       value={rewardPeriodTo}
-                      onChange={(event) =>
-                        setRewardPeriodTo(event.target.value)
-                      }
-                      className="h-[46px] w-full rounded-2xl border border-white/10 bg-[#0F1524] px-4 text-sm text-white outline-none"
+                      onChange={setRewardPeriodTo}
+                      placeholder="Конец периода"
                     />
                   </label>
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-4">
-                  <div className="rounded-2xl border border-white/10 bg-[#0F1524] p-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06]">
                     <div className="text-xs text-white/45">Оплат по фильтру</div>
                     <div className="mt-2 text-lg font-semibold text-white">
                       {filteredRewards.length}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-[#0F1524] p-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06]">
                     <div className="text-xs text-white/45">Сумма оплат</div>
                     <div className="mt-2 text-lg font-semibold text-white">
                       {formatMoney(rewardPeriodStats.paymentAmount)}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-[#0F1524] p-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06]">
                     <div className="text-xs text-white/45">Начислено</div>
                     <div className="mt-2 text-lg font-semibold text-emerald-300">
                       {formatMoney(rewardPeriodStats.approvedAmount)}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-[#0F1524] p-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06]">
                     <div className="text-xs text-white/45">Выплачено</div>
                     <div className="mt-2 text-lg font-semibold text-sky-300">
                       {formatMoney(rewardPeriodStats.paidAmount)}
@@ -799,9 +794,9 @@ export function ReferralSettingsTab() {
               </div>
             ) : null}
 
-            <div className="mt-6 overflow-hidden rounded-[24px] border border-white/8">
+            <div className="rivn-table-wrap mt-6">
               <table className="w-full text-left text-sm">
-                <thead className="bg-white/[0.04] text-white/45">
+                <thead className="rivn-table-head">
                   <tr>
                     <th className="px-4 py-3 font-medium">Пользователь</th>
                     <th className="px-4 py-3 font-medium">Дата</th>
@@ -818,7 +813,7 @@ export function ReferralSettingsTab() {
                     filteredRewards.map((reward) => (
                       <tr
                         key={reward.id}
-                        className="border-t border-white/6 bg-transparent transition hover:bg-white/[0.03]"
+                        className="rivn-table-row bg-transparent"
                       >
                         <td className="px-4 py-3 text-white/80">
                           {reward.referred_user_email ||
@@ -851,7 +846,7 @@ export function ReferralSettingsTab() {
                               type="button"
                               onClick={() => handleMarkRewardAsPaid(reward)}
                               disabled={payingRewardId === reward.id}
-                              className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rivn-button px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {payingRewardId === reward.id
                                 ? "Сохраняем..."

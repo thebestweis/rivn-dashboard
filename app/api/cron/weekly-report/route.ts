@@ -56,7 +56,7 @@ type PeriodStats = {
 
 function getSupabase() {
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error("РќРµ РЅР°Р№РґРµРЅС‹ РїРµСЂРµРјРµРЅРЅС‹Рµ Supabase");
+    throw new Error("Не найдены переменные Supabase");
   }
 
   return createClient(supabaseUrl, supabaseKey);
@@ -183,7 +183,7 @@ function buildUnavailableStatsLines() {
 
 async function sendTelegramMessage(chatId: string, text: string) {
   if (!telegramToken) {
-    throw new Error("РќРµ РЅР°Р№РґРµРЅ TELEGRAM_BOT_TOKEN");
+    throw new Error("Не найден TELEGRAM_BOT_TOKEN");
   }
 
   let response: Response | null = null;
@@ -246,7 +246,7 @@ async function resolveAvitoAccessToken(account: AvitoAccount) {
 
 function buildAccountErrorBlock(accountName: string, error: unknown) {
   const message =
-    error instanceof Error ? error.message : "РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР° Avito";
+    error instanceof Error ? error.message : "Неизвестная ошибка Avito";
   const safeMessage = message
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -254,10 +254,10 @@ function buildAccountErrorBlock(accountName: string, error: unknown) {
 
   return [
     "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
-    `РђРєРєР°СѓРЅС‚: <b>${accountName}</b>`,
+    `Аккаунт: <b>${accountName}</b>`,
     "",
-    "вљ пёЏ РђРєРєР°СѓРЅС‚ РЅРµ РїСЂРѕРІРµСЂРµРЅ.",
-    `РџСЂРёС‡РёРЅР°: ${safeMessage}`,
+    "⚠️ Аккаунт не проверен.",
+    `Причина: ${safeMessage}`,
   ].join("\n");
 }
 
@@ -281,7 +281,7 @@ async function getAllItemIds(accessToken: string) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(`РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РѕР±СЉСЏРІР»РµРЅРёР№: ${JSON.stringify(data)}`);
+      throw new Error(`Ошибка получения объявлений: ${JSON.stringify(data)}`);
     }
 
     const resources = Array.isArray(data.resources) ? data.resources : [];
@@ -332,7 +332,7 @@ async function getStatsForPeriod(params: {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(`РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СЃС‚Р°С‚РёСЃС‚РёРєРё: ${JSON.stringify(data)}`);
+      throw new Error(`Ошибка получения статистики: ${JSON.stringify(data)}`);
     }
 
     const items = (data?.result?.items || []) as AvitoStatsItem[];
@@ -361,13 +361,13 @@ function buildAccountBlock(params: {
 }) {
   return [
     "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
-    `РђРєРєР°СѓРЅС‚: <b>${params.accountName}</b>`,
+    `Аккаунт: <b>${params.accountName}</b>`,
     "",
-    buildMetricLine("Р Р°СЃС…РѕРґС‹", params.current.expenses, params.previous.expenses, "money"),
-    buildMetricLine("РџСЂРѕСЃРјРѕС‚СЂС‹", params.current.views, params.previous.views, "number"),
-    buildMetricLine("РљРѕРЅРІРµСЂСЃРёСЏ", params.current.conversion, params.previous.conversion, "percent"),
-    buildMetricLine("РљРѕРЅС‚Р°РєС‚С‹", params.current.contacts, params.previous.contacts, "number"),
-    buildMetricLine("РЎС‚РѕРёРјРѕСЃС‚СЊ 1 РєРѕРЅС‚Р°РєС‚Р°", params.current.costPerContact, params.previous.costPerContact, "money"),
+    buildMetricLine("Расходы", params.current.expenses, params.previous.expenses, "money"),
+    buildMetricLine("Просмотры", params.current.views, params.previous.views, "number"),
+    buildMetricLine("Конверсия", params.current.conversion, params.previous.conversion, "percent"),
+    buildMetricLine("Контакты", params.current.contacts, params.previous.contacts, "number"),
+    buildMetricLine("Стоимость 1 контакта", params.current.costPerContact, params.previous.costPerContact, "money"),
   ].join("\n");
 }
 
@@ -424,7 +424,7 @@ function buildWeeklyReport(params: {
   const hasUnavailableStats = Boolean(params.statsUnavailableAccountsCount);
 
   const baseLines = [
-    `рџ“Љ <b>Р•Р¶РµРЅРµРґРµР»СЊРЅС‹Р№ Avito-РѕС‚С‡С‘С‚</b>`,
+    `📊 <b>Еженедельный Avito-отчёт</b>`,
     `<b>${params.periodLabel}</b>`,
     "",
     ...params.accountBlocks,
@@ -453,9 +453,9 @@ function buildWeeklyReport(params: {
     ...baseLines,
     "",
     "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
-    "<b>РС‚РѕРіРѕ РїРѕ РІСЃРµРј Р°РєРєР°СѓРЅС‚Р°Рј</b>",
+    "<b>Итого по всем аккаунтам</b>",
     "",
-    buildMetricLine("Р Р°СЃС…РѕРґС‹", params.totalCurrent.expenses, params.totalPrevious.expenses, "money"),
+    buildMetricLine("Расходы", params.totalCurrent.expenses, params.totalPrevious.expenses, "money"),
     ...(hasUnavailableStats
       ? [
           ...buildUnavailableStatsLines(),
@@ -463,10 +463,10 @@ function buildWeeklyReport(params: {
           "⚠️ Итоги по просмотрам и контактам не рассчитаны: Avito временно не отдал статистику по части аккаунтов.",
         ]
       : [
-          buildMetricLine("РџСЂРѕСЃРјРѕС‚СЂС‹", params.totalCurrent.views, params.totalPrevious.views, "number"),
-          buildMetricLine("РљРѕРЅРІРµСЂСЃРёСЏ", params.totalCurrent.conversion, params.totalPrevious.conversion, "percent"),
-          buildMetricLine("РљРѕРЅС‚Р°РєС‚С‹", params.totalCurrent.contacts, params.totalPrevious.contacts, "number"),
-          buildMetricLine("РЎС‚РѕРёРјРѕСЃС‚СЊ 1 РєРѕРЅС‚Р°РєС‚Р°", params.totalCurrent.costPerContact, params.totalPrevious.costPerContact, "money"),
+          buildMetricLine("Просмотры", params.totalCurrent.views, params.totalPrevious.views, "number"),
+          buildMetricLine("Конверсия", params.totalCurrent.conversion, params.totalPrevious.conversion, "percent"),
+          buildMetricLine("Контакты", params.totalCurrent.contacts, params.totalPrevious.contacts, "number"),
+          buildMetricLine("Стоимость 1 контакта", params.totalCurrent.costPerContact, params.totalPrevious.costPerContact, "money"),
         ]),
     "",
     params.dialogAnalyticsBlock,
@@ -499,7 +499,7 @@ export async function GET(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: `РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РєР»РёРµРЅС‚РѕРІ: ${clientsError.message}`,
+          error: `Ошибка получения клиентов: ${clientsError.message}`,
         },
         { status: 500 }
       );
@@ -509,7 +509,7 @@ export async function GET(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: "РђРєС‚РёРІРЅС‹Рµ РєР»РёРµРЅС‚С‹ СЃ Telegram chat_id РЅРµ РЅР°Р№РґРµРЅС‹",
+          error: "Активные клиенты с Telegram chat_id не найдены",
         },
         { status: 404 }
       );
@@ -559,7 +559,7 @@ export async function GET(request: Request) {
             clientName: client.name,
             status: "skipped",
             accountsCount: 0,
-            error: "Weekly РѕС‚С‡С‘С‚ СѓР¶Рµ Р±С‹Р» РѕС‚РїСЂР°РІР»РµРЅ Р·Р° СЌС‚РѕС‚ РїРµСЂРёРѕРґ",
+            error: "Weekly отчёт уже был отправлен за этот период",
           });
 
           continue;
@@ -572,7 +572,7 @@ export async function GET(request: Request) {
           .eq("is_active", true);
 
         if (accountsError) {
-          throw new Error(`РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ Р°РєРєР°СѓРЅС‚РѕРІ: ${accountsError.message}`);
+          throw new Error(`Ошибка получения аккаунтов: ${accountsError.message}`);
         }
 
         if (!accounts || accounts.length === 0) {
@@ -581,7 +581,7 @@ export async function GET(request: Request) {
             clientName: client.name,
             status: "skipped",
             accountsCount: 0,
-            error: "РђРєС‚РёРІРЅС‹Рµ Avito-Р°РєРєР°СѓРЅС‚С‹ РєР»РёРµРЅС‚Р° РЅРµ РЅР°Р№РґРµРЅС‹",
+            error: "Активные Avito-аккаунты клиента не найдены",
           });
 
           continue;
@@ -616,9 +616,9 @@ export async function GET(request: Request) {
             accountBlocks.push(
               [
                 "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
-                `РђРєРєР°СѓРЅС‚: <b>${account.name}</b>`,
+                `Аккаунт: <b>${account.name}</b>`,
                 "",
-                "вљ пёЏ РђРєРєР°СѓРЅС‚ РЅРµ РїСЂРѕРІРµСЂРµРЅ: РЅРµС‚ avito_user_id.",
+                "⚠️ Аккаунт не проверен: нет avito_user_id.",
               ].join("\n")
             );
 
@@ -889,7 +889,7 @@ export async function GET(request: Request) {
               message:
                 accountError instanceof Error
                   ? accountError.message
-                  : "РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР° Avito-Р°РєРєР°СѓРЅС‚Р°",
+                  : "Неизвестная ошибка Avito-аккаунта",
             });
           }
         }
@@ -933,7 +933,7 @@ export async function GET(request: Request) {
         const errorMessage =
           clientError instanceof Error
             ? clientError.message
-            : "РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР° РєР»РёРµРЅС‚Р°";
+            : "Неизвестная ошибка клиента";
 
         results.push({
           clientId: client.id,
@@ -957,7 +957,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: "Weekly Avito-РѕС‚С‡С‘С‚С‹ РѕР±СЂР°Р±РѕС‚Р°РЅС‹ РїРѕ РІСЃРµРј Р°РєС‚РёРІРЅС‹Рј РєР»РёРµРЅС‚Р°Рј",
+      message: "Weekly Avito-отчёты обработаны по всем активным клиентам",
       period: {
         currentStart: currentStartDate,
         currentEnd: currentEndDate,

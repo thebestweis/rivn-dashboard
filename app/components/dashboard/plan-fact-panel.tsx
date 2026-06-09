@@ -41,25 +41,25 @@ export function PlanFactPanel({
       label: "Выручка",
       plan: revenuePlan,
       fact: revenueFact,
-      tone: "bg-violet-400",
+      tone: "bg-[#99D32A]",
     },
     {
       label: "Прибыль",
       plan: profitPlan,
       fact: profitFact,
-      tone: "bg-emerald-400",
+      tone: "bg-[#70855C]",
     },
     {
       label: "Расходы",
       plan: expensesPlan,
       fact: expensesFact,
-      tone: "bg-rose-400",
+      tone: "bg-[#E87979]",
     },
     {
       label: "ФОТ",
       plan: fotPlan,
       fact: fotFact,
-      tone: "bg-amber-400",
+      tone: "bg-[#D8C45E]",
     },
   ];
 
@@ -67,58 +67,59 @@ export function PlanFactPanel({
     revenuePlan > 0 || profitPlan > 0 || expensesPlan > 0 || fotPlan > 0;
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
+    <div className="relative overflow-hidden rounded-[22px] border border-[#2D342A] bg-[#11130F] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.16)]">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-[#99D32A]/45 via-[#70855C]/20 to-transparent" />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div>
-          <div className="text-sm text-white/50">{subtitle}</div>
-          <h2 className="mt-1 text-xl font-semibold">{title}</h2>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#AEAFB2]/70">{subtitle}</div>
+          <h2 className="mt-1 text-lg font-semibold text-[#F4F5F1]">{title}</h2>
         </div>
 
-        <div className="w-fit rounded-full bg-white/[0.04] px-3 py-1 text-xs text-white/60">
+        <div className="w-fit rounded-full border border-[#2D342A] bg-[#070807] px-3 py-1 text-xs text-[#AEAFB2]">
           {periodLabel}
         </div>
       </div>
 
             {!hasPlan ? (
-        <div className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-400/20 bg-violet-400/10 text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.14)]">
+        <div className="mt-4 overflow-hidden rounded-2xl border border-[#2D342A] bg-[#070807] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#99D32A]/25 bg-[#99D32A]/10 text-[#B7EA55]">
               <span className="text-lg font-semibold">+</span>
             </div>
 
             <div className="flex-1">
-              <div className="text-base font-medium text-white">
+              <div className="text-base font-medium text-[#F4F5F1]">
                 Пока нет плана на выбранный период
               </div>
 
-              <div className="mt-2 max-w-[520px] text-sm leading-6 text-white/55">
+              <div className="mt-1 max-w-[520px] text-sm leading-5 text-[#AEAFB2]">
                 Когда ты добавишь плановые значения по выручке, прибыли, расходам и ФОТ,
                 здесь появится наглядное сравнение плана и факта по месяцу или диапазону месяцев.
               </div>
 
-              <div className="mt-4">
+              <div className="mt-3">
   <Link
     href="/analytics?tab=planfact"
     style={{
-      background: "linear-gradient(90deg, #6F5AFF 0%, #8B7BFF 100%)",
+      background: "linear-gradient(90deg, #99D32A 0%, #B7EA55 100%)",
     }}
-    className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium text-white shadow-[0_10px_30px_rgba(111,90,255,0.35)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(111,90,255,0.42)] active:translate-y-[1px] active:shadow-[0_8px_20px_rgba(111,90,255,0.26)]"
+    className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-[#070807] transition-all duration-200 ease-out hover:-translate-y-0.5 active:translate-y-[1px]"
   >
     Добавить план
   </Link>
 </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/60">
+              <div className="mt-3 flex flex-wrap gap-2">
+                <div className="rounded-full border border-[#2D342A] bg-[#11130F] px-3 py-1 text-xs text-[#AEAFB2]">
                   Выручка
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/60">
+                <div className="rounded-full border border-[#2D342A] bg-[#11130F] px-3 py-1 text-xs text-[#AEAFB2]">
                   Прибыль
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/60">
+                <div className="rounded-full border border-[#2D342A] bg-[#11130F] px-3 py-1 text-xs text-[#AEAFB2]">
                   Расходы
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/60">
+                <div className="rounded-full border border-[#2D342A] bg-[#11130F] px-3 py-1 text-xs text-[#AEAFB2]">
                   ФОТ
                 </div>
               </div>
@@ -126,35 +127,35 @@ export function PlanFactPanel({
           </div>
         </div>
       ) : (
-        <div className="mt-5 space-y-4">
+        <div className="mt-4 grid gap-2.5 md:grid-cols-2">
           {rows.map((row) => {
             const percent = getCompletionPercent(row.plan, row.fact);
 
             return (
               <div
                 key={row.label}
-                className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
+                className="rounded-2xl border border-[#2D342A] bg-[#070807] px-3.5 py-3"
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-sm text-white/50">{row.label}</div>
-                    <div className="mt-1 text-sm text-white/75">
+                    <div className="text-sm font-medium text-[#F4F5F1]">{row.label}</div>
+                    <div className="mt-1 text-xs text-[#AEAFB2]/70">
                       План: {formatRubValue(row.plan)}
                     </div>
-                    <div className="mt-1 text-sm font-medium text-white">
+                    <div className="mt-0.5 text-sm font-medium text-[#CECED0]">
                       Факт: {formatRubValue(row.fact)}
                     </div>
                   </div>
 
                   <div className="text-right">
-                    <div className="text-sm text-white/50">Выполнение</div>
-                    <div className="mt-1 text-lg font-semibold text-white">
+                    <div className="text-xs text-[#AEAFB2]/65">Выполнено</div>
+                    <div className="mt-0.5 text-lg font-semibold text-[#F4F5F1]">
                       {percent}%
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#2D342A]">
                   <div
                     className={`h-full rounded-full ${row.tone}`}
                     style={{ width: `${Math.min(percent, 100)}%` }}

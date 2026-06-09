@@ -221,7 +221,7 @@ export async function GET(request: Request) {
             accountId: account.id,
             accountName: account.name,
             status: "skipped",
-            error: "РџРѕРІС‚РѕСЂРЅС‹Р№ СЃР±РѕСЂ СѓР¶Рµ Р·Р°РїР»Р°РЅРёСЂРѕРІР°РЅ",
+            error: "Повторный сбор уже запланирован",
           });
           continue;
         }

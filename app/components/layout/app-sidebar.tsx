@@ -29,7 +29,10 @@ import {
   type AppSection,
 } from "../../lib/permissions";
 import { useAppContextState } from "../../providers/app-context-provider";
-import { getWorkspaceMemberPermissions } from "../../lib/supabase/workspace-member-permissions";
+import {
+  getWorkspaceMemberPermissions,
+  type WorkspaceMemberPermissionItem,
+} from "../../lib/supabase/workspace-member-permissions";
 import { canAccessSectionWithCustomPermissions } from "../../lib/custom-access";
 import { useCrmInboxQuery } from "../../lib/queries/use-crm-query";
 import { NotificationCenter } from "../notifications/notification-center";
@@ -104,7 +107,7 @@ function readPermissionsCache(membershipId: string) {
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as {
-      permissions: any[];
+      permissions: WorkspaceMemberPermissionItem[];
       timestamp: number;
     };
 
@@ -121,7 +124,10 @@ function readPermissionsCache(membershipId: string) {
   }
 }
 
-function writePermissionsCache(membershipId: string, permissions: any[]) {
+function writePermissionsCache(
+  membershipId: string,
+  permissions: WorkspaceMemberPermissionItem[]
+) {
   try {
     localStorage.setItem(
       getPermissionsCacheKey(membershipId),
@@ -153,7 +159,9 @@ export function AppSidebar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
-  const [memberPermissions, setMemberPermissions] = useState<any[]>([]);
+  const [memberPermissions, setMemberPermissions] = useState<
+    WorkspaceMemberPermissionItem[]
+  >([]);
 
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
@@ -305,8 +313,12 @@ export function AppSidebar() {
   const crmUnreadCount = sidebarInboxItems.filter((item) => item.isUnread).length;
   const workspaceDisplayName =
     typeof workspace?.name === "string" ? workspace.name.trim() : "";
-  const sidebarBrandLabel = workspaceDisplayName ? "RIVN OS" : "Agency OS";
+  const sidebarBrandLabel =
+    showResolvedContext && workspaceDisplayName ? "RIVN OS" : "Agency OS";
   const sidebarCompanyLabel = workspaceDisplayName || "RIVN";
+  const visibleSidebarCompanyLabel = showResolvedContext
+    ? sidebarCompanyLabel
+    : "RIVN";
 
   useEffect(() => {
     if (!isMounted || permissionsLoading) return;
@@ -364,19 +376,22 @@ export function AppSidebar() {
 
   return (
     <>
-      <div className="fixed inset-x-0 top-0 z-[240] border-b border-slate-200 bg-white/92 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden dark:border-white/10 dark:bg-[#0B0F1A]/92">
+      <div className="rivn-themed-sidebar fixed inset-x-0 top-0 z-[240] border-b border-white/[0.08] bg-[#07111f]/88 px-4 py-3 shadow-[0_22px_70px_rgba(0,0,0,0.34)] backdrop-blur-2xl lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.18)] dark:text-emerald-300">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#00f5a8]/25 bg-[radial-gradient(circle_at_30%_25%,#7dffd6,#00f5a8_48%,#047857)] text-[#06101d] shadow-[0_0_30px_rgba(0,245,168,0.22),inset_0_1px_0_rgba(255,255,255,0.45)]">
               <span className="text-base font-bold">R</span>
             </div>
 
             <div className="min-w-0">
-              <div className="text-xs text-slate-500 dark:text-white/45">
+              <div className="text-xs text-white/42" suppressHydrationWarning>
                 {sidebarBrandLabel}
               </div>
-              <div className="truncate text-sm font-semibold text-slate-950 dark:text-white">
-                {showResolvedContext ? sidebarCompanyLabel : "RIVN"}
+              <div
+                className="truncate text-sm font-semibold text-white"
+                suppressHydrationWarning
+              >
+                {visibleSidebarCompanyLabel}
               </div>
             </div>
           </Link>
@@ -384,7 +399,7 @@ export function AppSidebar() {
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 transition hover:bg-white dark:border-white/10 dark:bg-white/[0.05] dark:text-white"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.065] text-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] transition duration-300 ease-out hover:-translate-y-0.5 hover:border-[#00f5a8]/35 hover:bg-white/[0.11] hover:text-white active:translate-y-0 active:scale-[0.97]"
             aria-label="Открыть меню"
           >
             <Menu className="h-5 w-5" />
@@ -400,12 +415,20 @@ export function AppSidebar() {
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-[220] hidden h-screen border-r border-slate-200 bg-white transition-[width] duration-300 ease-out lg:flex lg:flex-col dark:border-white/10 dark:bg-[#0F1524] ${
+        className={`rivn-themed-sidebar fixed inset-y-0 left-0 z-[220] hidden h-screen border-r border-white/[0.075] bg-[linear-gradient(180deg,#06101d_0%,#091423_46%,#0d1727_100%)] text-white shadow-[22px_0_80px_rgba(0,0,0,0.34)] transition-[width] duration-300 ease-out lg:flex lg:flex-col ${
           isCollapsed ? "w-[88px]" : "w-72"
         }`}
       >
         <div
-          className={`flex h-full min-h-0 flex-col py-5 ${
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_32%_-4%,rgba(0,245,168,0.13),transparent_34%),radial-gradient(circle_at_92%_16%,rgba(124,92,255,0.14),transparent_33%),linear-gradient(90deg,rgba(255,255,255,0.035),transparent_24%,transparent_76%,rgba(255,255,255,0.025))]"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.028)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.022)_1px,transparent_1px)] bg-[size:92px_92px] opacity-25"
+        />
+        <div
+          className={`relative z-10 flex h-full min-h-0 flex-col py-5 ${
             isCollapsed ? "px-3" : "px-5"
           }`}
         >
@@ -414,19 +437,23 @@ export function AppSidebar() {
               isCollapsed ? "justify-center" : "gap-3"
             }`}
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.18)] dark:text-emerald-300">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#00f5a8]/25 bg-[radial-gradient(circle_at_30%_25%,#7dffd6,#00f5a8_48%,#047857)] text-[#06101d] shadow-[0_0_34px_rgba(0,245,168,0.24),inset_0_1px_0_rgba(255,255,255,0.45)] transition duration-500 ease-out hover:scale-[1.03]">
               <span className="text-lg font-bold">R</span>
             </div>
 
             <div className={`min-w-0 flex-1 ${isCollapsed ? "hidden" : ""}`}>
-              <div className="truncate text-sm text-slate-500 dark:text-white/50">
+              <div
+                className="truncate text-sm text-white/42"
+                suppressHydrationWarning
+              >
                 {sidebarBrandLabel}
               </div>
               <div
-                className="truncate text-lg font-semibold text-slate-900 dark:text-white"
-                title={sidebarCompanyLabel}
+                className="truncate text-lg font-semibold text-white"
+                title={isMounted ? visibleSidebarCompanyLabel : undefined}
+                suppressHydrationWarning
               >
-                {sidebarCompanyLabel}
+                {visibleSidebarCompanyLabel}
               </div>
             </div>
 
@@ -434,7 +461,7 @@ export function AppSidebar() {
               type="button"
               onClick={() => setIsCollapsed(true)}
               title="Свернуть меню"
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-violet-200 hover:bg-white hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/60 dark:hover:bg-white/[0.08] dark:hover:text-white ${
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.055] text-white/58 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition duration-300 ease-out hover:-translate-y-0.5 hover:border-[#00f5a8]/35 hover:bg-white/[0.10] hover:text-white active:translate-y-0 active:scale-[0.96] ${
                 isCollapsed ? "hidden" : ""
               }`}
             >
@@ -446,7 +473,7 @@ export function AppSidebar() {
             type="button"
             onClick={() => setIsCollapsed((value) => !value)}
             title={isCollapsed ? "Развернуть меню" : "Свернуть меню"}
-            className={`mb-4 ${isCollapsed ? "flex" : "hidden"} h-9 w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-violet-200 hover:bg-white hover:text-violet-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/60 dark:hover:bg-white/[0.08] dark:hover:text-white`}
+            className={`mb-4 ${isCollapsed ? "flex" : "hidden"} h-9 w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.055] text-white/58 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition duration-300 ease-out hover:-translate-y-0.5 hover:border-[#00f5a8]/35 hover:bg-white/[0.10] hover:text-white active:translate-y-0 active:scale-[0.96]`}
           >
             {isCollapsed ? (
               <ChevronRight className="h-4 w-4" />
@@ -460,14 +487,14 @@ export function AppSidebar() {
 
           <div className="hidden">
             <div
-              className={`text-xs uppercase tracking-[0.12em] text-slate-400 dark:text-white/35 ${
+              className={`text-xs uppercase tracking-[0.12em] text-white/35 ${
                 isCollapsed ? "sr-only" : ""
               }`}
             >
               Текущая роль
             </div>
             <div
-              className={`text-sm font-medium text-slate-950 dark:text-white ${
+              className={`text-sm font-medium text-white ${
                 isCollapsed ? "mt-0 text-center" : "mt-2"
               }`}
               title={
@@ -486,9 +513,9 @@ export function AppSidebar() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-color:rgba(0,245,168,0.28)_transparent]">
             {!showResolvedMenu ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/45">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-white/45">
                 Загрузка меню...
               </div>
             ) : (
@@ -502,43 +529,51 @@ export function AppSidebar() {
                       <Link
                         key={item.label}
                         href={item.href}
-                        className={`relative flex w-full items-center rounded-2xl py-3 text-left transition ${
+                        className={`group relative flex w-full items-center overflow-hidden rounded-2xl py-3 text-left transition duration-300 ease-out active:scale-[0.985] ${
                           isCollapsed
                             ? "justify-center px-0"
                             : "justify-between px-4"
                         } ${
                           isActive
-                            ? "bg-slate-100 text-slate-900 shadow-sm dark:bg-white/8 dark:text-white dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_30px_rgba(123,97,255,0.18)]"
-                            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-white/65 dark:hover:bg-white/5 dark:hover:text-white"
+                            ? "border border-white/[0.12] bg-[linear-gradient(135deg,rgba(255,255,255,0.13),rgba(0,245,168,0.10)_46%,rgba(124,92,255,0.055))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_18px_42px_rgba(0,245,168,0.105)]"
+                            : "border border-transparent text-white/58 hover:-translate-y-0.5 hover:border-white/[0.085] hover:bg-white/[0.055] hover:text-white hover:shadow-[0_14px_34px_rgba(0,0,0,0.16)]"
                         }`}
                         title={isCollapsed ? item.label : undefined}
                         onMouseEnter={() => router.prefetch(item.href)}
                       >
-                        <span className="flex items-center gap-3">
-                          <Icon className="h-4 w-4 shrink-0" />
+                        <span className="pointer-events-none absolute inset-y-1 left-1 w-10 rounded-2xl bg-[#00f5a8]/0 blur-xl transition duration-500 group-hover:bg-[#00f5a8]/10" />
+                        <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white/0 to-transparent transition duration-500 group-hover:via-white/18" />
+                        <span className="relative flex items-center gap-3">
+                          <Icon
+                            className={`h-4 w-4 shrink-0 transition duration-300 ease-out group-hover:scale-110 ${
+                              isActive
+                                ? "text-[#00f5a8]"
+                                : "text-white/48 group-hover:text-[#43ffc2]"
+                            }`}
+                          />
                           <span className={isCollapsed ? "sr-only" : ""}>
                             {item.label}
                           </span>
                         </span>
                         {item.href === "/crm" && crmUnreadCount > 0 ? (
                           <span
-                            className={`flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold text-white ${
+                            className={`flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00f5a8] px-1.5 text-[11px] font-bold text-[#06101d] shadow-[0_8px_20px_rgba(0,245,168,0.28)] ${
                               isCollapsed ? "absolute ml-7 -mt-6" : ""
                             }`}
                           >
                             {crmUnreadCount > 99 ? "99+" : crmUnreadCount}
                           </span>
                         ) : isActive && !isCollapsed ? (
-                          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                          <span className="h-2 w-2 rounded-full bg-[#00f5a8] shadow-[0_0_16px_rgba(0,245,168,0.55)]" />
                         ) : null}
                       </Link>
                     );
                   })}
                 </nav>
 
-                <div className="border-t border-slate-200 pt-4 dark:border-white/10">
+                <div className="border-t border-white/10 pt-4">
                   <div
-                    className={`mb-2 px-2 text-xs uppercase tracking-[0.12em] text-slate-400 dark:text-white/30 ${
+                    className={`mb-2 px-2 text-xs uppercase tracking-[0.14em] text-white/30 ${
                       isCollapsed ? "sr-only" : ""
                     }`}
                   >
@@ -547,13 +582,13 @@ export function AppSidebar() {
 
                   <Link
                     href="/guide"
-                    className={`flex w-full items-center rounded-2xl py-3 text-left text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-white/65 dark:hover:bg-white/5 dark:hover:text-white ${
+                    className={`group flex w-full items-center rounded-2xl border border-transparent py-3 text-left text-white/58 transition duration-300 ease-out hover:-translate-y-0.5 hover:border-white/[0.085] hover:bg-white/[0.055] hover:text-white active:translate-y-0 active:scale-[0.985] ${
                       isCollapsed ? "justify-center px-0" : "justify-between px-4"
                     }`}
                     title={isCollapsed ? "Инструкция" : undefined}
                   >
                     <span className="flex items-center gap-3">
-                      <BookOpen className="h-4 w-4 shrink-0" />
+                      <BookOpen className="h-4 w-4 shrink-0 text-white/48 transition group-hover:text-[#43ffc2]" />
                       <span className={isCollapsed ? "sr-only" : ""}>
                         Инструкция по использованию
                       </span>
@@ -586,23 +621,24 @@ export function AppSidebar() {
               }}
               disabled={!showResolvedContext || isSwitchingWorkspace}
               title={isCollapsed ? workspace?.name ?? "Кабинет" : undefined}
-              className={`flex w-full items-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.06] ${
+              className={`group relative flex w-full items-center overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.09),rgba(124,92,255,0.075)_48%,rgba(0,245,168,0.075))] px-3 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_45px_rgba(0,0,0,0.18)] transition duration-300 ease-out hover:-translate-y-0.5 hover:border-[#00f5a8]/25 hover:bg-white/[0.08] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_20px_55px_rgba(0,245,168,0.08)] active:translate-y-0 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60 ${
                 isCollapsed ? "justify-center" : "gap-3"
               }`}
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-500/15 text-sm font-semibold text-violet-500 dark:text-violet-300">
+              <span className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent opacity-0 transition duration-500 group-hover:opacity-100" />
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#7c5cff]/18 text-sm font-semibold text-[#c4b5fd] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition duration-300 group-hover:scale-[1.03]">
                 {showResolvedContext && workspace
                   ? getWorkspaceInitial(workspace.name)
                   : "W"}
               </div>
 
-              <div className={`min-w-0 flex-1 ${isCollapsed ? "hidden" : ""}`}>
-                <div className="truncate text-sm font-medium text-slate-900 dark:text-white">
+              <div className={`relative min-w-0 flex-1 ${isCollapsed ? "hidden" : ""}`}>
+                <div className="truncate text-sm font-medium text-white">
                   {showResolvedContext && workspace?.name
                     ? workspace.name
                     : "Выбери кабинет"}
                 </div>
-                <div className="mt-0.5 truncate text-xs text-slate-500 dark:text-white/45">
+                <div className="mt-0.5 truncate text-xs text-white/42">
                   {!showResolvedContext
                     ? "Загрузка..."
                     : isSwitchingWorkspace
@@ -614,7 +650,7 @@ export function AppSidebar() {
               </div>
 
               <div
-                className={`shrink-0 text-slate-400 dark:text-white/35 ${
+                className={`shrink-0 text-white/35 ${
                   isCollapsed ? "hidden" : ""
                 }`}
               >
@@ -631,7 +667,7 @@ export function AppSidebar() {
         </div>
       </aside>
 
-      <nav className="fixed inset-x-0 bottom-0 z-[240] border-t border-slate-200 bg-white/94 px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_34px_rgba(15,23,42,0.1)] backdrop-blur-xl lg:hidden dark:border-white/10 dark:bg-[#0B0F1A]/94">
+      <nav className="rivn-themed-sidebar fixed inset-x-0 bottom-0 z-[240] border-t border-white/[0.08] bg-[#07111f]/90 px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-22px_70px_rgba(0,0,0,0.36)] backdrop-blur-2xl lg:hidden">
         <div className="grid grid-cols-5 gap-1">
           {mobilePrimaryItems.map((item) => {
             const isActive = isItemActive(pathname, item.href);
@@ -641,16 +677,16 @@ export function AppSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-medium transition ${
+                className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-medium transition duration-300 ease-out active:scale-[0.96] ${
                   isActive
-                    ? "bg-emerald-500/12 text-emerald-600 dark:bg-emerald-400/14 dark:text-emerald-300"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-white/55 dark:hover:bg-white/[0.06] dark:hover:text-white"
+                    ? "bg-[#00f5a8]/14 text-[#43ffc2] shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_10px_26px_rgba(0,245,168,0.10)]"
+                    : "text-white/50 hover:-translate-y-0.5 hover:bg-white/[0.06] hover:text-white"
                 }`}
               >
                 <span className="relative">
                   <Icon className="h-4 w-4" />
                   {item.href === "/crm" && crmUnreadCount > 0 ? (
-                    <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white">
+                    <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#00f5a8] px-1 text-[9px] font-bold text-[#06101d]">
                       {crmUnreadCount > 9 ? "9+" : crmUnreadCount}
                     </span>
                   ) : null}
@@ -664,7 +700,7 @@ export function AppSidebar() {
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(true)}
-              className="flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-white/55 dark:hover:bg-white/[0.06] dark:hover:text-white"
+              className="flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-medium text-white/50 transition duration-300 ease-out hover:-translate-y-0.5 hover:bg-white/[0.06] hover:text-white active:translate-y-0 active:scale-[0.96]"
             >
               <Menu className="h-4 w-4" />
               <span>Меню</span>
@@ -678,17 +714,17 @@ export function AppSidebar() {
           <button
             type="button"
             aria-label="Закрыть меню"
-            className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
+            className="absolute inset-0 bg-[#020817]/70 backdrop-blur-sm"
             onClick={() => setIsMobileMenuOpen(false)}
           />
 
-          <div className="absolute inset-x-3 bottom-3 max-h-[82vh] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24)] dark:border-white/10 dark:bg-[#121826]">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-white/10">
+          <div className="rivn-themed-surface absolute inset-x-3 bottom-3 max-h-[82vh] overflow-hidden rounded-[30px] border border-white/12 bg-[#08111f]/94 text-white shadow-[0_30px_100px_rgba(0,0,0,0.52)] backdrop-blur-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
               <div className="min-w-0">
-                <div className="text-xs uppercase tracking-[0.14em] text-slate-400 dark:text-white/35">
+                <div className="text-xs uppercase tracking-[0.14em] text-white/35">
                   Навигация
                 </div>
-                <div className="mt-1 truncate text-base font-semibold text-slate-950 dark:text-white">
+                <div className="mt-1 truncate text-base font-semibold text-white">
                   {showResolvedContext && workspace?.name
                     ? workspace.name
                     : "RIVN OS"}
@@ -698,7 +734,7 @@ export function AppSidebar() {
               <button
                 type="button"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-white dark:border-white/10 dark:bg-white/[0.05] dark:text-white/70"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.055] text-white/70 transition duration-300 ease-out hover:-translate-y-0.5 hover:bg-white/[0.10] hover:text-white active:translate-y-0 active:scale-[0.96]"
                 aria-label="Закрыть меню"
               >
                 <X className="h-5 w-5" />
@@ -715,10 +751,10 @@ export function AppSidebar() {
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`flex items-center justify-between rounded-2xl px-4 py-3 transition ${
+                      className={`flex items-center justify-between rounded-2xl px-4 py-3 transition duration-300 ease-out active:scale-[0.985] ${
                         isActive
-                          ? "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/14 dark:text-emerald-300"
-                          : "bg-slate-50 text-slate-700 hover:bg-slate-100 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                          ? "bg-[#00f5a8]/14 text-[#43ffc2] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]"
+                          : "bg-white/[0.04] text-white/66 hover:-translate-y-0.5 hover:bg-white/[0.07] hover:text-white"
                       }`}
                     >
                       <span className="flex min-w-0 items-center gap-3">
@@ -728,7 +764,7 @@ export function AppSidebar() {
                         </span>
                       </span>
                       {item.href === "/crm" && crmUnreadCount > 0 ? (
-                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold text-white">
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00f5a8] px-1.5 text-[11px] font-bold text-[#06101d]">
                           {crmUnreadCount > 99 ? "99+" : crmUnreadCount}
                         </span>
                       ) : null}
@@ -738,13 +774,13 @@ export function AppSidebar() {
 
                 <Link
                   href="/guide"
-                  className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                  className="flex items-center gap-3 rounded-2xl bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/66 transition duration-300 ease-out hover:-translate-y-0.5 hover:bg-white/[0.07] hover:text-white active:translate-y-0 active:scale-[0.985]"
                 >
                   <BookOpen className="h-4 w-4 shrink-0" />
                   <span>Инструкция по использованию</span>
                 </Link>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                   <ThemeToggle />
                 </div>
               </div>
@@ -757,7 +793,7 @@ export function AppSidebar() {
         ? createPortal(
             <div
               ref={workspaceMenuRef}
-              className="fixed z-[300] overflow-hidden rounded-[24px] border border-white/10 bg-[#121826] shadow-[0_18px_60px_rgba(0,0,0,0.6)]"
+              className="rivn-themed-surface fixed z-[300] overflow-hidden rounded-[24px] border border-white/10 bg-[#08111f]/94 shadow-[0_26px_90px_rgba(0,0,0,0.58)] backdrop-blur-2xl"
               style={{
                 left: menuPosition.left,
                 top: menuPosition.top,
@@ -771,7 +807,7 @@ export function AppSidebar() {
               </div>
 
               <div
-                className="overflow-y-auto p-2"
+                className="overflow-y-auto p-2 [scrollbar-color:rgba(0,245,168,0.28)_transparent]"
                 style={{ maxHeight: menuPosition.maxHeight - 48 }}
               >
                 {workspaces.length > 0 ? (
@@ -783,13 +819,13 @@ export function AppSidebar() {
                         key={item.id}
                         type="button"
                         onClick={() => void handleWorkspaceSelect(item.id)}
-                        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition duration-300 ease-out active:scale-[0.985] ${
                           isActive
-                            ? "bg-white/[0.08] text-white"
-                            : "text-white/70 hover:bg-white/[0.05] hover:text-white"
+                            ? "bg-[linear-gradient(135deg,rgba(255,255,255,0.11),rgba(0,245,168,0.10))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]"
+                            : "text-white/66 hover:-translate-y-0.5 hover:bg-white/[0.055] hover:text-white"
                         }`}
                       >
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-500/15 text-sm font-semibold text-violet-300">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#7c5cff]/18 text-sm font-semibold text-[#c4b5fd] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
                           {getWorkspaceInitial(item.name)}
                         </div>
 
@@ -803,7 +839,7 @@ export function AppSidebar() {
                         </div>
 
                         {isActive ? (
-                          <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                          <div className="h-2 w-2 rounded-full bg-[#00f5a8] shadow-[0_0_16px_rgba(0,245,168,0.55)]" />
                         ) : null}
                       </button>
                     );

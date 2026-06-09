@@ -1,4 +1,5 @@
 import { CustomSelect } from "../ui/custom-select";
+import { RivnDatePicker } from "../ui/rivn-date-picker";
 
 interface ClientItem {
   id: string;
@@ -109,12 +110,12 @@ export function EditPaymentModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_50px_rgba(0,0,0,0.45)] sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#020611]/75 p-3 backdrop-blur-md sm:items-center sm:p-4">
+      <div className="rivn-card max-h-[92vh] w-full max-w-2xl overflow-y-auto p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="text-sm text-white/50">Редактирование</div>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#43ffc2]">Редактирование</div>
+            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">
               {mode === "planned" ? "Изменить счёт" : "Изменить оплату"}
             </h2>
           </div>
@@ -125,7 +126,7 @@ export function EditPaymentModal({
             onClick={() => {
               if (!isSubmitting) onClose();
             }}
-            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:text-white/35 sm:w-auto"
+            className="rivn-button w-full px-4 py-2 text-sm text-white/70 disabled:cursor-not-allowed disabled:text-white/35 sm:w-auto"
           >
             Закрыть
           </button>
@@ -147,8 +148,8 @@ export function EditPaymentModal({
             }}
             options={clientOptions}
             placeholder="Выбери клиента"
-            buttonClassName="h-[46px] border-white/10 bg-white/[0.04] text-white shadow-none hover:bg-white/[0.06]"
-            dropdownClassName="border-white/10 bg-[#121826] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+            buttonClassName="rivn-field h-[48px] text-white shadow-none"
+            dropdownClassName="border-white/10 bg-[#0b1424] shadow-[0_20px_70px_rgba(0,0,0,0.55)]"
           />
 
           <CustomSelect
@@ -157,17 +158,15 @@ export function EditPaymentModal({
             disabled={!clientId || isDisabled}
             options={projectOptions}
             placeholder={clientId ? "Выбери проект" : "Сначала выбери клиента"}
-            buttonClassName="h-[46px] border-white/10 bg-white/[0.04] text-white shadow-none hover:bg-white/[0.06]"
-            dropdownClassName="border-white/10 bg-[#121826] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+            buttonClassName="rivn-field h-[48px] text-white shadow-none"
+            dropdownClassName="border-white/10 bg-[#0b1424] shadow-[0_20px_70px_rgba(0,0,0,0.55)]"
           />
 
-          <input
-            type="date"
+          <RivnDatePicker
             value={paidAt}
             disabled={isDisabled}
-            onChange={(e) => setPaidAt(e.target.value)}
+            onChange={setPaidAt}
             placeholder={mode === "planned" ? "Срок оплаты" : "Дата оплаты"}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50"
           />
 
           <input
@@ -175,7 +174,7 @@ export function EditPaymentModal({
             disabled={isDisabled}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Сумма"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rivn-field disabled:cursor-not-allowed disabled:opacity-50"
           />
 
           <textarea
@@ -184,7 +183,7 @@ export function EditPaymentModal({
             onChange={(e) => setSource(e.target.value)}
             placeholder="Комментарий"
             rows={4}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2"
+            className="rivn-field rivn-textarea disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2"
           />
 
           <input
@@ -192,7 +191,7 @@ export function EditPaymentModal({
             disabled={isDisabled}
             onChange={(e) => setDocumentUrl(e.target.value)}
             placeholder="Ссылка на документ"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2"
+            className="rivn-field disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2"
           />
         </div>
 
@@ -203,7 +202,7 @@ export function EditPaymentModal({
             onClick={() => {
               if (!isSubmitting) onClose();
             }}
-            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 disabled:cursor-not-allowed disabled:text-white/35"
+            className="rivn-button px-4 py-3 text-sm text-white/80 disabled:cursor-not-allowed disabled:text-white/35"
           >
             Отмена
           </button>
@@ -215,7 +214,7 @@ export function EditPaymentModal({
             className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
               isSubmitDisabled
                 ? "cursor-not-allowed bg-white/[0.04] text-white/35"
-                : "bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] hover:bg-emerald-400/20"
+                : "rivn-button-primary"
             }`}
           >
             {isSubmitting ? "Сохранение..." : "Сохранить изменения"}

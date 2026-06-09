@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendTelegramMessage } from "@/lib/notifications/telegram";
+import { verifyCronSecret } from "../verify-cron-secret";
 
 function startOfDay(date: Date) {
   const d = new Date(date);
@@ -18,7 +19,11 @@ function toISO(date: Date) {
   return date.toISOString();
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!verifyCronSecret(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

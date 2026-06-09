@@ -228,19 +228,67 @@ export function calculateEmployeePayrollAmount(employee: StoredEmployee) {
   return projectRate;
 }
 
-export function formatDisplayDate(value: string) {
-  if (!value) return "—";
+function makeLocalDate(year: number, month: number, day: number) {
+  const date = new Date(year, month - 1, day);
 
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
   }
 
-  return date.toLocaleDateString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-  });
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+export function parseDisplayDate(value: string | Date | null | undefined) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return makeLocalDate(
+      Number(isoMatch[1]),
+      Number(isoMatch[2]),
+      Number(isoMatch[3])
+    );
+  }
+
+  const displayMatch = trimmed.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (displayMatch) {
+    return makeLocalDate(
+      Number(displayMatch[3]),
+      Number(displayMatch[2]),
+      Number(displayMatch[1])
+    );
+  }
+
+  const date = new Date(trimmed);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatDisplayDate(value: string | Date | null | undefined) {
+  if (!value) return "—";
+
+  const date = parseDisplayDate(value);
+
+  if (!date) {
+    return String(value);
+  }
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear()).padStart(4, "0");
+
+  return `${day}.${month}.${year}`;
 }
 
 export function normalizeDateInput(value: string) {

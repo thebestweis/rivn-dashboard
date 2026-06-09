@@ -64,6 +64,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 401 });
     }
 
+    const { data: client, error: clientError } = await supabase
+      .from("clients")
+      .select("id,name")
+      .eq("id", body.clientId)
+      .maybeSingle();
+
+    if (clientError) {
+      return NextResponse.json(
+        { error: "Не удалось проверить доступ к клиенту" },
+        { status: 500 }
+      );
+    }
+
+    if (!client) {
+      return NextResponse.json(
+        { error: "Нет доступа к клиенту" },
+        { status: 403 }
+      );
+    }
+
     const { data: settings, error: settingsError } = await supabase
       .from("telegram_settings")
       .select("*")
@@ -119,7 +139,7 @@ export async function POST(request: Request) {
 
     const text =
       `📉 <b>Изменился статус клиента</b>\n\n` +
-      `Клиент: <b>${body.clientName}</b>\n` +
+      `Клиент: <b>${client.name || body.clientName || "Клиент"}</b>\n` +
       `Было: <b>${getStatusLabel(body.previousStatus)}</b>\n` +
       `Стало: <b>${getStatusLabel(body.nextStatus)}</b>`;
 

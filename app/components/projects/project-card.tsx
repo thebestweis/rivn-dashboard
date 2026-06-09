@@ -107,7 +107,7 @@ function ProjectCardComponent({
       onMouseEnter={handlePrefetch}
       onFocus={handlePrefetch}
       draggable={false}
-      className="group flex h-full min-h-[280px] flex-col rounded-[24px] border border-white/10 bg-[#0F1724] p-4 transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-[#111C2B]"
+      className="group flex h-full min-h-[280px] flex-col rounded-[28px] border border-white/12 bg-[linear-gradient(145deg,rgba(20,43,58,0.9),rgba(18,24,43,0.86))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_24px_70px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-[#00f5a8]/28 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_28px_80px_rgba(0,245,168,0.08),0_22px_70px_rgba(0,0,0,0.34)]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -129,22 +129,24 @@ function ProjectCardComponent({
         </span>
       </div>
 
-      <div className="mt-4 space-y-3">
-        <div>
-          <div className="text-xs text-white/40">Клиент</div>
+      <div className="mt-4 grid gap-2.5">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.065] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/35">Клиент</div>
           <div className="mt-1 truncate text-sm text-white/90">{clientName}</div>
         </div>
 
-        <div>
-          <div className="text-xs text-white/40">Дата начала работ</div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.065] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/35">Старт</div>
           <div className="mt-1 text-sm text-white/90">
             {formatProjectDate(startDate)}
           </div>
         </div>
 
-        <div>
-          <div className="text-xs text-white/40">Активные задачи</div>
-          <div className="mt-1 text-sm text-white/90">{activeTasksCount}</div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.065] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/35">Активные задачи</div>
+          <div className="mt-1 text-lg font-semibold tracking-[-0.04em] text-[#43ffc2]">
+            {activeTasksCount}
+          </div>
         </div>
       </div>
 
@@ -167,7 +169,7 @@ function ProjectCardComponent({
                   event.stopPropagation();
                   onEdit(id);
                 }}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
+                className="rivn-button px-3 py-1.5 text-xs font-medium"
               >
                 Редактировать
               </button>

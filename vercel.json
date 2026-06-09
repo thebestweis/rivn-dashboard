@@ -1,4 +1,18 @@
 {
+  "routes": [
+    {
+      "src": "/(?:wp-admin|wp-login\\.php|xmlrpc\\.php|phpmyadmin|\\.env|\\.git)(?:/.*)?",
+      "mitigate": {
+        "action": "deny"
+      }
+    },
+    {
+      "src": "/api/(?:avito/(?:test.*|get-token|get-all-items)|telegram/test.*)",
+      "mitigate": {
+        "action": "deny"
+      }
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/payment-reminders",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Search, UserPlus } from "lucide-react";
 import { CustomSelect } from "../ui/custom-select";
 
 interface ClientsPageHeaderProps {
@@ -35,40 +36,47 @@ export function ClientsPageHeader({
   }, []);
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.32)] sm:p-5">
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="text-sm text-white/50">Раздел</div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Клиенты</h1>
-          <p className="mt-2 text-sm text-white/55">
-            Управление клиентами, статусами, следующими счетами и прибыльностью.
-          </p>
+    <div className="rivn-card rivn-card-interactive p-4 sm:p-5">
+      <div className="grid gap-3 xl:grid-cols-[minmax(180px,0.75fr)_minmax(260px,1.15fr)_220px_auto] xl:items-end">
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-[0.22em] text-[#43ffc2]">CRM</div>
+          <h1 className="mt-1 text-3xl font-medium tracking-[-0.05em] text-white sm:text-4xl">
+            Клиенты
+          </h1>
         </div>
 
-        {isMounted && canAddClient ? (
-          <button
-            type="button"
-            onClick={onAddClient}
-            className="w-full rounded-2xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.18)] sm:w-auto"
-          >
-            Добавить клиента
-          </button>
-        ) : null}
-      </div>
-
-      <div className="mt-5 grid gap-3 md:grid-cols-[1.2fr_220px]">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Поиск по клиентам"
-          className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
-        />
+        <label className="rivn-field flex h-12 items-center gap-3">
+          <Search className="h-4 w-4 shrink-0 text-white/35" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Поиск по клиентам"
+            className="h-full min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+          />
+        </label>
 
         <CustomSelect
           value={status}
           onChange={setStatus}
           options={statusOptions}
+          className="w-full"
+          buttonClassName="h-12 bg-white/[0.045] dark:bg-white/[0.045]"
         />
+
+        {isMounted && canAddClient ? (
+          <button
+            type="button"
+            onClick={onAddClient}
+            className="rivn-button rivn-button-primary w-full px-4 py-3 text-sm font-semibold sm:w-auto"
+          >
+            <UserPlus className="h-4 w-4" />
+            Добавить клиента
+          </button>
+        ) : (
+          <div className="rivn-pill px-4 py-3 text-sm text-white/55">
+            Режим просмотра
+          </div>
+        )}
       </div>
     </div>
   );

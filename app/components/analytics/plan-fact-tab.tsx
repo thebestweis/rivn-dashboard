@@ -249,7 +249,7 @@ export function PlanFactTab({
         </div>
       ) : null}
 
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="rivn-panel p-6">
         <h2 className="text-2xl font-semibold text-white">
           План и факт по {getMetricLabel(selectedMetric)}
         </h2>
@@ -270,7 +270,7 @@ export function PlanFactTab({
                 onClick={() => setSelectedMetric(option.key)}
                 className={`rounded-full px-4 py-2 text-sm transition ${
                   isActive
-                    ? "bg-violet-500 text-white shadow-[0_0_24px_rgba(139,92,246,0.35)]"
+                    ? "bg-[#00f5a8] text-[#06101d] shadow-[0_16px_36px_rgba(0,245,168,0.2)]"
                     : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white"
                 }`}
               >
@@ -280,7 +280,7 @@ export function PlanFactTab({
           })}
         </div>
 
-        <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+        <div className="mt-6 rivn-panel-soft p-4">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
@@ -318,7 +318,7 @@ export function PlanFactTab({
                 </button>
 
                 {isRangeStartMenuOpen ? (
-                  <div className="absolute right-0 top-[56px] z-30 w-[280px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
+                  <div className="absolute right-0 top-[56px] z-30 w-[280px] rivn-panel-soft p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
                     <div className="mb-4 flex items-center justify-between">
                       <button
                         type="button"
@@ -395,7 +395,7 @@ export function PlanFactTab({
                 </button>
 
                 {isRangeEndMenuOpen ? (
-                  <div className="absolute right-0 top-[56px] z-30 w-[280px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
+                  <div className="absolute right-0 top-[56px] z-30 w-[280px] rivn-panel-soft p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
                     <div className="mb-4 flex items-center justify-between">
                       <button
                         type="button"
@@ -537,7 +537,7 @@ export function PlanFactTab({
         {rows.map((row) => (
           <div
             key={row.key}
-            className="rounded-[20px] border border-white/10 bg-[#121826] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.24)]"
+            className="rivn-panel-inner p-4"
           >
             <div className="text-sm text-white/50">{row.label}</div>
 
@@ -573,7 +573,7 @@ export function PlanFactTab({
         ))}
       </div>
 
-      <div className="rounded-[28px] border border-white/10 bg-[#121826] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.32)]">
+      <div className="rivn-panel p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="text-sm text-white/50">Редактирование плана</div>
@@ -603,7 +603,7 @@ export function PlanFactTab({
             </button>
 
             {isMonthMenuOpen ? (
-              <div className="absolute right-0 top-[56px] z-30 w-[280px] rounded-[24px] border border-white/10 bg-[#121826] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
+              <div className="absolute right-0 top-[56px] z-30 w-[280px] rivn-panel-soft p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:w-[320px]">
                 <div className="mb-4 flex items-center justify-between">
                   <button
                     type="button"
