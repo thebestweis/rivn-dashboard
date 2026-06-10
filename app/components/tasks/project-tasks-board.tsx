@@ -575,16 +575,19 @@ export function ProjectTasksBoard({
                                 : "text-white"
                             }`}
                           >
-                            {task.is_hot ? (
-                              <span className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-orange-300/25 bg-orange-400/15 px-2.5 py-1 text-[11px] font-semibold leading-none text-orange-100">
-                                <Flame className="h-3 w-3 fill-orange-300 text-orange-300" />
-                                Огонек
-                              </span>
-                            ) : null}
                             <span className="block">{task.title}</span>
                           </div>
 
-                          <div className="shrink-0">
+                          <div className="flex shrink-0 items-center gap-2">
+                            {task.is_hot ? (
+                              <span
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-orange-300/25 bg-orange-400/15 text-orange-100 shadow-[0_0_16px_rgba(251,146,60,0.14)]"
+                                title="Приоритетная задача"
+                                aria-label="Приоритетная задача"
+                              >
+                                <Flame className="h-3 w-3 fill-orange-300 text-orange-300" />
+                              </span>
+                            ) : null}
                             <span
                               className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${
                                  deadline.isOverdue && task.status !== "done"

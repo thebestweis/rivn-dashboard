@@ -911,13 +911,6 @@ export default function TasksPage() {
                                         {formatTaskTime(task.deadline_at)}
                                       </div>
 
-                                      {task.is_hot ? (
-                                        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-orange-300/25 bg-orange-400/15 px-2.5 py-1 text-[11px] font-semibold text-orange-100">
-                                          <Flame className="h-3 w-3 fill-orange-300 text-orange-300" />
-                                          Огонек
-                                        </div>
-                                      ) : null}
-
                                       <div
                                         className={`rivn-strike-title mt-2 line-clamp-3 text-sm font-semibold leading-6 transition-colors ${
                                           task.status === "done" ||
@@ -946,6 +939,17 @@ export default function TasksPage() {
 )}
                                     </div>
 
+                                    <div className="mt-1 flex shrink-0 items-center gap-2">
+                                      {task.is_hot ? (
+                                        <span
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-orange-300/25 bg-orange-400/15 text-orange-100 shadow-[0_0_18px_rgba(251,146,60,0.16)]"
+                                          title="Приоритетная задача"
+                                          aria-label="Приоритетная задача"
+                                        >
+                                          <Flame className="h-3.5 w-3.5 fill-orange-300 text-orange-300" />
+                                        </span>
+                                      ) : null}
+
                                     {canManageTasksWithBilling ? (
                                       <button
                                         type="button"
@@ -962,7 +966,7 @@ export default function TasksPage() {
                                           void handleQuickToggle(task);
                                         }}
                                         disabled={updatingTaskId === task.id}
-                                        className={`mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition active:scale-95 ${
+                                        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition active:scale-95 ${
                                           task.status === "done" ||
                                           isCompletedFlashing
                                             ? "border-emerald-400 bg-emerald-400"
@@ -975,6 +979,7 @@ export default function TasksPage() {
                                         ) : null}
                                       </button>
                                     ) : null}
+                                    </div>
                                   </div>
 
                                   <div className="mt-4 space-y-3">
