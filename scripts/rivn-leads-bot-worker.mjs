@@ -104,6 +104,45 @@ function htmlEscape(value) {
     .replaceAll(">", "&gt;");
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightMatchedKeywords(messageText, matchedKeywords) {
+  const keywords = [...new Set(matchedKeywords.map((keyword) => String(keyword || "").trim()).filter(Boolean))]
+    .sort((left, right) => right.length - left.length);
+
+  if (keywords.length === 0) return htmlEscape(messageText);
+
+  const ranges = [];
+
+  for (const keyword of keywords) {
+    const pattern = new RegExp(escapeRegExp(keyword).replaceAll("е", "[её]").replaceAll("Е", "[ЕЁ]"), "giu");
+    for (const match of String(messageText).matchAll(pattern)) {
+      const start = match.index ?? -1;
+      const end = start + match[0].length;
+      if (start < 0 || end <= start) continue;
+      if (ranges.some((range) => start < range.end && end > range.start)) continue;
+      ranges.push({ start, end });
+    }
+  }
+
+  if (ranges.length === 0) return htmlEscape(messageText);
+
+  ranges.sort((left, right) => left.start - right.start);
+
+  let cursor = 0;
+  let result = "";
+  for (const range of ranges) {
+    result += htmlEscape(String(messageText).slice(cursor, range.start));
+    result += `<b>${htmlEscape(String(messageText).slice(range.start, range.end))}</b>`;
+    cursor = range.end;
+  }
+  result += htmlEscape(String(messageText).slice(cursor));
+
+  return result;
+}
+
 function pickMessage(update) {
   return update.message || update.edited_message || update.channel_post || null;
 }
@@ -198,27 +237,26 @@ async function linkChatToRivnLeadsProject({ projectId, chatId }) {
 }
 
 function formatLeadMessage(lead) {
-  const project = one(lead, "rivn_leads_projects");
   const sourceChat = one(lead, "rivn_leads_source_chats");
   const telegramMessage = one(lead, "rivn_leads_telegram_messages");
   const authorUsername = telegramMessage?.author_username
     ? `@${String(telegramMessage.author_username).replace(/^@/, "")}`
     : "username отсутствует";
+  const matchedKeywords = Array.isArray(lead.matched_keywords)
+    ? lead.matched_keywords.map((item) => String(item?.value ?? item)).filter(Boolean)
+    : [];
 
   return [
     "🔥 <b>Потенциальный лид</b>",
     "",
     "<b>Сообщение:</b>",
-    `<blockquote>${htmlEscape(telegramMessage?.message_text || "")}</blockquote>`,
+    `<blockquote>${highlightMatchedKeywords(telegramMessage?.message_text || "", matchedKeywords)}</blockquote>`,
     "",
     "<b>Контакт:</b>",
     htmlEscape(authorUsername),
     "",
     "<b>Источник:</b>",
     htmlEscape(sourceChat?.title || "Telegram-чат"),
-    "",
-    "<b>Проект:</b>",
-    htmlEscape(project?.name || "RIVN Leads"),
   ].join("\n");
 }
 

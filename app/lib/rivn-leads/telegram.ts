@@ -9,6 +9,52 @@ type TelegramApiResponse<T> = {
   description?: string;
 };
 
+function htmlEscape(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightMatchedKeywords(messageText: string, matchedKeywords: string[]) {
+  const keywords = [...new Set(matchedKeywords.map((keyword) => keyword.trim()).filter(Boolean))]
+    .sort((left, right) => right.length - left.length);
+
+  if (keywords.length === 0) return htmlEscape(messageText);
+
+  const ranges: Array<{ start: number; end: number }> = [];
+
+  for (const keyword of keywords) {
+    const pattern = new RegExp(escapeRegExp(keyword).replaceAll("е", "[её]").replaceAll("Е", "[ЕЁ]"), "giu");
+    for (const match of messageText.matchAll(pattern)) {
+      const start = match.index ?? -1;
+      const end = start + match[0].length;
+      if (start < 0 || end <= start) continue;
+      if (ranges.some((range) => start < range.end && end > range.start)) continue;
+      ranges.push({ start, end });
+    }
+  }
+
+  if (ranges.length === 0) return htmlEscape(messageText);
+
+  ranges.sort((left, right) => left.start - right.start);
+
+  let cursor = 0;
+  let result = "";
+  for (const range of ranges) {
+    result += htmlEscape(messageText.slice(cursor, range.start));
+    result += `<b>${htmlEscape(messageText.slice(range.start, range.end))}</b>`;
+    cursor = range.end;
+  }
+  result += htmlEscape(messageText.slice(cursor));
+
+  return result;
+}
+
 export function formatRivnLeadTelegramMessage(input: {
   messageText: string;
   authorUsername: string | null;
@@ -21,22 +67,22 @@ export function formatRivnLeadTelegramMessage(input: {
   const keywords = input.matchedKeywords.length > 0 ? input.matchedKeywords.join(", ") : "не указаны";
 
   return [
-    "🔥 Потенциальный лид",
+    "🔥 <b>Потенциальный лид</b>",
     "",
-    "Сообщение:",
-    input.messageText,
+    "<b>Сообщение:</b>",
+    `<blockquote>${highlightMatchedKeywords(input.messageText, input.matchedKeywords)}</blockquote>`,
     "",
-    "Контакт:",
-    contact,
+    "<b>Контакт:</b>",
+    htmlEscape(contact),
     "",
-    "Источник:",
-    input.sourceChatTitle,
+    "<b>Источник:</b>",
+    htmlEscape(input.sourceChatTitle),
     "",
-    "Совпадения:",
-    keywords,
+    "<b>Совпадения:</b>",
+    htmlEscape(keywords),
     "",
-    "Ссылка:",
-    link,
+    "<b>Ссылка:</b>",
+    htmlEscape(link),
   ].join("\n");
 }
 
@@ -52,6 +98,7 @@ export async function sendRivnLeadTelegramMessage(input: SendTelegramMessageInpu
     body: JSON.stringify({
       chat_id: input.chatId,
       text: input.text,
+      parse_mode: "HTML",
       disable_web_page_preview: true,
     }),
   });

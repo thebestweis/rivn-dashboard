@@ -49,6 +49,8 @@ const config = {
   telegramBotToken: process.env.RIVN_LEADS_ALERT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "",
   alertChatId: process.env.RIVN_LEADS_ALERT_CHAT_ID || process.env.CRON_ERROR_CHAT_ID || "",
   alertThrottleMs: Number(process.env.RIVN_LEADS_ALERT_THROTTLE_MS || 300_000),
+  ingestMaxAttempts: Number(process.env.RIVN_LEADS_INGEST_MAX_ATTEMPTS || 3),
+  ingestRetryDelayMs: Number(process.env.RIVN_LEADS_INGEST_RETRY_DELAY_MS || 2_000),
 };
 
 function getTelegramProxy() {
@@ -106,9 +108,13 @@ function logError(message, error, meta = {}) {
 const alertSentAt = new Map();
 
 function isRecoverableReaderError(error) {
-  return /disconnected|reconnect|TIMEOUT|Not connected|fetch failed|network|socket hang up|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|temporar|external service|Telegram connection was reset|Внешний сервис|временно не ответил/i.test(
+  return /disconnected|reconnect|TIMEOUT|Not connected|fetch failed|network|socket hang up|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|temporar|external service|Telegram connection was reset|Bad Gateway|503|502|504|429|Внешний сервис|временно не ответил/i.test(
     String(error || "")
   );
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function escapeHtml(value) {
@@ -227,19 +233,35 @@ async function resolveSender(client, message) {
 }
 
 async function sendToIngest(payload) {
-  const response = await fetch(`${config.appUrl}/api/rivn-leads/ingest`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-rivn-leads-secret": config.ingestSecret,
-    },
-    body: JSON.stringify(payload),
-  });
-  const body = await response.json().catch(() => null);
-  if (!response.ok || !body?.ok) {
-    throw new Error(body?.error || `RIVN Leads ingest failed: ${response.status}`);
+  let lastError = null;
+  const maxAttempts = Math.max(1, config.ingestMaxAttempts);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(`${config.appUrl}/api/rivn-leads/ingest`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-rivn-leads-secret": config.ingestSecret,
+        },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => null);
+      if (response.ok && body?.ok) return body.result;
+
+      const message = body?.error || `RIVN Leads ingest failed: ${response.status}`;
+      lastError = new Error(`RIVN Leads ingest failed: ${response.status}: ${message}`);
+
+      if (![429, 502, 503, 504].includes(response.status) || attempt === maxAttempts) break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts) break;
+    }
+
+    await sleep(config.ingestRetryDelayMs * attempt);
   }
-  return body.result;
+
+  throw lastError || new Error("RIVN Leads ingest failed");
 }
 
 async function loadReaders() {
