@@ -33,6 +33,19 @@ function getRateLimitRule(pathname: string) {
   return API_RATE_LIMITS.find((rule) => rule.pattern.test(pathname));
 }
 
+function getExpectedRivnLeadsSecret() {
+  return process.env.RIVN_LEADS_INGEST_SECRET || process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET || "";
+}
+
+function hasValidRivnLeadsSecret(request: NextRequest) {
+  if (request.nextUrl.pathname !== "/api/rivn-leads/ingest") return false;
+
+  const expectedSecret = getExpectedRivnLeadsSecret();
+  const requestSecret = request.headers.get("x-rivn-leads-secret") || request.headers.get("x-cron-secret") || "";
+
+  return Boolean(expectedSecret && requestSecret && requestSecret === expectedSecret);
+}
+
 function getClientIp(request: NextRequest) {
   return (
     request.headers.get("cf-connecting-ip") ||
@@ -43,6 +56,8 @@ function getClientIp(request: NextRequest) {
 }
 
 function checkRateLimit(request: NextRequest) {
+  if (hasValidRivnLeadsSecret(request)) return null;
+
   const rule = getRateLimitRule(request.nextUrl.pathname);
 
   if (!rule) return null;

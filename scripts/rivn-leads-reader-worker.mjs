@@ -235,6 +235,7 @@ async function resolveSender(client, message) {
 async function sendToIngest(payload) {
   let lastError = null;
   const maxAttempts = Math.max(1, config.ingestMaxAttempts);
+  let retryAfterMs = 0;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -251,6 +252,8 @@ async function sendToIngest(payload) {
 
       const message = body?.error || `RIVN Leads ingest failed: ${response.status}`;
       lastError = new Error(`RIVN Leads ingest failed: ${response.status}: ${message}`);
+      const retryAfterSeconds = Number(response.headers.get("retry-after"));
+      retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 0;
 
       if (![429, 502, 503, 504].includes(response.status) || attempt === maxAttempts) break;
     } catch (error) {
@@ -258,7 +261,7 @@ async function sendToIngest(payload) {
       if (attempt === maxAttempts) break;
     }
 
-    await sleep(config.ingestRetryDelayMs * attempt);
+    await sleep(Math.max(retryAfterMs, config.ingestRetryDelayMs * attempt));
   }
 
   throw lastError || new Error("RIVN Leads ingest failed");
