@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import "react-day-picker/dist/style.css";
 
@@ -59,19 +59,19 @@ const recurrenceOptions: Array<{
   value: TaskRecurrenceFrequency;
   label: string;
 }> = [
-  { value: "daily", label: "Каждый день" },
-  { value: "weekly", label: "Каждую неделю" },
-  { value: "monthly", label: "Каждый месяц" },
+  { value: "daily", label: "РљР°Р¶РґС‹Р№ РґРµРЅСЊ" },
+  { value: "weekly", label: "РљР°Р¶РґСѓСЋ РЅРµРґРµР»СЋ" },
+  { value: "monthly", label: "РљР°Р¶РґС‹Р№ РјРµСЃСЏС†" },
 ];
 
 function getStatusLabel(status: TaskStatus) {
   switch (status) {
     case "todo":
-      return "К работе";
+      return "Рљ СЂР°Р±РѕС‚Рµ";
     case "in_progress":
-      return "В работе";
+      return "Р’ СЂР°Р±РѕС‚Рµ";
     case "done":
-      return "Готово";
+      return "Р“РѕС‚РѕРІРѕ";
     default:
       return status;
   }
@@ -367,7 +367,7 @@ export function TaskModal({
       ? workspaceMembersById.get(comment.author_member_id)
       : null;
 
-    return member ? getMemberLabel(member) : "Участник команды";
+    return member ? getMemberLabel(member) : "РЈС‡Р°СЃС‚РЅРёРє РєРѕРјР°РЅРґС‹";
   }
 
   function getActivityAuthorLabel(log: ActivityLog) {
@@ -375,16 +375,16 @@ export function TaskModal({
       ? workspaceMembersById.get(log.actor_member_id)
       : null;
 
-    return member ? getMemberLabel(member) : "Участник команды";
+    return member ? getMemberLabel(member) : "РЈС‡Р°СЃС‚РЅРёРє РєРѕРјР°РЅРґС‹";
   }
 
   const assigneesFieldLabel = useMemo(() => {
     if (isLoadingMembers) {
-      return "Загружаем участников...";
+      return "Р—Р°РіСЂСѓР¶Р°РµРј СѓС‡Р°СЃС‚РЅРёРєРѕРІ...";
     }
 
     if (selectedAssigneeLabels.length === 0) {
-      return "Выбрать исполнителей";
+      return "Р’С‹Р±СЂР°С‚СЊ РёСЃРїРѕР»РЅРёС‚РµР»РµР№";
     }
 
     if (selectedAssigneeLabels.length === 1) {
@@ -395,14 +395,14 @@ export function TaskModal({
       return `${selectedAssigneeLabels[0]}, ${selectedAssigneeLabels[1]}`;
     }
 
-    return `${selectedAssigneeLabels[0]}, ${selectedAssigneeLabels[1]} + ещё ${
+    return `${selectedAssigneeLabels[0]}, ${selectedAssigneeLabels[1]} + РµС‰С‘ ${
       selectedAssigneeLabels.length - 2
     }`;
   }, [isLoadingMembers, selectedAssigneeLabels]);
 
   const deadlineLabel = useMemo(() => {
     if (!deadlineDate) {
-      return "Выбрать дедлайн";
+      return "Р’С‹Р±СЂР°С‚СЊ РґРµРґР»Р°Р№РЅ";
     }
 
     const dateLabel = format(deadlineDate, "dd MMMM yyyy", { locale: ru });
@@ -507,13 +507,13 @@ export function TaskModal({
 
     if (!canManageTasks) {
       setToastType("error");
-      setToastMessage("У тебя нет прав на редактирование задач");
+      setToastMessage("РЈ С‚РµР±СЏ РЅРµС‚ РїСЂР°РІ РЅР° СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ Р·Р°РґР°С‡");
       return;
     }
 
     if (isBillingReadOnly) {
       setToastType("error");
-      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      setToastMessage("РџРѕРґРїРёСЃРєР° РЅРµР°РєС‚РёРІРЅР°. Р”РѕСЃС‚СѓРїРµРЅ С‚РѕР»СЊРєРѕ СЂРµР¶РёРј РїСЂРѕСЃРјРѕС‚СЂР°.");
       return;
     }
 
@@ -521,7 +521,7 @@ export function TaskModal({
 
     if (!trimmedTitle) {
       setToastType("error");
-      setToastMessage("Укажи название задачи");
+      setToastMessage("РЈРєР°Р¶Рё РЅР°Р·РІР°РЅРёРµ Р·Р°РґР°С‡Рё");
       return;
     }
 
@@ -529,13 +529,13 @@ export function TaskModal({
 
     if (isRecurrenceEnabled && !nextDeadlineAt) {
       setToastType("error");
-      setToastMessage("Для повторяющейся задачи нужно выбрать дедлайн");
+      setToastMessage("Р”Р»СЏ РїРѕРІС‚РѕСЂСЏСЋС‰РµР№СЃСЏ Р·Р°РґР°С‡Рё РЅСѓР¶РЅРѕ РІС‹Р±СЂР°С‚СЊ РґРµРґР»Р°Р№РЅ");
       return;
     }
 
     if (task.recurrence_rule_id && isRecurrenceEnabled && !recurrenceRule) {
       setToastType("info");
-      setToastMessage("Загружаем настройки повторения, попробуй ещё раз");
+      setToastMessage("Р—Р°РіСЂСѓР¶Р°РµРј РЅР°СЃС‚СЂРѕР№РєРё РїРѕРІС‚РѕСЂРµРЅРёСЏ, РїРѕРїСЂРѕР±СѓР№ РµС‰С‘ СЂР°Р·");
       return;
     }
 
@@ -563,13 +563,65 @@ export function TaskModal({
 
       onTaskUpdated(updatedTask);
       setToastType("success");
-      setToastMessage("Задача сохранена");
+      setToastMessage("Р—Р°РґР°С‡Р° СЃРѕС…СЂР°РЅРµРЅР°");
     } catch (error) {
       console.error(error);
       setToastType("error");
       setToastMessage(getBillingErrorMessage(error));
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleHotChange(nextIsHot: boolean) {
+    if (!task || nextIsHot === isHot) {
+      return;
+    }
+
+    if (!canManageTasksWithBilling) {
+      return;
+    }
+
+    const previousIsHot = isHot;
+    setIsHot(nextIsHot);
+
+    try {
+      const updatedTask = await updateTask(task.id, {
+        is_hot: nextIsHot,
+      });
+
+      onTaskUpdated(updatedTask);
+    } catch (error) {
+      setIsHot(previousIsHot);
+      console.error(error);
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
+    }
+  }
+
+  async function handleStatusChange(nextStatus: TaskStatus) {
+    if (!task || nextStatus === status) {
+      return;
+    }
+
+    if (!canManageTasksWithBilling) {
+      return;
+    }
+
+    const previousStatus = status;
+    setStatus(nextStatus);
+
+    try {
+      const updatedTask = await updateTask(task.id, {
+        status: nextStatus,
+      });
+
+      onTaskUpdated(updatedTask);
+    } catch (error) {
+      setStatus(previousStatus);
+      console.error(error);
+      setToastType("error");
+      setToastMessage(getBillingErrorMessage(error));
     }
   }
 
@@ -580,13 +632,13 @@ export function TaskModal({
 
     if (!canManageTasks) {
       setToastType("error");
-      setToastMessage("У тебя нет прав на создание подзадач");
+      setToastMessage("РЈ С‚РµР±СЏ РЅРµС‚ РїСЂР°РІ РЅР° СЃРѕР·РґР°РЅРёРµ РїРѕРґР·Р°РґР°С‡");
       return;
     }
 
     if (isBillingReadOnly) {
       setToastType("error");
-      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      setToastMessage("РџРѕРґРїРёСЃРєР° РЅРµР°РєС‚РёРІРЅР°. Р”РѕСЃС‚СѓРїРµРЅ С‚РѕР»СЊРєРѕ СЂРµР¶РёРј РїСЂРѕСЃРјРѕС‚СЂР°.");
       return;
     }
 
@@ -603,7 +655,7 @@ export function TaskModal({
       onTaskCreated(createdSubtask);
       setSubtaskDraft("");
       setToastType("success");
-      setToastMessage("Подзадача создана");
+      setToastMessage("РџРѕРґР·Р°РґР°С‡Р° СЃРѕР·РґР°РЅР°");
     } catch (error) {
       console.error(error);
       setToastType("error");
@@ -616,13 +668,13 @@ export function TaskModal({
   async function handleToggleSubtask(subtask: Task) {
     if (!canManageTasks) {
       setToastType("error");
-      setToastMessage("У тебя нет прав на изменение подзадач");
+      setToastMessage("РЈ С‚РµР±СЏ РЅРµС‚ РїСЂР°РІ РЅР° РёР·РјРµРЅРµРЅРёРµ РїРѕРґР·Р°РґР°С‡");
       return;
     }
 
     if (isBillingReadOnly) {
       setToastType("error");
-      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      setToastMessage("РџРѕРґРїРёСЃРєР° РЅРµР°РєС‚РёРІРЅР°. Р”РѕСЃС‚СѓРїРµРЅ С‚РѕР»СЊРєРѕ СЂРµР¶РёРј РїСЂРѕСЃРјРѕС‚СЂР°.");
       return;
     }
 
@@ -695,13 +747,13 @@ export function TaskModal({
 
     if (!canManageTasks) {
       setToastType("error");
-      setToastMessage("У тебя нет прав на добавление комментариев");
+      setToastMessage("РЈ С‚РµР±СЏ РЅРµС‚ РїСЂР°РІ РЅР° РґРѕР±Р°РІР»РµРЅРёРµ РєРѕРјРјРµРЅС‚Р°СЂРёРµРІ");
       return;
     }
 
     if (isBillingReadOnly) {
       setToastType("error");
-      setToastMessage("Подписка неактивна. Доступен только режим просмотра.");
+      setToastMessage("РџРѕРґРїРёСЃРєР° РЅРµР°РєС‚РёРІРЅР°. Р”РѕСЃС‚СѓРїРµРЅ С‚РѕР»СЊРєРѕ СЂРµР¶РёРј РїСЂРѕСЃРјРѕС‚СЂР°.");
       return;
     }
 
@@ -724,7 +776,7 @@ export function TaskModal({
         commentAttachmentInputRef.current.value = "";
       }
       setToastType("success");
-      setToastMessage("Сообщение отправлено");
+      setToastMessage("РЎРѕРѕР±С‰РµРЅРёРµ РѕС‚РїСЂР°РІР»РµРЅРѕ");
     } catch (error) {
       console.error(error);
       setToastType("error");
@@ -739,14 +791,14 @@ export function TaskModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/55">
+    <div className="fixed inset-0 z-[120] bg-black/78 backdrop-blur-md">
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div className="absolute bottom-0 left-0 right-0 flex h-[94vh] flex-col overflow-hidden rounded-t-[30px] border border-white/10 bg-[#121826] shadow-[0_24px_100px_rgba(0,0,0,0.55)] sm:left-1/2 sm:right-auto sm:top-6 sm:h-[calc(100vh-48px)] sm:w-[min(720px,calc(100vw-32px))] sm:-translate-x-1/2 sm:rounded-[30px]">
-        <div className="border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+      <div className="absolute bottom-0 left-0 right-0 isolate flex h-[94vh] flex-col overflow-hidden rounded-t-[30px] border border-white/12 bg-[linear-gradient(145deg,#07131f_0%,#101727_54%,#171b34_100%)] shadow-[0_28px_110px_rgba(0,0,0,0.72)] sm:left-1/2 sm:right-auto sm:top-6 sm:h-[calc(100vh-48px)] sm:w-[min(720px,calc(100vw-32px))] sm:-translate-x-1/2 sm:rounded-[30px]">
+        <div className="border-b border-white/10 bg-[#0A1421]/96 px-4 py-4 sm:px-6 sm:py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 flex-1">
-              <div className="text-sm text-white/40">Задача</div>
+              <div className="text-sm text-white/40">Р—Р°РґР°С‡Р°</div>
 
               <input
                 type="text"
@@ -754,7 +806,7 @@ export function TaskModal({
                 onChange={(event) => setTitle(event.target.value)}
                 readOnly={!canManageTasksWithBilling}
                 className="mt-2 w-full rounded-[18px] border border-transparent bg-white/[0.025] px-3 py-2 text-2xl font-semibold tracking-tight text-white outline-none transition placeholder:text-white/20 selection:bg-[#00f5a8]/20 focus:border-[#00f5a8]/20 focus:bg-white/[0.045] read-only:cursor-default sm:text-3xl"
-                placeholder="Название задачи"
+                placeholder="РќР°Р·РІР°РЅРёРµ Р·Р°РґР°С‡Рё"
               />
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -762,11 +814,13 @@ export function TaskModal({
                   type="button"
                   onClick={() => {
                     if (!canManageTasksWithBilling) return;
-                    setIsHot((current) => !current);
+                    void handleHotChange(!isHot);
                   }}
                   disabled={!canManageTasksWithBilling}
                   aria-pressed={isHot}
-                  className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition active:scale-[0.98] ${
+                  aria-label={isHot ? "РЈР±СЂР°С‚СЊ РѕРіРѕРЅРµРє" : "РџРѕСЃС‚Р°РІРёС‚СЊ РѕРіРѕРЅРµРє"}
+                  title={isHot ? "РЈР±СЂР°С‚СЊ РѕРіРѕРЅРµРє" : "РџРѕСЃС‚Р°РІРёС‚СЊ РѕРіРѕРЅРµРє"}
+                  className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border text-sm font-semibold transition active:scale-[0.98] ${
                     isHot
                       ? "border-orange-300/35 bg-orange-400/20 text-orange-100 shadow-[0_0_28px_rgba(251,146,60,0.20)]"
                       : "border-white/10 bg-white/5 text-white/65 hover:bg-white/10 hover:text-white"
@@ -779,7 +833,6 @@ export function TaskModal({
                       isHot ? "fill-orange-300 text-orange-300" : "text-white/55"
                     }`}
                   />
-                  Огонек
                 </button>
                 {(["todo", "in_progress", "done"] as TaskStatus[]).map((item) => (
                   <button
@@ -787,7 +840,7 @@ export function TaskModal({
                     type="button"
                     onClick={() => {
                       if (!canManageTasksWithBilling) return;
-                      setStatus(item);
+                      void handleStatusChange(item);
                     }}
                     disabled={!canManageTasksWithBilling}
                     className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getStatusButtonClasses(
@@ -808,7 +861,7 @@ export function TaskModal({
               onClick={onClose}
               className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white sm:w-auto"
             >
-              Закрыть
+              Р—Р°РєСЂС‹С‚СЊ
             </button>
           </div>
         </div>
@@ -819,12 +872,12 @@ export function TaskModal({
               isLoading={isAppContextLoading}
               isBillingReadOnly={isBillingReadOnly}
               canManage={canManageTasks}
-              readOnlyMessage="Подписка неактивна. Задача доступна только для просмотра, пока тариф не будет активирован."
-              roleRestrictedMessage="У тебя доступ только на просмотр задачи. Редактирование, подзадачи и комментарии недоступны."
+              readOnlyMessage="РџРѕРґРїРёСЃРєР° РЅРµР°РєС‚РёРІРЅР°. Р—Р°РґР°С‡Р° РґРѕСЃС‚СѓРїРЅР° С‚РѕР»СЊРєРѕ РґР»СЏ РїСЂРѕСЃРјРѕС‚СЂР°, РїРѕРєР° С‚Р°СЂРёС„ РЅРµ Р±СѓРґРµС‚ Р°РєС‚РёРІРёСЂРѕРІР°РЅ."
+              roleRestrictedMessage="РЈ С‚РµР±СЏ РґРѕСЃС‚СѓРї С‚РѕР»СЊРєРѕ РЅР° РїСЂРѕСЃРјРѕС‚СЂ Р·Р°РґР°С‡Рё. Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ, РїРѕРґР·Р°РґР°С‡Рё Рё РєРѕРјРјРµРЅС‚Р°СЂРёРё РЅРµРґРѕСЃС‚СѓРїРЅС‹."
             />
 
             <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
-              <div className="text-sm text-white/45">Исполнители</div>
+              <div className="text-sm text-white/45">РСЃРїРѕР»РЅРёС‚РµР»Рё</div>
 
               <div className="mt-4 relative" ref={assigneesDropdownRef}>
                 <button
@@ -849,12 +902,12 @@ export function TaskModal({
                     }
                   >
                     {activeWorkspaceMembers.length === 0 && !isLoadingMembers
-                      ? "Нет доступных исполнителей"
+                      ? "РќРµС‚ РґРѕСЃС‚СѓРїРЅС‹С… РёСЃРїРѕР»РЅРёС‚РµР»РµР№"
                       : assigneesFieldLabel}
                   </span>
 
                   <span className="ml-3 text-white/35">
-                    {isAssigneesDropdownOpen ? "−" : "+"}
+                    {isAssigneesDropdownOpen ? "в€’" : "+"}
                   </span>
                 </button>
 
@@ -898,7 +951,7 @@ export function TaskModal({
               </div>
 
               <div className="mt-4 text-xs leading-5 text-white/35">
-                Можно выбрать одного или нескольких исполнителей.
+                РњРѕР¶РЅРѕ РІС‹Р±СЂР°С‚СЊ РѕРґРЅРѕРіРѕ РёР»Рё РЅРµСЃРєРѕР»СЊРєРёС… РёСЃРїРѕР»РЅРёС‚РµР»РµР№.
               </div>
 
               {selectedAssigneeLabels.length > 0 ? (
@@ -914,13 +967,13 @@ export function TaskModal({
                 </div>
               ) : (
                 <div className="mt-3 text-xs text-white/30">
-                  Исполнители пока не назначены
+                  РСЃРїРѕР»РЅРёС‚РµР»Рё РїРѕРєР° РЅРµ РЅР°Р·РЅР°С‡РµРЅС‹
                 </div>
               )}
             </section>
 
             <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
-              <div className="text-sm text-white/45">Дедлайн</div>
+              <div className="text-sm text-white/45">Р”РµРґР»Р°Р№РЅ</div>
 
               <div className="mt-3">
                 <button
@@ -936,14 +989,14 @@ export function TaskModal({
                     {deadlineLabel}
                   </span>
                   <span className="text-white/35">
-                    {canManageTasksWithBilling ? "Открыть" : "Просмотр"}
+                    {canManageTasksWithBilling ? "РћС‚РєСЂС‹С‚СЊ" : "РџСЂРѕСЃРјРѕС‚СЂ"}
                   </span>
                 </button>
               </div>
 
               {isRecurrenceEnabled ? (
                 <div className="mt-3 inline-flex rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-xs font-medium text-violet-200">
-                  Повторяется
+                  РџРѕРІС‚РѕСЂСЏРµС‚СЃСЏ
                 </div>
               ) : null}
 
@@ -980,7 +1033,7 @@ export function TaskModal({
                   </div>
 
                   <div className="mt-4">
-                    <div className="text-xs text-white/40">Время</div>
+                    <div className="text-xs text-white/40">Р’СЂРµРјСЏ</div>
                     <input
                       type="time"
                       value={deadlineTime}
@@ -993,10 +1046,10 @@ export function TaskModal({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-xs font-semibold text-white/70">
-                          Повторять задачу
+                          РџРѕРІС‚РѕСЂСЏС‚СЊ Р·Р°РґР°С‡Сѓ
                         </div>
                         <div className="mt-1 text-[11px] text-white/35">
-                          Система создаст следующую задачу по расписанию
+                          РЎРёСЃС‚РµРјР° СЃРѕР·РґР°СЃС‚ СЃР»РµРґСѓСЋС‰СѓСЋ Р·Р°РґР°С‡Сѓ РїРѕ СЂР°СЃРїРёСЃР°РЅРёСЋ
                         </div>
                       </div>
 
@@ -1010,7 +1063,7 @@ export function TaskModal({
                           isRecurrenceEnabled ? "bg-emerald-400" : "bg-white/15"
                         }`}
                         aria-pressed={isRecurrenceEnabled}
-                        aria-label="Повторять задачу"
+                        aria-label="РџРѕРІС‚РѕСЂСЏС‚СЊ Р·Р°РґР°С‡Сѓ"
                       >
                         <span
                           className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${
@@ -1030,7 +1083,7 @@ export function TaskModal({
                             )
                           }
                           options={recurrenceOptions}
-                          placeholder="Периодичность"
+                          placeholder="РџРµСЂРёРѕРґРёС‡РЅРѕСЃС‚СЊ"
                           disabled={!canManageTasksWithBilling}
                           buttonClassName="h-10 rounded-xl px-3 text-sm"
                           dropdownClassName="w-full"
@@ -1047,7 +1100,7 @@ export function TaskModal({
                         />
 
                         <p className="text-[11px] leading-5 text-white/35">
-                          Дату окончания можно оставить пустой.
+                          Р”Р°С‚Сѓ РѕРєРѕРЅС‡Р°РЅРёСЏ РјРѕР¶РЅРѕ РѕСЃС‚Р°РІРёС‚СЊ РїСѓСЃС‚РѕР№.
                         </p>
                       </div>
                     ) : null}
@@ -1064,7 +1117,7 @@ export function TaskModal({
                       }}
                       className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
                     >
-                      Сбросить
+                      РЎР±СЂРѕСЃРёС‚СЊ
                     </button>
 
                     <button
@@ -1072,33 +1125,33 @@ export function TaskModal({
                       onClick={() => setIsDeadlinePickerOpen(false)}
                       className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
                     >
-                      Готово
+                      Р“РѕС‚РѕРІРѕ
                     </button>
                   </div>
                 </div>
               ) : null}
 
               <div className="mt-3 text-xs leading-5 text-white/35">
-                Дата и время создания задачи фиксируются автоматически.
+                Р”Р°С‚Р° Рё РІСЂРµРјСЏ СЃРѕР·РґР°РЅРёСЏ Р·Р°РґР°С‡Рё С„РёРєСЃРёСЂСѓСЋС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.
               </div>
             </section>
 
             <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
-              <div className="text-sm text-white/45">Описание</div>
+              <div className="text-sm text-white/45">РћРїРёСЃР°РЅРёРµ</div>
 
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 rows={6}
                 readOnly={!canManageTasksWithBilling}
-                placeholder="Опиши задачу, контекст, критерии готовности и важные детали"
+                placeholder="РћРїРёС€Рё Р·Р°РґР°С‡Сѓ, РєРѕРЅС‚РµРєСЃС‚, РєСЂРёС‚РµСЂРёРё РіРѕС‚РѕРІРЅРѕСЃС‚Рё Рё РІР°Р¶РЅС‹Рµ РґРµС‚Р°Р»Рё"
                 className="mt-4 w-full rounded-[22px] border border-white/10 bg-white/[0.035] px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/30 focus:border-[#00f5a8]/25 focus:bg-white/[0.055] read-only:cursor-default"
               />
             </section>
 
             <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm text-white/45">Подзадачи</div>
+                <div className="text-sm text-white/45">РџРѕРґР·Р°РґР°С‡Рё</div>
                 <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/50">
                   {doneSubtasksCount}/{subtasks.length}
                 </div>
@@ -1119,7 +1172,7 @@ export function TaskModal({
               <div className="mt-4 space-y-2">
                 {subtasks.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/35">
-                    Подзадач пока нет
+                    РџРѕРґР·Р°РґР°С‡ РїРѕРєР° РЅРµС‚
                   </div>
                 ) : (
                   orderedSubtasks.map((subtask) => (
@@ -1213,14 +1266,14 @@ export function TaskModal({
                           handleCreateSubtask();
                         }
                       }}
-                      placeholder="Новая подзадача"
+                      placeholder="РќРѕРІР°СЏ РїРѕРґР·Р°РґР°С‡Р°"
                       className="h-10 w-full rounded-[16px] bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/30"
                     />
                   </div>
 
                   {isCreatingSubtask ? (
                     <div className="mt-2 text-xs text-white/35">
-                      Создаём подзадачу...
+                      РЎРѕР·РґР°С‘Рј РїРѕРґР·Р°РґР°С‡Сѓ...
                     </div>
                   ) : null}
                 </>
@@ -1230,9 +1283,9 @@ export function TaskModal({
             <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm text-white/45">Чат задачи</div>
+                  <div className="text-sm text-white/45">Р§Р°С‚ Р·Р°РґР°С‡Рё</div>
                   <div className="mt-1 text-xs text-white/35">
-                    Обсуждай детали, правки и решения прямо внутри задачи.
+                    РћР±СЃСѓР¶РґР°Р№ РґРµС‚Р°Р»Рё, РїСЂР°РІРєРё Рё СЂРµС€РµРЅРёСЏ РїСЂСЏРјРѕ РІРЅСѓС‚СЂРё Р·Р°РґР°С‡Рё.
                   </div>
                 </div>
 
@@ -1244,11 +1297,11 @@ export function TaskModal({
               <div className="mt-4 space-y-3">
                 {isLoadingComments ? (
                   <div className="text-sm text-white/35">
-                    Загружаем чат...
+                    Р—Р°РіСЂСѓР¶Р°РµРј С‡Р°С‚...
                   </div>
                 ) : comments.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/35">
-                    Сообщений пока нет. Напиши первое сообщение по задаче.
+                    РЎРѕРѕР±С‰РµРЅРёР№ РїРѕРєР° РЅРµС‚. РќР°РїРёС€Рё РїРµСЂРІРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ РїРѕ Р·Р°РґР°С‡Рµ.
                   </div>
                 ) : (
                   <div className="max-h-[360px] space-y-3 overflow-y-auto pr-2 scrollbar-thin">
@@ -1280,7 +1333,7 @@ export function TaskModal({
                                 }
                               >
                                 {isOwnMessage
-                                  ? "Вы"
+                                  ? "Р’С‹"
                                   : getCommentAuthorLabel(comment)}
                               </span>
                               <span className="text-white/30">
@@ -1310,7 +1363,7 @@ export function TaskModal({
                                       <span className="text-xs text-white/35">
                                         {formatChatAttachmentSize(
                                           attachment.file_size
-                                        ) || "Файл"}
+                                        ) || "Р¤Р°Р№Р»"}
                                       </span>
                                     </span>
                                   </a>
@@ -1332,7 +1385,7 @@ export function TaskModal({
                       value={commentDraft}
                       onChange={(event) => setCommentDraft(event.target.value)}
                       rows={3}
-                      placeholder="Напиши сообщение по задаче"
+                      placeholder="РќР°РїРёС€Рё СЃРѕРѕР±С‰РµРЅРёРµ РїРѕ Р·Р°РґР°С‡Рµ"
                       className="w-full rounded-[16px] bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/30"
                     />
                     {commentAttachment ? (
@@ -1355,7 +1408,7 @@ export function TaskModal({
                             }
                           }}
                           className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-white/45 transition hover:bg-white/10 hover:text-white"
-                          aria-label="Убрать файл"
+                          aria-label="РЈР±СЂР°С‚СЊ С„Р°Р№Р»"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -1379,7 +1432,7 @@ export function TaskModal({
                         className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/60 transition hover:bg-white/10 hover:text-white"
                       >
                         <Paperclip className="h-4 w-4" />
-                        Прикрепить файл
+                        РџСЂРёРєСЂРµРїРёС‚СЊ С„Р°Р№Р»
                       </button>
                     </div>
 
@@ -1392,7 +1445,7 @@ export function TaskModal({
                       }
                       className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-400/15 disabled:opacity-60"
                     >
-                      {isCreatingComment ? "Отправляем..." : "Отправить"}
+                      {isCreatingComment ? "РћС‚РїСЂР°РІР»СЏРµРј..." : "РћС‚РїСЂР°РІРёС‚СЊ"}
                     </button>
                   </div>
                 </>
@@ -1402,9 +1455,9 @@ export function TaskModal({
             <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm text-white/45">История изменений</div>
+                  <div className="text-sm text-white/45">РСЃС‚РѕСЂРёСЏ РёР·РјРµРЅРµРЅРёР№</div>
                   <div className="mt-1 text-xs text-white/35">
-                    Здесь видно, что менялось по задаче и кто это сделал.
+                    Р—РґРµСЃСЊ РІРёРґРЅРѕ, С‡С‚Рѕ РјРµРЅСЏР»РѕСЃСЊ РїРѕ Р·Р°РґР°С‡Рµ Рё РєС‚Рѕ СЌС‚Рѕ СЃРґРµР»Р°Р».
                   </div>
                 </div>
 
@@ -1416,11 +1469,11 @@ export function TaskModal({
               <div className="mt-4 space-y-3">
                 {isLoadingActivityLogs ? (
                   <div className="text-sm text-white/35">
-                    Загружаем историю...
+                    Р—Р°РіСЂСѓР¶Р°РµРј РёСЃС‚РѕСЂРёСЋ...
                   </div>
                 ) : activityLogs.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/35">
-                    История пока пустая. Новые изменения будут появляться здесь.
+                    РСЃС‚РѕСЂРёСЏ РїРѕРєР° РїСѓСЃС‚Р°СЏ. РќРѕРІС‹Рµ РёР·РјРµРЅРµРЅРёСЏ Р±СѓРґСѓС‚ РїРѕСЏРІР»СЏС‚СЊСЃСЏ Р·РґРµСЃСЊ.
                   </div>
                 ) : (
                   <div className="max-h-[280px] space-y-3 overflow-y-auto pr-2 scrollbar-thin">
@@ -1461,7 +1514,7 @@ export function TaskModal({
               onClick={onClose}
               className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
             >
-              Закрыть
+              Р—Р°РєСЂС‹С‚СЊ
             </button>
 
             {canManageTasksWithBilling ? (
@@ -1469,9 +1522,9 @@ export function TaskModal({
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving || !title.trim()}
-                className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-2xl border border-[#00f5a8]/25 bg-[#00f5a8] px-4 py-2 text-sm font-semibold text-[#03130f] shadow-[0_12px_30px_rgba(0,245,168,0.20)] transition hover:bg-[#35ffd0] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSaving ? "Сохраняем..." : "Сохранить"}
+                {isSaving ? "РЎРѕС…СЂР°РЅСЏРµРј..." : "РЎРѕС…СЂР°РЅРёС‚СЊ"}
               </button>
             ) : null}
           </div>
