@@ -185,13 +185,17 @@ export async function getWorkspaceBillingByWorkspaceId(
     .from("workspace_billing")
     .select("*")
     .eq("workspace_id", workspaceId)
-    .maybeSingle();
+    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
 
   if (error) {
     throw new Error(`Не удалось загрузить billing workspace: ${error.message}`);
   }
 
-  return data ? normalizeWorkspaceBilling(data) : null;
+  const [row] = data ?? [];
+
+  return row ? normalizeWorkspaceBilling(row) : null;
 }
 
 export async function getBillingTransactions(

@@ -1291,6 +1291,103 @@ html[data-rivn-theme] .analytics-chart-plot-card canvas {
   filter: none !important;
 }
 
+html[data-rivn-theme] .rivn-task-modal-overlay {
+  background:
+    radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--rivn-accent) 13%, transparent), transparent 34%),
+    radial-gradient(circle at 84% 2%, color-mix(in srgb, var(--rivn-accent-2) 12%, transparent), transparent 38%),
+    color-mix(in srgb, var(--rivn-app-bg) 46%, rgba(0, 0, 0, 0.58)) !important;
+  backdrop-filter: blur(18px) saturate(1.12);
+}
+
+html[data-rivn-theme="white"] .rivn-task-modal-overlay,
+html[data-rivn-theme="legacy-light"] .rivn-task-modal-overlay {
+  background:
+    radial-gradient(circle at 16% 6%, color-mix(in srgb, var(--rivn-accent) 17%, transparent), transparent 34%),
+    radial-gradient(circle at 88% 4%, color-mix(in srgb, var(--rivn-accent-2) 12%, transparent), transparent 38%),
+    rgba(15, 23, 42, 0.26) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell {
+  background: var(--rivn-panel-bg) !important;
+  border-color: var(--rivn-card-border) !important;
+  color: var(--rivn-text) !important;
+  box-shadow: var(--rivn-shell-shadow) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-header {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--rivn-popover-bg) 86%, transparent), color-mix(in srgb, var(--rivn-panel-bg) 76%, transparent)) !important;
+  border-color: var(--rivn-card-border) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-section {
+  background: var(--rivn-soft-bg) !important;
+  border-color: var(--rivn-card-border) !important;
+  box-shadow: inset 0 1px 0 var(--rivn-glass-highlight) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-primary {
+  background: var(--rivn-primary-bg) !important;
+  color: var(--rivn-primary-text) !important;
+  border-color: color-mix(in srgb, var(--rivn-primary-bg) 42%, transparent) !important;
+  box-shadow: 0 16px 42px color-mix(in srgb, var(--rivn-primary-shadow) 72%, transparent) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-primary:hover {
+  background: var(--rivn-primary-hover-bg) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell input,
+html[data-rivn-theme] .rivn-task-modal-shell textarea {
+  background: var(--rivn-field-bg) !important;
+  color: var(--rivn-text) !important;
+  border-color: var(--rivn-field-border) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell input:focus,
+html[data-rivn-theme] .rivn-task-modal-shell textarea:focus {
+  background: var(--rivn-field-hover-bg) !important;
+  border-color: color-mix(in srgb, var(--rivn-accent) 42%, transparent) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell [class*="bg-[#0A1421]"],
+html[data-rivn-theme] .rivn-task-modal-shell [class*="bg-[#0F1724]"],
+html[data-rivn-theme] .rivn-task-modal-shell [class*="bg-[#121826]"],
+html[data-rivn-theme] .rivn-task-modal-shell [class*="bg-[#0D1420]"] {
+  background: var(--rivn-soft-bg) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell [class*="bg-[#152234]"],
+html[data-rivn-theme] .rivn-task-modal-shell [class*="bg-[#18283d]"] {
+  background: var(--rivn-field-bg) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell [class*="bg-[#0B1320]"] {
+  background: var(--rivn-popover-bg) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell [class*="border-white/"] {
+  border-color: var(--rivn-card-border) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell [class*="text-white/"] {
+  color: var(--rivn-muted) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell .text-white,
+html[data-rivn-theme] .rivn-task-modal-shell [class*="text-white "] {
+  color: var(--rivn-text) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell ::placeholder {
+  color: var(--rivn-muted) !important;
+}
+
+html[data-rivn-theme] .rivn-task-modal-shell .rdp {
+  --rdp-accent-color: var(--rivn-primary-bg);
+  --rdp-accent-background-color: color-mix(in srgb, var(--rivn-primary-bg) 18%, transparent);
+}
+
 html[data-rivn-theme] .rivn-field input,
 html[data-rivn-theme] .rivn-field textarea,
 html[data-rivn-theme] .rivn-field select,

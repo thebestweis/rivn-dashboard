@@ -783,11 +783,11 @@ export function TaskModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/78 backdrop-blur-md">
+    <div className="rivn-task-modal-overlay fixed inset-0 z-[120] bg-black/78 backdrop-blur-md">
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div className="absolute bottom-0 left-0 right-0 isolate flex h-[94vh] flex-col overflow-hidden rounded-t-[30px] border border-white/12 bg-[linear-gradient(145deg,#07131f_0%,#101727_54%,#171b34_100%)] shadow-[0_28px_110px_rgba(0,0,0,0.72)] sm:left-1/2 sm:right-auto sm:top-6 sm:h-[calc(100vh-48px)] sm:w-[min(720px,calc(100vw-32px))] sm:-translate-x-1/2 sm:rounded-[30px]">
-        <div className="border-b border-white/10 bg-[#0A1421]/96 px-4 py-4 sm:px-6 sm:py-5">
+      <div className="rivn-task-modal-shell absolute bottom-0 left-0 right-0 isolate flex h-[94vh] flex-col overflow-hidden rounded-t-[30px] border border-white/12 bg-[linear-gradient(145deg,#07131f_0%,#101727_54%,#171b34_100%)] shadow-[0_28px_110px_rgba(0,0,0,0.72)] sm:left-1/2 sm:right-auto sm:top-6 sm:h-[calc(100vh-48px)] sm:w-[min(720px,calc(100vw-32px))] sm:-translate-x-1/2 sm:rounded-[30px]">
+        <div className="rivn-task-modal-header border-b border-white/10 bg-[#0A1421]/96 px-4 py-4 sm:px-6 sm:py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 flex-1">
               <div className="text-sm text-white/40">Задача</div>
@@ -810,8 +810,8 @@ export function TaskModal({
                   }}
                   disabled={!canManageTasksWithBilling}
                   aria-pressed={isHot}
-                  aria-label={isHot ? "Убрать огонек" : "Поставить огонек"}
-                  title={isHot ? "Убрать огонек" : "Поставить огонек"}
+                  aria-label={isHot ? "Снять высокий приоритет" : "Поставить высокий приоритет"}
+                  title={isHot ? "Снять высокий приоритет" : "Поставить высокий приоритет"}
                   className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border text-sm font-semibold transition active:scale-[0.98] ${
                     isHot
                       ? "border-orange-300/35 bg-orange-400/20 text-orange-100 shadow-[0_0_28px_rgba(251,146,60,0.20)]"
@@ -868,7 +868,7 @@ export function TaskModal({
               roleRestrictedMessage="У тебя доступ только на просмотр задачи. Редактирование, подзадачи и комментарии недоступны."
             />
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
+            <section className="rivn-task-modal-section rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="text-sm text-white/45">Исполнители</div>
 
               <div className="mt-4 relative" ref={assigneesDropdownRef}>
@@ -964,7 +964,7 @@ export function TaskModal({
               )}
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
+            <section className="rivn-task-modal-section rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="text-sm text-white/45">Дедлайн</div>
 
               <div className="mt-3">
@@ -1115,7 +1115,7 @@ export function TaskModal({
                     <button
                       type="button"
                       onClick={() => setIsDeadlinePickerOpen(false)}
-                      className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+                      className="rivn-task-modal-primary rounded-2xl px-4 py-2 text-sm font-semibold transition"
                     >
                       Готово
                     </button>
@@ -1128,7 +1128,7 @@ export function TaskModal({
               </div>
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
+            <section className="rivn-task-modal-section rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="text-sm text-white/45">Описание</div>
 
               <textarea
@@ -1141,7 +1141,7 @@ export function TaskModal({
               />
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
+            <section className="rivn-task-modal-section rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm text-white/45">Подзадачи</div>
                 <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/50">
@@ -1272,7 +1272,7 @@ export function TaskModal({
               ) : null}
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
+            <section className="rivn-task-modal-section rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm text-white/45">Чат задачи</div>
@@ -1444,7 +1444,7 @@ export function TaskModal({
               ) : null}
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
+            <section className="rivn-task-modal-section rounded-[24px] border border-white/10 bg-[#0F1724] p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm text-white/45">История изменений</div>

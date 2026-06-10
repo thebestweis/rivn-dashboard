@@ -47,6 +47,7 @@ type AppContextState = {
 };
 
 const APP_CONTEXT_CACHE_KEY = "app_context_cache";
+const APP_CONTEXT_FAILURE_COUNT_KEY = "app_context_failure_count";
 const APP_CONTEXT_CACHE_TTL_MS = 5 * 60 * 1000;
 const AUTH_EXPIRED_PATHS = [
   "/dashboard",
@@ -168,6 +169,29 @@ function clearCachedAppContext() {
     localStorage.removeItem(APP_CONTEXT_CACHE_KEY);
     localStorage.removeItem("RIVN_OS_QUERY_CACHE");
   } catch {}
+}
+
+function resetAppContextFailureCount() {
+  if (typeof window === "undefined") return;
+
+  try {
+    sessionStorage.removeItem(APP_CONTEXT_FAILURE_COUNT_KEY);
+  } catch {}
+}
+
+function incrementAppContextFailureCount() {
+  if (typeof window === "undefined") return 1;
+
+  try {
+    const current = Number(
+      sessionStorage.getItem(APP_CONTEXT_FAILURE_COUNT_KEY) ?? "0"
+    );
+    const next = Number.isFinite(current) ? current + 1 : 1;
+    sessionStorage.setItem(APP_CONTEXT_FAILURE_COUNT_KEY, String(next));
+    return next;
+  } catch {
+    return 1;
+  }
 }
 
 export function AppContextProvider({
@@ -312,6 +336,7 @@ export function AppContextProvider({
 
       cachedRef.current = nextCache;
       writeCachedAppContext(nextCache);
+      resetAppContextFailureCount();
 
       setUser(nextCache.user);
       setProfile(nextCache.profile);
@@ -336,6 +361,23 @@ export function AppContextProvider({
       if (isAuthExpiredErrorMessage(message)) {
         resetStateToEmpty();
         redirectToSessionExpired();
+        return;
+      }
+
+      const failedAttempts = incrementAppContextFailureCount();
+
+      if (failedAttempts >= 3 && isProtectedAppPath(pathname)) {
+        cachedRef.current = null;
+        clearCachedAppContext();
+        resetStateToEmpty();
+
+        try {
+          await createClient().auth.signOut();
+        } catch {}
+
+        const params = new URLSearchParams();
+        params.set("next", pathname);
+        router.replace(`/login?${params.toString()}`);
         return;
       }
 
@@ -365,7 +407,7 @@ export function AppContextProvider({
     });
 
     return refreshPromiseRef.current;
-  }, [redirectToSessionExpired, resetStateToEmpty]);
+  }, [pathname, redirectToSessionExpired, resetStateToEmpty, router]);
 
   useEffect(() => {
     void refreshAppContext();

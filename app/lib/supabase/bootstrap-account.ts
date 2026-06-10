@@ -123,9 +123,11 @@ export async function bootstrapAccountForCurrentUser() {
     .from("workspace_billing")
     .select("*")
     .eq("workspace_id", workspaceId)
-    .maybeSingle();
+    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
 
-  if (!existingBilling) {
+  if (!existingBilling?.[0]) {
     const trialPlan = await getBillingPlanByCode("trial");
     const trialStart = new Date();
     const trialEnd = addDays(trialStart, 14);

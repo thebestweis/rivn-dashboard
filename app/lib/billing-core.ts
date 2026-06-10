@@ -161,6 +161,11 @@ async function updateWorkspaceBillingByWorkspaceId(
   patch: Partial<WorkspaceBilling>
 ): Promise<WorkspaceBilling> {
   const supabase = createClient();
+  const currentBilling = await getWorkspaceBillingByWorkspaceId(workspaceId);
+
+  if (!currentBilling?.id) {
+    throw new Error("Billing workspace not found");
+  }
 
   const { data, error } = await supabase
     .from("workspace_billing")
@@ -168,7 +173,7 @@ async function updateWorkspaceBillingByWorkspaceId(
       ...patch,
       updated_at: new Date().toISOString(),
     })
-    .eq("workspace_id", workspaceId)
+    .eq("id", currentBilling.id)
     .select("*")
     .single();
 

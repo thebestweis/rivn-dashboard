@@ -47,13 +47,15 @@ async function getWorkspaceBillingByWorkspaceIdServer(workspaceId: string) {
     .from("workspace_billing")
     .select("*")
     .eq("workspace_id", workspaceId)
-    .maybeSingle();
+    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
 
   if (error) {
     throw new Error(`Не удалось загрузить billing workspace: ${error.message}`);
   }
 
-  return data;
+  return data?.[0] ?? null;
 }
 
 async function getWorkspaceBalanceByWorkspaceIdServer(workspaceId: string) {
@@ -215,7 +217,7 @@ export async function activatePlanFromBalanceServer(params: {
       ai_enabled: Boolean(plan.ai_enabled),
       updated_at: new Date().toISOString(),
     })
-    .eq("workspace_id", params.workspaceId)
+    .eq("id", currentBilling.id)
     .select("*")
     .single();
 
@@ -301,7 +303,7 @@ export async function forceSetWorkspaceBillingStatusServer(params: {
   const { data: updatedBilling, error } = await adminSupabase
     .from("workspace_billing")
     .update(patch)
-    .eq("workspace_id", params.workspaceId)
+    .eq("id", currentBilling.id)
     .select("*")
     .single();
 
