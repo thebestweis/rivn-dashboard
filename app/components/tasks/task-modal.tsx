@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { FileText, Paperclip, X } from "lucide-react";
+import { FileText, Flame, Paperclip, X } from "lucide-react";
 import { DayPicker } from "react-day-picker";
 import { AppToast } from "../ui/app-toast";
 import {
@@ -207,6 +207,7 @@ export function TaskModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("todo");
+  const [isHot, setIsHot] = useState(false);
   const [deadlineDate, setDeadlineDate] = useState<Date | undefined>(undefined);
   const [deadlineTime, setDeadlineTime] = useState("");
   const [isDeadlinePickerOpen, setIsDeadlinePickerOpen] = useState(false);
@@ -423,6 +424,7 @@ export function TaskModal({
     setTitle(task.title);
     setDescription(task.description ?? "");
     setStatus(task.status);
+    setIsHot(task.is_hot ?? false);
     setDeadlineDate(parsedDeadline.date);
     setDeadlineTime(parsedDeadline.time);
     setIsRecurrenceEnabled(Boolean(task.recurrence_rule_id));
@@ -546,6 +548,7 @@ export function TaskModal({
         status,
         deadline_at: nextDeadlineAt,
         assignee_ids: selectedAssigneeIds,
+        is_hot: isHot,
         recurrence: isRecurrenceEnabled
           ? {
               enabled: true,
@@ -750,11 +753,34 @@ export function TaskModal({
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 readOnly={!canManageTasksWithBilling}
-                className="mt-2 w-full bg-transparent text-2xl font-semibold tracking-tight text-white outline-none placeholder:text-white/20 read-only:cursor-default sm:text-3xl"
+                className="mt-2 w-full rounded-[18px] border border-transparent bg-white/[0.025] px-3 py-2 text-2xl font-semibold tracking-tight text-white outline-none transition placeholder:text-white/20 selection:bg-[#00f5a8]/20 focus:border-[#00f5a8]/20 focus:bg-white/[0.045] read-only:cursor-default sm:text-3xl"
                 placeholder="Название задачи"
               />
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!canManageTasksWithBilling) return;
+                    setIsHot((current) => !current);
+                  }}
+                  disabled={!canManageTasksWithBilling}
+                  aria-pressed={isHot}
+                  className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition active:scale-[0.98] ${
+                    isHot
+                      ? "border-orange-300/35 bg-orange-400/20 text-orange-100 shadow-[0_0_28px_rgba(251,146,60,0.20)]"
+                      : "border-white/10 bg-white/5 text-white/65 hover:bg-white/10 hover:text-white"
+                  } ${
+                    !canManageTasksWithBilling ? "cursor-default opacity-80" : ""
+                  }`}
+                >
+                  <Flame
+                    className={`h-4 w-4 ${
+                      isHot ? "fill-orange-300 text-orange-300" : "text-white/55"
+                    }`}
+                  />
+                  Огонек
+                </button>
                 {(["todo", "in_progress", "done"] as TaskStatus[]).map((item) => (
                   <button
                     key={item}
@@ -815,7 +841,7 @@ export function TaskModal({
                     isLoadingMembers ||
                     activeWorkspaceMembers.length === 0
                   }
-                  className="flex h-12 w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-left text-sm text-white transition hover:bg-white/[0.06] disabled:cursor-default disabled:opacity-70"
+                  className="flex h-12 w-full items-center justify-between rounded-[20px] border border-white/12 bg-[#152234]/90 px-4 text-left text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition hover:border-[#00f5a8]/25 hover:bg-[#18283d] disabled:cursor-default disabled:opacity-70"
                 >
                   <span
                     className={
@@ -833,7 +859,7 @@ export function TaskModal({
                 </button>
 
                 {isAssigneesDropdownOpen ? (
-                  <div className="absolute left-0 right-0 top-[56px] z-30 max-h-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-[#121826] p-2 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+                  <div className="absolute left-0 right-0 top-[56px] z-[180] max-h-[280px] overflow-y-auto rounded-[24px] border border-[#00f5a8]/18 bg-[#0B1320]/95 p-2 shadow-[0_22px_70px_rgba(0,0,0,0.58)] backdrop-blur-2xl">
                     {activeWorkspaceMembers.map((member) => {
                       const isSelected = selectedAssigneeIds.includes(member.id);
 
@@ -844,8 +870,8 @@ export function TaskModal({
                           onClick={() => handleToggleAssignee(member.id)}
                           className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
                             isSelected
-                              ? "bg-emerald-400/10 text-emerald-300"
-                              : "text-white/75 hover:bg-white/[0.05] hover:text-white"
+                              ? "bg-[#00f5a8]/16 text-[#9fffe1]"
+                              : "text-white/78 hover:bg-white/[0.075] hover:text-white"
                           }`}
                         >
                           <div className="min-w-0">
@@ -860,7 +886,7 @@ export function TaskModal({
                           <div
                             className={`ml-3 h-4 w-4 shrink-0 rounded-full border ${
                               isSelected
-                                ? "border-emerald-400 bg-emerald-400"
+                                ? "border-[#00f5a8] bg-[#00f5a8]"
                                 : "border-white/25"
                             }`}
                           />
@@ -1017,7 +1043,7 @@ export function TaskModal({
                             setRecurrenceEndsAt(event.target.value)
                           }
                           disabled={!canManageTasksWithBilling}
-                          className="h-10 rounded-xl border border-white/10 bg-[#121826] px-3 text-sm text-white outline-none disabled:opacity-60"
+                      className="h-10 rounded-[16px] border border-white/10 bg-[#121826] px-3 text-sm text-white outline-none transition focus:border-[#00f5a8]/25 focus:bg-white/[0.04] disabled:opacity-60"
                         />
 
                         <p className="text-[11px] leading-5 text-white/35">
@@ -1066,7 +1092,7 @@ export function TaskModal({
                 rows={6}
                 readOnly={!canManageTasksWithBilling}
                 placeholder="Опиши задачу, контекст, критерии готовности и важные детали"
-                className="mt-4 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/30 read-only:cursor-default"
+                className="mt-4 w-full rounded-[22px] border border-white/10 bg-white/[0.035] px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/30 focus:border-[#00f5a8]/25 focus:bg-white/[0.055] read-only:cursor-default"
               />
             </section>
 
@@ -1176,7 +1202,7 @@ export function TaskModal({
 
               {canManageTasksWithBilling ? (
                 <>
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+                  <div className="mt-4 rounded-[20px] border border-white/10 bg-white/[0.035] p-2 transition focus-within:border-[#00f5a8]/25 focus-within:bg-white/[0.055]">
                     <input
                       type="text"
                       value={subtaskDraft}
@@ -1188,7 +1214,7 @@ export function TaskModal({
                         }
                       }}
                       placeholder="Новая подзадача"
-                      className="h-10 w-full bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/30"
+                      className="h-10 w-full rounded-[16px] bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/30"
                     />
                   </div>
 
@@ -1301,13 +1327,13 @@ export function TaskModal({
 
               {canManageTasksWithBilling ? (
                 <>
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+                  <div className="mt-4 rounded-[20px] border border-white/10 bg-white/[0.035] p-2 transition focus-within:border-[#00f5a8]/25 focus-within:bg-white/[0.055]">
                     <textarea
                       value={commentDraft}
                       onChange={(event) => setCommentDraft(event.target.value)}
                       rows={3}
                       placeholder="Напиши сообщение по задаче"
-                      className="w-full bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/30"
+                      className="w-full rounded-[16px] bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/30"
                     />
                     {commentAttachment ? (
                       <div className="mx-2 mb-2 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">

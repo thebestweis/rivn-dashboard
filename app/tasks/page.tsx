@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, format, isSameDay, startOfWeek } from "date-fns";
 import { ru } from "date-fns/locale";
-import { Check } from "lucide-react";
+import { Check, Flame } from "lucide-react";
 import { CustomSelect } from "../components/ui/custom-select";
 import { AppToast } from "../components/ui/app-toast";
 import { TaskModal } from "../components/tasks/task-modal";
@@ -102,6 +102,29 @@ function createDeadlineForDay(day: Date) {
   const next = new Date(day);
   next.setHours(12, 0, 0, 0);
   return next.toISOString();
+}
+
+function compareTasksByPriority(a: Task, b: Task) {
+  if (a.is_hot !== b.is_hot) {
+    return a.is_hot ? -1 : 1;
+  }
+
+  const aDeadline = a.deadline_at
+    ? new Date(a.deadline_at).getTime()
+    : Number.POSITIVE_INFINITY;
+  const bDeadline = b.deadline_at
+    ? new Date(b.deadline_at).getTime()
+    : Number.POSITIVE_INFINITY;
+
+  if (aDeadline !== bDeadline) {
+    return aDeadline - bDeadline;
+  }
+
+  if (a.position !== b.position) {
+    return a.position - b.position;
+  }
+
+  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
 }
 
 export default function TasksPage() {
@@ -226,7 +249,7 @@ export default function TasksPage() {
               );
 
       return matchesSearch && matchesStatus && matchesProject && matchesAssignee;
-    });
+    }).sort(compareTasksByPriority);
   }, [tasks, searchQuery, statusFilter, projectFilter, assigneeFilter]);
 
   const subtasksByParentId = useMemo(() => {
@@ -309,11 +332,7 @@ export default function TasksPage() {
     }
 
     for (const day of weekDays) {
-      map[day.key].sort((a, b) => {
-        const aTime = a.deadline_at ? new Date(a.deadline_at).getTime() : 0;
-        const bTime = b.deadline_at ? new Date(b.deadline_at).getTime() : 0;
-        return aTime - bTime;
-      });
+      map[day.key].sort(compareTasksByPriority);
     }
 
     return map;
@@ -765,6 +784,16 @@ export default function TasksPage() {
                                   onChange={(event) =>
                                     setQuickTaskTitle(event.target.value)
                                   }
+                                  onKeyDown={(event) => {
+                                    if (
+                                      event.key === "Enter" &&
+                                      quickTaskTitle.trim() &&
+                                      !createTaskMutation.isPending
+                                    ) {
+                                      event.preventDefault();
+                                      void handleCreateTaskForDay(day.date);
+                                    }
+                                  }}
                                   placeholder="Название задачи"
                                   className="h-10 w-full rounded-xl bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/30"
                                 />
@@ -797,7 +826,7 @@ export default function TasksPage() {
                                     type="button"
                                     onClick={() => handleCreateTaskForDay(day.date)}
                                     disabled={createTaskMutation.isPending}
-                                    className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
+                                    className="rounded-xl border border-[#00f5a8]/25 bg-[#00f5a8] px-3 py-2 text-xs font-semibold text-[#03130f] shadow-[0_10px_26px_rgba(0,245,168,0.18)] transition hover:bg-[#35ffd0] disabled:opacity-60"
                                   >
                                     {createTaskMutation.isPending
                                       ? "Создаём..."
@@ -881,6 +910,13 @@ export default function TasksPage() {
                                       <div className="text-[11px] text-white/35">
                                         {formatTaskTime(task.deadline_at)}
                                       </div>
+
+                                      {task.is_hot ? (
+                                        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-orange-300/25 bg-orange-400/15 px-2.5 py-1 text-[11px] font-semibold text-orange-100">
+                                          <Flame className="h-3 w-3 fill-orange-300 text-orange-300" />
+                                          Огонек
+                                        </div>
+                                      ) : null}
 
                                       <div
                                         className={`rivn-strike-title mt-2 line-clamp-3 text-sm font-semibold leading-6 transition-colors ${

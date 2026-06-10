@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Flame } from "lucide-react";
 import {
   createTask,
   updateTaskStatus,
@@ -118,6 +118,29 @@ function getAssigneesLabel(task: Task) {
   return `${labels[0]}, ${labels[1]} + ещё ${labels.length - 2}`;
 }
 
+function compareTasksByPriority(a: Task, b: Task) {
+  if (a.is_hot !== b.is_hot) {
+    return a.is_hot ? -1 : 1;
+  }
+
+  const aDeadline = a.deadline_at
+    ? new Date(a.deadline_at).getTime()
+    : Number.POSITIVE_INFINITY;
+  const bDeadline = b.deadline_at
+    ? new Date(b.deadline_at).getTime()
+    : Number.POSITIVE_INFINITY;
+
+  if (aDeadline !== bDeadline) {
+    return aDeadline - bDeadline;
+  }
+
+  if (a.position !== b.position) {
+    return a.position - b.position;
+  }
+
+  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+}
+
 export function ProjectTasksBoard({
   projectId,
   tasks,
@@ -172,9 +195,15 @@ export function ProjectTasksBoard({
 
   const tasksByStatus = useMemo(() => {
     return {
-      todo: rootTasks.filter((task) => task.status === "todo"),
-      in_progress: rootTasks.filter((task) => task.status === "in_progress"),
-      done: rootTasks.filter((task) => task.status === "done"),
+      todo: rootTasks
+        .filter((task) => task.status === "todo")
+        .sort(compareTasksByPriority),
+      in_progress: rootTasks
+        .filter((task) => task.status === "in_progress")
+        .sort(compareTasksByPriority),
+      done: rootTasks
+        .filter((task) => task.status === "done")
+        .sort(compareTasksByPriority),
     };
   }, [rootTasks]);
 
@@ -546,7 +575,13 @@ export function ProjectTasksBoard({
                                 : "text-white"
                             }`}
                           >
-                            {task.title}
+                            {task.is_hot ? (
+                              <span className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-orange-300/25 bg-orange-400/15 px-2.5 py-1 text-[11px] font-semibold leading-none text-orange-100">
+                                <Flame className="h-3 w-3 fill-orange-300 text-orange-300" />
+                                Огонек
+                              </span>
+                            ) : null}
+                            <span className="block">{task.title}</span>
                           </div>
 
                           <div className="shrink-0">

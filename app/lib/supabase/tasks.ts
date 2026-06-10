@@ -66,6 +66,7 @@ export type Task = {
   updated_at: string;
   position: number;
   is_archived: boolean;
+  is_hot: boolean;
   recurrence_rule_id: string | null;
   recurrence_occurrence_date: string | null;
   assignees?: TaskAssignee[];
@@ -83,6 +84,7 @@ export type CreateTaskInput = {
   deadline_at?: string | null;
   assignee_ids?: string[];
   description?: string | null;
+  is_hot?: boolean;
   recurrence?: TaskRecurrenceInput | null;
 };
 
@@ -92,6 +94,7 @@ export type UpdateTaskInput = {
   status?: TaskStatus;
   deadline_at?: string | null;
   assignee_ids?: string[];
+  is_hot?: boolean;
   recurrence?: TaskRecurrenceUpdateInput;
 };
 
@@ -114,6 +117,7 @@ type DbTaskRow = {
   updated_at: string;
   position: number | string | null;
   is_archived: boolean | null;
+  is_hot?: boolean | null;
   recurrence_rule_id?: string | null;
   recurrence_occurrence_date?: string | null;
 };
@@ -198,6 +202,7 @@ function mapTask(row: DbTaskRow): Task {
     updated_at: row.updated_at,
     position: Number(row.position ?? 0),
     is_archived: row.is_archived ?? false,
+    is_hot: row.is_hot ?? false,
     recurrence_rule_id: row.recurrence_rule_id ?? null,
     recurrence_occurrence_date: row.recurrence_occurrence_date ?? null,
   };
@@ -613,6 +618,7 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
       title: input.title,
       description: input.description ?? null,
       deadline_at: input.deadline_at ?? null,
+      is_hot: input.is_hot ?? false,
       position: nextPosition,
     })
     .select("*")
@@ -827,6 +833,7 @@ export async function updateTask(
     ...(input.deadline_at !== undefined
       ? { deadline_at: input.deadline_at }
       : {}),
+    ...(input.is_hot !== undefined ? { is_hot: input.is_hot } : {}),
     updated_at: new Date().toISOString(),
   };
 
