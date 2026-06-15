@@ -104,6 +104,17 @@ function htmlEscape(value) {
     .replaceAll(">", "&gt;");
 }
 
+function htmlAttributeEscape(value) {
+  return htmlEscape(value).replaceAll('"', "&quot;");
+}
+
+function formatSourceChatTitle(sourceChat, telegramMessage) {
+  const title = htmlEscape(sourceChat?.title || "Telegram-чат");
+  const messageLink = telegramMessage?.message_link ? String(telegramMessage.message_link) : "";
+  if (!messageLink || !/^https?:\/\//i.test(messageLink)) return title;
+  return `<a href="${htmlAttributeEscape(messageLink)}">${title}</a>`;
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -256,7 +267,7 @@ function formatLeadMessage(lead) {
     htmlEscape(authorUsername),
     "",
     "<b>Источник:</b>",
-    htmlEscape(sourceChat?.title || "Telegram-чат"),
+    formatSourceChatTitle(sourceChat, telegramMessage),
   ].join("\n");
 }
 

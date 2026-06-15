@@ -528,7 +528,7 @@ export function ProjectTasksBoard({
                         onTaskOpen(task.id);
                       }
                     }}
-                    className={`cursor-pointer rounded-[20px] border px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-[#00f5a8]/22 hover:bg-white/[0.065] ${
+                    className={`rivn-task-card cursor-pointer rounded-[20px] border px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-[#00f5a8]/22 hover:bg-white/[0.065] ${
                       isCompletedFlashing
                         ? "scale-[0.99] ring-2 ring-emerald-400/45"
                         : ""
@@ -538,7 +538,7 @@ export function ProjectTasksBoard({
                         : ""
                     } ${
                       deadline.isOverdue && task.status !== "done"
-                        ? "border-rose-400/20 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(244,63,94,0.055))]"
+                        ? "rivn-task-card-overdue border-rose-400/20 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(244,63,94,0.055))]"
                         : "border-white/10 bg-white/[0.045]"
                     }`}
                   >

@@ -895,13 +895,13 @@ export default function TasksPage() {
                                       handleTaskOpen(task.id);
                                     }
                                   }}
-                                  className={`cursor-pointer rounded-[20px] border p-4 transition duration-200 hover:border-white/20 hover:bg-[#111C2B] ${
+                                  className={`rivn-task-card cursor-pointer rounded-[20px] border p-4 transition duration-200 hover:border-white/20 hover:bg-[#111C2B] ${
                                     isCompletedFlashing
                                       ? "scale-[0.99] ring-2 ring-emerald-400/45"
                                       : ""
                                   } ${
                                     isOverdue
-                                      ? "border-red-500/25 bg-red-500/[0.04]"
+                                      ? "rivn-task-card-overdue border-red-500/25 bg-red-500/[0.04]"
                                       : "border-white/10 bg-[#121826]"
                                   }`}
                                 >

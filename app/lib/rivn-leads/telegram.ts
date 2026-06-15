@@ -16,6 +16,16 @@ function htmlEscape(value: string) {
     .replaceAll(">", "&gt;");
 }
 
+function htmlAttributeEscape(value: string) {
+  return htmlEscape(value).replaceAll('"', "&quot;");
+}
+
+function formatSourceChatTitle(title: string, messageLink: string | null) {
+  const safeTitle = htmlEscape(title || "Telegram-чат");
+  if (!messageLink || !/^https?:\/\//i.test(messageLink)) return safeTitle;
+  return `<a href="${htmlAttributeEscape(messageLink)}">${safeTitle}</a>`;
+}
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -63,7 +73,6 @@ export function formatRivnLeadTelegramMessage(input: {
   matchedKeywords: string[];
 }) {
   const contact = input.authorUsername ? `@${input.authorUsername.replace(/^@/, "")}` : "username отсутствует";
-  const link = input.messageLink || "ссылка недоступна";
   const keywords = input.matchedKeywords.length > 0 ? input.matchedKeywords.join(", ") : "не указаны";
 
   return [
@@ -76,13 +85,10 @@ export function formatRivnLeadTelegramMessage(input: {
     htmlEscape(contact),
     "",
     "<b>Источник:</b>",
-    htmlEscape(input.sourceChatTitle),
+    formatSourceChatTitle(input.sourceChatTitle, input.messageLink),
     "",
     "<b>Совпадения:</b>",
     htmlEscape(keywords),
-    "",
-    "<b>Ссылка:</b>",
-    htmlEscape(link),
   ].join("\n");
 }
 
