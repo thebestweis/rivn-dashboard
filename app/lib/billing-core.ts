@@ -175,12 +175,18 @@ async function updateWorkspaceBillingByWorkspaceId(
     })
     .eq("id", currentBilling.id)
     .select("*")
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
     throw new Error(
       `Не удалось обновить billing workspace: ${error?.message ?? "unknown error"}`
     );
+  }
+
+  if (!data) {
+    const freshBilling = await getWorkspaceBillingByWorkspaceId(workspaceId);
+    if (freshBilling) return freshBilling;
+    throw new Error("Billing workspace not found after update");
   }
 
   return data as WorkspaceBilling;

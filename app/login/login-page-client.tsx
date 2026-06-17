@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import { bootstrapAccountForCurrentUser } from "../lib/supabase/bootstrap-account";
+import {
+  bootstrapAccountForAuthFlow,
+  withTimeout,
+} from "../lib/supabase/auth-flow";
 import { createReferralAttributionForUser } from "../lib/supabase/referrals";
 
 export function LoginPageClient() {
@@ -28,16 +31,22 @@ export function LoginPageClient() {
     try {
       const supabase = createClient();
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+      const { data, error } = await withTimeout<
+        Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
+      >(
+        supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        }),
+        15_000,
+        "Вход занял слишком много времени. Попробуй ещё раз через несколько секунд."
+      );
 
       if (error) {
         throw error;
       }
 
-      await bootstrapAccountForCurrentUser();
+      await bootstrapAccountForAuthFlow();
 
       if (data.user?.id) {
         try {
@@ -49,8 +58,19 @@ export function LoginPageClient() {
 
       router.replace(nextPath);
       router.refresh();
-    } catch {
-      setErrorMessage("Неверный логин или пароль");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const normalizedMessage = message.toLowerCase();
+      const isLoadingIssue =
+        normalizedMessage.includes("timeout") ||
+        normalizedMessage.includes("bootstrap") ||
+        normalizedMessage.includes("context");
+
+      setErrorMessage(
+        isLoadingIssue
+          ? "Не удалось быстро загрузить кабинет. Попробуй ещё раз через несколько секунд."
+          : "Неверный логин или пароль"
+      );
     } finally {
       setIsSubmitting(false);
     }

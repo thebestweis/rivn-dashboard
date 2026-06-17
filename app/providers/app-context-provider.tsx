@@ -10,7 +10,11 @@ import {
   useState,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getAppContext } from "../lib/supabase/app-context";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import {
+  clearAppContextMemoryCache,
+  getAppContext,
+} from "../lib/supabase/app-context";
 import {
   getAccessibleWorkspaces,
   type AccessibleWorkspace,
@@ -24,6 +28,7 @@ import {
 import type { WorkspaceBilling } from "../lib/supabase/billing";
 import { createClient } from "../lib/supabase/client";
 import { createReferralAttributionForUser } from "../lib/supabase/referrals";
+import { withTimeout } from "../lib/supabase/auth-flow";
 
 type AppContextState = {
   isLoading: boolean;
@@ -93,12 +98,17 @@ function isBootstrapPendingErrorMessage(message: string) {
     normalizedMessage.includes("lock broken") ||
     normalizedMessage.includes("navigatorlockacquiretimeouterror") ||
     normalizedMessage.includes("failed to acquire lock") ||
+    normalizedMessage.includes("timeout") ||
     message.includes("Пользователь не авторизован")
   );
 }
 
 function isAuthExpiredErrorMessage(message: string) {
   const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes("timeout")) {
+    return false;
+  }
 
   return (
     message.includes("Auth session missing") ||
@@ -165,6 +175,7 @@ function clearCachedAppContext() {
   if (typeof window === "undefined") return;
 
   try {
+    clearAppContextMemoryCache();
     sessionStorage.removeItem(APP_CONTEXT_CACHE_KEY);
     localStorage.removeItem(APP_CONTEXT_CACHE_KEY);
     localStorage.removeItem("RIVN_OS_QUERY_CACHE");
@@ -278,10 +289,11 @@ export function AppContextProvider({
 
       for (let attempt = 0; attempt < 6; attempt += 1) {
         try {
-          const result = await Promise.all([
-            getAppContext(),
-            getAccessibleWorkspaces(),
-          ]);
+          const result = await withTimeout(
+            Promise.all([getAppContext(), getAccessibleWorkspaces()]),
+            10_000,
+            "App context timeout"
+          );
 
           ctx = result[0];
           workspaceList = result[1];
@@ -299,7 +311,7 @@ export function AppContextProvider({
             throw error;
           }
 
-          await sleep(700);
+          await sleep(600 + attempt * 250);
         }
       }
 
@@ -317,8 +329,18 @@ export function AppContextProvider({
       let nextBillingAccess: BillingAccessState | null = null;
 
       if (nextWorkspace?.id) {
-        nextBilling = await ensureBillingUpToDate(nextWorkspace.id);
-        nextBillingAccess = buildBillingAccessState(nextBilling);
+        try {
+          nextBilling = await withTimeout(
+            ensureBillingUpToDate(nextWorkspace.id),
+            10_000,
+            "Billing context timeout"
+          );
+          nextBillingAccess = buildBillingAccessState(nextBilling);
+        } catch (billingError) {
+          console.error("Billing context load failed:", billingError);
+          nextBilling = null;
+          nextBillingAccess = buildBillingAccessState(null);
+        }
       }
 
       const nextCache: AppContextCache = {
@@ -418,45 +440,53 @@ export function AppContextProvider({
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      const nextUserId = session?.user?.id ?? null;
-      const currentCachedUserId = cachedRef.current?.user?.id ?? null;
+    } = supabase.auth.onAuthStateChange(
+      (event: AuthChangeEvent, session: Session | null) => {
+        const nextUserId = session?.user?.id ?? null;
+        const currentCachedUserId = cachedRef.current?.user?.id ?? null;
 
-      const didUserChange =
-        Boolean(nextUserId) &&
-        Boolean(currentCachedUserId) &&
-        nextUserId !== currentCachedUserId;
+        const didUserChange =
+          Boolean(nextUserId) &&
+          Boolean(currentCachedUserId) &&
+          nextUserId !== currentCachedUserId;
 
-      if (didUserChange) {
-        cachedRef.current = null;
-        clearCachedAppContext();
+        if (didUserChange) {
+          clearAppContextMemoryCache();
+          cachedRef.current = null;
+          clearCachedAppContext();
 
-        setUser(null);
-        setProfile(null);
-        setWorkspace(null);
-        setMembership(null);
-        setRole(null);
-        setIsSuperAdmin(false);
-        setWorkspaces([]);
-        setBilling(null);
-        setBillingAccess(null);
-        setIsReady(false);
-        setErrorMessage("");
+          setUser(null);
+          setProfile(null);
+          setWorkspace(null);
+          setMembership(null);
+          setRole(null);
+          setIsSuperAdmin(false);
+          setWorkspaces([]);
+          setBilling(null);
+          setBillingAccess(null);
+          setIsReady(false);
+          setErrorMessage("");
+        }
+
+        if (
+          event === "SIGNED_IN" ||
+          event === "TOKEN_REFRESHED" ||
+          event === "INITIAL_SESSION"
+        ) {
+          if (event === "SIGNED_IN") {
+            clearAppContextMemoryCache();
+          }
+
+          void refreshAppContext();
+        }
+
+        if (event === "SIGNED_OUT") {
+          clearAppContextMemoryCache();
+          resetStateToEmpty();
+          redirectToSessionExpired();
+        }
       }
-
-      if (
-        event === "SIGNED_IN" ||
-        event === "TOKEN_REFRESHED" ||
-        event === "INITIAL_SESSION"
-      ) {
-        void refreshAppContext();
-      }
-
-      if (event === "SIGNED_OUT") {
-        resetStateToEmpty();
-        redirectToSessionExpired();
-      }
-    });
+    );
 
     return () => {
       subscription.unsubscribe();

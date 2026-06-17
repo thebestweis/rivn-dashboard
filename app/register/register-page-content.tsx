@@ -9,25 +9,11 @@ import {
   storeReferralCodeInBrowser,
 } from "../lib/supabase/referrals";
 
-import { bootstrapAccountForCurrentUser } from "../lib/supabase/bootstrap-account";
-
-async function waitForSessionReady() {
-  const supabase = createClient();
-
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (session) {
-      return session;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-
-  throw new Error("Не удалось дождаться auth session после регистрации");
-}
+import {
+  bootstrapAccountForAuthFlow,
+  isAlreadyRegisteredAuthError,
+  withTimeout,
+} from "../lib/supabase/auth-flow";
 
 async function createWelcomeNotification() {
   const response = await fetch("/api/notifications/welcome", {
@@ -84,36 +70,74 @@ export function RegisterPageContent() {
     try {
       const supabase = createClient();
 
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-      });
+      const normalizedEmail = email.trim();
+      const signUpResponse = await withTimeout<
+        Awaited<ReturnType<typeof supabase.auth.signUp>>
+      >(
+        supabase.auth.signUp({
+          email: normalizedEmail,
+          password,
+        }),
+        20_000,
+        "Регистрация заняла слишком много времени. Попробуй войти в аккаунт или повторить через минуту."
+      );
+
+      let data = signUpResponse.data;
+      let error = signUpResponse.error;
+
+      if (error && isAlreadyRegisteredAuthError(error)) {
+        const signInResponse = await withTimeout<
+          Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
+        >(
+          supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          }),
+          15_000,
+          "Аккаунт уже создан, но вход занял слишком много времени. Попробуй войти ещё раз."
+        );
+
+        if (signInResponse.error) {
+          throw new Error(
+            "Аккаунт с этим email уже существует. Если пароль не подходит, восстанови пароль или напиши в поддержку."
+          );
+        }
+
+        data = signInResponse.data;
+        error = null;
+      }
 
       if (error) {
         throw error;
       }
 
       if (data.session) {
-  await waitForSessionReady();
-  await bootstrapAccountForCurrentUser();
+        await bootstrapAccountForAuthFlow();
 
-  try {
-    await createWelcomeNotification();
-  } catch (notificationError) {
-    console.error("Ошибка создания приветственного уведомления:", notificationError);
-  }
+        try {
+          await createWelcomeNotification();
+        } catch (notificationError) {
+          console.error(
+            "Ошибка создания приветственного уведомления:",
+            notificationError
+          );
+        }
 
-  if (data.user) {
-    try {
-      await createReferralAttributionForUser(data.user.id);
-    } catch (referralError) {
-      console.error("Ошибка создания реферальной привязки:", referralError);
-    }
-  }
+        if (data.user) {
+          try {
+            await createReferralAttributionForUser(data.user.id);
+          } catch (referralError) {
+            console.error(
+              "Ошибка создания реферальной привязки:",
+              referralError
+            );
+          }
+        }
 
-  router.replace("/dashboard");
-  return;
-}
+        router.replace("/dashboard");
+        router.refresh();
+        return;
+      }
 
       setSuccessMessage(
         "Аккаунт создан. Проверь почту и подтверди email, если подтверждение включено в Supabase."
