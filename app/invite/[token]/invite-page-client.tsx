@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/app/lib/supabase/client";
+import {
+  bootstrapAccountForAuthFlow,
+  isAlreadyRegisteredAuthError,
+  withTimeout,
+} from "@/app/lib/supabase/auth-flow";
+import { reportAuthTelemetry } from "@/app/lib/auth-telemetry";
 import { getWorkspaceInvitationRoleLabel } from "@/app/lib/workspace-invitations";
 
 type InvitationInfo = {
@@ -141,10 +147,35 @@ export function InvitePageClient({ token }: { token: string }) {
       const supabase = createClient();
 
       if (mode === "register") {
-        const { data, error } = await supabase.auth.signUp({
-          email: inviteEmail,
-          password,
-        });
+        const signUpResponse = await withTimeout<
+          Awaited<ReturnType<typeof supabase.auth.signUp>>
+        >(
+          supabase.auth.signUp({
+            email: inviteEmail,
+            password,
+          }),
+          12_000,
+          "Регистрация заняла слишком много времени. Попробуй ещё раз."
+        );
+
+        let data = signUpResponse.data;
+        let error = signUpResponse.error;
+
+        if (error && isAlreadyRegisteredAuthError(error)) {
+          const signInResponse = await withTimeout<
+            Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
+          >(
+            supabase.auth.signInWithPassword({
+              email: inviteEmail,
+              password,
+            }),
+            12_000,
+            "Вход занял слишком много времени. Попробуй ещё раз."
+          );
+
+          data = signInResponse.data;
+          error = signInResponse.error;
+        }
 
         if (error) throw error;
 
@@ -155,19 +186,37 @@ export function InvitePageClient({ token }: { token: string }) {
           return;
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: inviteEmail,
-          password,
-        });
+        const { error } = await withTimeout<
+          Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
+        >(
+          supabase.auth.signInWithPassword({
+            email: inviteEmail,
+            password,
+          }),
+          12_000,
+          "Вход занял слишком много времени. Попробуй ещё раз."
+        );
 
         if (error) throw error;
       }
 
-      await acceptInvitation(displayName);
+      await bootstrapAccountForAuthFlow();
+      await withTimeout(
+        acceptInvitation(displayName),
+        12_000,
+        "Принятие приглашения заняло слишком много времени. Попробуй ещё раз."
+      );
 
       router.replace("/dashboard");
       router.refresh();
     } catch (error) {
+      reportAuthTelemetry({
+        event: "invite_failed",
+        email: inviteEmail,
+        message:
+          error instanceof Error ? error.message : "Invitation accept failed",
+        details: { token },
+      });
       setErrorMessage(
         error instanceof Error
           ? error.message

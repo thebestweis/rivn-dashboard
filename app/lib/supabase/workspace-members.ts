@@ -388,7 +388,10 @@ export async function updateWorkspaceMemberRole(params: {
     .eq("workspace_id", workspace.id)
     .eq("status", "active");
 
-  const owners = members?.filter((m) => m.role === "owner") ?? [];
+  const owners =
+    ((members ?? []) as Array<{ role: WorkspaceMemberRole }>).filter(
+      (member) => member.role === "owner"
+    ) ?? [];
 
   const { data: targetMember } = await supabase
     .from("workspace_members")
@@ -488,7 +491,10 @@ export async function removeWorkspaceMember(memberId: string): Promise<void> {
     .eq("workspace_id", workspace.id)
     .eq("status", "active");
 
-  const owners = members?.filter((m) => m.role === "owner") ?? [];
+  const owners =
+    ((members ?? []) as Array<{ role: WorkspaceMemberRole }>).filter(
+      (member) => member.role === "owner"
+    ) ?? [];
 
   const { data: targetMember } = await supabase
     .from("workspace_members")

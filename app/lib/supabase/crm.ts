@@ -941,7 +941,11 @@ export async function getCrmBootstrap(
     }
 
     visibleDealIds = Array.from(
-      new Set((visibleAssigneesData ?? []).map((assignee) => assignee.deal_id))
+      new Set(
+        ((visibleAssigneesData ?? []) as Array<{ deal_id: string }>).map(
+          (assignee) => assignee.deal_id
+        )
+      )
     );
   }
 
@@ -1113,7 +1117,9 @@ export async function getCrmStageHistory(
         );
       }
 
-      const assignedDealIds = (assigneeData ?? []).map(
+      const assignedDealIds = (
+        (assigneeData ?? []) as Array<{ deal_id: string }>
+      ).map(
         (assignee) => assignee.deal_id
       );
 
@@ -1132,7 +1138,9 @@ export async function getCrmStageHistory(
       );
     }
 
-    visibleDealIds = (visibleDeals ?? []).map((deal) => deal.id);
+    visibleDealIds = ((visibleDeals ?? []) as Array<{ id: string }>).map(
+      (deal) => deal.id
+    );
 
     if (visibleDealIds.length === 0) {
       return [];
@@ -1157,7 +1165,7 @@ export async function getCrmStageHistory(
     historyQuery = historyQuery.eq("to_pipeline_id", filters.pipelineId);
   }
 
-  if (visibleDealIds) {
+  if (visibleDealIds !== null) {
     historyQuery = historyQuery.in("deal_id", visibleDealIds);
   }
 

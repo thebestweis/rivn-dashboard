@@ -29,6 +29,7 @@ import type { WorkspaceBilling } from "../lib/supabase/billing";
 import { createClient } from "../lib/supabase/client";
 import { createReferralAttributionForUser } from "../lib/supabase/referrals";
 import { withTimeout } from "../lib/supabase/auth-flow";
+import { reportAuthTelemetry } from "../lib/auth-telemetry";
 
 type AppContextState = {
   isLoading: boolean;
@@ -387,6 +388,12 @@ export function AppContextProvider({
       }
 
       const failedAttempts = incrementAppContextFailureCount();
+
+      reportAuthTelemetry({
+        event: "app_context_failed",
+        message,
+        details: { failedAttempts },
+      });
 
       if (failedAttempts >= 3 && isProtectedAppPath(pathname)) {
         cachedRef.current = null;

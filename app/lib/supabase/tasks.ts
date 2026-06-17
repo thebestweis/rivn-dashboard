@@ -414,7 +414,7 @@ export async function getTaskAssignees(taskId: string): Promise<TaskAssignee[]> 
     throw new Error(`Ошибка загрузки исполнителей задачи: ${error.message}`);
   }
 
-  return (data ?? []).map((row) => mapTaskAssignee(row as DbTaskAssigneeRow));
+  return ((data ?? []) as DbTaskAssigneeRow[]).map(mapTaskAssignee);
 }
 
 export async function getTaskAssigneesMap(
@@ -522,7 +522,7 @@ export async function replaceTaskAssignees(
   }
 
   const allowedIds = new Set(
-    (workspaceMembers ?? []).map((item) => item.id as string)
+    ((workspaceMembers ?? []) as Array<{ id: string }>).map((item) => item.id)
   );
 
   const safeIds = normalizedIds.filter((id) => allowedIds.has(id));

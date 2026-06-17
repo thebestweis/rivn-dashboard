@@ -9,6 +9,7 @@ import {
   withTimeout,
 } from "../lib/supabase/auth-flow";
 import { createReferralAttributionForUser } from "../lib/supabase/referrals";
+import { reportAuthTelemetry } from "../lib/auth-telemetry";
 
 export function LoginPageClient() {
   const router = useRouter();
@@ -59,6 +60,11 @@ export function LoginPageClient() {
       router.replace(nextPath);
       router.refresh();
     } catch (error) {
+      reportAuthTelemetry({
+        event: "login_failed",
+        email: email.trim(),
+        message: error instanceof Error ? error.message : "Login failed",
+      });
       const message = error instanceof Error ? error.message : "";
       const normalizedMessage = message.toLowerCase();
       const isLoadingIssue =

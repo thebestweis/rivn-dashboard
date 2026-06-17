@@ -14,6 +14,7 @@ import {
   isAlreadyRegisteredAuthError,
   withTimeout,
 } from "../lib/supabase/auth-flow";
+import { reportAuthTelemetry } from "../lib/auth-telemetry";
 
 async function createWelcomeNotification() {
   const response = await fetch("/api/notifications/welcome", {
@@ -143,6 +144,12 @@ export function RegisterPageContent() {
         "Аккаунт создан. Проверь почту и подтверди email, если подтверждение включено в Supabase."
       );
     } catch (error) {
+      reportAuthTelemetry({
+        event: "register_failed",
+        email: email.trim(),
+        message:
+          error instanceof Error ? error.message : "Registration failed",
+      });
       setErrorMessage(
         error instanceof Error ? error.message : "Не удалось зарегистрироваться"
       );
