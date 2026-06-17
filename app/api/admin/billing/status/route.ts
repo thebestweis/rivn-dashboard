@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       .from("workspace_billing")
       .select("*")
       .eq("workspace_id", workspaceId)
-      .single();
+      .maybeSingle();
 
     if (currentBillingError || !currentBilling) {
       throw new Error("Billing для workspace не найден");

@@ -40,7 +40,7 @@ async function loadAppContext(): Promise<AppContext> {
     .from("profiles")
     .select("*")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   if (profileError || !profile) {
     throw new Error("Profile not found");
@@ -51,7 +51,7 @@ async function loadAppContext(): Promise<AppContext> {
       .from("workspaces")
       .select("*")
       .eq("id", workspaceId)
-      .single();
+      .maybeSingle();
 
     if (workspaceError || !workspace) {
       return null;
@@ -121,7 +121,7 @@ async function loadAppContext(): Promise<AppContext> {
       .from("workspaces")
       .select("*")
       .eq("id", fallbackMembership.workspace_id)
-      .single();
+      .maybeSingle();
 
   if (fallbackWorkspaceError || !fallbackWorkspace) {
     throw new Error("Workspace not found");

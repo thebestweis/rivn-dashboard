@@ -81,7 +81,7 @@ async function requireSuperAdmin() {
     .from("profiles")
     .select("platform_role")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   if (profileError || !data) {
     throw new Error("Профиль не найден");

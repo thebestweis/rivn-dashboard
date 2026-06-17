@@ -13,7 +13,8 @@
     "leads:health": "node scripts/rivn-leads-health-check.mjs",
     "leads:scan-chats": "node scripts/rivn-leads-scan-reader-chats.mjs",
     "leads:session": "node scripts/rivn-leads-generate-session.mjs",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.0",
@@ -38,6 +39,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
