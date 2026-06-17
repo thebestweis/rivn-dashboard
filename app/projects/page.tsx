@@ -602,7 +602,7 @@ const showManageProjectsActions = isProjectsAccessResolved && canManageProjects;
                     className="font-medium text-white underline underline-offset-4"
                     onClick={() => setIsNoClientsModalOpen(false)}
                   >
-                    СЃСЋРґР°
+                    сюда
                   </Link>
                   .
                 </p>

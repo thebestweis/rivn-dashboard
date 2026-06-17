@@ -602,7 +602,7 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
       .maybeSingle();
 
     if (lastSubtaskError) {
-      throw new Error(`РћС€РёР±РєР° РїРѕРґРіРѕС‚РѕРІРєРё РїРѕСЂСЏРґРєР° Р·Р°РґР°С‡Рё: ${lastSubtaskError.message}`);
+      throw new Error(`Ошибка подготовки порядка задачи: ${lastSubtaskError.message}`);
     }
 
     nextPosition = Number(lastSubtask?.position ?? 0) + 1000;
@@ -1020,7 +1020,7 @@ export async function createSubtask(
     .maybeSingle();
 
   if (lastSubtaskError) {
-    throw new Error(`РћС€РёР±РєР° РїРѕРґРіРѕС‚РѕРІРєРё РїРѕСЂСЏРґРєР° РїРѕРґР·Р°РґР°С‡Рё: ${lastSubtaskError.message}`);
+    throw new Error(`Ошибка подготовки порядка подзадачи: ${lastSubtaskError.message}`);
   }
 
   const nextPosition = Number(lastSubtask?.position ?? 0) + 1000;
@@ -1100,7 +1100,7 @@ export async function getActiveRootTaskCountsByProject(): Promise<
     .in("status", ["todo", "in_progress"]);
 
   if (error) {
-    throw new Error(`РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё СЃС‡С‘С‚С‡РёРєРѕРІ Р·Р°РґР°С‡: ${error.message}`);
+    throw new Error(`Ошибка загрузки счётчиков задач: ${error.message}`);
   }
 
   const counts: Record<string, number> = {};
@@ -1197,11 +1197,11 @@ export async function updateTaskPositions(
     );
 
   if (existingTasksError) {
-    throw new Error(`РћС€РёР±РєР° РїСЂРѕРІРµСЂРєРё РїРѕРґР·Р°РґР°С‡: ${existingTasksError.message}`);
+    throw new Error(`Ошибка проверки подзадач: ${existingTasksError.message}`);
   }
 
   if ((existingTasks ?? []).length !== normalizedUpdates.length) {
-    throw new Error("РћРґРЅР° РёР· РїРѕРґР·Р°РґР°С‡ РЅРµ РЅР°Р№РґРµРЅР° РІ С‚РµРєСѓС‰РµРј РєР°Р±РёРЅРµС‚Рµ");
+    throw new Error("Одна из подзадач не найдена в текущем кабинете");
   }
 
   const results = await Promise.all(
@@ -1220,6 +1220,6 @@ export async function updateTaskPositions(
   const failedResult = results.find((result) => result.error);
 
   if (failedResult?.error) {
-    throw new Error(`РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ РїРѕСЂСЏРґРєР° РїРѕРґР·Р°РґР°С‡: ${failedResult.error.message}`);
+    throw new Error(`Ошибка сохранения порядка подзадач: ${failedResult.error.message}`);
   }
 }

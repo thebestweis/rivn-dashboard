@@ -94,7 +94,7 @@ function formatNumber(value: number) {
 }
 
 function formatMoney(value: number) {
-  return `${formatNumber(value)} в‚Ѕ`;
+  return `${formatNumber(value)} ₽`;
 }
 
 function formatPercent(value: number) {
@@ -155,7 +155,7 @@ function buildMetricLine(
   if (type === "percent") formattedValue = formatPercent(current);
   if (type === "number") formattedValue = formatNumber(current);
 
-  return `вЂ” ${label}: ${formattedValue} (${formatChange(change)})`;
+  return `— ${label}: ${formattedValue} (${formatChange(change)})`;
 }
 
 function hasUnavailableStatsWarning(warnings: string[]) {
@@ -530,7 +530,7 @@ export async function GET(request: Request) {
     const prevStartDate = toDateOnly(prevStart);
     const prevEndDate = toDateOnly(prevEnd);
 
-    const periodLabel = `${formatDate(currentStart)} вЂ” ${formatDate(currentEnd)}`;
+    const periodLabel = `${formatDate(currentStart)} — ${formatDate(currentEnd)}`;
     const weekKey = `${currentStartDate}_${currentEndDate}`;
 
     const results: {
@@ -974,7 +974,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "РћС€РёР±РєР° weekly report",
+        error: error instanceof Error ? error.message : "Ошибка еженедельного отчёта",
       },
       { status: 500 }
     );
