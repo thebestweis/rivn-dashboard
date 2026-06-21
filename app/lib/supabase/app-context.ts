@@ -1,11 +1,43 @@
 import { createClient } from "./client";
 
+export type AppUser = {
+  id: string;
+  email?: string | null;
+};
+
+export type AppProfile = {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  display_name?: string | null;
+  last_active_workspace_id?: string | null;
+  platform_role?: string | null;
+  updated_at?: string | null;
+};
+
+export type AppWorkspace = {
+  id: string;
+  name?: string | null;
+  slug?: string | null;
+  owner_user_id?: string | null;
+  created_at?: string | null;
+};
+
+export type AppMembership = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+};
+
 export type AppContext = {
   supabase: ReturnType<typeof createClient>;
-  user: any;
-  profile: any;
-  workspace: any;
-  membership: any;
+  user: AppUser;
+  profile: AppProfile;
+  workspace: AppWorkspace;
+  membership: AppMembership;
   isSuperAdmin: boolean;
 };
 

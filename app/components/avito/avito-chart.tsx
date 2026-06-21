@@ -11,7 +11,12 @@ import {
 } from "recharts";
 
 type Props = {
-  data: any[];
+  data: Array<{
+    period_start: string;
+    views?: number | string | null;
+    contacts?: number | string | null;
+    expenses?: number | string | null;
+  }>;
 };
 
 function formatMoney(value: number) {

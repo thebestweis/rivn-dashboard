@@ -19,12 +19,6 @@ function startOfDay(date: Date) {
   return d;
 }
 
-function endOfDay(date: Date) {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
-
 function isBetween(date: Date, start: Date, end: Date) {
   return date >= start && date <= end;
 }

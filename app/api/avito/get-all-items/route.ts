@@ -3,6 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+type AvitoItem = {
+  id?: string | number;
+  [key: string]: unknown;
+};
+
 function getSupabase() {
   if (!supabaseUrl || !supabaseKey) {
     throw new Error("Не найдены переменные Supabase");
@@ -36,7 +41,7 @@ export async function GET() {
       );
     }
 
-    const allItems: any[] = [];
+    const allItems: AvitoItem[] = [];
     let page = 1;
     const perPage = 100;
 
@@ -66,7 +71,7 @@ export async function GET() {
         );
       }
 
-      const resources = Array.isArray(data.resources) ? data.resources : [];
+      const resources = Array.isArray(data.resources) ? data.resources as AvitoItem[] : [];
       allItems.push(...resources);
 
       if (resources.length < perPage) {

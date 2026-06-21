@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { EditClientModal } from "../../components/clients/edit-client-modal";
 import { AppToast } from "../../components/ui/app-toast";
@@ -11,6 +11,7 @@ import {
   parseRubAmount,
   formatRub,
   type StoredClient,
+  type StoredEmployee,
 } from "../../lib/storage";
 
 import {
@@ -137,7 +138,7 @@ export default function ClientDetailsPage() {
   const [payrollAccruals, setPayrollAccruals] = useState<
     SupabasePayrollAccrualItem[]
   >([]);
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<StoredEmployee[]>([]);
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -321,7 +322,7 @@ export default function ClientDetailsPage() {
     clientTaxNumber,
   ]);
 
-  function isDateInChartPeriod(value: string) {
+  const isDateInChartPeriod = useCallback((value: string) => {
     if (chartPeriod === "all") return true;
 
     const targetDate = parseDisplayDateToDate(value);
@@ -341,7 +342,7 @@ export default function ClientDetailsPage() {
     }
 
     return targetDate >= start && targetDate <= today;
-  }
+  }, [chartPeriod]);
 
   const paymentsChartData = useMemo(() => {
     const prepared = linkedPayments
@@ -356,7 +357,7 @@ export default function ClientDetailsPage() {
     }
 
     return groupChartData(prepared);
-  }, [linkedPayments, chartPeriod]);
+  }, [isDateInChartPeriod, linkedPayments]);
 
   const directExpensesChartData = useMemo(() => {
     const prepared = linkedExpenses
@@ -367,7 +368,7 @@ export default function ClientDetailsPage() {
       .filter((item) => item.label && isDateInChartPeriod(item.label));
 
     return groupChartData(prepared);
-  }, [linkedExpenses, chartPeriod]);
+  }, [isDateInChartPeriod, linkedExpenses]);
 
   const fotChartData = useMemo(() => {
     const prepared = linkedPayrollAccruals
@@ -378,7 +379,7 @@ export default function ClientDetailsPage() {
       .filter((item) => item.label && isDateInChartPeriod(item.label));
 
     return groupChartData(prepared);
-  }, [linkedPayrollAccruals, chartPeriod]);
+  }, [isDateInChartPeriod, linkedPayrollAccruals]);
 
   const clientChartData = useMemo(() => {
     const byLabel = new Map<string, ClientMetricSeries>();

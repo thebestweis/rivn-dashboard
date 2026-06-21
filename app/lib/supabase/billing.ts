@@ -80,7 +80,54 @@ export interface BillingPriceCalculation {
   maxMembers: number | null;
 }
 
-function normalizePlan(row: any): BillingPlan {
+type BillingPlanRow = {
+  code: BillingPlanCode;
+  name: string;
+  monthly_price: number | string | null;
+  yearly_price: number | string | null;
+  included_members: number | string | null;
+  max_members: number | string | null;
+  extra_member_price_monthly: number | string | null;
+  extra_member_price_yearly: number | string | null;
+  team_enabled: boolean | null;
+  ai_enabled: boolean | null;
+  is_active: boolean | null;
+  created_at: string;
+};
+
+type WorkspaceBillingRow = {
+  id: string;
+  workspace_id: string;
+  plan_code: BillingPlanCode;
+  billing_period: BillingPeriod;
+  subscription_status: BillingStatus;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  subscription_started_at: string | null;
+  subscription_ends_at: string | null;
+  auto_renew: boolean | null;
+  included_members: number | string | null;
+  extra_members: number | string | null;
+  max_members: number | string | null;
+  team_enabled: boolean | null;
+  ai_enabled: boolean | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type BillingTransactionRow = {
+  id: string;
+  workspace_id: string;
+  amount: number | string | null;
+  transaction_type: BillingTransactionType;
+  status: BillingTransactionStatus;
+  description: string | null;
+  meta: unknown;
+  created_by_user_id: string | null;
+  created_at: string;
+};
+
+function normalizePlan(row: BillingPlanRow): BillingPlan {
   return {
     code: row.code,
     name: row.name,
@@ -100,7 +147,7 @@ function normalizePlan(row: any): BillingPlan {
   };
 }
 
-function normalizeWorkspaceBilling(row: any): WorkspaceBilling {
+function normalizeWorkspaceBilling(row: WorkspaceBillingRow): WorkspaceBilling {
   return {
     id: row.id,
     workspace_id: row.workspace_id,
@@ -125,7 +172,12 @@ function normalizeWorkspaceBilling(row: any): WorkspaceBilling {
   };
 }
 
-function normalizeBillingTransaction(row: any): BillingTransaction {
+function normalizeBillingTransaction(row: BillingTransactionRow): BillingTransaction {
+  const meta =
+    row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+      ? (row.meta as Record<string, unknown>)
+      : {};
+
   return {
     id: row.id,
     workspace_id: row.workspace_id,
@@ -134,10 +186,7 @@ function normalizeBillingTransaction(row: any): BillingTransaction {
     transaction_type: row.transaction_type,
     status: row.status,
     description: row.description ?? null,
-    meta:
-      row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
-        ? row.meta
-        : {},
+    meta,
     created_by_user_id: row.created_by_user_id ?? null,
     created_at: row.created_at,
   };

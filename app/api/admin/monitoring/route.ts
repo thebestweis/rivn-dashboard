@@ -54,7 +54,14 @@ type ReportLogRow = {
 const FOUR_DAYS_MS = 4 * 24 * 60 * 60 * 1000;
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
-async function safeQuery<T>(label: string, query: PromiseLike<{ data: unknown; error: any }>) {
+type SupabaseQueryError = {
+  message: string;
+};
+
+async function safeQuery<T>(
+  label: string,
+  query: PromiseLike<{ data: unknown; error: SupabaseQueryError | null }>
+) {
   const result = await query;
 
   if (result.error) {

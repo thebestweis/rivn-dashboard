@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -218,10 +219,10 @@ export default function CrmAnalyticsPage() {
   const upsertSalesPlanMutation = useUpsertCrmSalesPlanMutation();
   const { activeMembers = [] } = useActiveWorkspaceMembers(isReady && hasAccess);
 
-  const deals = data?.deals ?? [];
-  const pipelines = data?.pipelines ?? [];
-  const sources = data?.sources ?? [];
-  const stages = data?.stages ?? [];
+  const deals = useMemo(() => data?.deals ?? [], [data?.deals]);
+  const pipelines = useMemo(() => data?.pipelines ?? [], [data?.pipelines]);
+  const sources = useMemo(() => data?.sources ?? [], [data?.sources]);
+  const stages = useMemo(() => data?.stages ?? [], [data?.stages]);
   function updateCrmPlan(metric: CrmPlanMetric, value: number) {
     const nextValue = Number.isFinite(value) ? Math.max(0, value) : 0;
     const nextPlan = {
@@ -236,6 +237,8 @@ export default function CrmAnalyticsPage() {
       leads_plan: nextPlan.leads,
     });
   }
+
+  const [analyticsNowMs] = useState(() => Date.now());
 
   const analytics = useMemo(() => {
     const filteredDeals = deals.filter((deal) => {
@@ -276,12 +279,11 @@ export default function CrmAnalyticsPage() {
       (sum, deal) => sum + (deal.service_amount ?? 0),
       0
     );
-    const now = Date.now();
     const overdueDeals = filteredDeals.filter(
       (deal) =>
         deal.status === "open" &&
         deal.next_contact_at &&
-        new Date(deal.next_contact_at).getTime() < now
+        new Date(deal.next_contact_at).getTime() < analyticsNowMs
     );
     const withoutNextContact = filteredDeals.filter(
       (deal) => deal.status === "open" && !deal.next_contact_at
@@ -436,7 +438,7 @@ export default function CrmAnalyticsPage() {
           latestStageMoveByDeal.get(deal.id) ?? deal.updated_at ?? deal.created_at;
         const daysInStage = Math.max(
           0,
-          Math.floor((now - new Date(lastMoveAt).getTime()) / 86_400_000)
+          Math.floor((analyticsNowMs - new Date(lastMoveAt).getTime()) / 86_400_000)
         );
 
         return {
@@ -551,6 +553,7 @@ export default function CrmAnalyticsPage() {
     };
   }, [
     activeMembers,
+    analyticsNowMs,
     deals,
     inboxItems,
     pipelines,
@@ -1519,9 +1522,12 @@ export default function CrmAnalyticsPage() {
             <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100">
               <div className="flex items-center gap-3">
                 {topManager.avatarUrl ? (
-                  <img
+                  <Image
                     src={topManager.avatarUrl}
                     alt={topManager.name}
+                    width={44}
+                    height={44}
+                    unoptimized
                     className="h-11 w-11 rounded-2xl object-cover"
                   />
                 ) : (
@@ -1551,9 +1557,12 @@ export default function CrmAnalyticsPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
                     {manager.avatarUrl ? (
-                      <img
+                      <Image
                         src={manager.avatarUrl}
                         alt={manager.name}
+                        width={40}
+                        height={40}
+                        unoptimized
                         className="h-10 w-10 rounded-2xl object-cover"
                       />
                     ) : (

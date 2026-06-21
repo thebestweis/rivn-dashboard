@@ -65,10 +65,6 @@ type EditingAccountForm = {
 
 const TELEGRAM_BOT_USERNAME = "stat_rivnos_bot";
 
-function buildTelegramBotLink(clientCode: string) {
-  return buildTelegramGroupLink(clientCode);
-}
-
 function buildTelegramGroupLink(clientCode: string) {
   return `https://t.me/${TELEGRAM_BOT_USERNAME}?startgroup=${encodeURIComponent(
     clientCode
@@ -594,24 +590,6 @@ setIntegrations(integrationsData.integrations ?? []);
     }
   }
 
-  async function archiveIntegration(integration: AvitoIntegration) {
-    const confirmed = await confirm({
-      title: "Выключить Avito-проект?",
-      description: `Отчёты по проекту "${integration.name}" будут выключены. История и настройки останутся в системе.`,
-      confirmLabel: "Выключить",
-      tone: "danger",
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
-    await updateIntegration(integration.id, {
-      isActive: false,
-      dailyEnabled: false,
-      weeklyEnabled: false,
-    });
-  }
 
   async function updateIntegrationAccount(
     accountId: string,
@@ -1070,7 +1048,7 @@ setIntegrations(integrationsData.integrations ?? []);
         >
           <span>
             {chat.title}
-            {chat.username ? ` (@${chat.username})` : ""} · {chat.type}
+            {chat.username ? ` (@${chat.username})` : ""} В· {chat.type}
           </span>
           <span className="text-emerald-300">{chat.chatId}</span>
         </button>

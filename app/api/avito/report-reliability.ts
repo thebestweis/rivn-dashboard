@@ -1,6 +1,6 @@
-type SupabaseLike = {
-  from: (table: string) => any;
-};
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+type SupabaseLike = SupabaseClient;
 
 export type AvitoReportType = "daily" | "weekly";
 export type AvitoSnapshotStatus = "pending" | "success" | "partial" | "failed";

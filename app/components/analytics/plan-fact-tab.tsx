@@ -155,36 +155,49 @@ export function PlanFactTab({
 
   const monthMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const selectedMetricRow =
-    rows.find((row) => row.key === selectedMetric) ?? rows[0];
-
   useEffect(() => {
     const [year] = selectedMonth.split("-");
     if (year) {
-      setPickerYear(Number(year));
+      const timeoutId = window.setTimeout(() => {
+        setPickerYear(Number(year));
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
   }, [selectedMonth]);
 
   useEffect(() => {
     const [year] = rangeStartMonth.split("-");
     if (year) {
-      setRangeStartPickerYear(Number(year));
+      const timeoutId = window.setTimeout(() => {
+        setRangeStartPickerYear(Number(year));
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
   }, [rangeStartMonth]);
 
   useEffect(() => {
     const [year] = rangeEndMonth.split("-");
     if (year) {
-      setRangeEndPickerYear(Number(year));
+      const timeoutId = window.setTimeout(() => {
+        setRangeEndPickerYear(Number(year));
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
   }, [rangeEndMonth]);
 
   useEffect(() => {
     if (canEditPlan) return;
 
-    setIsMonthMenuOpen(false);
-    setIsRangeStartMenuOpen(false);
-    setIsRangeEndMenuOpen(false);
+    const timeoutId = window.setTimeout(() => {
+      setIsMonthMenuOpen(false);
+      setIsRangeStartMenuOpen(false);
+      setIsRangeEndMenuOpen(false);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [canEditPlan]);
 
   useEffect(() => {

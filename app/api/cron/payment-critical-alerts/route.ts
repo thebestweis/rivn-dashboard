@@ -9,6 +9,15 @@ function startOfDay(date: Date) {
   return d;
 }
 
+type CriticalPaymentAlert = {
+  due_date: string;
+  status: string;
+  client_name?: string | null;
+  amount: number | string;
+  daysOverdue: number;
+  level: "warning" | "critical";
+};
+
 export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,7 +47,7 @@ export async function GET(request: Request) {
       return due < today;
     });
 
-    const alerts = overduePayments
+    const alerts: CriticalPaymentAlert[] = overduePayments
       .map((p) => {
         const due = new Date(p.due_date);
         const diffTime = today.getTime() - due.getTime();
@@ -58,7 +67,7 @@ export async function GET(request: Request) {
           level,
         };
       })
-      .filter(Boolean) as any[];
+      .filter((alert): alert is CriticalPaymentAlert => Boolean(alert));
 
     if (alerts.length === 0) {
       return NextResponse.json({ success: true, message: "no alerts" });

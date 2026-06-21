@@ -25,6 +25,35 @@ type DbWorkspaceOwnerRow = {
   owner_user_id: string | null;
 };
 
+type BillingPlanRow = {
+  code: BillingPlanCode;
+  name: string;
+  monthly_price: number | string | null;
+  yearly_price: number | string | null;
+  included_members: number | string | null;
+  max_members: number | string | null;
+  extra_member_price_monthly: number | string | null;
+  extra_member_price_yearly: number | string | null;
+  team_enabled: boolean | null;
+  ai_enabled: boolean | null;
+  is_active: boolean | null;
+  created_at: string;
+};
+
+type WorkspaceBillingRow = WorkspaceBilling & {
+  included_members: number | string;
+  extra_members: number | string;
+  max_members: number | string | null;
+  auto_renew: boolean | null;
+  team_enabled: boolean | null;
+  ai_enabled: boolean | null;
+};
+
+type BillingTransactionBalanceRow = {
+  amount: number | string | null;
+  status?: string | null;
+};
+
 function addMonths(date: Date, months: number) {
   const next = new Date(date);
   next.setMonth(next.getMonth() + months);
@@ -37,7 +66,7 @@ function addYears(date: Date, years: number) {
   return next;
 }
 
-function normalizeBillingPlan(row: any): BillingPlan {
+function normalizeBillingPlan(row: BillingPlanRow): BillingPlan {
   return {
     code: row.code,
     name: row.name,
@@ -57,7 +86,7 @@ function normalizeBillingPlan(row: any): BillingPlan {
   };
 }
 
-function normalizeWorkspaceBilling(row: any): WorkspaceBilling {
+function normalizeWorkspaceBilling(row: WorkspaceBillingRow): WorkspaceBilling {
   return {
     id: row.id,
     workspace_id: row.workspace_id,
@@ -96,7 +125,7 @@ async function requireSuperAdmin() {
 
   const admin = createAdminClient();
 
-  const { data, error: profileError } = await (admin as any)
+  const { data, error: profileError } = await admin
     .from("profiles")
     .select("platform_role")
     .eq("id", user.id)
@@ -123,7 +152,7 @@ async function logAdminAction(params: {
 }) {
   const admin = createAdminClient();
 
-  const { error } = await (admin as any).from("admin_action_logs").insert({
+  const { error } = await admin.from("admin_action_logs").insert({
     admin_user_id: params.adminUserId,
     workspace_id: params.workspaceId ?? null,
     action_type: params.actionType,
@@ -140,7 +169,7 @@ async function getBillingPlanByCodeAdmin(
 ): Promise<BillingPlan | null> {
   const admin = createAdminClient();
 
-  const { data, error } = await (admin as any)
+  const { data, error } = await admin
     .from("billing_plans")
     .select("*")
     .eq("code", code)
@@ -161,7 +190,7 @@ async function getWorkspaceBillingByWorkspaceIdAdmin(
 ): Promise<WorkspaceBilling | null> {
   const admin = createAdminClient();
 
-  const { data, error } = await (admin as any)
+  const { data, error } = await admin
     .from("workspace_billing")
     .select("*")
     .eq("workspace_id", workspaceId)
@@ -179,7 +208,7 @@ async function getWorkspaceBalanceByWorkspaceIdAdmin(
 ): Promise<number> {
   const admin = createAdminClient();
 
-  const { data, error } = await (admin as any)
+  const { data, error } = await admin
     .from("billing_transactions")
     .select("amount, status")
     .eq("workspace_id", workspaceId);
@@ -188,7 +217,7 @@ async function getWorkspaceBalanceByWorkspaceIdAdmin(
     throw new Error(`Не удалось загрузить billing транзакции: ${error.message}`);
   }
 
-  return (data ?? []).reduce((sum: number, item: any) => {
+  return ((data ?? []) as BillingTransactionBalanceRow[]).reduce((sum, item) => {
     if (item.status && item.status !== "completed") {
       return sum;
     }
@@ -202,7 +231,7 @@ async function getWorkspaceOwnerUserIdAdmin(
 ): Promise<string | null> {
   const admin = createAdminClient();
 
-  const { data, error } = await (admin as any)
+  const { data, error } = await admin
     .from("workspaces")
     .select("owner_user_id")
     .eq("id", workspaceId)
@@ -229,7 +258,7 @@ async function createBillingTransactionAdmin(params: {
 }) {
   const admin = createAdminClient();
 
-  const { data, error } = await (admin as any)
+  const { data, error } = await admin
     .from("billing_transactions")
     .insert({
       workspace_id: params.workspaceId,
@@ -257,7 +286,7 @@ async function updateWorkspaceBillingByWorkspaceIdAdmin(
 ): Promise<WorkspaceBilling> {
   const admin = createAdminClient();
 
-  const { data, error } = await (admin as any)
+  const { data, error } = await admin
     .from("workspace_billing")
     .update({
       ...patch,
@@ -289,7 +318,7 @@ async function ensureWorkspaceBillingRecord(
   const now = new Date();
   const trialPlan = await getBillingPlanByCodeAdmin("trial");
 
-  const { data, error } = await (admin as any)
+  const { data, error } = await admin
     .from("workspace_billing")
     .insert({
       workspace_id: workspaceId,

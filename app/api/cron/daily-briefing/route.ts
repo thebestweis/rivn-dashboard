@@ -15,10 +15,6 @@ function endOfDay(date: Date) {
   return d;
 }
 
-function toISO(date: Date) {
-  return date.toISOString();
-}
-
 export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -6,6 +6,18 @@ export type ParsedAvitoSpendings = {
   rest: number;
 };
 
+type AvitoSpendingsPayload = {
+  result?: {
+    groupings?: Array<{
+      date?: string;
+      spendings?: Array<{
+        slug?: string;
+        value?: number | string | null;
+      }>;
+    }>;
+  };
+};
+
 function createEmptySpendings(): ParsedAvitoSpendings {
   return {
     total: 0,
@@ -23,7 +35,7 @@ function isDateInRange(date: string, dateFrom?: string, dateTo?: string) {
 }
 
 export function parseAvitoSpendings(
-  data: any,
+  data: AvitoSpendingsPayload,
   options?: {
     dateFrom?: string;
     dateTo?: string;

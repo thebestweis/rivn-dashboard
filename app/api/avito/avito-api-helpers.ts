@@ -746,77 +746,6 @@ function hasStatsValue(stats?: AvitoPeriodStats | null) {
   return Boolean(stats && (stats.views || stats.contacts || stats.favorites));
 }
 
-async function getCachedChunkedStatsByDay(params: {
-  accountId?: string;
-  accessToken: string;
-  avitoUserId: string;
-  dates: string[];
-  cachedByDate?: Record<string, AvitoPeriodStats>;
-}) {
-  const itemIds = await getCachedAvitoItemIds({
-    accountId: params.accountId,
-    avitoUserId: params.avitoUserId,
-    accessToken: params.accessToken,
-  });
-  const statsByDate: Record<string, AvitoPeriodStats> = {
-    ...(params.cachedByDate ?? {}),
-  };
-
-  if (!itemIds.length) {
-    return statsByDate;
-  }
-
-  for (const date of params.dates) {
-    if (hasStatsValue(statsByDate[date])) {
-      continue;
-    }
-
-    statsByDate[date] = await getCachedAvitoStatsForPeriod({
-      accountId: params.accountId,
-      accessToken: params.accessToken,
-      avitoUserId: params.avitoUserId,
-      itemIds,
-      dateFrom: date,
-      dateTo: date,
-    });
-
-    await sleep(1500);
-  }
-
-  return statsByDate;
-}
-
-async function getCachedChunkedStatsForRange(params: {
-  accountId?: string;
-  accessToken: string;
-  avitoUserId: string;
-  dateFrom: string;
-  dateTo: string;
-}) {
-  const itemIds = await getCachedAvitoItemIds({
-    accountId: params.accountId,
-    avitoUserId: params.avitoUserId,
-    accessToken: params.accessToken,
-  });
-
-  if (!itemIds.length) {
-    return {
-      views: 0,
-      contacts: 0,
-      favorites: 0,
-    };
-  }
-
-  return getCachedAvitoStatsForPeriod({
-    accountId: params.accountId,
-    accessToken: params.accessToken,
-    avitoUserId: params.avitoUserId,
-    itemIds,
-    dateFrom: params.dateFrom,
-    dateTo: params.dateTo,
-  });
-}
-
 function parseAggregateStatsByDayResponse(data: unknown) {
   const result =
     data && typeof data === "object" && "result" in data
@@ -1012,10 +941,10 @@ export async function getAvitoAggregateStatsForPeriod(params: {
     }
 
     let stats: AvitoPeriodStats;
-    let cacheHash = AGGREGATE_STATS_CACHE_HASH;
-    let processedChunks = 1;
-    let totalChunks = 1;
-    let cacheId = cached?.id;
+    const cacheHash = AGGREGATE_STATS_CACHE_HASH;
+    const processedChunks = 1;
+    const totalChunks = 1;
+    const cacheId = cached?.id;
 
     try {
       const data = await fetchAggregateStatsFromAvito(params);

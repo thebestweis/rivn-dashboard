@@ -24,6 +24,13 @@ export type ResolvedClient = {
   name: string;
 };
 
+type WorkspaceMemberResolverRow = {
+  id: string;
+  user_id: string;
+  display_name: string | null;
+  profiles?: { email?: string | null } | Array<{ email?: string | null }> | null;
+};
+
 export async function getWorkspaceMembersForResolver(workspaceId: string) {
   const supabase = createClient();
 
@@ -44,7 +51,7 @@ export async function getWorkspaceMembersForResolver(workspaceId: string) {
     throw new Error(`Не удалось загрузить участников workspace: ${error.message}`);
   }
 
-  return (data ?? []).map((item: any) => ({
+  return ((data ?? []) as WorkspaceMemberResolverRow[]).map((item) => ({
     id: item.id,
     user_id: item.user_id,
     display_name: item.display_name ?? null,

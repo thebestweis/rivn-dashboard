@@ -1,9 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
-import { Suspense, memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -319,9 +328,12 @@ function MemberAvatar({
 
   if (member.avatarUrl) {
     return (
-      <img
+      <Image
         src={member.avatarUrl}
         alt={member.name}
+        width={size === "xs" ? 24 : 32}
+        height={size === "xs" ? 24 : 32}
+        unoptimized
         className={`${sizeClass} rounded-full object-cover ring-2 ring-white dark:ring-[#111827]`}
       />
     );
@@ -505,12 +517,6 @@ function CrmPageContent() {
     return () => window.clearTimeout(timeoutId);
   }, [search]);
 
-  useEffect(() => {
-    if (selectedPipelineId === "all") {
-      setViewMode("list");
-    }
-  }, [selectedPipelineId]);
-
   const crmFilters = useMemo(
     () => ({
       search: debouncedSearch,
@@ -597,13 +603,17 @@ function CrmPageContent() {
     Record<string, AssignmentRuleDraft>
   >({});
   const [isCrmLoadingSlow, setIsCrmLoadingSlow] = useState(false);
-  const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null);
-  const [endOfTodayMs, setEndOfTodayMs] = useState<number | null>(null);
+  const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
+  const [endOfTodayMs, setEndOfTodayMs] = useState(() => {
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    return endOfToday.getTime();
+  });
 
-  const {
-    data: selectedDealDetails,
-    isLoading: isDealDetailsLoading,
-  } = useCrmDealDetailsQuery(selectedDealId, isReady && hasAccess);
+  const { data: selectedDealDetails } = useCrmDealDetailsQuery(
+    selectedDealId,
+    isReady && hasAccess
+  );
 
   useEffect(() => {
     const updateTimeMarkers = () => {
@@ -614,7 +624,6 @@ function CrmPageContent() {
       setEndOfTodayMs(endOfToday.getTime());
     };
 
-    updateTimeMarkers();
     const intervalId = window.setInterval(updateTimeMarkers, 60_000);
 
     return () => window.clearInterval(intervalId);
@@ -622,30 +631,63 @@ function CrmPageContent() {
 
   useEffect(() => {
     if (!isReady || isLoading) {
-      setIsCrmLoadingSlow(false);
+      const resetTimeoutId = window.setTimeout(() => {
+        setIsCrmLoadingSlow(false);
+      }, 0);
       const timeoutId = window.setTimeout(() => {
         setIsCrmLoadingSlow(true);
       }, 8000);
 
-      return () => window.clearTimeout(timeoutId);
+      return () => {
+        window.clearTimeout(resetTimeoutId);
+        window.clearTimeout(timeoutId);
+      };
     }
 
-    setIsCrmLoadingSlow(false);
+    const timeoutId = window.setTimeout(() => {
+      setIsCrmLoadingSlow(false);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [isLoading, isReady]);
 
-  const pipelines = data?.pipelines ?? [];
-  const stages = data?.stages ?? [];
-  const deals = data?.deals ?? [];
-  const sources = data?.sources ?? [];
-  const lossReasons = data?.lossReasons ?? [];
-  const assignmentRules = data?.assignmentRules ?? [];
-  const stageDealCounts = data?.stageDealCounts ?? {};
-  const dealTasks = selectedDealDetails?.dealTasks ?? [];
-  const dealComments = selectedDealDetails?.dealComments ?? [];
-  const dealActivities = selectedDealDetails?.dealActivities ?? [];
-  const dealStageHistory = selectedDealDetails?.stageHistory ?? [];
-  const conversations = selectedDealDetails?.conversations ?? [];
-  const messages = selectedDealDetails?.messages ?? [];
+  const pipelines = useMemo(() => data?.pipelines ?? [], [data?.pipelines]);
+  const stages = useMemo(() => data?.stages ?? [], [data?.stages]);
+  const deals = useMemo(() => data?.deals ?? [], [data?.deals]);
+  const sources = useMemo(() => data?.sources ?? [], [data?.sources]);
+  const lossReasons = useMemo(() => data?.lossReasons ?? [], [data?.lossReasons]);
+  const assignmentRules = useMemo(
+    () => data?.assignmentRules ?? [],
+    [data?.assignmentRules]
+  );
+  const stageDealCounts = useMemo(
+    () => data?.stageDealCounts ?? {},
+    [data?.stageDealCounts]
+  );
+  const dealTasks = useMemo(
+    () => selectedDealDetails?.dealTasks ?? [],
+    [selectedDealDetails?.dealTasks]
+  );
+  const dealComments = useMemo(
+    () => selectedDealDetails?.dealComments ?? [],
+    [selectedDealDetails?.dealComments]
+  );
+  const dealActivities = useMemo(
+    () => selectedDealDetails?.dealActivities ?? [],
+    [selectedDealDetails?.dealActivities]
+  );
+  const dealStageHistory = useMemo(
+    () => selectedDealDetails?.stageHistory ?? [],
+    [selectedDealDetails?.stageHistory]
+  );
+  const conversations = useMemo(
+    () => selectedDealDetails?.conversations ?? [],
+    [selectedDealDetails?.conversations]
+  );
+  const messages = useMemo(
+    () => selectedDealDetails?.messages ?? [],
+    [selectedDealDetails?.messages]
+  );
   const inboxNeedsReplyCount = inboxItems.filter((item) => item.needsReply).length;
   const inboxUnreadCount = inboxItems.filter((item) => item.isUnread).length;
   const inboxAvitoCount = inboxItems.filter(
@@ -797,8 +839,12 @@ function CrmPageContent() {
     const deal = deals.find((item) => item.id === dealId);
     if (!deal) return;
 
-    setSelectedDealId(deal.id);
-    setDealPanelTab(isDealPanelTab(tab) ? tab : "info");
+    const timeoutId = window.setTimeout(() => {
+      setSelectedDealId(deal.id);
+      setDealPanelTab(isDealPanelTab(tab) ? tab : "info");
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [deals, searchParams, selectedDealId]);
 
   const memberNameById = useMemo(
@@ -972,24 +1018,24 @@ function CrmPageContent() {
     setIsFormOpen(true);
   }
 
-  function openStageSettings() {
+  const openStageSettings = useCallback(() => {
     setStageNameDrafts(
       Object.fromEntries(activeStages.map((stage) => [stage.id, stage.name]))
     );
     setNewStageName("");
     setIsStageSettingsOpen(true);
-  }
+  }, [activeStages]);
 
-  function openPipelineSettings() {
+  const openPipelineSettings = useCallback(() => {
     setPipelineNameDrafts(
       Object.fromEntries(pipelines.map((pipeline) => [pipeline.id, pipeline.name]))
     );
     setNewPipelineName("");
     setNewPipelineKind("sales");
     setIsPipelineSettingsOpen(true);
-  }
+  }, [pipelines]);
 
-  function openAssignmentSettings() {
+  const openAssignmentSettings = useCallback(() => {
     const ruleBySourceKind = new Map(
       assignmentRules.map((rule) => [rule.source_kind ?? "", rule])
     );
@@ -1010,7 +1056,7 @@ function CrmPageContent() {
       )
     );
     setIsAssignmentSettingsOpen(true);
-  }
+  }, [assignmentRules, sources]);
 
   useEffect(() => {
     const settings = searchParams.get("settings");
@@ -1024,21 +1070,32 @@ function CrmPageContent() {
       return;
     }
 
-    if (settings === "pipelines") {
-      openPipelineSettings();
-      openedSettingsParamRef.current = settings;
-    }
+    const timeoutId = window.setTimeout(() => {
+      if (settings === "pipelines") {
+        openPipelineSettings();
+        openedSettingsParamRef.current = settings;
+      }
 
-    if (settings === "stages") {
-      openStageSettings();
-      openedSettingsParamRef.current = settings;
-    }
+      if (settings === "stages") {
+        openStageSettings();
+        openedSettingsParamRef.current = settings;
+      }
 
-    if (settings === "assignment") {
-      openAssignmentSettings();
-      openedSettingsParamRef.current = settings;
-    }
-  }, [canManageStages, isLoading, searchParams]);
+      if (settings === "assignment") {
+        openAssignmentSettings();
+        openedSettingsParamRef.current = settings;
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    canManageStages,
+    isLoading,
+    openAssignmentSettings,
+    openPipelineSettings,
+    openStageSettings,
+    searchParams,
+  ]);
 
   function openDealPanel(deal: CrmDeal) {
     setSelectedDealId(deal.id);

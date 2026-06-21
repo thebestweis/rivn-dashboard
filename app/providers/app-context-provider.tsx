@@ -14,6 +14,10 @@ import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import {
   clearAppContextMemoryCache,
   getAppContext,
+  type AppMembership,
+  type AppProfile,
+  type AppUser,
+  type AppWorkspace,
 } from "../lib/supabase/app-context";
 import {
   getAccessibleWorkspaces,
@@ -36,10 +40,10 @@ type AppContextState = {
   isReady: boolean;
   errorMessage: string;
 
-  user: any | null;
-  profile: any | null;
-  workspace: any | null;
-  membership: any | null;
+  user: AppUser | null;
+  profile: AppProfile | null;
+  workspace: AppWorkspace | null;
+  membership: AppMembership | null;
   role: AppRole | null;
   isSuperAdmin: boolean;
 
@@ -73,10 +77,10 @@ const AUTH_EXPIRED_PATHS = [
 ];
 
 type AppContextCache = {
-  user: any | null;
-  profile: any | null;
-  workspace: any | null;
-  membership: any | null;
+  user: AppUser | null;
+  profile: AppProfile | null;
+  workspace: AppWorkspace | null;
+  membership: AppMembership | null;
   role: AppRole | null;
   isSuperAdmin: boolean;
   workspaces: AccessibleWorkspace[];
@@ -220,14 +224,16 @@ export function AppContextProvider({
   const [isReady, setIsReady] = useState(() => Boolean(cachedRef.current));
   const [errorMessage, setErrorMessage] = useState("");
 
-  const [user, setUser] = useState<any | null>(cachedRef.current?.user ?? null);
-  const [profile, setProfile] = useState<any | null>(
+  const [user, setUser] = useState<AppUser | null>(
+    cachedRef.current?.user ?? null
+  );
+  const [profile, setProfile] = useState<AppProfile | null>(
     cachedRef.current?.profile ?? null
   );
-  const [workspace, setWorkspace] = useState<any | null>(
+  const [workspace, setWorkspace] = useState<AppWorkspace | null>(
     cachedRef.current?.workspace ?? null
   );
-  const [membership, setMembership] = useState<any | null>(
+  const [membership, setMembership] = useState<AppMembership | null>(
     cachedRef.current?.membership ?? null
   );
   const [role, setRole] = useState<AppRole | null>(

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireBillingAccess } from "../billing-guards";
 import {
   canManageCrmSettings,
@@ -589,7 +590,7 @@ async function requireCanManageCrmSettings() {
 }
 
 async function canAccessCrmDeal(params: {
-  supabase: any;
+  supabase: SupabaseClient;
   workspaceId: string;
   membership: { id?: string | null; role?: string | null } | null | undefined;
   dealId: string;
@@ -618,7 +619,7 @@ async function canAccessCrmDeal(params: {
 }
 
 async function requireCanAccessCrmDeal(params: {
-  supabase: any;
+  supabase: SupabaseClient;
   workspaceId: string;
   membership: { id?: string | null; role?: string | null } | null | undefined;
   dealId: string;

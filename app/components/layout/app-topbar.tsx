@@ -19,7 +19,6 @@ export function AppTopbar({
   eyebrow,
   title,
   description,
-  breadcrumbs,
   compactMobile = false,
   customActions,
 }: AppTopbarProps) {

@@ -3,6 +3,27 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+type AvitoTestChat = {
+  id: string;
+  created?: number;
+  updated?: number;
+};
+
+type AvitoTestMessage = {
+  id?: string;
+  author_id?: string | number;
+  direction?: string;
+  created?: number;
+  type?: string;
+  content?: {
+    text?: string | null;
+  };
+};
+
+type AvitoMessagesResponse = {
+  messages?: AvitoTestMessage[];
+};
+
 function getSupabase() {
   if (!supabaseUrl || !supabaseKey) {
     throw new Error("Не найдены переменные Supabase");
@@ -57,7 +78,7 @@ export async function GET() {
       });
     }
 
-    const chats = Array.isArray(chatsData.chats) ? chatsData.chats : [];
+    const chats = Array.isArray(chatsData.chats) ? chatsData.chats as AvitoTestChat[] : [];
 
     const results = [];
 
@@ -72,7 +93,7 @@ export async function GET() {
         }
       );
 
-      let messagesData: any = null;
+      let messagesData: AvitoMessagesResponse | null = null;
 
       try {
         messagesData = await messagesResponse.json();
@@ -90,7 +111,7 @@ export async function GET() {
           ? messagesData.messages.length
           : null,
         sample_messages: Array.isArray(messagesData?.messages)
-          ? messagesData.messages.slice(0, 5).map((message: any) => ({
+          ? messagesData.messages.slice(0, 5).map((message) => ({
               id: message.id,
               author_id: message.author_id,
               direction: message.direction,

@@ -57,7 +57,7 @@ export default function CrmTeamPage() {
   );
 
   const periodStart = useMemo(() => getPeriodStart(period), [period]);
-  const deals = data?.deals ?? [];
+  const deals = useMemo(() => data?.deals ?? [], [data?.deals]);
   const teamRows = useMemo(() => {
     const now = new Date();
 

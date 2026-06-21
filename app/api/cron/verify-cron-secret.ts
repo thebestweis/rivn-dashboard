@@ -2,7 +2,8 @@ import { matchesAnySecret } from "@/app/api/_secrets";
 
 export function verifyCronSecret(request: Request) {
   const url = new URL(request.url);
-  const secret = url.searchParams.get("secret");
+  const querySecret =
+    process.env.NODE_ENV === "production" ? null : url.searchParams.get("secret");
   const authorization = request.headers.get("authorization");
   const bearerSecret = authorization?.startsWith("Bearer ")
     ? authorization.slice("Bearer ".length)
@@ -19,7 +20,7 @@ export function verifyCronSecret(request: Request) {
     );
   }
 
-  if (!matchesAnySecret([secret, bearerSecret, headerSecret], expectedSecrets)) {
+  if (!matchesAnySecret([querySecret, bearerSecret, headerSecret], expectedSecrets)) {
     return false;
   }
 

@@ -5,7 +5,7 @@ import { usePageAccess } from "../lib/use-page-access";
 import { canManageFinance, isAppRole, type AppRole } from "../lib/permissions";
 import { useAppContextState } from "../providers/app-context-provider";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PayrollPageHeader } from "../components/payroll/payroll-page-header";
 import { PayrollAccrualsTable } from "../components/payroll/payroll-accruals-table";
 import { PayrollPayoutsTable } from "../components/payroll/payroll-payouts-table";
@@ -170,18 +170,6 @@ function isActivePayrollMember(member: WorkspaceMemberItem) {
   return member.status === "active" && (member.is_payroll_active ?? true);
 }
 
-function getMemberNameById(
-  members: WorkspaceMemberItem[],
-  memberId: string | null | undefined,
-  fallback = "Без имени"
-) {
-  if (!memberId) return fallback;
-
-  const member = members.find((item) => item.id === memberId);
-  if (!member) return fallback;
-
-  return getWorkspaceMemberDisplayName(member);
-}
 
 function getPayrollRoleLabel(role: string | null | undefined) {
   const labels: Record<string, string> = {
@@ -687,7 +675,7 @@ setSystemSettings(settingsData);
     return { from, to, label };
   }, [periodPreset, customDateFrom, customDateTo]);
 
-  function isDateInSelectedPeriod(value: string) {
+  const isDateInSelectedPeriod = useCallback((value: string) => {
     const targetDate = parseDisplayDateToDate(value);
     if (!targetDate) return false;
 
@@ -695,7 +683,7 @@ setSystemSettings(settingsData);
     if (selectedPeriod.to && targetDate > selectedPeriod.to) return false;
 
     return true;
-  }
+  }, [selectedPeriod]);
 
   const totalExtra = useMemo(() => {
     return extraPayments
@@ -703,7 +691,7 @@ setSystemSettings(settingsData);
       .reduce((sum, item) => {
         return sum + parseRubAmount(item.amount);
       }, 0);
-  }, [extraPayments, selectedPeriod]);
+  }, [extraPayments, isDateInSelectedPeriod]);
 
     async function invalidatePayrollQueries() {
     await queryClient.invalidateQueries({

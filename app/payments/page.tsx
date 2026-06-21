@@ -33,6 +33,7 @@ import type {
 import {
   createPaymentInSupabase,
   deletePaymentFromSupabase,
+  hasPlannedPaymentInSupabase,
   updatePaymentInSupabase,
 } from "../lib/supabase/payments";
 import {
@@ -67,6 +68,7 @@ interface FactPaymentRow {
   amount: string;
   source: string;
   documentUrl: string;
+  isRecurring: boolean;
 }
 
 interface PlannedPaymentRow {
@@ -81,6 +83,7 @@ interface PlannedPaymentRow {
   status: "planned" | "waiting" | "overdue" | "paid";
   notes: string;
   documentUrl: string;
+  isRecurring: boolean;
 }
 
 type PaymentClientMap = Record<string, string>;
@@ -139,6 +142,18 @@ function toSupabaseDate(value: string) {
   return value;
 }
 
+function addOneMonth(value: string) {
+  const normalized = toSupabaseDate(value);
+  const [year, month, day] = normalized.split("-").map(Number);
+
+  if (!year || !month || !day) return normalized;
+
+  const lastDayOfNextMonth = new Date(year, month + 1, 0).getDate();
+  const nextDate = new Date(year, month, Math.min(day, lastDayOfNextMonth));
+
+  return toInputDate(nextDate);
+}
+
 function fromSupabaseDate(value: string | null) {
   if (!value) return "";
   return formatDisplayDate(value);
@@ -172,22 +187,6 @@ function getClientDisplayName(client: ClientItem) {
 function compareText(a: string, b: string, direction: PaymentSortDirection) {
   const result = a.localeCompare(b, "ru", { sensitivity: "base" });
   return direction === "asc" ? result : -result;
-}
-
-function PaymentsStatsSkeleton() {
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div
-          key={index}
-          className="rivn-card p-4"
-        >
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="mt-3 h-8 w-36" />
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function PaymentsTableSkeleton() {
@@ -271,6 +270,7 @@ export default function PaymentsPage() {
   const [newAmount, setNewAmount] = useState("");
   const [newSource, setNewSource] = useState("");
   const [newDocumentUrl, setNewDocumentUrl] = useState("");
+  const [newIsRecurring, setNewIsRecurring] = useState(false);
 
   const [editClientId, setEditClientId] = useState("");
   const [editProjectId, setEditProjectId] = useState("");
@@ -278,6 +278,7 @@ export default function PaymentsPage() {
   const [editAmount, setEditAmount] = useState("");
   const [editSource, setEditSource] = useState("");
   const [editDocumentUrl, setEditDocumentUrl] = useState("");
+  const [editIsRecurring, setEditIsRecurring] = useState(false);
 
   const {
     data: clients = [],
@@ -371,6 +372,7 @@ export default function PaymentsPage() {
         amount: String(payment.amount),
         source: payment.notes ?? "",
         documentUrl: payment.document_url ?? "",
+        isRecurring: Boolean(payment.is_recurring),
       }));
 
     if (sortBy === "client") {
@@ -401,6 +403,7 @@ export default function PaymentsPage() {
         status: getPlannedStatus(payment),
         notes: payment.notes ?? "",
         documentUrl: payment.document_url ?? "",
+        isRecurring: Boolean(payment.is_recurring),
       }));
 
     if (sortBy === "client") {
@@ -447,15 +450,6 @@ export default function PaymentsPage() {
     setDateTo(range.to);
   }
 
-  function handleDateFromChange(value: string) {
-    setDatePreset("all");
-    setDateFrom(value);
-  }
-
-  function handleDateToChange(value: string) {
-    setDatePreset("all");
-    setDateTo(value);
-  }
 
   function handleDateRangeChange(range: { from: string; to: string }) {
     setDatePreset(range.from || range.to ? "custom" : "all");
@@ -492,6 +486,40 @@ export default function PaymentsPage() {
     return projectsMap.get(id)?.name ?? "";
   }
 
+  async function createNextRecurringPayment(payment: {
+    clientId: string;
+    projectId: string;
+    amount: string;
+    dueDate: string;
+    notes: string;
+    documentUrl: string | null;
+  }) {
+    const nextDueDate = addOneMonth(payment.dueDate);
+    const amount = parseRubAmount(payment.amount);
+
+    const alreadyPlanned = await hasPlannedPaymentInSupabase({
+      clientId: payment.clientId,
+      projectId: payment.projectId,
+      dueDate: nextDueDate,
+      amount,
+    });
+
+    if (alreadyPlanned) return null;
+
+    return createPaymentInSupabase({
+      client_id: payment.clientId,
+      project_id: payment.projectId,
+      amount,
+      due_date: nextDueDate,
+      paid_date: null,
+      status: "pending",
+      period_label: getProjectNameById(payment.projectId),
+      notes: payment.notes,
+      document_url: payment.documentUrl,
+      is_recurring: true,
+    });
+  }
+
   function resetCreateForm() {
     setNewClientId("");
     setNewProjectId("");
@@ -499,6 +527,7 @@ export default function PaymentsPage() {
     setNewAmount("");
     setNewSource("");
     setNewDocumentUrl("");
+    setNewIsRecurring(false);
   }
 
   function resetEditForm() {
@@ -508,6 +537,7 @@ export default function PaymentsPage() {
     setEditAmount("");
     setEditSource("");
     setEditDocumentUrl("");
+    setEditIsRecurring(false);
     setEditingPaymentId(null);
     setEditMode("fact");
   }
@@ -527,6 +557,7 @@ export default function PaymentsPage() {
     amount: string;
     source: string;
     documentUrl: string;
+    isRecurring: boolean;
   }) {
     if (!canManage) {
       showNoAccessMessage();
@@ -563,9 +594,24 @@ export default function PaymentsPage() {
         period_label: getProjectNameById(payment.projectId),
         notes: payment.source,
         document_url: payment.documentUrl || null,
+        is_recurring: payment.isRecurring,
       };
 
       const createdPayment = await createPaymentInSupabase(payload);
+      let nextRecurringCreated = false;
+
+      if (!isInvoice && payment.isRecurring) {
+        const nextPayment = await createNextRecurringPayment({
+          clientId: payment.clientId,
+          projectId: payment.projectId,
+          amount: payment.amount,
+          dueDate: supabaseDate,
+          notes: payment.source,
+          documentUrl: payment.documentUrl || null,
+        });
+
+        nextRecurringCreated = Boolean(nextPayment);
+      }
 
       if (!isInvoice) {
         try {
@@ -610,6 +656,10 @@ export default function PaymentsPage() {
 
       setActiveTab(isInvoice ? "planned" : "fact");
       setToastType("success");
+      if (nextRecurringCreated) {
+        setToastMessage("Оплата создана, следующий платёж запланирован");
+        return;
+      }
       setToastMessage(isInvoice ? "Счёт создан" : "Оплата создана");
     } catch (error) {
       console.error("Ошибка создания payment:", error);
@@ -644,6 +694,7 @@ export default function PaymentsPage() {
     setEditAmount(payment.amount);
     setEditSource(payment.source);
     setEditDocumentUrl(payment.documentUrl ?? "");
+    setEditIsRecurring(payment.isRecurring);
     setIsEditOpen(true);
   }
 
@@ -673,6 +724,7 @@ export default function PaymentsPage() {
     setEditAmount(target.amount);
     setEditSource(target.notes);
     setEditDocumentUrl(target.documentUrl);
+    setEditIsRecurring(target.isRecurring);
     setIsEditOpen(true);
   }
 
@@ -683,6 +735,7 @@ export default function PaymentsPage() {
     amount: string;
     source: string;
     documentUrl: string;
+    isRecurring: boolean;
   }) {
     if (!canManage) {
       showNoAccessMessage();
@@ -720,9 +773,24 @@ export default function PaymentsPage() {
         period_label: getProjectNameById(updatedPayment.projectId),
         notes: updatedPayment.source,
         document_url: updatedPayment.documentUrl || null,
+        is_recurring: updatedPayment.isRecurring,
       };
 
       await updatePaymentInSupabase(editingPaymentId, payload);
+      let nextRecurringCreated = false;
+
+      if (shouldExist && updatedPayment.isRecurring) {
+        const nextPayment = await createNextRecurringPayment({
+          clientId: updatedPayment.clientId,
+          projectId: updatedPayment.projectId,
+          amount: updatedPayment.amount,
+          dueDate: supabaseDate,
+          notes: updatedPayment.source,
+          documentUrl: updatedPayment.documentUrl || null,
+        });
+
+        nextRecurringCreated = Boolean(nextPayment);
+      }
 
       setIsEditOpen(false);
       resetEditForm();
@@ -732,6 +800,10 @@ export default function PaymentsPage() {
       });
 
       setToastType("success");
+      if (nextRecurringCreated) {
+        setToastMessage("Изменения сохранены, следующий платёж запланирован");
+        return;
+      }
       setToastMessage(
         editMode === "planned" ? "Счёт сохранён" : "Оплата сохранена"
       );
@@ -782,9 +854,24 @@ export default function PaymentsPage() {
         period_label: getProjectNameById(target.projectId),
         notes: target.notes,
         document_url: target.documentUrl || null,
+        is_recurring: target.isRecurring,
       };
 
       await updatePaymentInSupabase(id, payload);
+      let nextRecurringCreated = false;
+
+      if (target.isRecurring) {
+        const nextPayment = await createNextRecurringPayment({
+          clientId: target.clientId,
+          projectId: target.projectId,
+          amount: target.amount,
+          dueDate: target.paymentDate,
+          notes: target.notes,
+          documentUrl: target.documentUrl || null,
+        });
+
+        nextRecurringCreated = Boolean(nextPayment);
+      }
 
       try {
         await sendPaymentReceivedNotification({
@@ -806,6 +893,10 @@ export default function PaymentsPage() {
       });
 
       setToastType("success");
+      if (nextRecurringCreated) {
+        setToastMessage("Счёт оплачен, следующий платёж запланирован");
+        return;
+      }
       setToastMessage(`Счёт для "${target.client}" отмечен как оплаченный`);
     } catch (error) {
       console.error("Ошибка отметки оплаты:", error);
@@ -870,15 +961,6 @@ export default function PaymentsPage() {
     }
   }
 
-  function handleOpenCreateInvoice() {
-    if (!canManage) {
-      showNoAccessMessage();
-      return;
-    }
-
-    setMode("invoice");
-    setIsCreateOpen(true);
-  }
 
   function handleOpenCreatePayment() {
     if (!canManage) {
@@ -1074,6 +1156,8 @@ export default function PaymentsPage() {
           setSource={setNewSource}
           documentUrl={newDocumentUrl}
           setDocumentUrl={setNewDocumentUrl}
+          isRecurring={newIsRecurring}
+          setIsRecurring={setNewIsRecurring}
           mode={mode}
           setMode={setMode}
         />
@@ -1099,6 +1183,8 @@ export default function PaymentsPage() {
           mode={editMode}
           documentUrl={editDocumentUrl}
           setDocumentUrl={setEditDocumentUrl}
+          isRecurring={editIsRecurring}
+          setIsRecurring={setEditIsRecurring}
         />
       </main>
 

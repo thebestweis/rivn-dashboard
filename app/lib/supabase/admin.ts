@@ -77,7 +77,7 @@ async function requireSuperAdmin() {
 
   const admin = createAdminClient();
 
-  const { data, error: profileError } = await (admin as any)
+  const { data, error: profileError } = await admin
     .from("profiles")
     .select("platform_role")
     .eq("id", user.id)
@@ -105,14 +105,14 @@ export async function getAllWorkspaces(): Promise<AdminWorkspaceRow[]> {
     { data: transactions, error: transactionsError },
     { data: ownerProfiles, error: ownerProfilesError },
   ] = await Promise.all([
-    (admin as any).from("workspaces").select("id, name, slug, owner_user_id, created_at"),
-    (admin as any)
+    admin.from("workspaces").select("id, name, slug, owner_user_id, created_at"),
+    admin
       .from("workspace_billing")
       .select("workspace_id, plan_code, subscription_status, billing_period"),
-    (admin as any)
+    admin
       .from("billing_transactions")
       .select("workspace_id, amount, status"),
-    (admin as any).from("profiles").select("id, email"),
+    admin.from("profiles").select("id, email"),
   ]);
 
   if (workspacesError) {
@@ -182,7 +182,7 @@ export async function getAdminActionLogs(
 ): Promise<AdminActionLogRow[]> {
   const { admin } = await requireSuperAdmin();
 
-  const { data, error } = await (admin as any)
+  const { data, error } = await admin
     .from("admin_action_logs")
     .select(
       "id, admin_user_id, workspace_id, action_type, action_payload, created_at"

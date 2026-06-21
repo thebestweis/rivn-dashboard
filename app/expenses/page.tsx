@@ -137,32 +137,44 @@ export default function ExpensesPage() {
     if (!clientsError) return;
 
     console.error(clientsError);
-    setToastType("error");
+    const timeoutId = window.setTimeout(() => {
+      setToastType("error");
     setToastMessage(
       clientsError instanceof Error
         ? clientsError.message
         : "Не удалось загрузить клиентов"
-    );
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [clientsError]);
 
   useEffect(() => {
     if (!expensesError) return;
 
     console.error(expensesError);
-    setToastType("error");
+    const timeoutId = window.setTimeout(() => {
+      setToastType("error");
     setToastMessage(
       expensesError instanceof Error
         ? expensesError.message
         : "Не удалось загрузить расходы"
-    );
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [expensesError]);
 
   useEffect(() => {
     if (canManageExpenses) return;
 
-    setIsCreateOpen(false);
-    setIsEditOpen(false);
-    setEditingExpenseId(null);
+    const timeoutId = window.setTimeout(() => {
+      setIsCreateOpen(false);
+      setIsEditOpen(false);
+      setEditingExpenseId(null);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [canManageExpenses]);
 
   const mappedExpenses = useMemo<ExpenseItem[]>(() => {
@@ -226,10 +238,6 @@ export default function ExpensesPage() {
     setSortDirection(field === "date" || field === "amount" ? "desc" : "asc");
   }
 
-  function getClientNameById(id: string) {
-    const client = clients.find((c) => c.id === id);
-    return client ? getClientDisplayName(client) : "Клиент";
-  }
 
   function resetCreateForm() {
     setNewTitle("");

@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
@@ -34,16 +34,7 @@ type AvitoAccount = {
   avito_client_secret: string | null;
 };
 
-type AvitoStatPoint = {
-  uniqViews?: number;
-  uniqContacts?: number;
-  uniqFavorites?: number;
-};
 
-type AvitoStatsItem = {
-  itemId: number;
-  stats?: AvitoStatPoint[];
-};
 
 type PeriodStats = {
   views: number;
@@ -113,15 +104,6 @@ function getChangePercent(current: number, previous: number) {
   return ((current - previous) / previous) * 100;
 }
 
-function chunkArray<T>(array: T[], size: number) {
-  const chunks: T[][] = [];
-
-  for (let index = 0; index < array.length; index += size) {
-    chunks.push(array.slice(index, index + size));
-  }
-
-  return chunks;
-}
 
 function buildStats(params: {
   views: number;
@@ -253,105 +235,12 @@ function buildAccountErrorBlock(accountName: string, error: unknown) {
     .replace(/>/g, "&gt;");
 
   return [
-    "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
+    "━━━━━━━━━━━━",
     `Аккаунт: <b>${accountName}</b>`,
     "",
     "⚠️ Аккаунт не проверен.",
     `Причина: ${safeMessage}`,
   ].join("\n");
-}
-
-async function getAllItemIds(accessToken: string) {
-  const allItems: { id: number }[] = [];
-  let page = 1;
-  const perPage = 100;
-
-  while (true) {
-    const response = await fetch(
-      `https://api.avito.ru/core/v1/items?page=${page}&per_page=${perPage}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-        },
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(`Ошибка получения объявлений: ${JSON.stringify(data)}`);
-    }
-
-    const resources = Array.isArray(data.resources) ? data.resources : [];
-    allItems.push(...resources);
-
-    if (resources.length < perPage) break;
-
-    page += 1;
-
-    if (page > 50) break;
-  }
-
-  return allItems.map((item) => item.id).filter(Boolean);
-}
-
-async function getStatsForPeriod(params: {
-  accessToken: string;
-  avitoUserId: string;
-  itemIds: number[];
-  dateFrom: string;
-  dateTo: string;
-}) {
-  const chunks = chunkArray(params.itemIds, 200);
-
-  let views = 0;
-  let contacts = 0;
-  let favorites = 0;
-
-  for (const chunk of chunks) {
-    const response = await fetch(
-      `https://api.avito.ru/stats/v1/accounts/${params.avitoUserId}/items`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${params.accessToken}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          dateFrom: params.dateFrom,
-          dateTo: params.dateTo,
-          itemIds: chunk,
-          periodGrouping: "day",
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(`Ошибка получения статистики: ${JSON.stringify(data)}`);
-    }
-
-    const items = (data?.result?.items || []) as AvitoStatsItem[];
-
-    for (const item of items) {
-      for (const stat of item.stats || []) {
-        views += Number(stat.uniqViews || 0);
-        contacts += Number(stat.uniqContacts || 0);
-        favorites += Number(stat.uniqFavorites || 0);
-      }
-    }
-  }
-
-  return buildStats({
-    views,
-    contacts,
-    favorites,
-    expenses: 0,
-  });
 }
 
 function buildAccountBlock(params: {
@@ -360,7 +249,7 @@ function buildAccountBlock(params: {
   previous: PeriodStats;
 }) {
   return [
-    "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
+    "━━━━━━━━━━━━",
     `Аккаунт: <b>${params.accountName}</b>`,
     "",
     buildMetricLine("Расходы", params.current.expenses, params.previous.expenses, "money"),
@@ -384,7 +273,7 @@ function buildAccountPartialBlock(params: {
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    return `вљ пёЏ ${safeWarning}`;
+    return `⚠️ ${safeWarning}`;
   });
 
   if (!params.statsUnavailable) {
@@ -452,7 +341,7 @@ function buildWeeklyReport(params: {
   return [
     ...baseLines,
     "",
-    "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
+    "━━━━━━━━━━━━",
     "<b>Итого по всем аккаунтам</b>",
     "",
     buildMetricLine("Расходы", params.totalCurrent.expenses, params.totalPrevious.expenses, "money"),
@@ -531,8 +420,6 @@ export async function GET(request: Request) {
     const prevEndDate = toDateOnly(prevEnd);
 
     const periodLabel = `${formatDate(currentStart)} — ${formatDate(currentEnd)}`;
-    const weekKey = `${currentStartDate}_${currentEndDate}`;
-
     const results: {
       clientId: string;
       clientName: string;
@@ -615,7 +502,7 @@ export async function GET(request: Request) {
           if (!account.avito_user_id) {
             accountBlocks.push(
               [
-                "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ",
+                "━━━━━━━━━━━━",
                 `Аккаунт: <b>${account.name}</b>`,
                 "",
                 "⚠️ Аккаунт не проверен: нет avito_user_id.",
@@ -631,14 +518,14 @@ export async function GET(request: Request) {
           let expensesStatus: AvitoSnapshotStatus = "success";
           let currentStatsRaw = { views: 0, contacts: 0, favorites: 0 };
           let previousStatsRaw = { views: 0, contacts: 0, favorites: 0 };
-          let currentAvitoSpendings = {
+          const currentAvitoSpendings = {
             total: 0,
             presence: 0,
             promotion: 0,
             commission: 0,
             rest: 0,
           };
-          let previousAvitoSpendings = {
+          const previousAvitoSpendings = {
             total: 0,
             presence: 0,
             promotion: 0,

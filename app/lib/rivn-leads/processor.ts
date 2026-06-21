@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { findLeadStopWords, matchLeadKeywords, normalizeLeadText, type KeywordCandidate } from "./text";
+import { findLeadStopWords, matchLeadKeywords, normalizeLeadText, type KeywordCandidate, type StopWordCandidate } from "./text";
 import { formatRivnLeadTelegramMessage, sendRivnLeadTelegramMessage } from "./telegram";
 
-type ServiceSupabase = SupabaseClient<any, "public", any>;
+type ServiceSupabase = SupabaseClient;
 
 export type RivnLeadsIncomingMessage = {
   sourceChatId: string;
@@ -137,7 +137,7 @@ export async function deliverRivnLead(serviceSupabase: ServiceSupabase, leadId: 
 
   try {
     const matchedKeywords = Array.isArray(lead.matched_keywords)
-      ? lead.matched_keywords.map((item: any) => String(item?.value ?? item)).filter(Boolean)
+      ? lead.matched_keywords.map((item: { value?: string } | string) => String(typeof item === "string" ? item : item.value ?? "")).filter(Boolean)
       : [];
     const sent = await sendRivnLeadTelegramMessage({
       chatId: destinationChatId,
@@ -302,7 +302,7 @@ export async function processRivnLeadsMessage(
     const projectKeywords = ((keywords ?? []) as Array<KeywordCandidate & { project_id: string }>).filter(
       (keyword) => keyword.project_id === project.id
     );
-    const projectStopWords = (stopWords ?? []).filter((stopWord: any) => stopWord.project_id === project.id);
+    const projectStopWords = ((stopWords ?? []) as Array<StopWordCandidate & { project_id: string }>).filter((stopWord) => stopWord.project_id === project.id);
     const matchedKeywords = matchLeadKeywords(normalizedText, projectKeywords);
     const blockedByStopWords = findLeadStopWords(normalizedText, projectStopWords);
 

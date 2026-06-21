@@ -30,6 +30,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 .next-dev-*.log
+debug.log
 
 # env files (can opt-in for committing if needed)
 .env*
@@ -44,3 +45,6 @@ next-env.d.ts
 
 .vercel
 .env*.local
+
+# local audit artifacts
+/ui-ux-audit-screenshots/

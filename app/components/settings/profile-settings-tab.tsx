@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Camera, Save, Upload, X } from "lucide-react";
@@ -144,9 +145,12 @@ export function ProfileSettingsTab() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#43ffc2]">Карточка профиля</p>
           <div className="mt-5 flex items-center gap-4">
             {avatarPreviewSrc ? (
-              <img
+              <Image
                 src={avatarPreviewSrc}
                 alt={previewName}
+                width={80}
+                height={80}
+                unoptimized
                 className="h-20 w-20 rounded-3xl border border-white/10 object-cover shadow-[0_18px_45px_rgba(0,0,0,0.28)]"
               />
             ) : (
@@ -228,9 +232,12 @@ export function ProfileSettingsTab() {
               <div className="mt-2 flex flex-col gap-3 rounded-[22px] border border-white/10 bg-white/[0.04] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/50">
                   {avatarPreviewSrc ? (
-                    <img
+                    <Image
                       src={avatarPreviewSrc}
                       alt={previewName}
+                      width={48}
+                      height={48}
+                      unoptimized
                       className="h-full w-full rounded-xl object-cover"
                     />
                   ) : (

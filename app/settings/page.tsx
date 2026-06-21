@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SettingsPageHeader } from "../components/settings/settings-page-header";
 import { UsersSettingsTab } from "../components/settings/users-settings-tab";
@@ -43,15 +43,9 @@ function SettingsPageContent() {
   const { isLoading, hasAccess } = usePageAccess("settings");
 
   const queryTab = searchParams.get("tab");
-  const resolvedInitialTab = isSettingsTab(queryTab) ? queryTab : DEFAULT_TAB;
-
-  const [activeTab, setActiveTab] = useState<SettingsTab>(resolvedInitialTab);
+  const activeTab = isSettingsTab(queryTab) ? queryTab : DEFAULT_TAB;
 
   useEffect(() => {
-    const nextTab = isSettingsTab(queryTab) ? queryTab : DEFAULT_TAB;
-
-    setActiveTab((prev) => (prev === nextTab ? prev : nextTab));
-
     if (!isSettingsTab(queryTab)) {
       const params = new URLSearchParams(searchParams.toString());
       params.set("tab", DEFAULT_TAB);
@@ -60,8 +54,6 @@ function SettingsPageContent() {
   }, [queryTab, router, searchParams]);
 
   function handleSetActiveTab(nextTab: SettingsTab) {
-    setActiveTab(nextTab);
-
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", nextTab);
 

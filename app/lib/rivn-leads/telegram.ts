@@ -26,6 +26,11 @@ function formatSourceChatTitle(title: string, messageLink: string | null) {
   return `<a href="${htmlAttributeEscape(messageLink)}">${safeTitle}</a>`;
 }
 
+function formatOriginalMessageLink(messageLink: string | null) {
+  if (!messageLink || !/^https?:\/\//i.test(messageLink)) return null;
+  return `<a href="${htmlAttributeEscape(messageLink)}">Открыть исходное сообщение</a>`;
+}
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -74,8 +79,9 @@ export function formatRivnLeadTelegramMessage(input: {
 }) {
   const contact = input.authorUsername ? `@${input.authorUsername.replace(/^@/, "")}` : "username отсутствует";
   const keywords = input.matchedKeywords.length > 0 ? input.matchedKeywords.join(", ") : "не указаны";
+  const originalMessageLink = formatOriginalMessageLink(input.messageLink);
 
-  return [
+  const lines = [
     "🔥 <b>Потенциальный лид</b>",
     "",
     "<b>Сообщение:</b>",
@@ -89,7 +95,13 @@ export function formatRivnLeadTelegramMessage(input: {
     "",
     "<b>Совпадения:</b>",
     htmlEscape(keywords),
-  ].join("\n");
+  ];
+
+  if (originalMessageLink) {
+    lines.push("", originalMessageLink);
+  }
+
+  return lines.join("\n");
 }
 
 export async function sendRivnLeadTelegramMessage(input: SendTelegramMessageInput) {

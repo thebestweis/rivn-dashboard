@@ -27,15 +27,52 @@ interface AnalyticsClientRow {
 
 interface ClientsAnalyticsTabProps {
   clients: AnalyticsClientRow[];
-  payments: any[];
-  allPaymentRecords: any[];
+  payments: ClientAnalyticsPaymentRow[];
+  allPaymentRecords: ClientAnalyticsPaymentRecord[];
   clientUnitEconomics: ClientUnitEconomicsRow[];
   topClientsByProfit: ClientUnitEconomicsRow[];
   lossMakingClients: ClientUnitEconomicsRow[];
   lowMarginClients: ClientUnitEconomicsRow[];
-  highRiskClients: any[];
-  clientRecommendations: any[];
+  highRiskClients: ClientRiskRow[];
+  clientRecommendations: ClientRecommendationRow[];
 }
+
+type ClientAnalyticsPaymentRow = {
+  id?: string;
+  clientId?: string | null;
+  client?: string;
+  amount?: string | number | null;
+  paidAt?: string | null;
+};
+
+type ClientAnalyticsPaymentRecord = ClientAnalyticsPaymentRow & {
+  status?: "paid" | "pending" | "overdue";
+  dueDate?: string | null;
+  paidDate?: string | null;
+  project?: string;
+  notes?: string;
+};
+
+type ClientRiskRow = {
+  clientId?: string;
+  clientName?: string;
+  risk: number;
+  margin?: number | null;
+  reason?: string;
+  value?: number;
+};
+
+type ClientRecommendationRow = {
+  clientId?: string;
+  clientName?: string;
+  title?: string;
+  description?: string;
+  priority?: string;
+  recommendations: Array<{
+    text: string;
+    tone: "good" | "warn" | "danger";
+  }>;
+};
 
 function formatMoney(value: number) {
   return `₽${Math.round(value).toLocaleString("ru-RU")}`;
@@ -70,7 +107,6 @@ function toComparableDate(value: string) {
 
 export function ClientsAnalyticsTab({
   clients,
-  payments,
   allPaymentRecords,
   clientUnitEconomics,
   topClientsByProfit,
@@ -180,7 +216,7 @@ const preparedClients = [...clients].map((client) => {
       return due < today;
     })
     .map((p) => {
-      const normalized = toComparableDate(p.dueDate);
+      const normalized = toComparableDate(p.dueDate ?? "");
       const today = new Date();
       const due = new Date(normalized);
 
@@ -231,7 +267,6 @@ const preparedClients = [...clients].map((client) => {
 
   const clientsWithoutPayments = clients.filter((c) => !clientRevenueMap[c.name]);
 
-  const totalClients = clients.length;
 const activeClients = clients.filter((client) => client.status === "active").length;
 const inactiveClients = clientsWithoutPayments.length;
 

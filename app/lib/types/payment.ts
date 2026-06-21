@@ -12,6 +12,7 @@ export type Payment = {
   period_label: string | null;
   notes: string | null;
   document_url: string | null;
+  is_recurring: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -26,4 +27,5 @@ export type PaymentFormData = {
   period_label: string;
   notes: string;
   document_url?: string | null;
+  is_recurring?: boolean;
 };

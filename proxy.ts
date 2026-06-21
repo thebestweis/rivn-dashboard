@@ -6,10 +6,13 @@ const DEBUG_API_PATH_PATTERNS = [
   /^\/api\/avito\/test(?:-|\/|$)/,
   /^\/api\/avito\/get-token$/,
   /^\/api\/avito\/get-all-items$/,
+  /^\/api\/admin-leads\/test-ingest$/,
+  /^\/api\/crm\/integration-test$/,
   /^\/api\/telegram\/test(?:\/|$)/,
 ];
 
 const API_RATE_LIMITS = [
+  { pattern: /^\/api\/auth-events$/, limit: 20, windowMs: 60_000 },
   { pattern: /^\/api\/cron(?:\/|$)/, limit: 30, windowMs: 60_000 },
   { pattern: /^\/api\/telegram\/webhook$/, limit: 120, windowMs: 60_000 },
   { pattern: /^\/api\/crm(?:\/|$)/, limit: 90, windowMs: 60_000 },
@@ -37,13 +40,24 @@ function getExpectedRivnLeadsSecret() {
   return process.env.RIVN_LEADS_INGEST_SECRET || process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET || "";
 }
 
+function safeEqual(value: string, expected: string) {
+  let diff = value.length ^ expected.length;
+  const maxLength = Math.max(value.length, expected.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    diff |= (value.charCodeAt(index) || 0) ^ (expected.charCodeAt(index) || 0);
+  }
+
+  return diff === 0;
+}
+
 function hasValidRivnLeadsSecret(request: NextRequest) {
   if (request.nextUrl.pathname !== "/api/rivn-leads/ingest") return false;
 
   const expectedSecret = getExpectedRivnLeadsSecret();
   const requestSecret = request.headers.get("x-rivn-leads-secret") || request.headers.get("x-cron-secret") || "";
 
-  return Boolean(expectedSecret && requestSecret && requestSecret === expectedSecret);
+  return Boolean(expectedSecret && requestSecret && safeEqual(requestSecret, expectedSecret));
 }
 
 function getClientIp(request: NextRequest) {

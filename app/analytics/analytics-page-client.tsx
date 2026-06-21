@@ -45,6 +45,8 @@ import {
 } from "../lib/queries/use-payroll-query";
 import { useMonthlyPlansQuery } from "../lib/queries/use-monthly-plans-query";
 import { queryKeys } from "../lib/query-keys";
+import type { Expense } from "../lib/types/expense";
+import type { Payment } from "../lib/types/payment";
 
 import {
   upsertMonthlyPlanInSupabase,
@@ -83,6 +85,10 @@ type MonthlyPlanMap = Record<
     fot: number;
   }
 >;
+
+type ExpenseWithClientId = StoredExpense & {
+  client_id?: string | null;
+};
 
 function formatDelta(plan: number, fact: number) {
   const diff = fact - plan;
@@ -280,18 +286,6 @@ function calculateClientUnitEconomics(params: {
     .sort((a, b) => b.profit - a.profit);
 }
 
-function isCurrentMonth(dateString: string) {
-  if (!dateString) return false;
-
-  const date = new Date(dateString);
-  const now = new Date();
-
-  return (
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth()
-  );
-}
-
 function SectionSkeleton({ text }: { text: string }) {
   return (
     <div className="rivn-panel p-8 text-white/60">
@@ -301,11 +295,7 @@ function SectionSkeleton({ text }: { text: string }) {
 }
 
 export default function AnalyticsPage() {
-  const {
-    role,
-    workspace,
-    isLoading: isAppContextLoading,
-  } = useAppContextState();
+  const { role, workspace } = useAppContextState();
   const queryClient = useQueryClient();
 
   const currentRole: AppRole | null = isAppRole(role) ? role : null;
@@ -330,7 +320,7 @@ export default function AnalyticsPage() {
       : "financial"
   );
 
-  const [selectedMonth, setSelectedMonth] = useState(() => {
+  const [selectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
@@ -371,8 +361,10 @@ export default function AnalyticsPage() {
   const planSaveVersionsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
+    const planSaveTimers = planSaveTimersRef.current;
+
     return () => {
-      Object.values(planSaveTimersRef.current).forEach((timer) => {
+      Object.values(planSaveTimers).forEach((timer) => {
         if (timer) {
           clearTimeout(timer);
         }
@@ -389,7 +381,11 @@ export default function AnalyticsPage() {
       tab === "clients" ||
       tab === "team"
     ) {
-      setActiveTab(tab);
+      const handle = window.setTimeout(() => {
+        setActiveTab(tab);
+      }, 0);
+
+      return () => window.clearTimeout(handle);
     }
   }, [searchParams]);
 
@@ -465,7 +461,7 @@ export default function AnalyticsPage() {
   }, [clients]);
 
   const expenses = useMemo(() => {
-    return (expensesRaw as any[]).map((item) => ({
+    return (expensesRaw as Expense[]).map((item) => ({
       id: item.id,
       title: item.title,
       category: item.category as StoredExpense["category"],
@@ -473,15 +469,11 @@ export default function AnalyticsPage() {
       date: fromSupabaseDate(item.expense_date),
       client: item.notes ?? "",
       client_id: item.client_id ?? null,
-    })) as Array<
-      StoredExpense & {
-        client_id?: string | null;
-      }
-    >;
+    })) as ExpenseWithClientId[];
   }, [expensesRaw]);
 
   const payments = useMemo(() => {
-    return (paymentsRaw as any[])
+    return (paymentsRaw as Payment[])
       .filter((item) => item.status === "paid")
       .map((item) => ({
         id: item.id,
@@ -495,7 +487,7 @@ export default function AnalyticsPage() {
   }, [paymentsRaw, clientNameMap]);
 
   const allPaymentRecords = useMemo(() => {
-    return (paymentsRaw as any[]).map((item) => ({
+    return (paymentsRaw as Payment[]).map((item) => ({
       id: item.id,
       clientId: item.client_id,
       client: clientNameMap.get(item.client_id) ?? "Неизвестный клиент",
@@ -509,7 +501,7 @@ export default function AnalyticsPage() {
   }, [paymentsRaw, clientNameMap]);
 
   const monthlyPlans = useMemo<MonthlyPlanMap>(() => {
-    const plans = (monthlyPlansRaw as any[]).reduce<MonthlyPlanMap>((acc, item) => {
+    const plans = (monthlyPlansRaw as SupabaseMonthlyPlan[]).reduce<MonthlyPlanMap>((acc, item) => {
       acc[item.month] = {
         revenue: Number(item.revenue_plan) || 0,
         profit: Number(item.profit_plan) || 0,
@@ -595,14 +587,8 @@ export default function AnalyticsPage() {
   }, [totalRevenueNumber, totalExpensesNumber, totalFotNumber, totalTaxNumber]);
 
   const paidPaymentsCount = useMemo(() => {
-    return payments.length;
-  }, [payments]);
-
-  const currentMonthRevenueNumber = useMemo(() => {
-    return payments
-      .filter((item) => isCurrentMonth(toSupabaseLikeDate(item.paidAt)))
-      .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
-  }, [payments]);
+    return filteredPayments.length;
+  }, [filteredPayments]);
 
   const averageCheckNumber = useMemo(() => {
     if (paidPaymentsCount === 0) return 0;
@@ -611,50 +597,13 @@ export default function AnalyticsPage() {
 
   const uniquePayingClientsCount = useMemo(() => {
     const uniqueClients = new Set(
-      payments
+      filteredPayments
         .map((item) => item.client?.trim())
         .filter((value) => Boolean(value))
     );
 
     return uniqueClients.size;
-  }, [payments]);
-
-  const revenuePerClientNumber = useMemo(() => {
-    if (uniquePayingClientsCount === 0) return 0;
-    return totalRevenueNumber / uniquePayingClientsCount;
-  }, [totalRevenueNumber, uniquePayingClientsCount]);
-
-  const clientRevenueMap = useMemo(() => {
-    const map = new Map<string, number>();
-
-    payments.forEach((item) => {
-      const clientName = item.client?.trim();
-      if (!clientName) return;
-
-      const current = map.get(clientName) ?? 0;
-      map.set(clientName, current + parseRubAmount(item.amount));
-    });
-
-    return map;
-  }, [payments]);
-
-  const topClientsByRevenue = useMemo(() => {
-    return Array.from(clientRevenueMap.entries())
-      .map(([client, revenue]) => ({
-        client,
-        revenue,
-      }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
-  }, [clientRevenueMap]);
-
-  const totalExpenses = useMemo(() => {
-    return formatRub(totalExpensesNumber);
-  }, [totalExpensesNumber]);
-
-  const totalFot = useMemo(() => {
-    return formatRub(totalFotNumber);
-  }, [totalFotNumber]);
+  }, [filteredPayments]);
 
   const clientUnitEconomics = useMemo(() => {
     return calculateClientUnitEconomics({

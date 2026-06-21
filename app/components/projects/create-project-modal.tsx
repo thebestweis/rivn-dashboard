@@ -107,30 +107,34 @@ export function CreateProjectModal({
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
-    if (!isOpen) {
+    const timeoutId = window.setTimeout(() => {
+      if (!isOpen) {
+        setForm(initialFormState);
+        setFormError("");
+        return;
+      }
+
+      if (mode === "edit" && initialProject) {
+        setForm(getFormStateFromProject(initialProject));
+        setFormError("");
+        return;
+      }
+
+      if (clients.length > 0) {
+        setForm({
+          ...initialFormState,
+          client_id: clients[0].id,
+          employee_id: "",
+        });
+        setFormError("");
+        return;
+      }
+
       setForm(initialFormState);
       setFormError("");
-      return;
-    }
+    }, 0);
 
-    if (mode === "edit" && initialProject) {
-      setForm(getFormStateFromProject(initialProject));
-      setFormError("");
-      return;
-    }
-
-    if (clients.length > 0) {
-      setForm({
-        ...initialFormState,
-        client_id: clients[0].id,
-        employee_id: "",
-      });
-      setFormError("");
-      return;
-    }
-
-    setForm(initialFormState);
-    setFormError("");
+    return () => window.clearTimeout(timeoutId);
   }, [isOpen, mode, initialProject, clients]);
 
   if (!isOpen) {

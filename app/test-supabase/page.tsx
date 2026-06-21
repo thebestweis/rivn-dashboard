@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { fetchClientsFromSupabase } from "../lib/supabase/clients";
 
 export default function TestSupabasePage() {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<unknown[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {

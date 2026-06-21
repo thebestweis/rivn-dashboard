@@ -9,7 +9,7 @@ export const sourceChatAccessLevels = ["public", "private", "special"] as const;
 export const sourceChatStatuses = ["active", "paused", "pending_access", "access_lost", "error"] as const;
 export const keywordMatchTypes = ["contains", "exact", "fuzzy"] as const;
 
-export type AdminLeadsClient = SupabaseClient<any, "public", any>;
+export type AdminLeadsClient = SupabaseClient;
 
 export function normalizeText(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");

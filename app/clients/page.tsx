@@ -79,9 +79,13 @@ export default function ClientsPage() {
   useEffect(() => {
     if (canManageClientsWithBilling) return;
 
-    setIsCreateOpen(false);
-    setIsEditOpen(false);
-    setEditingClientId("");
+    const timeoutId = window.setTimeout(() => {
+      setIsCreateOpen(false);
+      setIsEditOpen(false);
+      setEditingClientId("");
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [canManageClientsWithBilling]);
 
   const {
@@ -115,24 +119,32 @@ export default function ClientsPage() {
     if (!clientsError) return;
 
     console.error(clientsError);
-    setToastType("error");
+    const timeoutId = window.setTimeout(() => {
+      setToastType("error");
     setToastMessage(
       clientsError instanceof Error
         ? clientsError.message
         : "Не удалось загрузить клиентов"
-    );
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [clientsError]);
 
   useEffect(() => {
     if (!employeesError) return;
 
     console.error(employeesError);
-    setToastType("error");
+    const timeoutId = window.setTimeout(() => {
+      setToastType("error");
     setToastMessage(
       employeesError instanceof Error
         ? employeesError.message
         : "Не удалось загрузить пользователей"
-    );
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [employeesError]);
 
   const filteredClients = useMemo(() => {

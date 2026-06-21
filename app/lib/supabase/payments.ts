@@ -20,6 +20,7 @@ type DbPaymentRow = {
   period_label: string | null;
   notes: string | null;
   document_url: string | null;
+  is_recurring: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -56,6 +57,7 @@ function mapPayment(item: DbPaymentRow): Payment {
     period_label: item.period_label,
     notes: item.notes,
     document_url: item.document_url,
+    is_recurring: Boolean(item.is_recurring),
     created_at: item.created_at,
     updated_at: item.updated_at,
   };
@@ -139,6 +141,7 @@ export async function createPaymentInSupabase(
       period_label: payload.period_label || null,
       notes: payload.notes || null,
       document_url: payload.document_url ?? null,
+      is_recurring: payload.is_recurring ?? false,
     })
     .select("*")
     .single();
@@ -161,13 +164,44 @@ export async function createPaymentInSupabase(
   return createdPayment;
 }
 
+export async function hasPlannedPaymentInSupabase({
+  clientId,
+  projectId,
+  dueDate,
+  amount,
+}: {
+  clientId: string;
+  projectId: string;
+  dueDate: string;
+  amount: number;
+}): Promise<boolean> {
+  const { supabase, workspace } = await getAppContext();
+
+  const { data, error } = await supabase
+    .from("payments")
+    .select("id")
+    .eq("workspace_id", workspace.id)
+    .eq("client_id", clientId)
+    .eq("project_id", projectId)
+    .eq("due_date", dueDate)
+    .eq("amount", amount)
+    .neq("status", "paid")
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Не удалось проверить повторяющийся платёж: ${error.message}`);
+  }
+
+  return Boolean(data?.length);
+}
+
 export async function updatePaymentInSupabase(
   id: string,
   payload: PaymentFormData
 ): Promise<Payment> {
   const { supabase, workspace } = await getAppContext();
 
-  const { data: oldPayment, error: oldPaymentError } = await supabase
+  const { error: oldPaymentError } = await supabase
     .from("payments")
     .select("*")
     .eq("id", id)
@@ -192,6 +226,7 @@ export async function updatePaymentInSupabase(
       period_label: payload.period_label || null,
       notes: payload.notes || null,
       document_url: payload.document_url ?? null,
+      is_recurring: payload.is_recurring ?? false,
     })
     .eq("id", id)
     .eq("workspace_id", workspace.id)

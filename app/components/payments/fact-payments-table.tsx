@@ -10,6 +10,7 @@ interface FactPaymentRow {
   amount: string;
   source: string;
   documentUrl: string;
+  isRecurring: boolean;
 }
 
 interface FactPaymentsTableProps {

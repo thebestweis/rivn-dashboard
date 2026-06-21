@@ -1137,7 +1137,7 @@ export function TaskModal({
                 rows={6}
                 readOnly={!canManageTasksWithBilling}
                 placeholder="Опиши задачу, контекст, критерии готовности и важные детали"
-                className="mt-4 w-full rounded-[22px] border border-white/10 bg-white/[0.035] px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/30 focus:border-[#00f5a8]/25 focus:bg-white/[0.055] read-only:cursor-default"
+                className="rivn-task-description-textarea mt-4 w-full resize-none rounded-[22px] border border-white/10 bg-white/[0.035] px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/30 focus:border-[#00f5a8]/25 focus:bg-white/[0.055] read-only:cursor-default"
               />
             </section>
 

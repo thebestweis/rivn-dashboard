@@ -4,6 +4,15 @@ import { createClient as createServerClient } from "@/app/lib/supabase/server";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+type AvitoIntegrationAccountPayload = {
+  accountName?: string;
+  avitoUserId?: string | number;
+  avitoClientId?: string;
+  avitoClientSecret?: string;
+  crmDialogsEnabled?: boolean;
+  isActive?: boolean;
+};
+
 function getServiceSupabase() {
   if (!supabaseUrl || !supabaseKey) {
     throw new Error("Не найдены переменные Supabase");
@@ -228,7 +237,7 @@ export async function POST(request: Request) {
       throw new Error(`Ошибка создания клиента: ${clientError.message}`);
     }
 
-    const accountsPayload = body.accounts.map((account: any, index: number) => {
+    const accountsPayload = (body.accounts as AvitoIntegrationAccountPayload[]).map((account, index) => {
       if (!account.avitoUserId) {
         throw new Error(`Укажи Avito user_id для аккаунта №${index + 1}`);
       }

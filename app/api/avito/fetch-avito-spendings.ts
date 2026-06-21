@@ -17,6 +17,20 @@ type FetchAvitoSpendingsParams = {
   spendingTypes?: AvitoSpendingType[];
 };
 
+type AvitoSpendingsGroup = {
+  date?: string;
+  spendings?: Array<{
+    slug?: string;
+    value?: number | string | null;
+  }>;
+};
+
+type AvitoSpendingsResponse = {
+  result?: {
+    groupings?: AvitoSpendingsGroup[];
+  };
+};
+
 const SPENDINGS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,11 +39,11 @@ const spendingsCache = new Map<
   string,
   {
     expiresAt: number;
-    data: any;
+    data: AvitoSpendingsResponse;
   }
 >();
 
-const pendingSpendingsRequests = new Map<string, Promise<any>>();
+const pendingSpendingsRequests = new Map<string, Promise<AvitoSpendingsResponse>>();
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -91,7 +105,7 @@ function buildSyntheticSpendings(
   };
 }
 
-function getDailyTotalFromGroup(group: any) {
+function getDailyTotalFromGroup(group: AvitoSpendingsGroup) {
   const spendings = group?.spendings;
 
   if (!Array.isArray(spendings)) {
@@ -183,7 +197,7 @@ async function saveSpendingsToDatabase(params: {
   accountId?: string;
   dateFrom: string;
   dateTo: string;
-  data: any;
+  data: AvitoSpendingsResponse;
 }) {
   if (!params.accountId) {
     return;
@@ -239,7 +253,7 @@ async function saveSpendingsToDatabase(params: {
   );
 }
 
-function mergeSpendingsResponses(responses: any[]) {
+function mergeSpendingsResponses(responses: AvitoSpendingsResponse[]) {
   const groupings = responses.flatMap((response) =>
     Array.isArray(response?.result?.groupings) ? response.result.groupings : []
   );
@@ -302,7 +316,7 @@ async function fetchAvitoSpendingsOnce(params: FetchAvitoSpendingsParams) {
     throw error;
   }
 
-  return JSON.parse(text);
+  return JSON.parse(text) as AvitoSpendingsResponse;
 }
 
 async function fetchAvitoSpendingsWithRetry(params: FetchAvitoSpendingsParams) {
@@ -374,7 +388,7 @@ export async function fetchAvitoSpendings({
       return databaseCached;
     }
 
-    let data: any;
+    let data: AvitoSpendingsResponse;
 
     try {
       data = await fetchAvitoSpendingsWithRetry({

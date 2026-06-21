@@ -90,7 +90,7 @@ export async function GET(request: Request) {
           });
 
           sent++;
-        } catch (e) {
+        } catch {
           await supabase.from("notification_logs").insert({
             user_id: user.user_id,
             type: "task_deadline",

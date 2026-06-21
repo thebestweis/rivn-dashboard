@@ -15,11 +15,11 @@ import { parseRubAmount, formatRub } from "../../lib/storage";
 import { ensureSystemSettings } from "../../lib/supabase/system-settings";
 
 interface FinancialAnalyticsTabProps {
-  expenses: any[];
-  payments: any[];
+  expenses: FinancialExpenseRow[];
+  payments: FinancialPaymentRow[];
     stableRevenue: number;
-  payrollPayouts: any[];
-    extraPayments: any[];
+  payrollPayouts: FinancialPayrollPayoutRow[];
+    extraPayments: ExtraPaymentRow[];
     growthBasePeriod: 1 | 3;
   setGrowthBasePeriod: Dispatch<SetStateAction<1 | 3>>;
   revenueDynamics: {
@@ -118,6 +118,37 @@ type ExtraPaymentRow = {
   amount: string;
 };
 
+type FinancialExpenseRow = {
+  id?: string;
+  amount?: string | number | null;
+  date?: string | null;
+  expense_date?: string | null;
+  payment_date?: string | null;
+  created_at?: string | null;
+  category?: string | null;
+  client?: string | null;
+  client_id?: string | null;
+};
+
+type FinancialPaymentRow = {
+  id?: string;
+  amount?: string | number | null;
+  paidAt?: string | null;
+  paid_at?: string | null;
+  paid_date?: string | null;
+  client?: string | null;
+  clientId?: string | null;
+};
+
+type FinancialPayrollPayoutRow = {
+  id?: string;
+  amount?: string | number | null;
+  month?: string | null;
+  payoutDate?: string | null;
+  payout_date?: string | null;
+  status?: "scheduled" | "paid" | string;
+};
+
 function formatMonthLabel(value: string) {
   const [year, month] = value.split("-");
   if (!year || !month) return value;
@@ -130,7 +161,7 @@ function formatMonthLabel(value: string) {
   });
 }
 
-function getExpenseDate(expense: any) {
+function getExpenseDate(expense: FinancialExpenseRow) {
   return (
     expense.date ||
     expense.expense_date ||
@@ -300,9 +331,7 @@ export function FinancialAnalyticsTab({
   growthBasePeriod,
   setGrowthBasePeriod,
   growthMetrics,
-  growthInsights,
   growthPlan,
-  ceoSummary,
 }: FinancialAnalyticsTabProps) {
   const [summaryDateRange, setSummaryDateRange] = useState(() =>
     getDateRangeForPeriod("current_month")
@@ -391,28 +420,40 @@ const chartRangeEndMenuRef = useRef<HTMLDivElement | null>(null);
 useEffect(() => {
   if (chartMonths.length === 0) return;
 
-  setChartRangeEndMonth((prev) =>
-    chartMonths.includes(prev) ? prev : chartMonths[chartMonths.length - 1]
-  );
+  const timeoutId = window.setTimeout(() => {
+    setChartRangeEndMonth((prev) =>
+      chartMonths.includes(prev) ? prev : chartMonths[chartMonths.length - 1]
+    );
 
-  setChartRangeStartMonth((prev) =>
-    chartMonths.includes(prev)
-      ? prev
-      : chartMonths[Math.max(0, chartMonths.length - 6)]
-  );
+    setChartRangeStartMonth((prev) =>
+      chartMonths.includes(prev)
+        ? prev
+        : chartMonths[Math.max(0, chartMonths.length - 6)]
+    );
+  }, 0);
+
+  return () => window.clearTimeout(timeoutId);
 }, [chartMonths]);
 
 useEffect(() => {
   const [year] = chartRangeStartMonth.split("-");
   if (year) {
-    setChartRangeStartPickerYear(Number(year));
+    const timeoutId = window.setTimeout(() => {
+      setChartRangeStartPickerYear(Number(year));
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }
 }, [chartRangeStartMonth]);
 
 useEffect(() => {
   const [year] = chartRangeEndMonth.split("-");
   if (year) {
-    setChartRangeEndPickerYear(Number(year));
+    const timeoutId = window.setTimeout(() => {
+      setChartRangeEndPickerYear(Number(year));
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }
 }, [chartRangeEndMonth]);
 
@@ -490,7 +531,7 @@ const filteredFinancialData = useMemo(() => {
 
 const payoutsFot = safePayrollPayouts
   .filter((item) => item.status === "paid")
-  .filter((item) => normalizePayrollPayoutMonth(item.payoutDate) === month)
+  .filter((item) => normalizePayrollPayoutMonth(item.payoutDate ?? "") === month)
   .reduce(
     (sum, item) => sum + parseRubAmount(String(item.amount ?? "")),
     0
@@ -601,7 +642,6 @@ useEffect(() => {
       ? "Бизнес в минусе за выбранный период"
       : "P&L в нуле за выбранный период";
 
-  const [selectedExpenseYear, selectedExpenseMonth] = expenseSelectedMonth.split("-");
 
 const filteredExpenses = normalizedExpenses.filter((expense) => {
   return (
@@ -626,10 +666,6 @@ const expenseBreakdownData = Object.entries(grouped).map(([name, value]) => ({
       ? expenseBreakdownData
       : [{ name: "Нет данных", value: 0 }];
 
-      const expensePeriodLabel =
-  expensePeriod === "month"
-    ? formatMonthLabel(expenseSelectedMonth)
-    : `За ${selectedExpenseYear} год`;
 
   const romi =
     totalExpenses > 0 ? Math.round((totalProfit / totalExpenses) * 100) : 0;
@@ -647,8 +683,6 @@ const expenseBreakdownData = Object.entries(grouped).map(([name, value]) => ({
   const cac =
     uniqueClients.size > 0 ? Math.round(totalExpenses / uniqueClients.size) : 0;
 
-  const ltv =
-    payments.length > 0 ? Math.round(totalRevenue / payments.length) : 0;
 
   const averageCheck =
     payments.length > 0 ? Math.round(totalRevenue / payments.length) : 0;
@@ -914,7 +948,7 @@ const taxYTD = monthlyTaxRows
           >
             <span>{formatMonthLabel(chartRangeStartMonth)}</span>
             <span className="ml-3 text-white/35">
-              {isChartRangeStartMenuOpen ? "в€’" : "+"}
+              {isChartRangeStartMenuOpen ? "−" : "+"}
             </span>
           </button>
 
@@ -926,7 +960,7 @@ const taxYTD = monthlyTaxRows
                   onClick={() => setChartRangeStartPickerYear((prev) => prev - 1)}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
                 >
-                  в†ђ
+                  ←
                 </button>
 
                 <div className="text-sm font-semibold text-white">
@@ -938,7 +972,7 @@ const taxYTD = monthlyTaxRows
                   onClick={() => setChartRangeStartPickerYear((prev) => prev + 1)}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
                 >
-                  в†’
+                  →
                 </button>
               </div>
 
@@ -988,7 +1022,7 @@ const taxYTD = monthlyTaxRows
           >
             <span>{formatMonthLabel(chartRangeEndMonth)}</span>
             <span className="ml-3 text-white/35">
-              {isChartRangeEndMenuOpen ? "в€’" : "+"}
+              {isChartRangeEndMenuOpen ? "−" : "+"}
             </span>
           </button>
 
@@ -1000,7 +1034,7 @@ const taxYTD = monthlyTaxRows
                   onClick={() => setChartRangeEndPickerYear((prev) => prev - 1)}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
                 >
-                  в†ђ
+                  ←
                 </button>
 
                 <div className="text-sm font-semibold text-white">
@@ -1012,7 +1046,7 @@ const taxYTD = monthlyTaxRows
                   onClick={() => setChartRangeEndPickerYear((prev) => prev + 1)}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/70 transition hover:border-white/20 hover:text-white"
                 >
-                  в†’
+                  →
                 </button>
               </div>
 
@@ -1076,7 +1110,7 @@ const taxYTD = monthlyTaxRows
         className="rounded-full px-3 py-1 text-xs text-white/45 transition hover:text-white disabled:opacity-30"
         disabled={expenseMonths.indexOf(expenseSelectedMonth) <= 0}
       >
-        в†ђ
+        ←
       </button>
 
       <div className="px-2 text-xs text-white/60">
@@ -1094,7 +1128,7 @@ const taxYTD = monthlyTaxRows
         className="rounded-full px-3 py-1 text-xs text-white/45 transition hover:text-white disabled:opacity-30"
         disabled={expenseMonths.indexOf(expenseSelectedMonth) === expenseMonths.length - 1}
       >
-        в†’
+        →
       </button>
     </div>
 

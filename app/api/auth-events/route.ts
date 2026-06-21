@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readJsonWithLimit } from "@/app/api/_request";
 
 const ALLOWED_EVENTS = new Set([
   "login_failed",
@@ -8,6 +9,7 @@ const ALLOWED_EVENTS = new Set([
 ]);
 
 const ALERT_TTL_MS = 5 * 60 * 1000;
+const MAX_AUTH_EVENT_BYTES = 8 * 1024;
 const alertCache = new Map<string, number>();
 
 function sanitizeString(value: unknown, maxLength = 500) {
@@ -97,7 +99,10 @@ async function sendAuthAlert(payload: {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => null);
+    const body = await readJsonWithLimit<Record<string, unknown>>(
+      request,
+      MAX_AUTH_EVENT_BYTES
+    ).catch(() => null);
     const event = sanitizeString(body?.event, 80);
 
     if (!event || !ALLOWED_EVENTS.has(event)) {
@@ -111,13 +116,15 @@ export async function POST(request: Request) {
       message: sanitizeString(body?.message, 500),
       timestamp: sanitizeString(body?.timestamp, 60),
       userAgent: sanitizeString(body?.userAgent, 300),
-      details:
-        body?.details && typeof body.details === "object"
-          ? body.details
-          : undefined,
     };
 
-    console.error("[auth-event]", payload);
+    console.error("[auth-event]", {
+      event: payload.event,
+      path: payload.path,
+      message: payload.message,
+      hasEmail: Boolean(payload.email),
+      hasUserAgent: Boolean(payload.userAgent),
+    });
     await sendAuthAlert(payload).catch((alertError) => {
       console.error("[auth-event] failed to send alert", alertError);
     });

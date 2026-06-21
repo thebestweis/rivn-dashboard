@@ -88,7 +88,7 @@ export async function assertInvitationSeatAvailable(params: {
     throw new Error(billingError.message);
   }
 
-  const billingAccess = buildBillingAccessState(billing as any);
+  const billingAccess = buildBillingAccessState(billing);
 
   if (billingAccess.isReadOnly) {
     throw new Error("Подписка неактивна. Сначала продли тариф.");

@@ -87,14 +87,23 @@ export function RootAppShell({
     if (!isInternalRoute || !isTrialActive || !workspace?.id) return;
 
     const storageKey = `rivn_trial_welcome_seen_${workspace.id}_${billingAccess?.endDate ?? "trial"}`;
+    let shouldOpen = false;
 
     try {
       if (localStorage.getItem(storageKey) !== "1") {
-        setIsTrialWelcomeOpen(true);
+        shouldOpen = true;
       }
     } catch {
-      setIsTrialWelcomeOpen(true);
+      shouldOpen = true;
     }
+
+    if (!shouldOpen) return;
+
+    const handle = window.setTimeout(() => {
+      setIsTrialWelcomeOpen(true);
+    }, 0);
+
+    return () => window.clearTimeout(handle);
   }, [billingAccess?.endDate, isInternalRoute, isTrialActive, workspace?.id]);
 
   function closeTrialWelcome() {

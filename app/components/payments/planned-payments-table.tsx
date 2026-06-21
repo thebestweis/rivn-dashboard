@@ -10,6 +10,7 @@ interface PlannedPaymentRow {
   status: "planned" | "waiting" | "overdue" | "paid";
   notes: string;
   documentUrl: string;
+  isRecurring: boolean;
 }
 
 interface PlannedPaymentsTableProps {

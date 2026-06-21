@@ -30,7 +30,13 @@ function toDirectDate(value: Date) {
   return value.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
-function getYandexError(data: any) {
+function getYandexError(data: {
+  error?: {
+    error_detail?: string;
+    error_string?: string;
+    message?: string;
+  };
+}) {
   return (
     data?.error?.error_detail ||
     data?.error?.error_string ||

@@ -24,6 +24,7 @@ interface EditPaymentModalProps {
     amount: string;
     source: string;
     documentUrl: string;
+    isRecurring: boolean;
   }) => void | Promise<void>;
   isSubmitting?: boolean;
   canManage?: boolean;
@@ -42,6 +43,8 @@ interface EditPaymentModalProps {
   mode: "planned" | "fact";
   documentUrl: string;
   setDocumentUrl: (value: string) => void;
+  isRecurring: boolean;
+  setIsRecurring: (value: boolean) => void;
 }
 
 function getClientDisplayName(client: ClientItem) {
@@ -69,6 +72,8 @@ export function EditPaymentModal({
   mode,
   documentUrl,
   setDocumentUrl,
+  isRecurring,
+  setIsRecurring,
 }: EditPaymentModalProps) {
   if (!isOpen) return null;
 
@@ -106,6 +111,7 @@ export function EditPaymentModal({
       amount,
       source,
       documentUrl,
+      isRecurring,
     });
   }
 
@@ -113,6 +119,30 @@ export function EditPaymentModal({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#020611]/75 p-3 backdrop-blur-md sm:items-center sm:p-4">
       <div className="rivn-card max-h-[92vh] w-full max-w-2xl overflow-y-auto p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <button
+            type="button"
+            aria-pressed={isRecurring}
+            disabled={isDisabled}
+            onClick={() => setIsRecurring(!isRecurring)}
+            className={`order-2 inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 text-xs font-semibold text-white/72 transition sm:ml-auto ${
+              isDisabled
+                ? "cursor-not-allowed opacity-50"
+                : isRecurring
+                  ? "border-[#00f5a8]/55 bg-[#00f5a8]/14 text-white shadow-[0_12px_36px_rgba(0,245,168,0.16)]"
+                  : "hover:border-[#00f5a8]/35 hover:bg-white/[0.07] hover:text-white"
+            }`}
+          >
+            <span
+              className={`grid h-4 w-4 place-items-center rounded-[6px] border text-[10px] leading-none transition ${
+                isRecurring
+                  ? "border-[#00f5a8] bg-[#00f5a8] text-white"
+                  : "border-white/24 bg-white/[0.04] text-transparent"
+              }`}
+            >
+              {isRecurring ? "✓" : ""}
+            </span>
+            <span>Повторяющийся платёж</span>
+          </button>
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-[#43ffc2]">Редактирование</div>
             <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">
@@ -126,7 +156,7 @@ export function EditPaymentModal({
             onClick={() => {
               if (!isSubmitting) onClose();
             }}
-            className="rivn-button w-full px-4 py-2 text-sm text-white/70 disabled:cursor-not-allowed disabled:text-white/35 sm:w-auto"
+            className="rivn-button order-3 w-full px-4 py-2 text-sm text-white/70 disabled:cursor-not-allowed disabled:text-white/35 sm:w-auto"
           >
             Закрыть
           </button>

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Search, UserPlus } from "lucide-react";
 import { CustomSelect } from "../ui/custom-select";
 
@@ -29,12 +28,6 @@ export function ClientsPageHeader({
   onAddClient,
   canAddClient = false,
 }: ClientsPageHeaderProps) {
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
   return (
     <div className="rivn-card rivn-card-interactive p-4 sm:p-5">
       <div className="grid gap-3 xl:grid-cols-[minmax(180px,0.75fr)_minmax(260px,1.15fr)_220px_auto] xl:items-end">
@@ -63,7 +56,7 @@ export function ClientsPageHeader({
           buttonClassName="h-12 bg-white/[0.045] dark:bg-white/[0.045]"
         />
 
-        {isMounted && canAddClient ? (
+        {canAddClient ? (
           <button
             type="button"
             onClick={onAddClient}

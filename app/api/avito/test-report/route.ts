@@ -22,16 +22,7 @@ type AvitoAccount = {
   avito_client_secret: string | null;
 };
 
-type AvitoStatPoint = {
-  uniqViews?: number;
-  uniqContacts?: number;
-  uniqFavorites?: number;
-};
 
-type AvitoStatsItem = {
-  itemId: number;
-  stats?: AvitoStatPoint[];
-};
 
 type PeriodStats = {
   views: number;
@@ -42,39 +33,6 @@ type PeriodStats = {
   costPerContact: number;
 };
 
-const dailyWishes = [
-  "☀️ Доброе утро! Пусть день пройдёт спокойно и приятно.",
-  "Доброе утро! Желаем лёгкого старта дня и хорошего настроения.",
-  "👋 Доброе утро! Пусть сегодня всё складывается в твою пользу.",
-  "Доброе утро! Желаем продуктивного дня и приятных результатов.",
-  "Доброе утро! Пусть сегодня будет хороший настрой и уверенность в действиях.",
-  "Доброе утро! Желаем спокойного дня и нескольких удачных сделок.",
-  "Доброе утро! Пусть день пройдёт без лишней суеты и с хорошим результатом.",
-  "☀️ Доброе утро! Желаем приятного дня и пару сочных продаж сегодня 😉",
-  "Доброе утро! Пусть сегодня всё идёт ровно и приносит удовольствие.",
-  "Доброе утро! Желаем лёгкого дня и хорошего отклика от работы.",
-  "👋 Доброе утро! Пусть сегодня будут хорошие новости и приятные результаты.",
-  "Доброе утро! Желаем уверенного дня и стабильного движения вперёд.",
-  "Доброе утро! Пусть день будет комфортным и продуктивным.",
-  "Доброе утро! Желаем отличного настроения и приятных диалогов.",
-  "Доброе утро! Пусть сегодня будет больше хороших моментов в работе.",
-  "☀️ Доброе утро! Желаем спокойного дня и хорошего результата по итогу.",
-  "Доброе утро! Пусть сегодня будет хороший ритм и лёгкая работа.",
-  "👋 Доброе утро! Желаем ясной головы и уверенных решений.",
-  "Доброе утро! Пусть сегодня всё идёт по плану и даже лучше.",
-  "Доброе утро! Желаем приятного дня и хороших продаж.",
-  "☀️ Доброе утро! Пусть сегодня будет больше приятных разговоров и закрытых сделок.",
-  "Доброе утро! Желаем стабильного дня и хорошего настроения.",
-  "Доброе утро! Пусть сегодня всё даётся легко.",
-  "👋 Доброе утро! Желаем продуктивного дня и уверенности в каждом шаге.",
-  "Доброе утро! Пусть день принесёт хорошие результаты и спокойствие.",
-  "👋 Доброе утро! Желаем отличного дня и пару приятных продаж.",
-  "Доброе утро! Пусть сегодня всё складывается максимально комфортно.",
-  "☀️ Доброе утро! Желаем лёгкости в работе и хороших итогов дня.",
-  "Доброе утро! Пусть сегодня будет несколько классных сделок.",
-  "Доброе утро! Желаем хорошего дня и приятных результатов.",
-  "☀️ Доброе утро! Пусть сегодняшний день приятно удивит результатами.",
-];
 
 function getSupabase() {
   if (!supabaseUrl || !supabaseKey) {
@@ -145,19 +103,10 @@ function getChangePercent(current: number, previous: number) {
   return ((current - previous) / previous) * 100;
 }
 
-function getDailyWish(_date: string) {
+function getDailyWish() {
   return "👋 Добрый день";
 }
 
-function chunkArray<T>(array: T[], size: number) {
-  const chunks: T[][] = [];
-
-  for (let index = 0; index < array.length; index += size) {
-    chunks.push(array.slice(index, index + size));
-  }
-
-  return chunks;
-}
 
 function buildStats(params: {
   views: number;
@@ -268,111 +217,6 @@ async function sendTelegramMessage(chatId: string, text: string) {
   return data;
 }
 
-async function getAllItemIds(accessToken: string) {
-  const allItems: { id: number }[] = [];
-  let page = 1;
-  const perPage = 100;
-
-  while (true) {
-    const response = await fetch(
-      `https://api.avito.ru/core/v1/items?page=${page}&per_page=${perPage}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-        },
-      }
-    );
-
-    const data = await readJsonResponse(response);
-
-    if (!response.ok) {
-      throw new Error(
-        `Ошибка получения объявлений: ${JSON.stringify(
-          data ?? { status: response.status }
-        )}`
-      );
-    }
-
-    const resources = Array.isArray(data.resources) ? data.resources : [];
-    allItems.push(...resources);
-
-    if (resources.length < perPage) {
-      break;
-    }
-
-    page += 1;
-
-    if (page > 50) {
-      break;
-    }
-  }
-
-  return allItems.map((item) => item.id).filter(Boolean);
-}
-
-async function getStatsForPeriod(params: {
-  accessToken: string;
-  avitoUserId: string;
-  itemIds: number[];
-  dateFrom: string;
-  dateTo: string;
-}) {
-  const chunks = chunkArray(params.itemIds, 200);
-
-  let views = 0;
-  let contacts = 0;
-  let favorites = 0;
-
-  for (const chunk of chunks) {
-    const response = await fetch(
-      `https://api.avito.ru/stats/v1/accounts/${params.avitoUserId}/items`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${params.accessToken}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          dateFrom: params.dateFrom,
-          dateTo: params.dateTo,
-          itemIds: chunk,
-          periodGrouping: "day",
-        }),
-      }
-    );
-
-    const data = await readJsonResponse(response);
-
-    if (!response.ok) {
-      throw new Error(
-        `Ошибка получения статистики: ${JSON.stringify(
-          data ?? { status: response.status }
-        )}`
-      );
-    }
-
-    const items = (data?.result?.items || []) as AvitoStatsItem[];
-
-    for (const item of items) {
-      for (const stat of item.stats || []) {
-        views += Number(stat.uniqViews || 0);
-        contacts += Number(stat.uniqContacts || 0);
-        favorites += Number(stat.uniqFavorites || 0);
-      }
-    }
-  }
-
-  return buildStats({
-    views,
-    contacts,
-    favorites,
-    expenses: 0,
-  });
-}
-
 function buildAccountBlock(params: {
   accountName: string;
   current: PeriodStats;
@@ -454,7 +298,7 @@ function buildDailyReport(params: {
   failedAccountsCount?: number;
   statsUnavailableAccountsCount?: number;
 }) {
-  const wish = getDailyWish(params.date);
+  const wish = getDailyWish();
   const hasMultipleAccounts = params.accountBlocks.length > 1;
   const hasUnavailableStats = Boolean(params.statsUnavailableAccountsCount);
 
@@ -563,14 +407,14 @@ export async function GET(request: Request) {
 
     const accountBlocks: string[] = [];
 
-    let totalCurrentRaw = {
+    const totalCurrentRaw = {
       views: 0,
       contacts: 0,
       favorites: 0,
       expenses: 0,
     };
 
-    let totalPreviousRaw = {
+    const totalPreviousRaw = {
       views: 0,
       contacts: 0,
       favorites: 0,
@@ -597,14 +441,14 @@ export async function GET(request: Request) {
         const warnings: string[] = [];
         let currentStatsRaw = { views: 0, contacts: 0, favorites: 0 };
         let previousStatsRaw = { views: 0, contacts: 0, favorites: 0 };
-        let currentAvitoSpendings = {
+        const currentAvitoSpendings = {
           total: 0,
           presence: 0,
           promotion: 0,
           commission: 0,
           rest: 0,
         };
-        let previousAvitoSpendings = {
+        const previousAvitoSpendings = {
           total: 0,
           presence: 0,
           promotion: 0,

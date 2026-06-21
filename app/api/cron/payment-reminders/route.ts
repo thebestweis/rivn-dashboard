@@ -147,14 +147,14 @@ export async function GET(request: Request) {
     }
 
     const clientsMap = new Map(
-  (clients ?? []).map((client: any) => [
+  (clients ?? []).map((client: { id: string; name?: string | null; clientName?: string | null; title?: string | null }) => [
     client.id,
     client.name || client.clientName || client.title || "Без названия",
   ])
 );
 
     const projectsMap = new Map(
-      (projects ?? []).map((project: any) => [project.id, project.name || ""])
+      (projects ?? []).map((project: { id: string; name?: string | null }) => [project.id, project.name || ""])
     );
 
     let sentCount = 0;

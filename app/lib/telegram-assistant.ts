@@ -190,12 +190,6 @@ export function parseTaskFromTelegramText(input: ParseTaskInput): ParseTaskResul
     normalized.includes("на ") ||
     matchedMembers.length > 0;
 
-  const hasProjectMention =
-    normalized.includes("проект") ||
-    normalized.includes("клиент") ||
-    matchedProjects.length > 0 ||
-    matchedClients.length > 0;
-
   return {
     title,
     description,

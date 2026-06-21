@@ -208,8 +208,13 @@ function getMessageDate(message) {
 }
 
 function buildMessageLink(sourceChat, telegramMessageId) {
-  if (sourceChat.username) return `https://t.me/${sourceChat.username}/${telegramMessageId}`;
-  const internalChatId = String(sourceChat.telegram_chat_id).replace(/^-100/, "");
+  const username = String(sourceChat.username || "").trim().replace(/^@/, "");
+  if (username) return `https://t.me/${username}/${telegramMessageId}`;
+
+  const telegramChatId = String(sourceChat.telegram_chat_id || "");
+  if (!telegramChatId.startsWith("-100")) return null;
+
+  const internalChatId = telegramChatId.replace(/^-100/, "");
   return internalChatId ? `https://t.me/c/${internalChatId}/${telegramMessageId}` : null;
 }
 

@@ -15,6 +15,7 @@
     "leads:scan-chats": "node scripts/rivn-leads-scan-reader-chats.mjs",
     "leads:session": "node scripts/rivn-leads-generate-session.mjs",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test"
   },
   "dependencies": {

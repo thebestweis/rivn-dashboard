@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode } from "react";
 
 interface PayrollPageHeaderProps {
   activeTab: "accruals" | "payouts" | "extra";
@@ -36,14 +36,6 @@ export function PayrollPageHeader({
   employeeFilterControl,
   canManagePayroll = false,
 }: PayrollPageHeaderProps) {
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  const resolvedCanManagePayroll = isMounted ? canManagePayroll : false;
-
   return (
     <div className="rivn-panel p-4 sm:p-5">
       <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
@@ -86,9 +78,9 @@ export function PayrollPageHeader({
           <button
             type="button"
             onClick={onAccrueSalaries}
-            disabled={!resolvedCanManagePayroll}
+            disabled={!canManagePayroll}
             className={`h-11 rounded-2xl border px-4 text-sm font-medium transition ${
-              resolvedCanManagePayroll
+              canManagePayroll
                 ? "border-white/10 bg-white/[0.04] text-white/80 hover:bg-white/[0.07] hover:text-white"
                 : "cursor-not-allowed border-white/10 bg-white/[0.04] text-white/35"
             }`}
@@ -99,9 +91,9 @@ export function PayrollPageHeader({
           <button
             type="button"
             onClick={onAddPayout}
-            disabled={!resolvedCanManagePayroll}
+            disabled={!canManagePayroll}
             className={`h-11 rounded-2xl px-4 text-sm font-semibold transition ${
-              resolvedCanManagePayroll
+              canManagePayroll
                 ? "bg-[#00f5a8] text-[#06101d] shadow-[0_16px_38px_rgba(0,245,168,0.24)] hover:translate-y-[-1px] hover:shadow-[0_18px_44px_rgba(0,245,168,0.32)]"
                 : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-white/35"
             }`}

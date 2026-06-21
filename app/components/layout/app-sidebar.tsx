@@ -628,7 +628,7 @@ export function AppSidebar() {
               <span className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent opacity-0 transition duration-500 group-hover:opacity-100" />
               <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#7c5cff]/18 text-sm font-semibold text-[#c4b5fd] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition duration-300 group-hover:scale-[1.03]">
                 {showResolvedContext && workspace
-                  ? getWorkspaceInitial(workspace.name)
+                  ? getWorkspaceInitial(workspace.name ?? "RIVN")
                   : "W"}
               </div>
 

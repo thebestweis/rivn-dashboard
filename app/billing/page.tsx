@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Crown, Gem, Shield, Sparkles, Users } from "lucide-react";
+import { Check, Crown, Shield, Sparkles, Users } from "lucide-react";
 import { AccessDenied } from "../components/access/access-denied";
 import { AppToast } from "../components/ui/app-toast";
 import { EmptyState } from "../components/ui/empty-state";
@@ -200,12 +200,16 @@ export default function BillingPage() {
     if (!error) return;
 
     console.error(error);
-    setToastType("error");
+    const timeoutId = window.setTimeout(() => {
+      setToastType("error");
     setToastMessage(
       error instanceof Error
         ? error.message
         : "Не удалось загрузить данные биллинга"
-    );
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [transactionsError, balanceError]);
 
   const currentEndDate = useMemo(() => getCurrentEndDate(billing), [billing]);

@@ -109,10 +109,16 @@ function htmlAttributeEscape(value) {
 }
 
 function formatSourceChatTitle(sourceChat, telegramMessage) {
-  const title = htmlEscape(sourceChat?.title || "Telegram-чат");
+  const title = htmlEscape(sourceChat?.title || "Telegram-\u0447\u0430\u0442");
   const messageLink = telegramMessage?.message_link ? String(telegramMessage.message_link) : "";
   if (!messageLink || !/^https?:\/\//i.test(messageLink)) return title;
   return `<a href="${htmlAttributeEscape(messageLink)}">${title}</a>`;
+}
+
+function formatOriginalMessageLink(telegramMessage) {
+  const messageLink = telegramMessage?.message_link ? String(telegramMessage.message_link) : "";
+  if (!messageLink || !/^https?:\/\//i.test(messageLink)) return null;
+  return `<a href="${htmlAttributeEscape(messageLink)}">\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0438\u0441\u0445\u043e\u0434\u043d\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435</a>`;
 }
 
 function escapeRegExp(value) {
@@ -252,23 +258,30 @@ function formatLeadMessage(lead) {
   const telegramMessage = one(lead, "rivn_leads_telegram_messages");
   const authorUsername = telegramMessage?.author_username
     ? `@${String(telegramMessage.author_username).replace(/^@/, "")}`
-    : "username отсутствует";
+    : "username \u043e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442";
   const matchedKeywords = Array.isArray(lead.matched_keywords)
     ? lead.matched_keywords.map((item) => String(item?.value ?? item)).filter(Boolean)
     : [];
+  const originalMessageLink = formatOriginalMessageLink(telegramMessage);
 
-  return [
-    "🔥 <b>Потенциальный лид</b>",
+  const lines = [
+    "\u{1F525} <b>\u041f\u043e\u0442\u0435\u043d\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439 \u043b\u0438\u0434</b>",
     "",
-    "<b>Сообщение:</b>",
+    "<b>\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435:</b>",
     `<blockquote>${highlightMatchedKeywords(telegramMessage?.message_text || "", matchedKeywords)}</blockquote>`,
     "",
-    "<b>Контакт:</b>",
+    "<b>\u041a\u043e\u043d\u0442\u0430\u043a\u0442:</b>",
     htmlEscape(authorUsername),
     "",
-    "<b>Источник:</b>",
+    "<b>\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a:</b>",
     formatSourceChatTitle(sourceChat, telegramMessage),
-  ].join("\n");
+  ];
+
+  if (originalMessageLink) {
+    lines.push("", originalMessageLink);
+  }
+
+  return lines.join("\n");
 }
 
 async function fetchPendingLeads() {

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AccessDenied } from "../components/access/access-denied";
-import { Skeleton } from "../components/ui/skeleton";
 import { formatRub, type StoredClient } from "../lib/storage";
 import {
   type SupabaseMonthlyPlan,
@@ -37,7 +36,6 @@ import {
 
 import Link from "next/link";
 
-type OverviewVisualTier = "minimal" | "middle" | "max";
 type OverviewMetricKey =
   | "revenue"
   | "activeProjects"
@@ -158,10 +156,6 @@ function getMonthShortLabel(date: Date) {
   });
 }
 
-function getCurrentMonthValue() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
 function formatDateInputValue(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
     date.getDate()
@@ -376,79 +370,6 @@ function isTaskDueOn(task: Task, date: Date) {
   return isSameCalendarDay(new Date(task.deadline_at), date);
 }
 
-function wasTaskChangedOn(task: Task, date: Date) {
-  return isSameCalendarDay(new Date(task.updated_at), date);
-}
-
-function DashboardHeroSkeleton() {
-  return (
-    <section className="rounded-[22px] border border-[#2D342A] bg-[#11130F] p-4">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-36" />
-          <Skeleton className="h-6 w-80" />
-          <Skeleton className="h-4 w-72" />
-        </div>
-        <div className="flex gap-2 rounded-2xl border border-white/10 bg-black/20 p-1.5">
-          <Skeleton className="h-10 w-24 rounded-xl" />
-          <Skeleton className="h-10 w-24 rounded-xl" />
-          <Skeleton className="h-10 w-28 rounded-xl" />
-        </div>
-      </div>
-    </section>
-  );
-}
-function KpiGridSkeleton() {
-  return (
-    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-      {Array.from({ length: 8 }).map((_, index) => (
-        <div
-          key={index}
-          className="rounded-[18px] border border-[#2D342A] bg-[#11130F] p-4"
-        >
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="mt-4 h-8 w-32" />
-          <Skeleton className="mt-3 h-3 w-24" />
-        </div>
-      ))}
-    </section>
-  );
-}
-
-function DashboardBottomSkeleton() {
-  return (
-    <section className="grid gap-4 2xl:grid-cols-[1.45fr_0.95fr]">
-      <div className="rounded-[22px] border border-[#2D342A] bg-[#11130F] p-4">
-        <Skeleton className="h-5 w-40" />
-        <div className="mt-5 space-y-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="grid grid-cols-6 gap-4">
-              {Array.from({ length: 6 }).map((__, cellIndex) => (
-                <Skeleton key={cellIndex} className="h-5 w-full" />
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2 2xl:grid-cols-1">
-        <div className="rounded-[22px] border border-[#2D342A] bg-[#11130F] p-4">
-          <Skeleton className="h-5 w-40" />
-          <div className="mt-5 space-y-3">
-            <Skeleton className="h-12 w-full rounded-2xl" />
-            <Skeleton className="h-12 w-full rounded-2xl" />
-            <Skeleton className="h-12 w-full rounded-2xl" />
-          </div>
-        </div>
-
-        <div className="rounded-[22px] border border-[#2D342A] bg-[#11130F] p-4">
-          <Skeleton className="h-5 w-32" />
-          <Skeleton className="mx-auto mt-6 h-36 w-36 rounded-full" />
-        </div>
-      </div>
-    </section>
-  );
-}
 
 type OnboardingStep = {
   title: string;
@@ -559,7 +480,6 @@ export default function Home() {
     profile,
     workspace,
     membership,
-    billingAccess,
   } = useAppContextState();
   const { isLoading: isAccessLoading, hasAccess } = usePageAccess("dashboard");
 
@@ -601,8 +521,6 @@ export default function Home() {
   const [calendarMonthDate, setCalendarMonthDate] = useState(() =>
     getDateFromInputValue(getDefaultCustomEndDate())
   );
-  const [planFactStartMonth, setPlanFactStartMonth] = useState(getCurrentMonthValue);
-  const [planFactEndMonth, setPlanFactEndMonth] = useState(getCurrentMonthValue);
   const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(false);
 
   const {
@@ -630,10 +548,7 @@ export default function Home() {
     isLoading: isPayrollExtraPaymentsLoading,
   } = usePayrollExtraPaymentsQuery(hasAccess);
 
-  const {
-    data: monthlyPlans = [],
-    isLoading: isMonthlyPlansLoading,
-  } = useMonthlyPlansQuery(hasAccess);
+  const { data: monthlyPlans = [] } = useMonthlyPlansQuery(hasAccess);
 
   const {
     data: projects = [],
@@ -665,16 +580,14 @@ export default function Home() {
     isTasksLoading ||
     isWorkspaceMembersLoading;
 
-    const isLoadingPlanFact =
-    isLoadingDashboardKpis || isMonthlyPlansLoading;
-
-    const isLoadingDashboardBottom =
-    isLoadingDashboardShell || isClientsLoading || isProjectsLoading || isTasksLoading;
-
   useEffect(() => {
-    setIsOnboardingDismissed(
-      window.localStorage.getItem("rivn-dashboard-onboarding-dismissed") === "1"
-    );
+    const timeoutId = window.setTimeout(() => {
+      setIsOnboardingDismissed(
+        window.localStorage.getItem("rivn-dashboard-onboarding-dismissed") === "1"
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   async function handleLogout() {
@@ -683,22 +596,11 @@ export default function Home() {
     window.location.href = "/login";
   }
 
-  const periodLabel =
-    dashboardPeriod === "30d"
-      ? "за 30 дней"
-      : dashboardPeriod === "90d"
-      ? "за 90 дней"
-      : dashboardPeriod === "custom"
-      ? "за выбранный период"
-      : "за всё время";
 
   const paidPayments = useMemo(() => {
     return (payments as SupabasePaymentItem[]).filter((item) => item.status === "paid");
   }, [payments]);
 
-  const pendingPayments = useMemo(() => {
-    return (payments as SupabasePaymentItem[]).filter((item) => item.status !== "paid");
-  }, [payments]);
 
   const periodPaidPayments = useMemo(() => {
     return paidPayments.filter((item) =>
@@ -897,14 +799,6 @@ export default function Home() {
       "Сотрудник"
     );
   }, [selectedTaskMemberId, taskMembers]);
-
-  const problemClients = useMemo(() => {
-    return (clients as StoredClient[]).filter((client) => client.status === "problem");
-  }, [clients]);
-
-  const dashboardClients = useMemo(() => {
-    return (clients as StoredClient[]).slice(0, 4);
-  }, [clients]);
 
   const totalRevenueNumber = useMemo(() => {
     return periodPaidPayments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -1106,15 +1000,6 @@ export default function Home() {
       Math.min(100, Math.round((totalProfitNumber / totalRevenueNumber) * 100))
     );
   }, [totalProfitNumber, totalRevenueNumber]);
-
-  const overviewVisualTier = useMemo<OverviewVisualTier>(() => {
-    const planCode = billingAccess?.currentPlanCode;
-
-    if (planCode === "strategy") return "max";
-    if (planCode === "team") return "middle";
-
-    return "minimal";
-  }, [billingAccess?.currentPlanCode]);
 
   const overviewBubbles = useMemo<OverviewBubble[]>(() => {
     const palette = [
@@ -1440,35 +1325,7 @@ export default function Home() {
     });
   }
 
-  const overdueInvoices = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
-    return pendingPayments.filter((item) => {
-      const dueDate = parseDisplayDateToDate(
-        formatSupabaseDateToDisplay(item.due_date)
-      );
-      if (!dueDate) return false;
-      return dueDate < today;
-    });
-  }, [pendingPayments]);
-
-  const overdueInvoicesTotal = useMemo(() => {
-    return overdueInvoices.reduce(
-      (sum, item) => sum + Number(item.amount || 0),
-      0
-    );
-  }, [overdueInvoices]);
-
-  const expenseSharePercent = useMemo(() => {
-    if (totalRevenueNumber <= 0) return 0;
-    return Math.round((totalExpensesNumber / totalRevenueNumber) * 100);
-  }, [totalExpensesNumber, totalRevenueNumber]);
-
-  const fotSharePercent = useMemo(() => {
-    if (totalRevenueNumber <= 0) return 0;
-    return Math.round((totalFotNumber / totalRevenueNumber) * 100);
-  }, [totalFotNumber, totalRevenueNumber]);
 
   const financialChartData = useMemo(() => {
     const selectedRange = getDashboardPeriodRange(
@@ -1809,275 +1666,7 @@ export default function Home() {
     );
   }, [planProgressItems]);
 
-  const availablePlanMonths = useMemo(() => {
-    const months = Array.from(
-      new Set((monthlyPlans as SupabaseMonthlyPlan[]).map((item) => item.month))
-    ).sort();
 
-    if (months.length === 0) {
-      return [getCurrentMonthValue()];
-    }
-
-    return months;
-  }, [monthlyPlans]);
-
-  useEffect(() => {
-    if (!availablePlanMonths.includes(planFactStartMonth)) {
-      setPlanFactStartMonth(availablePlanMonths[0]);
-    }
-
-    if (!availablePlanMonths.includes(planFactEndMonth)) {
-      setPlanFactEndMonth(availablePlanMonths[0]);
-    }
-  }, [availablePlanMonths, planFactStartMonth, planFactEndMonth]);
-
-  const selectedPlanMonthKeys = useMemo(() => {
-    if (!planFactStartMonth || !planFactEndMonth) {
-      return new Set<string>();
-    }
-
-    const start = new Date(
-      Number(planFactStartMonth.split("-")[0]),
-      Number(planFactStartMonth.split("-")[1]) - 1,
-      1
-    );
-
-    const end = new Date(
-      Number(planFactEndMonth.split("-")[0]),
-      Number(planFactEndMonth.split("-")[1]) - 1,
-      1
-    );
-
-    const startDate = start <= end ? start : end;
-    const endDate = start <= end ? end : start;
-
-    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    const keys: string[] = [];
-
-    while (cursor <= endDate) {
-      keys.push(getMonthKey(cursor));
-      cursor.setMonth(cursor.getMonth() + 1);
-    }
-
-    return new Set(keys);
-  }, [planFactStartMonth, planFactEndMonth]);
-
-  const periodPlans = useMemo(() => {
-    return (monthlyPlans as SupabaseMonthlyPlan[]).filter((item) =>
-      selectedPlanMonthKeys.has(item.month)
-    );
-  }, [monthlyPlans, selectedPlanMonthKeys]);
-
-  const revenuePlanNumber = useMemo(() => {
-    return periodPlans.reduce((sum, item) => sum + Number(item.revenue_plan || 0), 0);
-  }, [periodPlans]);
-
-  const profitPlanNumber = useMemo(() => {
-    return periodPlans.reduce((sum, item) => sum + Number(item.profit_plan || 0), 0);
-  }, [periodPlans]);
-
-  const expensesPlanNumber = useMemo(() => {
-    return periodPlans.reduce((sum, item) => sum + Number(item.expenses_plan || 0), 0);
-  }, [periodPlans]);
-
-  const fotPlanNumber = useMemo(() => {
-    return periodPlans.reduce((sum, item) => sum + Number(item.fot_plan || 0), 0);
-  }, [periodPlans]);
-
-  const alerts = useMemo(() => {
-    const nextAlerts: {
-      title: string;
-      desc: string;
-      tone: "warning" | "danger" | "success";
-      href?: string;
-    }[] = [];
-
-    if (overdueInvoices.length > 0) {
-      nextAlerts.push({
-        title: `Просрочено ${overdueInvoices.length} счёт(ов)`,
-        desc: `На сумму ${formatRub(overdueInvoicesTotal)}. Нужно вернуться к оплатам.`,
-        tone: "danger",
-        href: "/payments",
-      });
-    }
-
-    if (problemClients.length > 0) {
-      const preview = problemClients
-        .slice(0, 3)
-        .map((client) => client.name)
-        .join(", ");
-
-      nextAlerts.push({
-        title: `Проблемных клиентов: ${problemClients.length}`,
-        desc:
-          problemClients.length <= 3
-            ? preview
-            : `${preview} и ещё ${problemClients.length - 3}`,
-        tone: "warning",
-        href: "/clients",
-      });
-    }
-
-    if (totalProfitNumber < 0) {
-      nextAlerts.push({
-        title: "Бизнес в минусе",
-        desc: `Текущая прибыль ${formatRub(totalProfitNumber)} ${periodLabel}.`,
-        tone: "danger",
-        href: "/analytics",
-      });
-    }
-
-    if (fotSharePercent >= 35 && totalRevenueNumber > 0) {
-      nextAlerts.push({
-        title: "Высокая доля ФОТ",
-        desc: `ФОТ съедает ${fotSharePercent}% выручки ${periodLabel}.`,
-        tone: "warning",
-        href: "/payroll",
-      });
-    }
-
-    if (expenseSharePercent >= 45 && totalRevenueNumber > 0) {
-      nextAlerts.push({
-        title: "Высокая доля расходов",
-        desc: `Расходы составляют ${expenseSharePercent}% выручки ${periodLabel}.`,
-        tone: "warning",
-        href: "/expenses",
-      });
-    }
-
-    if (nextAlerts.length === 0) {
-      nextAlerts.push({
-        title: "Критичных сигналов нет",
-        desc: "Просрочек нет, прибыль положительная, структура затрат выглядит нормально.",
-        tone: "success",
-      });
-    }
-
-    return nextAlerts.slice(0, 4);
-  }, [
-    overdueInvoices,
-    overdueInvoicesTotal,
-    problemClients,
-    totalProfitNumber,
-    fotSharePercent,
-    expenseSharePercent,
-    totalRevenueNumber,
-    periodLabel,
-  ]);
-
-  const quickActions = [
-    { label: "Добавить клиента", tone: "emerald" as const, href: "/clients" },
-    ...(canManageDashboardFinance
-      ? [
-          {
-            label: "Добавить оплату",
-            tone: "violet" as const,
-            href: "/payments",
-          },
-          {
-            label: "Добавить расход",
-            tone: "rose" as const,
-            href: "/expenses",
-          },
-          {
-            label: "Внеплановая выплата",
-            tone: "amber" as const,
-            href: "/payroll",
-          },
-        ]
-      : []),
-  ];
-
-  const kpis = [
-    {
-      label: "Выручка",
-      value: formatRub(totalRevenueNumber),
-      delta: periodLabel,
-      tone: "success" as const,
-    },
-    {
-      label: "Прибыль",
-      value: formatRub(totalProfitNumber),
-      delta: "выручка - расходы - ФОТ - 7%",
-      tone: totalProfitNumber >= 0 ? ("success" as const) : ("warning" as const),
-    },
-    {
-      label: "Расходы",
-      value: formatRub(totalExpensesNumber),
-      delta: periodLabel,
-      tone: "warning" as const,
-    },
-    {
-      label: "ФОТ",
-      value: formatRub(totalFotNumber),
-      delta: periodLabel,
-      tone: "warning" as const,
-    },
-    {
-      label: "Налог 7%",
-      value: formatRub(taxNumber),
-      delta: periodLabel,
-      tone: "neutral" as const,
-    },
-    {
-      label: "Активные клиенты",
-      value: isLoadingDashboardKpis ? "..." : String(activeClientsCount),
-      delta: "из раздела клиенты",
-      tone: "success" as const,
-    },
-    {
-      label: "Средний чек",
-      value: formatRub(averageCheckNumber),
-      delta: "по оплаченным счетам",
-      tone: "success" as const,
-    },
-    {
-      label: "Маржа",
-      value: `${profitMarginRatio}%`,
-      delta: "доля прибыли",
-      tone: profitMarginRatio >= 20 ? ("success" as const) : ("warning" as const),
-    },
-  ];
-
-  const dashboardSummary = useMemo(() => {
-    const hasRevenue = totalRevenueNumber > 0;
-    const profitLabel = totalProfitNumber >= 0 ? "в плюсе" : "в минусе";
-    const overdueLabel =
-      overdueInvoices.length > 0
-        ? `${overdueInvoices.length} просроч.`
-        : "просрочек нет";
-    const costLabel =
-      expenseSharePercent >= 45 || fotSharePercent >= 35
-        ? "затраты требуют внимания"
-        : "затраты в норме";
-
-    if (!hasRevenue) {
-      return "Пока мало финансовых данных. Добавь оплаты, расходы и план, чтобы дашборд стал управленческой картиной.";
-    }
-
-    return `Бизнес ${profitLabel}: маржа ${profitMarginRatio}%, ${overdueLabel}, ${costLabel}.`;
-  }, [
-    totalRevenueNumber,
-    totalProfitNumber,
-    overdueInvoices.length,
-    expenseSharePercent,
-    fotSharePercent,
-    profitMarginRatio,
-  ]);
-
-  const planFactPeriodLabel = useMemo(() => {
-    if (!planFactStartMonth || !planFactEndMonth) {
-      return "Период не выбран";
-    }
-
-    if (planFactStartMonth === planFactEndMonth) {
-      return formatMonthLabel(planFactStartMonth);
-    }
-
-    return `${formatMonthLabel(planFactStartMonth)} — ${formatMonthLabel(
-      planFactEndMonth
-    )}`;
-  }, [planFactStartMonth, planFactEndMonth]);
 
   const isBasicSettingsConfigured = Boolean(
     workspace?.id &&
@@ -2346,7 +1935,7 @@ export default function Home() {
 
                         <div className="mt-4 grid grid-cols-2 gap-3">
                           {[
-                            ["С", customPeriodStartDate],
+                            ["РЎ", customPeriodStartDate],
                             ["По", customPeriodEndDate],
                           ].map(([label, value]) => (
                             <div

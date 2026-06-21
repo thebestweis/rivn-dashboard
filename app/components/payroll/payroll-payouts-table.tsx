@@ -30,6 +30,35 @@ function parseAmount(value: string) {
   return Number(value.replace(/[^\d.-]/g, "")) || 0;
 }
 
+function StableSortHeader({
+  sort,
+  sortKey,
+  sortDirection,
+  onSort,
+  children,
+}: {
+  sort: SortKey;
+  sortKey: SortKey;
+  sortDirection: "asc" | "desc";
+  onSort: (sort: SortKey) => void;
+  children: ReactNode;
+}) {
+  const isActive = sortKey === sort;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sort)}
+      className="inline-flex items-center justify-center gap-1 transition hover:text-white"
+    >
+      <span>{children}</span>
+      <span className={isActive ? "text-[#00f5a8]" : "text-white/25"}>
+        {isActive ? (sortDirection === "asc" ? "в†‘" : "в†“") : "в†•"}
+      </span>
+    </button>
+  );
+}
+
 export function PayrollPayoutsTable({
   items,
   onEdit,
@@ -62,23 +91,6 @@ export function PayrollPayoutsTable({
     setSortDirection("asc");
   }
 
-  function SortHeader({ sort, children }: { sort: SortKey; children: ReactNode }) {
-    const isActive = sortKey === sort;
-
-    return (
-      <button
-        type="button"
-        onClick={() => handleSort(sort)}
-        className="inline-flex items-center justify-center gap-1 transition hover:text-white"
-      >
-        <span>{children}</span>
-        <span className={isActive ? "text-[#00f5a8]" : "text-white/25"}>
-          {isActive ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
-        </span>
-      </button>
-    );
-  }
-
   return (
     <div className="rivn-card p-4 sm:p-5">
       <div className="text-sm text-white/50">Выплаты</div>
@@ -87,11 +99,11 @@ export function PayrollPayoutsTable({
         <table className="w-full min-w-[760px] text-center text-sm">
           <thead className="bg-white/[0.04] text-white/45">
             <tr>
-              <th className="px-4 py-3 font-medium"><SortHeader sort="employee">Сотрудник</SortHeader></th>
-              <th className="px-4 py-3 font-medium"><SortHeader sort="month">Месяц</SortHeader></th>
-              <th className="px-4 py-3 font-medium"><SortHeader sort="payoutDate">Дата выплаты</SortHeader></th>
-              <th className="px-4 py-3 font-medium"><SortHeader sort="amount">Сумма</SortHeader></th>
-              <th className="px-4 py-3 font-medium"><SortHeader sort="status">Статус</SortHeader></th>
+              <th className="px-4 py-3 font-medium"><StableSortHeader sort="employee" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Сотрудник</StableSortHeader></th>
+              <th className="px-4 py-3 font-medium"><StableSortHeader sort="month" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Месяц</StableSortHeader></th>
+              <th className="px-4 py-3 font-medium"><StableSortHeader sort="payoutDate" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Дата выплаты</StableSortHeader></th>
+              <th className="px-4 py-3 font-medium"><StableSortHeader sort="amount" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Сумма</StableSortHeader></th>
+              <th className="px-4 py-3 font-medium"><StableSortHeader sort="status" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Статус</StableSortHeader></th>
               <th className="px-4 py-3 font-medium">Действия</th>
             </tr>
           </thead>

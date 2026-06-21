@@ -188,11 +188,19 @@ export async function setDefaultTelegramWorkspaceLink(params: {
 export async function getDefaultTelegramWorkspaceLink(telegramUserId: number) {
   const links = await getTelegramWorkspaceLinks(telegramUserId);
   return (
-    links.find((item: any) => item.is_default) ??
+    links.find((item) => item.is_default) ??
     links[0] ??
     null
   );
 }
+
+type BotWorkspaceMemberRow = {
+  id: string;
+  role: string;
+  status: string;
+  display_name: string | null;
+  profiles?: { email?: string | null } | Array<{ email?: string | null }> | null;
+};
 
 export async function getWorkspaceMembersForBot(workspaceId: string) {
   const supabase = getAdminSupabase();
@@ -215,7 +223,7 @@ export async function getWorkspaceMembersForBot(workspaceId: string) {
     throw new Error(`Не удалось загрузить участников workspace: ${error.message}`);
   }
 
-  return (data ?? []).map((item: any) => ({
+  return ((data ?? []) as BotWorkspaceMemberRow[]).map((item) => ({
     id: item.id as string,
     role: item.role as string,
     status: item.status as string,

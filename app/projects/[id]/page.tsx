@@ -19,7 +19,6 @@ import {
 } from "../../lib/permissions";
 import { useAppContextState } from "../../providers/app-context-provider";
 import { queryKeys } from "../../lib/query-keys";
-import { type Project } from "../../lib/supabase/projects";
 import { type Task, type TaskStatus } from "../../lib/supabase/tasks";
 import { useProjectQuery } from "../../lib/queries/use-project-query";
 import { useProjectTasksQuery } from "../../lib/queries/use-project-tasks-query";
@@ -186,7 +185,6 @@ export default function ProjectPage() {
   const [linksDraft, setLinksDraft] = useState("");
   const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
   const [isProjectChatOpen, setIsProjectChatOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [projectCommentDraft, setProjectCommentDraft] = useState("");
   const [projectCommentAttachment, setProjectCommentAttachment] =
     useState<File | null>(null);
@@ -275,7 +273,6 @@ export default function ProjectPage() {
   });
 
   const isLoading =
-    !mounted ||
     isAppContextLoading ||
     isProjectLoading ||
     isTasksLoading ||
@@ -337,9 +334,13 @@ export default function ProjectPage() {
       return;
     }
 
-    setOverviewDraft(
-      project.project_overview?.trim() || project.description?.trim() || ""
-    );
+    const timeoutId = window.setTimeout(() => {
+      setOverviewDraft(
+        project.project_overview?.trim() || project.description?.trim() || ""
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [project, isEditingOverview]);
 
   useEffect(() => {
@@ -347,29 +348,32 @@ export default function ProjectPage() {
       return;
     }
 
-    setLinksDraft(project.important_links ?? "");
+    const timeoutId = window.setTimeout(() => {
+      setLinksDraft(project.important_links ?? "");
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [project, isEditingLinks]);
 
   useEffect(() => {
     const taskIdFromUrl = searchParams.get("taskId");
 
     if (!taskIdFromUrl) {
-      setSelectedTaskId(null);
-      return;
+      const timeoutId = window.setTimeout(() => {
+        setSelectedTaskId(null);
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
 
     const taskExists = tasks.some((task) => task.id === taskIdFromUrl);
 
-    if (taskExists) {
-      setSelectedTaskId(taskIdFromUrl);
-    } else {
-      setSelectedTaskId(null);
-    }
-  }, [searchParams, tasks]);
+    const timeoutId = window.setTimeout(() => {
+      setSelectedTaskId(taskExists ? taskIdFromUrl : null);
+    }, 0);
 
-  useEffect(() => {
-  setMounted(true);
-}, []);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchParams, tasks]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -381,12 +385,12 @@ export default function ProjectPage() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  const assignedEmployeeName = useMemo(() => {
+  const assignedEmployeeName = (() => {
     if (!project?.employee_id) return "Не назначен";
 
     const member = employees.find((item) => item.id === project.employee_id);
     return member?.name ?? "Не назначен";
-  }, [employees, project?.employee_id]);
+  })();
 
   const selectedTask = selectedTaskId
     ? tasks.find((task) => task.id === selectedTaskId) ?? null

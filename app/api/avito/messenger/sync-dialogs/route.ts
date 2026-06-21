@@ -45,6 +45,10 @@ type AvitoMessage = {
   };
 };
 
+type LinkedAvitoAccount = {
+  avito_report_clients?: unknown[] | unknown;
+};
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -82,7 +86,7 @@ function getInternalSecret() {
   );
 }
 
-function getLinkedClient(account: any) {
+function getLinkedClient(account: LinkedAvitoAccount) {
   return Array.isArray(account?.avito_report_clients)
     ? account.avito_report_clients[0]
     : account?.avito_report_clients;
@@ -139,37 +143,48 @@ function getChatTimestamp(chat: AvitoChat) {
   );
 }
 
-function normalizeAvitoChats(data: any): AvitoChat[] {
+function normalizeAvitoChats(data: unknown): AvitoChat[] {
   if (Array.isArray(data)) {
     return data as AvitoChat[];
   }
 
-  if (Array.isArray(data?.chats)) {
-    return data.chats as AvitoChat[];
+  const payload = data as {
+    chats?: unknown;
+    result?: { chats?: unknown };
+  };
+
+  if (Array.isArray(payload.chats)) {
+    return payload.chats as AvitoChat[];
   }
 
-  if (Array.isArray(data?.result?.chats)) {
-    return data.result.chats as AvitoChat[];
+  if (Array.isArray(payload.result?.chats)) {
+    return payload.result.chats as AvitoChat[];
   }
 
   return [];
 }
 
-function normalizeAvitoMessages(data: any): AvitoMessage[] {
+function normalizeAvitoMessages(data: unknown): AvitoMessage[] {
   if (Array.isArray(data)) {
     return data as AvitoMessage[];
   }
 
-  if (Array.isArray(data?.messages)) {
-    return data.messages as AvitoMessage[];
+  const payload = data as {
+    messages?: unknown;
+    result?: { messages?: unknown };
+    0?: { messages?: unknown };
+  };
+
+  if (Array.isArray(payload.messages)) {
+    return payload.messages as AvitoMessage[];
   }
 
-  if (Array.isArray(data?.result?.messages)) {
-    return data.result.messages as AvitoMessage[];
+  if (Array.isArray(payload.result?.messages)) {
+    return payload.result.messages as AvitoMessage[];
   }
 
-  if (Array.isArray(data?.[0]?.messages)) {
-    return data[0].messages as AvitoMessage[];
+  if (Array.isArray(payload[0]?.messages)) {
+    return payload[0].messages as AvitoMessage[];
   }
 
   return [];
