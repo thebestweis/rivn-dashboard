@@ -85,6 +85,7 @@ export function RegisterPageContent() {
 
       let data = signUpResponse.data;
       let error = signUpResponse.error;
+      let signedInExistingAccount = false;
 
       if (error && isAlreadyRegisteredAuthError(error)) {
         const signInResponse = await withTimeout<
@@ -94,7 +95,7 @@ export function RegisterPageContent() {
             email: normalizedEmail,
             password,
           }),
-          15_000,
+          30_000,
           "Аккаунт уже создан, но вход занял слишком много времени. Попробуй войти ещё раз."
         );
 
@@ -106,6 +107,7 @@ export function RegisterPageContent() {
 
         data = signInResponse.data;
         error = null;
+        signedInExistingAccount = true;
       }
 
       if (error) {
@@ -113,26 +115,36 @@ export function RegisterPageContent() {
       }
 
       if (data.session) {
-        await bootstrapAccountForAuthFlow();
-
-        try {
-          await createWelcomeNotification();
-        } catch (notificationError) {
-          console.error(
-            "Ошибка создания приветственного уведомления:",
-            notificationError
-          );
+        if (signedInExistingAccount) {
+          bootstrapAccountForAuthFlow().catch((bootstrapError) => {
+            console.error("Account bootstrap after registration sign-in failed:", bootstrapError);
+            reportAuthTelemetry({
+              event: "app_context_failed",
+              email: normalizedEmail,
+              message:
+                bootstrapError instanceof Error
+                  ? bootstrapError.message
+                  : "Account bootstrap after registration sign-in failed",
+            });
+          });
+        } else {
+          await bootstrapAccountForAuthFlow();
         }
 
+        createWelcomeNotification().catch((notificationError) => {
+          console.error(
+            "Welcome notification after registration failed:",
+            notificationError
+          );
+        });
+
         if (data.user) {
-          try {
-            await createReferralAttributionForUser(data.user.id);
-          } catch (referralError) {
+          createReferralAttributionForUser(data.user.id).catch((referralError) => {
             console.error(
-              "Ошибка создания реферальной привязки:",
+              "Referral attribution after registration failed:",
               referralError
             );
-          }
+          });
         }
 
         router.replace("/dashboard");

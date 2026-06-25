@@ -1,23 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import {
-  bootstrapAccountForAuthFlow,
-  withTimeout,
-} from "../lib/supabase/auth-flow";
-import { createReferralAttributionForUser } from "../lib/supabase/referrals";
+import { withTimeout } from "../lib/supabase/auth-flow";
 import { reportAuthTelemetry } from "../lib/auth-telemetry";
 
+function getSafeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/dashboard";
+  }
+
+  return value;
+}
+
 export function LoginPageClient() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = useMemo(
-    () => searchParams.get("next") || "/dashboard",
+    () => getSafeNextPath(searchParams.get("next")),
     [searchParams]
   );
+  const submissionInFlightRef = useRef(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,6 +30,10 @@ export function LoginPageClient() {
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (submissionInFlightRef.current) return;
+
+    submissionInFlightRef.current = true;
     setErrorMessage("");
     setIsSubmitting(true);
 
@@ -39,7 +47,7 @@ export function LoginPageClient() {
           email: email.trim(),
           password,
         }),
-        15_000,
+        30_000,
         "Вход занял слишком много времени. Попробуй ещё раз через несколько секунд."
       );
 
@@ -47,18 +55,13 @@ export function LoginPageClient() {
         throw error;
       }
 
-      await bootstrapAccountForAuthFlow();
+      reportAuthTelemetry({
+        event: "login_succeeded",
+        email: data.user?.email ?? email.trim(),
+      });
 
-      if (data.user?.id) {
-        try {
-          await createReferralAttributionForUser(data.user.id);
-        } catch (referralError) {
-          console.error("Ошибка создания реферальной привязки:", referralError);
-        }
-      }
-
-      router.replace(nextPath);
-      router.refresh();
+      window.location.replace(nextPath);
+      return;
     } catch (error) {
       reportAuthTelemetry({
         event: "login_failed",
@@ -78,6 +81,7 @@ export function LoginPageClient() {
           : "Неверный логин или пароль"
       );
     } finally {
+      submissionInFlightRef.current = false;
       setIsSubmitting(false);
     }
   }

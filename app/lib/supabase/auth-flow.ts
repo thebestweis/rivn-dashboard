@@ -62,7 +62,7 @@ export async function bootstrapAccountForAuthFlow() {
       await waitForAuthSessionReady();
       return await withTimeout(
         bootstrapAccountForCurrentUser(),
-        15_000,
+        30_000,
         "Account bootstrap timeout"
       );
     } catch (error) {

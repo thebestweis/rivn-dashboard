@@ -759,9 +759,9 @@ const fadeUp = {
 >
   Поддержка
 </a>
-  <Link href="/login" className={styles.primaryHeaderBtn}>
+  <a href="/login" className={styles.primaryHeaderBtn}>
     Войти в дашборд
-  </Link>
+  </a>
 </div>
           </motion.header>
 
@@ -2122,4 +2122,3 @@ const fadeUp = {
     </main>
   );
 }
-

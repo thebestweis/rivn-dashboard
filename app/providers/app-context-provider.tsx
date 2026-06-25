@@ -33,6 +33,7 @@ import type { WorkspaceBilling } from "../lib/supabase/billing";
 import { createClient } from "../lib/supabase/client";
 import { createReferralAttributionForUser } from "../lib/supabase/referrals";
 import { withTimeout } from "../lib/supabase/auth-flow";
+import { bootstrapAccountForCurrentUser } from "../lib/supabase/bootstrap-account";
 import { reportAuthTelemetry } from "../lib/auth-telemetry";
 
 type AppContextState = {
@@ -278,6 +279,11 @@ export function AppContextProvider({
   }, [pathname, router]);
 
   const refreshAppContext = useCallback(async () => {
+    if (!isProtectedAppPath(pathname)) {
+      setIsLoading(false);
+      return;
+    }
+
     if (refreshPromiseRef.current) {
       return refreshPromiseRef.current;
     }
@@ -316,6 +322,19 @@ export function AppContextProvider({
 
           if (!isBootstrapPendingErrorMessage(message) || attempt === 5) {
             throw error;
+          }
+
+          if (
+            attempt === 0 &&
+            (message.includes("Profile not found") ||
+              message.includes("Membership not found") ||
+              message.includes("Workspace not found"))
+          ) {
+            await withTimeout(
+              bootstrapAccountForCurrentUser(),
+              30_000,
+              "Account bootstrap recovery timeout"
+            );
           }
 
           await sleep(600 + attempt * 250);
@@ -445,10 +464,14 @@ export function AppContextProvider({
   }, [pathname, redirectToSessionExpired, resetStateToEmpty, router]);
 
   useEffect(() => {
+    if (!isProtectedAppPath(pathname)) return;
+
     void refreshAppContext();
-  }, [refreshAppContext]);
+  }, [pathname, refreshAppContext]);
 
   useEffect(() => {
+    if (!isProtectedAppPath(pathname)) return;
+
     const supabase = createClient();
 
     const {
@@ -504,7 +527,7 @@ export function AppContextProvider({
     return () => {
       subscription.unsubscribe();
     };
-  }, [refreshAppContext, redirectToSessionExpired, resetStateToEmpty]);
+  }, [pathname, refreshAppContext, redirectToSessionExpired, resetStateToEmpty]);
 
   const value = useMemo<AppContextState>(
     () => ({
