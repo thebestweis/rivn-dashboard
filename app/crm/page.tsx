@@ -2825,9 +2825,15 @@ function CrmPageContent() {
       ) : null}
 
       {selectedDeal ? (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-[#050A14]">
-          <div className="ml-auto flex h-full w-full max-w-xl flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#101827]">
-          <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
+        <div
+          className="fixed inset-0 z-[1000] isolate overflow-hidden bg-[#050A14] text-white"
+          style={{ backgroundColor: "#050A14", opacity: 1 }}
+        >
+          <div
+            className="flex h-full w-full flex-col bg-[#101827] text-white shadow-2xl"
+            style={{ backgroundColor: "#101827", opacity: 1 }}
+          >
+            <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
