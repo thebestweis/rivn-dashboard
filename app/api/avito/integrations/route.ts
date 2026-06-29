@@ -216,6 +216,52 @@ export async function POST(request: Request) {
       throw new Error("Проект не найден в текущем кабинете");
     }
 
+    const accountsInput = body.accounts as AvitoIntegrationAccountPayload[];
+    const duplicateCheckUserIds = accountsInput.map((account, index) => {
+      const avitoUserId = String(account.avitoUserId || "").trim();
+
+      if (!avitoUserId) {
+        throw new Error(`Укажи Avito user_id для аккаунта №${index + 1}`);
+      }
+
+      if (!account.avitoClientId || !account.avitoClientSecret) {
+        throw new Error(
+          `Укажи Avito client_id и client_secret для аккаунта №${index + 1}`
+        );
+      }
+
+      return avitoUserId;
+    });
+
+    const { data: existingAccounts, error: existingAccountsError } =
+      await supabase
+        .from("avito_report_accounts")
+        .select(
+          `
+          id,
+          avito_user_id,
+          avito_report_clients!inner (
+            id,
+            workspace_id
+          )
+        `
+        )
+        .in("avito_user_id", duplicateCheckUserIds)
+        .eq("avito_report_clients.workspace_id", workspaceId)
+        .limit(1);
+
+    if (existingAccountsError) {
+      throw new Error(
+        `Ошибка проверки дублей Avito: ${existingAccountsError.message}`
+      );
+    }
+
+    if (existingAccounts?.length) {
+      throw new Error(
+        `Avito user_id ${existingAccounts[0].avito_user_id} уже подключен в этом кабинете. Используй уже созданную интеграцию.`
+      );
+    }
+
     const clientCode = await generateUniqueClientCode(supabase);
 
     const { data: client, error: clientError } = await supabase
@@ -251,9 +297,9 @@ export async function POST(request: Request) {
       return {
         client_id: client.id,
         name: account.accountName || `Avito аккаунт ${index + 1}`,
-        avito_user_id: account.avitoUserId,
-        avito_client_id: account.avitoClientId,
-        avito_client_secret: account.avitoClientSecret,
+        avito_user_id: String(account.avitoUserId).trim(),
+        avito_client_id: String(account.avitoClientId).trim(),
+        avito_client_secret: String(account.avitoClientSecret).trim(),
         crm_dialogs_enabled: account.crmDialogsEnabled ?? true,
         is_active: account.isActive ?? true,
       };

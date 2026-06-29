@@ -56,18 +56,39 @@ type YandexStatus = {
   lastLeadSubmittedAt: string | null;
 };
 
+type AvitoProject = {
+  id: string;
+  name: string;
+};
+
+type AvitoAccount = {
+  id: string;
+  name: string;
+  avito_user_id: string | number | null;
+  avito_client_id: string | null;
+  crm_dialogs_enabled: boolean | null;
+  is_active: boolean | null;
+};
+
+type AvitoIntegration = {
+  id: string;
+  name: string | null;
+  project_id: string | null;
+  is_active: boolean | null;
+  avito_report_accounts?: AvitoAccount[] | null;
+};
+
 const integrationCards: IntegrationCard[] = [
   {
     name: "Avito",
     title: "Авито",
     sourceKind: "avito",
     accentClassName: "from-[#00f5a8] to-[#65d6ff]",
-    href: "/avito-reports",
     description:
       "Диалоги и заявки попадают в CRM, создают сделку и сохраняют связь с клиентом.",
-    setupLabel: "Подключение через кабинет Avito",
+    setupLabel: "Подключение Avito к CRM",
     setupDescription:
-      "Основная авторизация находится в разделе Avito. Здесь можно быстро проверить статус и включить прием заявок в CRM.",
+      "Добавь данные Avito API, проверь доступ и включи диалоги для сделок в CRM.",
   },
   {
     name: "Tilda",
@@ -148,6 +169,20 @@ export default function CrmIntegrationsPage() {
   const [isLoadingYandexStatus, setIsLoadingYandexStatus] = useState(false);
   const [isRunningYandexSync, setIsRunningYandexSync] = useState(false);
   const [isAvitoConnected, setIsAvitoConnected] = useState(false);
+  const [avitoProjects, setAvitoProjects] = useState<AvitoProject[]>([]);
+  const [avitoIntegrations, setAvitoIntegrations] = useState<
+    AvitoIntegration[]
+  >([]);
+  const [avitoForm, setAvitoForm] = useState({
+    projectId: "",
+    accountName: "",
+    avitoUserId: "",
+    avitoClientId: "",
+    avitoClientSecret: "",
+  });
+  const [isCheckingAvito, setIsCheckingAvito] = useState(false);
+  const [isSavingAvito, setIsSavingAvito] = useState(false);
+  const [avitoAccountAction, setAvitoAccountAction] = useState("");
   const [testingIntegration, setTestingIntegration] = useState("");
   const [leadIngestionSettings, setLeadIngestionSettings] = useState<
     Record<IntegrationSourceKind, boolean>
@@ -198,6 +233,14 @@ export default function CrmIntegrationsPage() {
     isIntegrationConnected(integration)
   ).length;
 
+  const avitoAccounts = useMemo(
+    () =>
+      avitoIntegrations.flatMap(
+        (integration) => integration.avito_report_accounts ?? []
+      ),
+    [avitoIntegrations]
+  );
+
   useEffect(() => {
     if (isReady && hasAccess && workspace?.id) {
       void loadYandexStatus();
@@ -242,14 +285,34 @@ export default function CrmIntegrationsPage() {
   async function loadAvitoStatus() {
     if (!workspace?.id) return;
 
-    const response = await fetch(
-      `/api/avito/integrations?workspaceId=${workspace.id}`,
-      { cache: "no-store" }
-    );
-    const result = await response.json();
+    try {
+      const response = await fetch(
+        `/api/avito/integrations?workspaceId=${workspace.id}`,
+        { cache: "no-store" }
+      );
+      const result = await response.json();
 
-    if (response.ok && result.ok) {
-      setIsAvitoConnected((result.integrations ?? []).length > 0);
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Не удалось загрузить Avito");
+      }
+
+      const projects = (result.projects ?? []) as AvitoProject[];
+      const integrations = (result.integrations ?? []) as AvitoIntegration[];
+
+      setAvitoProjects(projects);
+      setAvitoIntegrations(integrations);
+      setIsAvitoConnected(integrations.length > 0);
+      setAvitoForm((current) =>
+        current.projectId || !projects[0]?.id
+          ? current
+          : { ...current, projectId: projects[0].id }
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Не удалось загрузить подключение Avito"
+      );
     }
   }
 
@@ -306,6 +369,164 @@ export default function CrmIntegrationsPage() {
       );
     } finally {
       setUpdatingLeadIngestion("");
+    }
+  }
+
+  function updateAvitoForm(
+    field: keyof typeof avitoForm,
+    value: string
+  ) {
+    setAvitoForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  async function checkAvitoConnection() {
+    if (!workspace?.id) return;
+
+    try {
+      setMessage("");
+      setIsCheckingAvito(true);
+
+      const response = await fetch("/api/avito/check-connection", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace.id,
+          avitoUserId: avitoForm.avitoUserId,
+          avitoClientId: avitoForm.avitoClientId,
+          avitoClientSecret: avitoForm.avitoClientSecret,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Avito не принял данные подключения");
+      }
+
+      setMessage("Avito подключение проверено. Можно сохранять интеграцию.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Не удалось проверить Avito подключение"
+      );
+    } finally {
+      setIsCheckingAvito(false);
+    }
+  }
+
+  async function saveAvitoIntegration() {
+    if (!workspace?.id) return;
+
+    try {
+      setMessage("");
+      setIsSavingAvito(true);
+
+      const response = await fetch("/api/avito/integrations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace.id,
+          projectId: avitoForm.projectId,
+          dailyEnabled: false,
+          weeklyEnabled: false,
+          isActive: true,
+          accounts: [
+            {
+              accountName: avitoForm.accountName || "Avito аккаунт",
+              avitoUserId: avitoForm.avitoUserId,
+              avitoClientId: avitoForm.avitoClientId,
+              avitoClientSecret: avitoForm.avitoClientSecret,
+              crmDialogsEnabled: true,
+              isActive: true,
+            },
+          ],
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Не удалось сохранить Avito");
+      }
+
+      setAvitoForm((current) => ({
+        ...current,
+        accountName: "",
+        avitoUserId: "",
+        avitoClientId: "",
+        avitoClientSecret: "",
+      }));
+      setMessage("Avito сохранён. Теперь можно подключить диалоги.");
+      await loadAvitoStatus();
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Не удалось сохранить Avito"
+      );
+    } finally {
+      setIsSavingAvito(false);
+    }
+  }
+
+  async function runAvitoAccountAction(
+    accountId: string,
+    action: "connect" | "sync"
+  ) {
+    if (!workspace?.id) return;
+
+    try {
+      setMessage("");
+      setAvitoAccountAction(`${action}:${accountId}`);
+
+      const response = await fetch(
+        action === "connect"
+          ? "/api/avito/messenger/connect-webhook"
+          : "/api/avito/messenger/sync-dialogs",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            workspaceId: workspace.id,
+            accountId,
+            days: 14,
+            maxChats: 30,
+          }),
+        }
+      );
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.error ||
+            (action === "connect"
+              ? "Не удалось подключить Avito webhook"
+              : "Не удалось синхронизировать диалоги")
+        );
+      }
+
+      setMessage(
+        action === "connect"
+          ? "Avito webhook подключён. Новые диалоги будут попадать в CRM."
+          : `Диалоги синхронизированы. Новых сообщений: ${
+              result.messagesSynced ?? 0
+            }.`
+      );
+      await loadAvitoStatus();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Не удалось выполнить действие Avito"
+      );
+    } finally {
+      setAvitoAccountAction("");
     }
   }
 
@@ -808,13 +1029,88 @@ export default function CrmIntegrationsPage() {
                 </div>
 
                 {selectedIntegration.sourceKind === "avito" ? (
-                  <Link
-                    href={selectedIntegration.href ?? "/avito-reports"}
-                    className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#00f5a8] px-4 text-sm font-semibold text-slate-950 shadow-[0_16px_40px_rgba(0,245,168,0.20)] transition hover:-translate-y-0.5 hover:bg-[#2fffc0]"
-                  >
-                    Открыть подключение
-                    <ExternalLink className="h-4 w-4" />
-                  </Link>
+                  <div className="mt-5 space-y-3">
+                    <select
+                      value={avitoForm.projectId}
+                      onChange={(event) =>
+                        updateAvitoForm("projectId", event.target.value)
+                      }
+                      className="h-12 w-full rounded-2xl border border-white/10 bg-[#08111f]/90 px-4 text-sm text-white outline-none transition focus:border-[#00f5a8]/40"
+                    >
+                      <option value="">Выбери проект</option>
+                      {avitoProjects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={avitoForm.accountName}
+                      onChange={(event) =>
+                        updateAvitoForm("accountName", event.target.value)
+                      }
+                      placeholder="Название аккаунта"
+                      className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.055] px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#00f5a8]/40"
+                    />
+                    <input
+                      value={avitoForm.avitoUserId}
+                      onChange={(event) =>
+                        updateAvitoForm("avitoUserId", event.target.value)
+                      }
+                      placeholder="Avito user_id"
+                      className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.055] px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#00f5a8]/40"
+                    />
+                    <input
+                      value={avitoForm.avitoClientId}
+                      onChange={(event) =>
+                        updateAvitoForm("avitoClientId", event.target.value)
+                      }
+                      placeholder="Avito client_id"
+                      className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.055] px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#00f5a8]/40"
+                    />
+                    <input
+                      value={avitoForm.avitoClientSecret}
+                      onChange={(event) =>
+                        updateAvitoForm(
+                          "avitoClientSecret",
+                          event.target.value
+                        )
+                      }
+                      type="password"
+                      placeholder="Avito client_secret"
+                      className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.055] px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#00f5a8]/40"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={checkAvitoConnection}
+                        disabled={
+                          isCheckingAvito ||
+                          !avitoForm.avitoUserId.trim() ||
+                          !avitoForm.avitoClientId.trim() ||
+                          !avitoForm.avitoClientSecret.trim()
+                        }
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-white/78 transition hover:border-[#00f5a8]/28 hover:bg-[#00f5a8]/10 hover:text-white disabled:opacity-45"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        {isCheckingAvito ? "Проверяем..." : "Проверить"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveAvitoIntegration}
+                        disabled={
+                          isSavingAvito ||
+                          !avitoForm.projectId ||
+                          !avitoForm.avitoUserId.trim() ||
+                          !avitoForm.avitoClientId.trim() ||
+                          !avitoForm.avitoClientSecret.trim()
+                        }
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#00f5a8] px-4 text-sm font-semibold text-slate-950 shadow-[0_16px_40px_rgba(0,245,168,0.20)] transition hover:-translate-y-0.5 hover:bg-[#2fffc0] disabled:translate-y-0 disabled:opacity-50"
+                      >
+                        {isSavingAvito ? "Сохраняем..." : "Подключить Avito"}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <>
                     <div className="mt-5 rounded-2xl border border-white/10 bg-[#08111f]/75 p-3 font-mono text-xs leading-6 text-white/72">
@@ -887,10 +1183,85 @@ export default function CrmIntegrationsPage() {
                 </div>
 
                 {selectedIntegration.sourceKind === "avito" ? (
-                  <div className="mt-5 rounded-2xl border border-[#00f5a8]/20 bg-[#00f5a8]/10 p-4 text-sm leading-6 text-[#9fffe3]">
-                    Avito проверяется через активную интеграцию кабинета и
-                    входящие диалоги. Если статус подключен, заявки будут
-                    попадать в CRM.
+                  <div className="mt-5 space-y-3">
+                    <div className="rounded-2xl border border-[#00f5a8]/20 bg-[#00f5a8]/10 p-4 text-sm leading-6 text-[#9fffe3]">
+                      {avitoAccounts.length > 0
+                        ? `Подключено аккаунтов: ${avitoAccounts.length}.`
+                        : "Аккаунты Avito пока не добавлены."}
+                    </div>
+
+                    {avitoAccounts.length > 0 ? (
+                      <div className="space-y-2">
+                        {avitoAccounts.map((account) => (
+                          <div
+                            key={account.id}
+                            className="rounded-2xl border border-white/10 bg-white/[0.045] p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">
+                                  {account.name || "Avito аккаунт"}
+                                </p>
+                                <p className="mt-1 text-xs text-white/42">
+                                  user_id: {account.avito_user_id || "не указан"}
+                                </p>
+                              </div>
+                              <span
+                                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                                  account.crm_dialogs_enabled
+                                    ? "bg-[#00f5a8]/12 text-[#9fffe3]"
+                                    : "bg-white/[0.055] text-white/45"
+                                }`}
+                              >
+                                {account.crm_dialogs_enabled
+                                  ? "CRM включена"
+                                  : "CRM выключена"}
+                              </span>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void runAvitoAccountAction(
+                                    account.id,
+                                    "connect"
+                                  )
+                                }
+                                disabled={
+                                  avitoAccountAction ===
+                                  `connect:${account.id}`
+                                }
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#00f5a8]/20 bg-[#00f5a8]/10 px-3 text-xs font-semibold text-[#9fffe3] transition hover:border-[#00f5a8]/35 hover:bg-[#00f5a8]/14 disabled:opacity-45"
+                              >
+                                <Webhook className="h-4 w-4" />
+                                {avitoAccountAction ===
+                                `connect:${account.id}`
+                                  ? "Подключаем..."
+                                  : "Подключить диалоги"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void runAvitoAccountAction(
+                                    account.id,
+                                    "sync"
+                                  )
+                                }
+                                disabled={
+                                  avitoAccountAction === `sync:${account.id}`
+                                }
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-white/70 transition hover:border-white/20 hover:text-white disabled:opacity-45"
+                              >
+                                <RefreshCcw className="h-4 w-4" />
+                                {avitoAccountAction === `sync:${account.id}`
+                                  ? "Собираем..."
+                                  : "Синхронизировать"}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <button
