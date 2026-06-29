@@ -33,6 +33,45 @@ async function readJsonResponse(response: Response) {
   }
 }
 
+type AvitoTestReportItem = {
+  status?: string;
+  error?: string;
+};
+
+type AvitoTestReportResult = {
+  success?: number;
+  failed?: number;
+  skipped?: number;
+  results?: AvitoTestReportItem[];
+};
+
+function getReportDeliveryError(result: AvitoTestReportResult | null) {
+  const success = Number(result?.success ?? 0);
+  const failed = Number(result?.failed ?? 0);
+  const skipped = Number(result?.skipped ?? 0);
+  const firstProblem = Array.isArray(result?.results)
+    ? result.results.find((item) => item?.status !== "success")
+    : null;
+
+  if (success > 0 && failed === 0) {
+    return null;
+  }
+
+  if (firstProblem?.error) {
+    return firstProblem.error;
+  }
+
+  if (failed > 0) {
+    return "Отчёт сформировался, но Telegram не подтвердил доставку.";
+  }
+
+  if (skipped > 0) {
+    return "Отчёт был пропущен: активные Avito-аккаунты или данные для отправки не найдены.";
+  }
+
+  return "Отчёт не был отправлен в Telegram.";
+}
+
 export async function POST(request: Request) {
   try {
     const rawBody = await request.text();
@@ -143,6 +182,12 @@ export async function POST(request: Request) {
         result?.error ||
           `Avito test report failed with empty response (${response.status}).`
       );
+    }
+
+    const deliveryError = getReportDeliveryError(result);
+
+    if (deliveryError) {
+      throw new Error(deliveryError);
     }
 
     return Response.json({

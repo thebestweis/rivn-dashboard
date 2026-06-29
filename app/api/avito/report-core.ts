@@ -67,6 +67,7 @@ type RunReportParams = {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_MESSAGE_LIMIT = 3900;
 
 function getSupabase() {
   if (!supabaseUrl || !supabaseKey) {
@@ -256,6 +257,55 @@ async function sendTelegramMessage(chatId: string, text: string) {
     throw new Error("Не найден TELEGRAM_BOT_TOKEN");
   }
 
+  let lastData: unknown = null;
+
+  for (const message of splitTelegramMessage(text)) {
+    lastData = await sendTelegramMessagePart(chatId, message);
+    await sleep(350);
+  }
+
+  return lastData;
+}
+
+function splitTelegramMessage(text: string) {
+  if (text.length <= TELEGRAM_MESSAGE_LIMIT) {
+    return [text];
+  }
+
+  const parts: string[] = [];
+  let current = "";
+
+  for (const block of text.split("\n\n")) {
+    const next = current ? `${current}\n\n${block}` : block;
+
+    if (next.length <= TELEGRAM_MESSAGE_LIMIT) {
+      current = next;
+      continue;
+    }
+
+    if (current) {
+      parts.push(current);
+      current = "";
+    }
+
+    if (block.length <= TELEGRAM_MESSAGE_LIMIT) {
+      current = block;
+      continue;
+    }
+
+    for (let index = 0; index < block.length; index += TELEGRAM_MESSAGE_LIMIT) {
+      parts.push(block.slice(index, index + TELEGRAM_MESSAGE_LIMIT));
+    }
+  }
+
+  if (current) {
+    parts.push(current);
+  }
+
+  return parts;
+}
+
+async function sendTelegramMessagePart(chatId: string, text: string) {
   let response: Response | null = null;
   let lastError: unknown = null;
 
