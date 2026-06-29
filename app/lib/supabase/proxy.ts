@@ -53,13 +53,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-    if (
-    isAuthenticated &&
-    (pathname === "/landing" ||
-      pathname === "/login" ||
-      pathname === "/register" ||
-      pathname === "/session-expired")
-  ) {
+  if (isAuthenticated && pathname === "/landing") {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.searchParams.delete("next");
