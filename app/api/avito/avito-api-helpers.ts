@@ -43,6 +43,10 @@ type AvitoPeriodStats = {
 
 type MetricBucket = keyof AvitoPeriodStats;
 
+export type AvitoProfileAnalyticsStats = AvitoPeriodStats & {
+  expenses: number;
+};
+
 export class AvitoApiError extends Error {
   status: number;
   details: unknown;
@@ -566,6 +570,12 @@ function getMetricBucket(metricName: string): MetricBucket | null {
 }
 
 const coreAnalyticsMetrics = ["views", "contacts", "favorites"];
+const profileAnalyticsMetrics = [
+  "views",
+  "contacts",
+  "favorites",
+  "allSpending",
+];
 
 function toFiniteNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -581,6 +591,61 @@ function toFiniteNumber(value: unknown) {
   }
 
   return 0;
+}
+
+function getMetricValue(data: unknown, metricName: string) {
+  let total = 0;
+
+  const visit = (node: unknown) => {
+    if (!node || typeof node !== "object") {
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        visit(item);
+      }
+      return;
+    }
+
+    const record = node as Record<string, unknown>;
+    const slug = record.slug ?? record.name ?? record.code ?? record.metric;
+
+    if (slug === metricName) {
+      total += toFiniteNumber(record.value ?? record.amount ?? record.count ?? 0);
+      return;
+    }
+
+    for (const [key, value] of Object.entries(record)) {
+      if (key === metricName) {
+        total += toFiniteNumber(value);
+      }
+    }
+
+    for (const value of Object.values(record)) {
+      visit(value);
+    }
+  };
+
+  visit(data);
+
+  return total;
+}
+
+function getProfileAnalyticsStatsFromValue(value: unknown): AvitoProfileAnalyticsStats {
+  const stats = collectMetricsFromValue(value);
+  const allSpendingKopecks =
+    getMetricValue(value, "allSpending") ||
+    getMetricValue(value, "spending") ||
+    getMetricValue(value, "presenceSpending") +
+      getMetricValue(value, "promoSpending") +
+      getMetricValue(value, "commission") +
+      getMetricValue(value, "restSpending");
+
+  return {
+    ...stats,
+    expenses: Math.round(allSpendingKopecks / 100),
+  };
 }
 
 function addMetricValue(
@@ -841,6 +906,118 @@ async function fetchAggregateStatsFromAvito(params: {
   }
 
   throw lastError;
+}
+
+async function fetchProfileAnalyticsFromAvito(params: {
+  accessToken: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+  grouping: "day" | "week" | "month" | "totals";
+}) {
+  return fetchAvitoJson(
+    `https://api.avito.ru/stats/v2/accounts/${params.avitoUserId}/items`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.accessToken}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        dateFrom: params.dateFrom,
+        dateTo: params.dateTo,
+        filter: null,
+        grouping: params.grouping,
+        limit: 1000,
+        metrics: profileAnalyticsMetrics,
+        offset: 0,
+      }),
+    },
+    "Ошибка получения статистики профиля Avito"
+  );
+}
+
+function parseProfileAnalyticsByPeriod(data: unknown) {
+  const root = data as Record<string, unknown> | null;
+  const result =
+    root && typeof root === "object" && "result" in root
+      ? (root.result as Record<string, unknown>)
+      : null;
+  const groupings = Array.isArray(result?.groupings) ? result.groupings : [];
+  const statsByDate: Record<string, AvitoProfileAnalyticsStats> = {};
+
+  for (const grouping of groupings) {
+    if (!grouping || typeof grouping !== "object") {
+      continue;
+    }
+
+    const record = grouping as Record<string, unknown>;
+    const date =
+      getGroupingDate(record) ||
+      (typeof record.id === "number"
+        ? new Date(record.id * 1000).toISOString().slice(0, 10)
+        : "");
+
+    if (!date) {
+      continue;
+    }
+
+    statsByDate[date] = getProfileAnalyticsStatsFromValue(record);
+  }
+
+  return statsByDate;
+}
+
+export async function getAvitoProfileAnalyticsByPeriod(params: {
+  accountId?: string;
+  accessToken: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+  grouping: "day" | "week" | "month";
+}): Promise<Record<string, AvitoProfileAnalyticsStats>> {
+  const cacheKey = JSON.stringify({
+    accountId: params.accountId,
+    avitoUserId: params.avitoUserId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    grouping: params.grouping,
+    itemIdsHash: `profile-analytics-v1:${params.grouping}`,
+  });
+  const pending = pendingAggregateStatsByDayRequests.get(cacheKey) as
+    | Promise<Record<string, AvitoProfileAnalyticsStats>>
+    | undefined;
+
+  if (pending) {
+    return pending;
+  }
+
+  const request = (async () => {
+    const data = await fetchProfileAnalyticsFromAvito(params);
+    return parseProfileAnalyticsByPeriod(data);
+  })().finally(() => {
+    pendingAggregateStatsByDayRequests.delete(cacheKey);
+  });
+
+  pendingAggregateStatsByDayRequests.set(cacheKey, request);
+
+  return request;
+}
+
+export async function getAvitoProfileAnalyticsForPeriod(params: {
+  accountId?: string;
+  accessToken: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+}): Promise<AvitoProfileAnalyticsStats> {
+  const data = await fetchProfileAnalyticsFromAvito({
+    ...params,
+    grouping: "totals",
+  });
+
+  return getProfileAnalyticsStatsFromValue(data);
 }
 
 async function fetchAggregateStatsByDayFromAvito(params: {
