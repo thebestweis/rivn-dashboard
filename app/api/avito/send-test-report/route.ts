@@ -128,9 +128,14 @@ export async function POST(request: Request) {
 
     const url = new URL("/api/avito/test-report", "http://rivn-internal.local");
     url.searchParams.set("clientCode", client.client_code);
-    url.searchParams.set("secret", cronSecret);
 
-    const response = await sendAvitoTestReport(new Request(url));
+    const response = await sendAvitoTestReport(
+      new Request(url, {
+        headers: {
+          authorization: `Bearer ${cronSecret}`,
+        },
+      })
+    );
     const result = await readJsonResponse(response);
 
     if (!response.ok || !result?.ok) {
