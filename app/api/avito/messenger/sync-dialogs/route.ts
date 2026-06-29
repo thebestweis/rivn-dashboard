@@ -78,6 +78,33 @@ function getErrorStatus(error: unknown) {
   return error instanceof HttpError ? error.status : 500;
 }
 
+function formatAvitoMessengerError(
+  data: unknown,
+  status: number,
+  action: string
+) {
+  const payload =
+    data && typeof data === "object"
+      ? (data as { code?: number | string; message?: string })
+      : null;
+  const message =
+    typeof payload?.message === "string"
+      ? payload.message
+      : typeof data === "string"
+        ? data
+        : "";
+
+  if (status === 402 || payload?.code === 402 || payload?.code === "402") {
+    return `Avito Messenger API недоступен для этого аккаунта. Avito ответил: ${
+      message || "нужна подписка на API мессенджера"
+    }`;
+  }
+
+  return `Avito не отдал ${action}. Статус: ${status}. Ответ: ${
+    message || JSON.stringify(data) || "пустой ответ"
+  }`;
+}
+
 function getInternalSecret() {
   return (
     process.env.CRM_WEBHOOK_SECRET ||
@@ -301,6 +328,12 @@ async function fetchChats(params: {
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
+      throw new Error(
+        formatAvitoMessengerError(data, response.status, "список чатов")
+      );
+    }
+
+    if (!response.ok) {
       throw new Error(`Avito не отдал список чатов: ${JSON.stringify(data)}`);
     }
 
@@ -338,6 +371,12 @@ async function fetchMessages(params: {
   );
 
   const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(
+      formatAvitoMessengerError(data, response.status, "сообщения")
+    );
+  }
 
   if (!response.ok) {
     throw new Error(`Avito не отдал сообщения: ${JSON.stringify(data)}`);

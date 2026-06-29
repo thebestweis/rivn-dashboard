@@ -144,6 +144,23 @@ function formatDateTime(value?: string | null) {
   }).format(new Date(value));
 }
 
+async function readApiJson(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text().catch(() => "");
+
+  return {
+    ok: false,
+    error: text.trim().startsWith("<")
+      ? "Сервер вернул HTML вместо JSON. Обнови страницу и попробуй снова."
+      : text || `Сервер вернул ответ ${response.status}`,
+  };
+}
+
 function getBrandLogo(sourceKind: IntegrationSourceKind) {
   if (sourceKind === "avito") return "A";
   if (sourceKind === "tilda") return "T";
@@ -290,7 +307,7 @@ export default function CrmIntegrationsPage() {
         `/api/avito/integrations?workspaceId=${workspace.id}`,
         { cache: "no-store" }
       );
-      const result = await response.json();
+      const result = await readApiJson(response);
 
       if (!response.ok || !result.ok) {
         throw new Error(result.error || "Не удалось загрузить Avito");
@@ -401,7 +418,7 @@ export default function CrmIntegrationsPage() {
           avitoClientSecret: avitoForm.avitoClientSecret,
         }),
       });
-      const result = await response.json();
+      const result = await readApiJson(response);
 
       if (!response.ok || !result.ok) {
         throw new Error(result.error || "Avito не принял данные подключения");
@@ -449,7 +466,7 @@ export default function CrmIntegrationsPage() {
           ],
         }),
       });
-      const result = await response.json();
+      const result = await readApiJson(response);
 
       if (!response.ok || !result.ok) {
         throw new Error(result.error || "Не удалось сохранить Avito");
@@ -500,7 +517,7 @@ export default function CrmIntegrationsPage() {
           }),
         }
       );
-      const result = await response.json();
+      const result = await readApiJson(response);
 
       if (!response.ok || !result.ok) {
         throw new Error(

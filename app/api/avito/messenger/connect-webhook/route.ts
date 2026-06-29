@@ -77,6 +77,29 @@ async function readAvitoResponse(response: Response) {
   }
 }
 
+function formatAvitoMessengerError(result: unknown, status: number) {
+  const data =
+    result && typeof result === "object"
+      ? (result as { code?: number | string; message?: string })
+      : null;
+  const message =
+    typeof data?.message === "string"
+      ? data.message
+      : typeof result === "string"
+        ? result
+        : "";
+
+  if (status === 402 || data?.code === 402 || data?.code === "402") {
+    return `Avito Messenger API недоступен для этого аккаунта. Avito ответил: ${
+      message || "нужна подписка на API мессенджера"
+    }`;
+  }
+
+  return `Avito не подключил webhook. Статус: ${status}. Ответ: ${
+    message || JSON.stringify(result) || "пустой ответ"
+  }`;
+}
+
 async function requireWorkspaceAccess(
   supabase: ServiceSupabase,
   workspaceId: string
@@ -200,6 +223,13 @@ export async function POST(request: Request) {
     });
 
     const result = await readAvitoResponse(response);
+
+    if (!response.ok) {
+      throw new HttpError(
+        `${formatAvitoMessengerError(result, response.status)}. URL: ${webhookUrl}`,
+        400
+      );
+    }
 
     if (!response.ok) {
       const resultText =
