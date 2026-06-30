@@ -798,7 +798,7 @@ async function queueTelegramReport(params: {
     report_type: params.reportType,
     period_start: params.period.currentStart,
     period_end: params.period.currentEnd,
-    status: "processing",
+    status: "success",
     message: `${AVITO_TELEGRAM_QUEUE_MARKER}\n${params.message}`,
   });
 

@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 const AVITO_TELEGRAM_QUEUE_MARKER = "AVITO_TELEGRAM_PENDING_V1";
+const AVITO_TELEGRAM_FAILED_MARKER = "AVITO_TELEGRAM_FAILED_V1";
 
 function loadEnvFile(fileName) {
   const path = resolve(process.cwd(), fileName);
@@ -157,7 +158,7 @@ async function fetchPendingReports() {
   const { data, error } = await supabase
     .from("avito_report_logs")
     .select("id, client_id, telegram_chat_id, report_type, period_start, period_end, message, created_at")
-    .eq("status", "processing")
+    .eq("status", "success")
     .like("message", `${AVITO_TELEGRAM_QUEUE_MARKER}%`)
     .order("created_at", { ascending: true })
     .limit(config.batchSize);
@@ -212,7 +213,7 @@ async function deliverPendingReports() {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        await markReportStatus(report.id, "failed", message).catch((updateError) =>
+        await markReportStatus(report.id, "success", `${AVITO_TELEGRAM_FAILED_MARKER}\n${message}`).catch((updateError) =>
           logError("Failed to mark Avito report delivery as failed", updateError, { reportId: report.id })
         );
         logError("Avito report delivery failed", error, {

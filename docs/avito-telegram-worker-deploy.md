@@ -66,10 +66,11 @@ pm2 logs avito-telegram-worker --lines 100
 
 You should see `Avito report delivered`.
 
-In Supabase, `avito_report_logs.status` should move:
+In Supabase, `avito_report_logs.status` stays:
 
 ```txt
-processing -> success
+success
 ```
 
 Queued rows are marked by the `AVITO_TELEGRAM_PENDING_V1` prefix in `message`.
+After delivery, the worker removes the prefix and keeps the clean report text.
