@@ -2,6 +2,11 @@
 
 Use this when the main RIVN OS server cannot reach `api.telegram.org`.
 
+## Database
+
+Run `docs/avito-telegram-delivery-queue.sql` once in Supabase SQL Editor.
+This creates a dedicated delivery queue and avoids the `avito_report_logs_status_check` constraint.
+
 ## Main RIVN OS server
 
 The main server should generate Avito reports and put Telegram delivery into the database queue.
@@ -66,11 +71,10 @@ pm2 logs avito-telegram-worker --lines 100
 
 You should see `Avito report delivered`.
 
-In Supabase, `avito_report_logs.status` stays:
+In Supabase, `avito_telegram_delivery_queue.status` changes:
 
 ```txt
-success
+pending -> processing -> sent
 ```
 
-Queued rows are marked by the `AVITO_TELEGRAM_PENDING_V1` prefix in `message`.
-After delivery, the worker removes the prefix and keeps the clean report text.
+After successful Telegram delivery, the worker writes a normal `success` row to `avito_report_logs`.

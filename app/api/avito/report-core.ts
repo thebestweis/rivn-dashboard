@@ -70,7 +70,6 @@ const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MESSAGE_LIMIT = 3900;
 const TELEGRAM_FETCH_TIMEOUT_MS = 20_000;
 const telegramDeliveryMode = process.env.AVITO_TELEGRAM_DELIVERY_MODE;
-const AVITO_TELEGRAM_QUEUE_MARKER = "AVITO_TELEGRAM_PENDING_V1";
 
 function shouldQueueTelegramDelivery() {
   return (
@@ -785,6 +784,28 @@ async function hasDuplicateSuccess(params: {
   );
 }
 
+async function hasQueuedTelegramDelivery(params: {
+  supabase: Supabase;
+  clientId: string;
+  reportType: AvitoReportType;
+  period: ReportPeriod;
+}) {
+  const { data, error } = await params.supabase
+    .from("avito_telegram_delivery_queue")
+    .select("id, status")
+    .eq("client_id", params.clientId)
+    .eq("report_type", params.reportType)
+    .eq("period_start", params.period.currentStart)
+    .eq("period_end", params.period.currentEnd)
+    .in("status", ["pending", "processing", "sent"]);
+
+  if (error) {
+    throw new Error(`Не удалось проверить очередь Avito-отчётов: ${error.message}`);
+  }
+
+  return (data ?? []).length > 0;
+}
+
 async function queueTelegramReport(params: {
   supabase: Supabase;
   client: AvitoClient;
@@ -792,14 +813,14 @@ async function queueTelegramReport(params: {
   period: ReportPeriod;
   message: string;
 }) {
-  const { error } = await params.supabase.from("avito_report_logs").insert({
+  const { error } = await params.supabase.from("avito_telegram_delivery_queue").insert({
     client_id: params.client.id,
     telegram_chat_id: params.client.telegram_chat_id,
     report_type: params.reportType,
     period_start: params.period.currentStart,
     period_end: params.period.currentEnd,
-    status: "success",
-    message: `${AVITO_TELEGRAM_QUEUE_MARKER}\n${params.message}`,
+    status: "pending",
+    message: params.message,
   });
 
   if (error) {
@@ -840,12 +861,19 @@ export async function runAvitoReport(params: RunReportParams) {
       if (
         !params.testMode &&
         !params.forceSend &&
-        (await hasDuplicateSuccess({
+        ((await hasDuplicateSuccess({
           supabase,
           clientId: client.id,
           reportType: params.reportType,
           period,
-        }))
+        })) ||
+          (deliveryMode === "queue" &&
+            (await hasQueuedTelegramDelivery({
+              supabase,
+              clientId: client.id,
+              reportType: params.reportType,
+              period,
+            }))))
       ) {
         results.push({
           clientId: client.id,

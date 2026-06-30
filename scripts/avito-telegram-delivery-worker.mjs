@@ -3,8 +3,6 @@ import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
-const AVITO_TELEGRAM_QUEUE_MARKER = "AVITO_TELEGRAM_PENDING_V1";
-const AVITO_TELEGRAM_FAILED_MARKER = "AVITO_TELEGRAM_FAILED_V1";
 
 function loadEnvFile(fileName) {
   const path = resolve(process.cwd(), fileName);
@@ -45,6 +43,7 @@ const config = {
   batchSize: Number(process.env.AVITO_TELEGRAM_WORKER_BATCH_SIZE || 10),
   messageLimit: Number(process.env.AVITO_TELEGRAM_MESSAGE_LIMIT || 3900),
   requestTimeoutMs: Number(process.env.AVITO_TELEGRAM_REQUEST_TIMEOUT_MS || 20_000),
+  maxAttempts: Number(process.env.AVITO_TELEGRAM_WORKER_MAX_ATTEMPTS || 5),
 };
 
 const supabase = createClient(config.supabaseUrl, config.serviceRoleKey, {
@@ -156,10 +155,10 @@ async function sendTelegramReport(chatId, text) {
 
 async function fetchPendingReports() {
   const { data, error } = await supabase
-    .from("avito_report_logs")
-    .select("id, client_id, telegram_chat_id, report_type, period_start, period_end, message, created_at")
-    .eq("status", "success")
-    .like("message", `${AVITO_TELEGRAM_QUEUE_MARKER}%`)
+    .from("avito_telegram_delivery_queue")
+    .select("id, client_id, telegram_chat_id, report_type, period_start, period_end, message, attempts, created_at")
+    .in("status", ["pending", "failed"])
+    .lt("attempts", config.maxAttempts)
     .order("created_at", { ascending: true })
     .limit(config.batchSize);
 
@@ -167,26 +166,51 @@ async function fetchPendingReports() {
   return data ?? [];
 }
 
-async function markReportStatus(reportId, status, message) {
-  const patch = { status };
-  if (typeof message === "string") patch.message = message;
-
-  const { error } = await supabase.from("avito_report_logs").update(patch).eq("id", reportId);
+async function updateQueueReport(reportId, patch) {
+  const { error } = await supabase
+    .from("avito_telegram_delivery_queue")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", reportId);
   if (error) throw new Error(error.message);
+}
+
+async function insertDeliveryLog(report, message) {
+  const { error } = await supabase.from("avito_report_logs").insert({
+    client_id: report.client_id,
+    telegram_chat_id: report.telegram_chat_id,
+    report_type: report.report_type,
+    period_start: report.period_start,
+    period_end: report.period_end,
+    status: "success",
+    message,
+  });
+
+  if (error) {
+    logError("Failed to write Avito report delivery log", new Error(error.message), { reportId: report.id });
+  }
 }
 
 async function deliverReport(report) {
   const chatId = report.telegram_chat_id ? String(report.telegram_chat_id) : "";
-  const rawText = report.message ? String(report.message) : "";
-  const text = rawText.startsWith(AVITO_TELEGRAM_QUEUE_MARKER)
-    ? rawText.slice(AVITO_TELEGRAM_QUEUE_MARKER.length).replace(/^\n/, "")
-    : rawText;
+  const text = report.message ? String(report.message) : "";
 
   if (!chatId) throw new Error("Report has no telegram_chat_id");
   if (!text) throw new Error("Report has empty message");
 
+  await updateQueueReport(report.id, {
+    status: "processing",
+    attempts: Number(report.attempts || 0) + 1,
+    last_error: null,
+  });
+
   const sent = await sendTelegramReport(chatId, text);
-  await markReportStatus(report.id, "success", text);
+  await updateQueueReport(report.id, {
+    status: "sent",
+    telegram_message_id: sent?.message_id ? String(sent.message_id) : null,
+    sent_at: new Date().toISOString(),
+    last_error: null,
+  });
+  await insertDeliveryLog(report, text);
 
   return {
     messageId: sent?.message_id ?? null,
@@ -213,7 +237,10 @@ async function deliverPendingReports() {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        await markReportStatus(report.id, "success", `${AVITO_TELEGRAM_FAILED_MARKER}\n${message}`).catch((updateError) =>
+        await updateQueueReport(report.id, {
+          status: "failed",
+          last_error: message,
+        }).catch((updateError) =>
           logError("Failed to mark Avito report delivery as failed", updateError, { reportId: report.id })
         );
         logError("Avito report delivery failed", error, {
