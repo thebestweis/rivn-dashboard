@@ -193,6 +193,96 @@ export async function POST(request: Request) {
     const supabase = getServiceSupabase();
     await requireWorkspaceAccess(supabase, workspaceId);
 
+    if (body.integrationId) {
+      if (!Array.isArray(body.accounts) || body.accounts.length === 0) {
+        throw new Error("Добавь хотя бы один Avito-аккаунт");
+      }
+
+      const { data: integration, error: integrationError } = await supabase
+        .from("avito_report_clients")
+        .select("id")
+        .eq("id", body.integrationId)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+
+      if (integrationError) {
+        throw new Error(`Ошибка проверки проекта: ${integrationError.message}`);
+      }
+
+      if (!integration) {
+        throw new Error("Проект не найден в текущем кабинете");
+      }
+
+      const accountsInput = body.accounts as AvitoIntegrationAccountPayload[];
+      const duplicateCheckUserIds = accountsInput.map((account, index) => {
+        const avitoUserId = String(account.avitoUserId || "").trim();
+
+        if (!avitoUserId) {
+          throw new Error(`Укажи Avito user_id для аккаунта №${index + 1}`);
+        }
+
+        if (!account.avitoClientId || !account.avitoClientSecret) {
+          throw new Error(
+            `Укажи Avito client_id и client_secret для аккаунта №${index + 1}`
+          );
+        }
+
+        return avitoUserId;
+      });
+
+      const { data: existingAccounts, error: existingAccountsError } =
+        await supabase
+          .from("avito_report_accounts")
+          .select(
+            `
+            id,
+            avito_user_id,
+            avito_report_clients!inner (
+              id,
+              workspace_id
+            )
+          `
+          )
+          .in("avito_user_id", duplicateCheckUserIds)
+          .eq("avito_report_clients.workspace_id", workspaceId)
+          .limit(1);
+
+      if (existingAccountsError) {
+        throw new Error(
+          `Ошибка проверки дублей Avito: ${existingAccountsError.message}`
+        );
+      }
+
+      if (existingAccounts?.length) {
+        throw new Error(
+          `Avito user_id ${existingAccounts[0].avito_user_id} уже подключен в этом кабинете.`
+        );
+      }
+
+      const accountsPayload = accountsInput.map((account, index) => ({
+        client_id: integration.id,
+        name: account.accountName || `Avito аккаунт ${index + 1}`,
+        avito_user_id: String(account.avitoUserId).trim(),
+        avito_client_id: String(account.avitoClientId).trim(),
+        avito_client_secret: String(account.avitoClientSecret).trim(),
+        crm_dialogs_enabled: account.crmDialogsEnabled ?? true,
+        is_active: account.isActive ?? true,
+      }));
+
+      const { error: accountError } = await supabase
+        .from("avito_report_accounts")
+        .insert(accountsPayload);
+
+      if (accountError) {
+        throw new Error(`Ошибка добавления аккаунтов Avito: ${accountError.message}`);
+      }
+
+      return Response.json({
+        ok: true,
+        accountsCount: accountsPayload.length,
+      });
+    }
+
     if (!body.projectId) {
       throw new Error("Выбери проект");
     }

@@ -187,6 +187,14 @@ const [editingTelegramChatId, setEditingTelegramChatId] = useState("");
 const [editingAccounts, setEditingAccounts] = useState<Record<string, EditingAccountForm>>({});
 const [connectingMessengerAccountId, setConnectingMessengerAccountId] = useState("");
 const [syncingDialogsAccountId, setSyncingDialogsAccountId] = useState("");
+const [accountManagerIntegrationId, setAccountManagerIntegrationId] = useState("");
+const [newAccount, setNewAccount] = useState<AvitoAccountForm>({
+  ...emptyAccount(),
+  accountName: "Новый аккаунт",
+});
+const [isAddingAccount, setIsAddingAccount] = useState(false);
+const [isCheckingNewAccount, setIsCheckingNewAccount] = useState(false);
+const [accountManagerMessage, setAccountManagerMessage] = useState("");
 
   const { workspace } = useAppContextState();
 
@@ -341,6 +349,133 @@ setIntegrations(integrationsData.integrations ?? []);
         ...patch,
       },
     }));
+  }
+
+  const accountManagerIntegration = integrations.find(
+    (integration) => integration.id === accountManagerIntegrationId
+  );
+
+  function openAccountManager(integration: AvitoIntegration) {
+    setAccountManagerIntegrationId(integration.id);
+    setAccountManagerMessage("");
+    setNewAccount({
+      ...emptyAccount(),
+      accountName: `Avito аккаунт ${(integration.avito_report_accounts?.length ?? 0) + 1}`,
+    });
+  }
+
+  function closeAccountManager() {
+    setAccountManagerIntegrationId("");
+    setAccountManagerMessage("");
+    setNewAccount({
+      ...emptyAccount(),
+      accountName: "Новый аккаунт",
+    });
+  }
+
+  async function addAccountToIntegration() {
+    if (!accountManagerIntegration) {
+      return;
+    }
+
+    setAccountManagerMessage("");
+
+    if (
+      !newAccount.avitoUserId.trim() ||
+      !newAccount.avitoClientId.trim() ||
+      !newAccount.avitoClientSecret.trim()
+    ) {
+      setAccountManagerMessage("Заполни Avito user_id, client_id и client_secret");
+      return;
+    }
+
+    try {
+      setIsAddingAccount(true);
+
+      const response = await fetch("/api/avito/integrations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace?.id,
+          integrationId: accountManagerIntegration.id,
+          accounts: [
+            {
+              accountName: newAccount.accountName.trim() || "Avito аккаунт",
+              avitoUserId: newAccount.avitoUserId.trim(),
+              avitoClientId: newAccount.avitoClientId.trim(),
+              avitoClientSecret: newAccount.avitoClientSecret.trim(),
+              isActive: newAccount.isActive,
+              crmDialogsEnabled: true,
+            },
+          ],
+        }),
+      });
+
+      const result = await readApiResponse(response);
+
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || "Не удалось добавить Avito-аккаунт");
+      }
+
+      await refreshIntegrations();
+      setAccountManagerMessage("Аккаунт добавлен. Если он активен, он попадёт в ближайший отчёт.");
+      setNewAccount({
+        ...emptyAccount(),
+        accountName: `Avito аккаунт ${(accountManagerIntegration.avito_report_accounts?.length ?? 0) + 2}`,
+      });
+    } catch (error) {
+      setAccountManagerMessage(
+        error instanceof Error ? error.message : "Ошибка добавления Avito-аккаунта"
+      );
+    } finally {
+      setIsAddingAccount(false);
+    }
+  }
+
+  async function checkNewAccountConnection() {
+    setAccountManagerMessage("");
+
+    if (
+      !newAccount.avitoUserId.trim() ||
+      !newAccount.avitoClientId.trim() ||
+      !newAccount.avitoClientSecret.trim()
+    ) {
+      setAccountManagerMessage("Заполни Avito user_id, client_id и client_secret");
+      return;
+    }
+
+    try {
+      setIsCheckingNewAccount(true);
+
+      const response = await fetch("/api/avito/check-connection", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: workspace?.id,
+          avitoUserId: newAccount.avitoUserId.trim(),
+          avitoClientId: newAccount.avitoClientId.trim(),
+          avitoClientSecret: newAccount.avitoClientSecret.trim(),
+        }),
+      });
+
+      const result = await readApiResponse(response);
+
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || "Avito не принял данные");
+      }
+
+      setAccountManagerMessage("Подключение работает. Можно добавлять аккаунт в отчёт.");
+    } catch (error) {
+      setAccountManagerMessage(
+        error instanceof Error ? error.message : "Не удалось проверить Avito-подключение"
+      );
+    } finally {
+      setIsCheckingNewAccount(false);
+    }
   }
 
   async function checkAvitoConnection(index: number) {
@@ -1410,6 +1545,14 @@ setIntegrations(integrationsData.integrations ?? []);
 
                 <button
                   type="button"
+                  onClick={() => openAccountManager(integration)}
+                  className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-violet-200 transition hover:bg-violet-400/15"
+                >
+                  Аккаунты
+                </button>
+
+                <button
+                  type="button"
                   onClick={() =>
                     setExpandedIntegrationId((current) =>
                       current === integration.id ? "" : integration.id
@@ -2127,6 +2270,209 @@ setIntegrations(integrationsData.integrations ?? []);
           </div>
         </div>
       </div>
+
+      {accountManagerIntegration ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[32px] border border-white/10 bg-[#121826] p-4 shadow-[0_24px_100px_rgba(0,0,0,0.65)] sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-sm text-white/45">Avito-аккаунты проекта</div>
+                <h2 className="mt-1 text-2xl font-semibold text-white">
+                  {accountManagerIntegration.name}
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">
+                  Активные аккаунты попадают в ежедневные и еженедельные отчёты.
+                  Здесь можно добавить новый кабинет Avito без пересоздания проекта.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeAccountManager}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07]"
+              >
+                Закрыть
+              </button>
+            </div>
+
+            {accountManagerMessage ? (
+              <div className="mt-5 rounded-2xl border border-violet-400/20 bg-violet-400/10 px-4 py-3 text-sm text-violet-100">
+                {accountManagerMessage}
+              </div>
+            ) : null}
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_1.1fr]">
+              <section className="rounded-[24px] border border-white/10 bg-[#0F1524] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-white">Действующие аккаунты</h3>
+                    <div className="mt-1 text-xs text-white/40">
+                      {accountManagerIntegration.avito_report_accounts?.length ?? 0} подключено
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {(accountManagerIntegration.avito_report_accounts ?? []).map((account) => {
+                    const isCrmDialogsEnabled = account.crm_dialogs_enabled !== false;
+
+                    return (
+                      <div
+                        key={account.id}
+                        className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="font-semibold text-white">{account.name}</div>
+                            <div className="mt-1 text-xs text-white/40">
+                              user_id: {account.avito_user_id || "не указан"}
+                            </div>
+                            <div className="mt-1 text-xs text-white/40">
+                              client_id: {account.avito_client_id ? `${account.avito_client_id.slice(0, 6)}...` : "не указан"}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateIntegrationAccount(account.id, {
+                                  isActive: !account.is_active,
+                                })
+                              }
+                              disabled={updatingIntegrationId === account.id}
+                              className={`rounded-full border px-3 py-1 transition disabled:opacity-50 ${
+                                account.is_active
+                                  ? "border-violet-300/25 bg-violet-400/15 text-violet-100"
+                                  : "border-white/10 bg-white/[0.04] text-white/45"
+                              }`}
+                            >
+                              {account.is_active ? "В отчётах" : "Отчёты выкл."}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateIntegrationAccount(account.id, {
+                                  crmDialogsEnabled: !isCrmDialogsEnabled,
+                                })
+                              }
+                              disabled={updatingIntegrationId === account.id}
+                              className={`rounded-full border px-3 py-1 transition disabled:opacity-50 ${
+                                isCrmDialogsEnabled
+                                  ? "border-emerald-300/25 bg-emerald-400/10 text-emerald-200"
+                                  : "border-white/10 bg-white/[0.04] text-white/45"
+                              }`}
+                            >
+                              {isCrmDialogsEnabled ? "CRM включена" : "CRM выкл."}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="rounded-[24px] border border-violet-300/15 bg-violet-400/[0.06] p-4">
+                <h3 className="text-base font-semibold text-white">Добавить Avito-аккаунт</h3>
+                <div className="mt-1 text-xs leading-5 text-white/45">
+                  Для проекта FOR - Авито просто добавь 3 аккаунта по очереди. Каждый активный аккаунт будет учитываться в следующем отчёте.
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="text-xs text-white/50">
+                    Название
+                    <input
+                      value={newAccount.accountName}
+                      onChange={(event) =>
+                        setNewAccount((current) => ({
+                          ...current,
+                          accountName: event.target.value,
+                        }))
+                      }
+                      className="mt-1 h-[44px] w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm text-white outline-none placeholder:text-white/25"
+                    />
+                  </label>
+                  <label className="text-xs text-white/50">
+                    Avito user_id
+                    <input
+                      value={newAccount.avitoUserId}
+                      onChange={(event) =>
+                        setNewAccount((current) => ({
+                          ...current,
+                          avitoUserId: event.target.value,
+                        }))
+                      }
+                      placeholder="Например: 123456789"
+                      className="mt-1 h-[44px] w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm text-white outline-none placeholder:text-white/25"
+                    />
+                  </label>
+                  <label className="text-xs text-white/50">
+                    Avito client_id
+                    <input
+                      value={newAccount.avitoClientId}
+                      onChange={(event) =>
+                        setNewAccount((current) => ({
+                          ...current,
+                          avitoClientId: event.target.value,
+                        }))
+                      }
+                      className="mt-1 h-[44px] w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm text-white outline-none placeholder:text-white/25"
+                    />
+                  </label>
+                  <label className="text-xs text-white/50">
+                    Avito client_secret
+                    <input
+                      value={newAccount.avitoClientSecret}
+                      onChange={(event) =>
+                        setNewAccount((current) => ({
+                          ...current,
+                          avitoClientSecret: event.target.value,
+                        }))
+                      }
+                      type="password"
+                      className="mt-1 h-[44px] w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm text-white outline-none placeholder:text-white/25"
+                    />
+                  </label>
+                </div>
+
+                <label className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/70">
+                  <span>Сразу включить аккаунт в отчёты</span>
+                  <input
+                    type="checkbox"
+                    checked={newAccount.isActive}
+                    onChange={(event) =>
+                      setNewAccount((current) => ({
+                        ...current,
+                        isActive: event.target.checked,
+                      }))
+                    }
+                    className="h-5 w-5 accent-violet-400"
+                  />
+                </label>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={checkNewAccountConnection}
+                    disabled={isCheckingNewAccount || isAddingAccount}
+                    className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white/75 transition hover:bg-white/[0.09] disabled:opacity-50"
+                  >
+                    {isCheckingNewAccount ? "Проверяем..." : "Проверить подключение"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addAccountToIntegration}
+                    disabled={isAddingAccount || isCheckingNewAccount}
+                    className="rounded-2xl bg-violet-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_35px_rgba(139,92,246,0.35)] transition hover:bg-violet-400 disabled:opacity-50"
+                  >
+                    {isAddingAccount ? "Добавляем..." : "Добавить аккаунт"}
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isInstructionOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
