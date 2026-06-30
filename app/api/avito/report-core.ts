@@ -69,6 +69,14 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MESSAGE_LIMIT = 3900;
 const TELEGRAM_FETCH_TIMEOUT_MS = 20_000;
+const telegramDeliveryMode = process.env.AVITO_TELEGRAM_DELIVERY_MODE;
+
+function shouldQueueTelegramDelivery() {
+  return (
+    telegramDeliveryMode === "queue" ||
+    process.env.AVITO_TELEGRAM_QUEUE_ENABLED === "true"
+  );
+}
 
 function getSupabase() {
   if (!supabaseUrl || !supabaseKey) {
@@ -770,15 +778,40 @@ async function hasDuplicateSuccess(params: {
   return rows.some(
     (row) =>
       row.status === "success" ||
+      row.status === "telegram_pending" ||
+      row.status === "telegram_processing" ||
       (row.status === "processing" &&
         typeof row.created_at === "string" &&
         row.created_at >= processingWindowStart)
   );
 }
 
+async function queueTelegramReport(params: {
+  supabase: Supabase;
+  client: AvitoClient;
+  reportType: AvitoReportType | "test";
+  period: ReportPeriod;
+  message: string;
+}) {
+  const { error } = await params.supabase.from("avito_report_logs").insert({
+    client_id: params.client.id,
+    telegram_chat_id: params.client.telegram_chat_id,
+    report_type: params.reportType,
+    period_start: params.period.currentStart,
+    period_end: params.period.currentEnd,
+    status: "telegram_pending",
+    message: params.message,
+  });
+
+  if (error) {
+    throw new Error(`Не удалось поставить Avito-отчёт в очередь Telegram: ${error.message}`);
+  }
+}
+
 export async function runAvitoReport(params: RunReportParams) {
   const supabase = getSupabase();
   const period = getReportPeriod(params.reportType);
+  const deliveryMode = shouldQueueTelegramDelivery() ? "queue" : "direct";
   const clients = await loadClients({
     supabase,
     reportType: params.reportType,
@@ -1025,17 +1058,27 @@ export async function runAvitoReport(params: RunReportParams) {
         ? ["🧪 <b>Тестовый Avito-отчёт RIVN OS</b>", "", reportText].join("\n")
         : reportText;
 
-      await sendTelegramMessage(client.telegram_chat_id, finalText);
+      if (deliveryMode === "queue") {
+        await queueTelegramReport({
+          supabase,
+          client,
+          reportType: params.testMode ? "test" : params.reportType,
+          period,
+          message: finalText,
+        });
+      } else {
+        await sendTelegramMessage(client.telegram_chat_id, finalText);
 
-      await supabase.from("avito_report_logs").insert({
-        client_id: client.id,
-        telegram_chat_id: client.telegram_chat_id,
-        report_type: params.testMode ? "test" : params.reportType,
-        period_start: period.currentStart,
-        period_end: period.currentEnd,
-        status: "success",
-        message: finalText,
-      });
+        await supabase.from("avito_report_logs").insert({
+          client_id: client.id,
+          telegram_chat_id: client.telegram_chat_id,
+          report_type: params.testMode ? "test" : params.reportType,
+          period_start: period.currentStart,
+          period_end: period.currentEnd,
+          status: "success",
+          message: finalText,
+        });
+      }
 
       results.push({
         clientId: client.id,
@@ -1070,6 +1113,7 @@ export async function runAvitoReport(params: RunReportParams) {
   return {
     ok: true,
     reportType: params.reportType,
+    deliveryMode,
     testMode: params.testMode ?? false,
     forceSend: params.forceSend ?? false,
     period,

@@ -42,6 +42,7 @@ type AvitoTestReportResult = {
   success?: number;
   failed?: number;
   skipped?: number;
+  deliveryMode?: string;
   results?: AvitoTestReportItem[];
 };
 
@@ -193,7 +194,10 @@ export async function POST(request: Request) {
     return Response.json({
       ok: true,
       mode: "sync",
-      message: "Тестовый отчёт отправлен в Telegram.",
+      message:
+        result.deliveryMode === "queue"
+          ? "Тестовый отчёт сформирован и поставлен в очередь отправки в Telegram."
+          : "Тестовый отчёт отправлен в Telegram.",
       avitoTestReport: result,
     });
   } catch (error) {
