@@ -70,6 +70,7 @@ const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MESSAGE_LIMIT = 3900;
 const TELEGRAM_FETCH_TIMEOUT_MS = 20_000;
 const telegramDeliveryMode = process.env.AVITO_TELEGRAM_DELIVERY_MODE;
+const AVITO_TELEGRAM_QUEUE_MARKER = "AVITO_TELEGRAM_PENDING_V1";
 
 function shouldQueueTelegramDelivery() {
   return (
@@ -778,8 +779,6 @@ async function hasDuplicateSuccess(params: {
   return rows.some(
     (row) =>
       row.status === "success" ||
-      row.status === "telegram_pending" ||
-      row.status === "telegram_processing" ||
       (row.status === "processing" &&
         typeof row.created_at === "string" &&
         row.created_at >= processingWindowStart)
@@ -799,8 +798,8 @@ async function queueTelegramReport(params: {
     report_type: params.reportType,
     period_start: params.period.currentStart,
     period_end: params.period.currentEnd,
-    status: "telegram_pending",
-    message: params.message,
+    status: "processing",
+    message: `${AVITO_TELEGRAM_QUEUE_MARKER}\n${params.message}`,
   });
 
   if (error) {

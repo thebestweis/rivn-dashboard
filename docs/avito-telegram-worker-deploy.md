@@ -69,5 +69,7 @@ You should see `Avito report delivered`.
 In Supabase, `avito_report_logs.status` should move:
 
 ```txt
-telegram_pending -> telegram_processing -> success
+processing -> success
 ```
+
+Queued rows are marked by the `AVITO_TELEGRAM_PENDING_V1` prefix in `message`.

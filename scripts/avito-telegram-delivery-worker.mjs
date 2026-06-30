@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+const AVITO_TELEGRAM_QUEUE_MARKER = "AVITO_TELEGRAM_PENDING_V1";
 
 function loadEnvFile(fileName) {
   const path = resolve(process.cwd(), fileName);
@@ -156,7 +157,8 @@ async function fetchPendingReports() {
   const { data, error } = await supabase
     .from("avito_report_logs")
     .select("id, client_id, telegram_chat_id, report_type, period_start, period_end, message, created_at")
-    .eq("status", "telegram_pending")
+    .eq("status", "processing")
+    .like("message", `${AVITO_TELEGRAM_QUEUE_MARKER}%`)
     .order("created_at", { ascending: true })
     .limit(config.batchSize);
 
@@ -174,14 +176,16 @@ async function markReportStatus(reportId, status, message) {
 
 async function deliverReport(report) {
   const chatId = report.telegram_chat_id ? String(report.telegram_chat_id) : "";
-  const text = report.message ? String(report.message) : "";
+  const rawText = report.message ? String(report.message) : "";
+  const text = rawText.startsWith(AVITO_TELEGRAM_QUEUE_MARKER)
+    ? rawText.slice(AVITO_TELEGRAM_QUEUE_MARKER.length).replace(/^\n/, "")
+    : rawText;
 
   if (!chatId) throw new Error("Report has no telegram_chat_id");
   if (!text) throw new Error("Report has empty message");
 
-  await markReportStatus(report.id, "telegram_processing");
   const sent = await sendTelegramReport(chatId, text);
-  await markReportStatus(report.id, "success");
+  await markReportStatus(report.id, "success", text);
 
   return {
     messageId: sent?.message_id ?? null,
