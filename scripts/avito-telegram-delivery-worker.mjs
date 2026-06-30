@@ -35,10 +35,16 @@ function requiredEnv(name, fallbackNames = []) {
   return value;
 }
 
+function optionalEnv(name) {
+  const value = process.env[name]?.trim();
+  return value || "";
+}
+
 const config = {
   supabaseUrl: requiredEnv("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]),
   serviceRoleKey: requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-  telegramBotToken: requiredEnv("AVITO_TELEGRAM_BOT_TOKEN", ["TELEGRAM_BOT_TOKEN"]),
+  telegramBotToken: requiredEnv("AVITO_TELEGRAM_BOT_TOKEN"),
+  fallbackTelegramBotTokenConfigured: Boolean(optionalEnv("TELEGRAM_BOT_TOKEN")),
   pollMs: Number(process.env.AVITO_TELEGRAM_WORKER_POLL_MS || 10_000),
   batchSize: Number(process.env.AVITO_TELEGRAM_WORKER_BATCH_SIZE || 10),
   messageLimit: Number(process.env.AVITO_TELEGRAM_MESSAGE_LIMIT || 3900),
@@ -135,6 +141,15 @@ async function callTelegram(method, payload) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function validateTelegramBot() {
+  const bot = await callTelegram("getMe", {});
+  log("Avito Telegram bot token validated", {
+    botId: bot?.id ?? null,
+    username: bot?.username ? `@${bot.username}` : null,
+    fallbackTelegramBotTokenConfigured: config.fallbackTelegramBotTokenConfigured,
+  });
 }
 
 async function sendTelegramReport(chatId, text) {
@@ -257,6 +272,8 @@ async function deliverPendingReports() {
 }
 
 async function main() {
+  await validateTelegramBot();
+
   log("Avito Telegram delivery worker started", {
     pollMs: config.pollMs,
     batchSize: config.batchSize,
