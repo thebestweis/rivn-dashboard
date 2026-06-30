@@ -68,6 +68,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MESSAGE_LIMIT = 3900;
+const TELEGRAM_FETCH_TIMEOUT_MS = 20_000;
 
 function getSupabase() {
   if (!supabaseUrl || !supabaseKey) {
@@ -310,12 +311,16 @@ async function sendTelegramMessagePart(chatId: string, text: string) {
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TELEGRAM_FETCH_TIMEOUT_MS);
+
     try {
       response = await fetch(
         `https://api.telegram.org/bot${telegramToken}/sendMessage`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
           body: JSON.stringify({
             chat_id: chatId,
             text,
@@ -327,14 +332,21 @@ async function sendTelegramMessagePart(chatId: string, text: string) {
       break;
     } catch (error) {
       lastError = error;
+      console.error("[avito:telegram] sendMessage fetch failed", {
+        chatId,
+        attempt: attempt + 1,
+        error: formatTelegramError(error),
+      });
       await sleep(1200 * (attempt + 1));
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
   if (!response) {
     throw new Error(
       `Не удалось отправить отчёт в Telegram: ${
-        lastError instanceof Error ? lastError.message : "network error"
+        formatTelegramError(lastError)
       }`
     );
   }
@@ -346,6 +358,32 @@ async function sendTelegramMessagePart(chatId: string, text: string) {
   }
 
   return data;
+}
+
+function formatTelegramError(error: unknown) {
+  if (!error) {
+    return "network error";
+  }
+
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  const cause = (error as Error & { cause?: unknown }).cause;
+  const causeMessage =
+    cause && typeof cause === "object" && "message" in cause
+      ? String((cause as { message?: unknown }).message)
+      : cause
+        ? String(cause)
+        : "";
+  const causeCode =
+    cause && typeof cause === "object" && "code" in cause
+      ? String((cause as { code?: unknown }).code)
+      : "";
+
+  return [error.message, causeCode, causeMessage]
+    .filter(Boolean)
+    .join(" | ");
 }
 
 async function resolveAvitoAccessToken(account: AvitoAccount) {
