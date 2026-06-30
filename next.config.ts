@@ -13,7 +13,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://supabase.rivnos.ru wss://supabase.rivnos.ru",
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",
