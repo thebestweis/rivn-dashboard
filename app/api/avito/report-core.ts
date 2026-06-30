@@ -824,7 +824,7 @@ async function queueTelegramReport(params: {
   });
 
   if (error) {
-    throw new Error(`Не удалось поставить Avito-отчёт в очередь Telegram: ${error.message}`);
+    throw new Error(`Не удалось поставить Avito-отчёт в очередь Telegram (table: avito_telegram_delivery_queue, status: pending): ${error.message}`);
   }
 }
 
@@ -885,15 +885,6 @@ export async function runAvitoReport(params: RunReportParams) {
         continue;
       }
 
-      await supabase.from("avito_report_logs").insert({
-        client_id: client.id,
-        telegram_chat_id: client.telegram_chat_id,
-        report_type: params.testMode ? "test" : params.reportType,
-        period_start: period.currentStart,
-        period_end: period.currentEnd,
-        status: "processing",
-        message: `${params.testMode ? "Test" : params.reportType} отчёт принят в обработку`,
-      });
 
       const accounts = await loadAccounts(supabase, client.id);
 
@@ -1125,13 +1116,9 @@ export async function runAvitoReport(params: RunReportParams) {
         error: message,
       });
 
-      await supabase.from("avito_report_logs").insert({
-        client_id: client.id,
-        telegram_chat_id: client.telegram_chat_id,
-        report_type: params.testMode ? "test" : params.reportType,
-        period_start: period.currentStart,
-        period_end: period.currentEnd,
-        status: "failed",
+      console.error("[avito:report-core] report failed", {
+        clientId: client.id,
+        reportType: params.testMode ? "test" : params.reportType,
         message,
       });
     }
