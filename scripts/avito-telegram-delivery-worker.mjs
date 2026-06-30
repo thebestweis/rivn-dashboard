@@ -38,7 +38,7 @@ function requiredEnv(name, fallbackNames = []) {
 const config = {
   supabaseUrl: requiredEnv("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]),
   serviceRoleKey: requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-  telegramBotToken: requiredEnv("TELEGRAM_BOT_TOKEN"),
+  telegramBotToken: requiredEnv("AVITO_TELEGRAM_BOT_TOKEN", ["TELEGRAM_BOT_TOKEN"]),
   pollMs: Number(process.env.AVITO_TELEGRAM_WORKER_POLL_MS || 10_000),
   batchSize: Number(process.env.AVITO_TELEGRAM_WORKER_BATCH_SIZE || 10),
   messageLimit: Number(process.env.AVITO_TELEGRAM_MESSAGE_LIMIT || 3900),
