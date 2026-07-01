@@ -2825,7 +2825,7 @@ function CrmPageContent() {
         </div>
       ) : null}
 
-      {selectedDeal ? (
+      {selectedDeal && !isFormOpen ? (
         <div className="fixed inset-0 z-[1000] overflow-hidden bg-[#020611]/70 text-white backdrop-blur-sm">
           <div
             className="ml-auto flex h-full w-full max-w-xl flex-col border-l border-white/10 bg-[#101827] text-white shadow-2xl"
