@@ -2219,7 +2219,8 @@ function CrmPageContent() {
                 <button
                   type="button"
                   onClick={openCreateForm}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
+                  style={{ color: "#fff" }}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-2 text-sm font-semibold !text-white transition hover:bg-emerald-400"
                 >
                   <Plus className="h-4 w-4" />
                   Создать сделку
@@ -3609,7 +3610,7 @@ function CrmPageContent() {
       ) : null}
 
       {isFormOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-[1200] flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
           <form
             onSubmit={submitDeal}
             className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#121827] sm:p-6"
