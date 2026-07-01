@@ -1735,7 +1735,7 @@ function CrmPageContent() {
                 Сбросить
               </button>
             ) : null}
-            {false && canManageStages ? (
+            {canManageStages ? (
               <button
                 type="button"
                 onClick={openPipelineSettings}
@@ -1745,7 +1745,7 @@ function CrmPageContent() {
                 Воронки
               </button>
             ) : null}
-            {false && canManageStages ? (
+            {canManageStages ? (
               <button
                 type="button"
                 onClick={openAssignmentSettings}
@@ -1755,7 +1755,7 @@ function CrmPageContent() {
                 Распределение
               </button>
             ) : null}
-            {false && canManageStages && !isAllPipelinesSelected ? (
+            {canManageStages && !isAllPipelinesSelected ? (
               <button
                 type="button"
                 onClick={openStageSettings}
