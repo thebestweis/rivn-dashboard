@@ -579,12 +579,15 @@ const extraFot = safeExtraPayments
     return dayKey >= normalizedFrom && dayKey <= normalizedTo;
   };
 
-  const totalRevenue = payments
-  .filter((item) => {
+  const summaryPayments = payments.filter((item) => {
     if (!item.paidAt) return false;
     return isInSummaryDateRange(item.paidAt);
-  })
-  .reduce((sum, item) => sum + parseRubAmount(item.amount), 0);
+  });
+
+  const totalRevenue = summaryPayments.reduce(
+    (sum, item) => sum + parseRubAmount(item.amount),
+    0
+  );
 
   const totalExpenses = normalizedExpenses
   .filter((item) => {
@@ -677,7 +680,7 @@ const expenseBreakdownData = Object.entries(grouped).map(([name, value]) => ({
         )}`;
 
   const uniqueClients = new Set(
-    payments.map((payment) => payment.client).filter(Boolean)
+    summaryPayments.map((payment) => payment.client).filter(Boolean)
   );
 
   const cac =
@@ -685,17 +688,63 @@ const expenseBreakdownData = Object.entries(grouped).map(([name, value]) => ({
 
 
   const averageCheck =
-    payments.length > 0 ? Math.round(totalRevenue / payments.length) : 0;
-
-  const revenuePerClient =
-    uniqueClients.size > 0
-      ? Math.round(totalRevenue / uniqueClients.size)
+    summaryPayments.length > 0
+      ? Math.round(totalRevenue / summaryPayments.length)
       : 0;
 
-  const paymentsPerClient =
-    uniqueClients.size > 0 ? payments.length / uniqueClients.size : 0;
+  const revenuePerClient = (() => {
+    const monthlyClientRevenue = new Map<
+      string,
+      { revenue: number; clients: Set<string> }
+    >();
 
-  const ltvAdvanced = Math.round(averageCheck * paymentsPerClient);
+    for (const payment of summaryPayments) {
+      if (!payment.paidAt || !payment.client) continue;
+
+      const monthKey = normalizeDateToMonthKey(payment.paidAt);
+      if (!monthKey) continue;
+
+      const current =
+        monthlyClientRevenue.get(monthKey) ?? { revenue: 0, clients: new Set<string>() };
+      current.revenue += parseRubAmount(payment.amount);
+      current.clients.add(payment.client);
+      monthlyClientRevenue.set(monthKey, current);
+    }
+
+    const monthlyAverages = [...monthlyClientRevenue.values()]
+      .filter((item) => item.clients.size > 0)
+      .map((item) => item.revenue / item.clients.size);
+
+    if (monthlyAverages.length === 0) return 0;
+
+    return Math.round(
+      monthlyAverages.reduce((sum, value) => sum + value, 0) /
+        monthlyAverages.length
+    );
+  })();
+
+  const ltvAdvanced = (() => {
+    const lifetimeRevenueByClient = new Map<string, number>();
+
+    for (const payment of payments) {
+      if (!payment.client) continue;
+
+      lifetimeRevenueByClient.set(
+        payment.client,
+        (lifetimeRevenueByClient.get(payment.client) ?? 0) +
+          parseRubAmount(payment.amount)
+      );
+    }
+
+    if (lifetimeRevenueByClient.size === 0) return 0;
+
+    const totalLifetimeRevenue = [...lifetimeRevenueByClient.values()].reduce(
+      (sum, value) => sum + value,
+      0
+    );
+
+    return Math.round(totalLifetimeRevenue / lifetimeRevenueByClient.size);
+  })();
 
   const monthlyTaxRows = [...revenueDynamics]
   .filter((item) => item.revenue > 0)
