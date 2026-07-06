@@ -271,22 +271,10 @@ export function AppSidebar() {
       setIsWorkspaceMenuOpen(false);
     }
 
-    function closeMenuOnOutsideScroll(event: Event) {
-      const target = event.target as Node | null;
-
-      if (target && workspaceMenuRef.current?.contains(target)) {
-        return;
-      }
-
-      setIsWorkspaceMenuOpen(false);
-    }
-
     window.addEventListener("resize", closeMenuOnResize);
-    window.addEventListener("scroll", closeMenuOnOutsideScroll, true);
 
     return () => {
       window.removeEventListener("resize", closeMenuOnResize);
-      window.removeEventListener("scroll", closeMenuOnOutsideScroll, true);
     };
   }, [isWorkspaceMenuOpen]);
 
@@ -811,6 +799,8 @@ export function AppSidebar() {
                 maxHeight: menuPosition.maxHeight,
                 transform: "translateY(-100%)",
               }}
+              onWheel={(event) => event.stopPropagation()}
+              onTouchMove={(event) => event.stopPropagation()}
             >
               <div className="border-b border-white/10 px-4 py-3 text-xs uppercase tracking-[0.12em] text-white/35">
                 Кабинеты
