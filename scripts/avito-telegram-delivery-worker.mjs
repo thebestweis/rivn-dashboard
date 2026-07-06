@@ -40,16 +40,22 @@ function optionalEnv(name) {
   return value || "";
 }
 
+const updatesPollTimeoutSeconds = Number(process.env.AVITO_TELEGRAM_UPDATES_POLL_TIMEOUT_SECONDS || 25);
+const requestTimeoutMs = Math.max(
+  Number(process.env.AVITO_TELEGRAM_REQUEST_TIMEOUT_MS || 20_000),
+  (updatesPollTimeoutSeconds + 10) * 1000
+);
+
 const config = {
   supabaseUrl: requiredEnv("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]),
   serviceRoleKey: requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
   telegramBotToken: requiredEnv("AVITO_TELEGRAM_BOT_TOKEN"),
   fallbackTelegramBotTokenConfigured: Boolean(optionalEnv("TELEGRAM_BOT_TOKEN")),
   pollMs: Number(process.env.AVITO_TELEGRAM_WORKER_POLL_MS || 10_000),
-  updatesPollTimeoutSeconds: Number(process.env.AVITO_TELEGRAM_UPDATES_POLL_TIMEOUT_SECONDS || 25),
+  updatesPollTimeoutSeconds,
   batchSize: Number(process.env.AVITO_TELEGRAM_WORKER_BATCH_SIZE || 10),
   messageLimit: Number(process.env.AVITO_TELEGRAM_MESSAGE_LIMIT || 3900),
-  requestTimeoutMs: Number(process.env.AVITO_TELEGRAM_REQUEST_TIMEOUT_MS || 20_000),
+  requestTimeoutMs,
   maxAttempts: Number(process.env.AVITO_TELEGRAM_WORKER_MAX_ATTEMPTS || 5),
 };
 
