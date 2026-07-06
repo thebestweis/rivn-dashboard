@@ -334,22 +334,17 @@ export function AppSidebar() {
     const rect = workspaceButtonRef.current.getBoundingClientRect();
     const gap = 12;
     const viewportPadding = 16;
-    const menuTop = viewportPadding;
-    const availableHeight = Math.max(260, rect.top - gap - menuTop);
-    const width = Math.min(
-      Math.max(340, rect.width),
-      window.innerWidth - viewportPadding * 2
+    const availableHeight = Math.max(
+      180,
+      rect.top - gap - viewportPadding
     );
-    const left = Math.min(
-      Math.max(viewportPadding, rect.left),
-      window.innerWidth - width - viewportPadding
-    );
-    const maxHeight = Math.min(640, availableHeight);
+    const maxHeight = Math.min(520, availableHeight);
+    const menuTop = Math.max(viewportPadding, rect.top - gap - maxHeight);
 
     setMenuPosition({
-      left,
+      left: rect.left,
       top: menuTop,
-      width,
+      width: rect.width,
       maxHeight,
     });
     setIsWorkspaceMenuOpen(true);
