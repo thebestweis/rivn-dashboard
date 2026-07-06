@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import type { ComponentType } from "react";
+import type { ComponentType, WheelEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -165,6 +165,7 @@ export function AppSidebar() {
 
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
+  const workspaceMenuScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -279,6 +280,7 @@ export function AppSidebar() {
   }, [isWorkspaceMenuOpen]);
 
   const activeWorkspaceId = workspace?.id ?? "";
+  const canScrollWorkspaceMenu = workspaces.length > 4;
   const resolvedRole: AppRole | null = isAppRole(role) ? role : null;
   const activeRole: AppRole | null = isMounted ? resolvedRole : null;
   const showResolvedContext =
@@ -333,8 +335,8 @@ export function AppSidebar() {
     const gap = 12;
     const viewportPadding = 12;
     const maxHeight = Math.max(
-      160,
-      Math.min(320, rect.top - gap - viewportPadding)
+      220,
+      Math.min(520, rect.top - gap - viewportPadding)
     );
 
     setMenuPosition({
@@ -344,6 +346,21 @@ export function AppSidebar() {
       maxHeight,
     });
     setIsWorkspaceMenuOpen(true);
+  }
+
+  function scrollWorkspaceMenuBy(offset: number) {
+    workspaceMenuScrollRef.current?.scrollBy({
+      top: offset,
+      behavior: "smooth",
+    });
+  }
+
+  function handleWorkspaceMenuWheel(event: WheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!workspaceMenuScrollRef.current) return;
+    workspaceMenuScrollRef.current.scrollTop += event.deltaY;
   }
 
   async function handleWorkspaceSelect(workspaceId: string) {
@@ -799,17 +816,37 @@ export function AppSidebar() {
                 maxHeight: menuPosition.maxHeight,
                 transform: "translateY(-100%)",
               }}
-              onWheel={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onWheel={handleWorkspaceMenuWheel}
               onTouchMove={(event) => event.stopPropagation()}
             >
               <div className="border-b border-white/10 px-4 py-3 text-xs uppercase tracking-[0.12em] text-white/35">
                 Кабинеты
               </div>
 
+              {canScrollWorkspaceMenu ? (
+                <div className="border-b border-white/5 p-2">
+                  <button
+                    type="button"
+                    onClick={() => scrollWorkspaceMenuBy(-180)}
+                    className="flex h-8 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.045] text-white/55 transition duration-200 hover:border-[#00f5a8]/25 hover:bg-[#00f5a8]/10 hover:text-white"
+                    aria-label="Scroll workspaces up"
+                  >
+                    <ChevronLeft className="h-4 w-4 rotate-90" />
+                  </button>
+                </div>
+              ) : null}
+
               <div
-                className="overscroll-contain overflow-y-auto p-2 [scrollbar-color:rgba(0,245,168,0.28)_transparent]"
-                style={{ maxHeight: menuPosition.maxHeight - 48 }}
-                onWheel={(event) => event.stopPropagation()}
+                ref={workspaceMenuScrollRef}
+                className="overscroll-contain overflow-y-auto p-2 [scrollbar-color:rgba(0,245,168,0.28)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#00f5a8]/30 [&::-webkit-scrollbar-track]:bg-transparent"
+                style={{
+                  maxHeight: Math.max(
+                    132,
+                    menuPosition.maxHeight - (canScrollWorkspaceMenu ? 128 : 48)
+                  ),
+                }}
+                onWheel={handleWorkspaceMenuWheel}
                 onTouchMove={(event) => event.stopPropagation()}
               >
                 {workspaces.length > 0 ? (
@@ -852,6 +889,19 @@ export function AppSidebar() {
                   </div>
                 )}
               </div>
+
+              {canScrollWorkspaceMenu ? (
+                <div className="border-t border-white/5 p-2">
+                  <button
+                    type="button"
+                    onClick={() => scrollWorkspaceMenuBy(180)}
+                    className="flex h-8 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.045] text-white/55 transition duration-200 hover:border-[#00f5a8]/25 hover:bg-[#00f5a8]/10 hover:text-white"
+                    aria-label="Scroll workspaces down"
+                  >
+                    <ChevronLeft className="h-4 w-4 -rotate-90" />
+                  </button>
+                </div>
+              ) : null}
             </div>,
             document.body
           )
