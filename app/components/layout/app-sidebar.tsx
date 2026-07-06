@@ -267,16 +267,26 @@ export function AppSidebar() {
   useEffect(() => {
     if (!isWorkspaceMenuOpen) return;
 
-    function closeMenu() {
+    function closeMenuOnResize() {
       setIsWorkspaceMenuOpen(false);
     }
 
-    window.addEventListener("resize", closeMenu);
-    window.addEventListener("scroll", closeMenu, true);
+    function closeMenuOnOutsideScroll(event: Event) {
+      const target = event.target as Node | null;
+
+      if (target && workspaceMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      setIsWorkspaceMenuOpen(false);
+    }
+
+    window.addEventListener("resize", closeMenuOnResize);
+    window.addEventListener("scroll", closeMenuOnOutsideScroll, true);
 
     return () => {
-      window.removeEventListener("resize", closeMenu);
-      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("resize", closeMenuOnResize);
+      window.removeEventListener("scroll", closeMenuOnOutsideScroll, true);
     };
   }, [isWorkspaceMenuOpen]);
 
@@ -807,8 +817,10 @@ export function AppSidebar() {
               </div>
 
               <div
-                className="overflow-y-auto p-2 [scrollbar-color:rgba(0,245,168,0.28)_transparent]"
+                className="overscroll-contain overflow-y-auto p-2 [scrollbar-color:rgba(0,245,168,0.28)_transparent]"
                 style={{ maxHeight: menuPosition.maxHeight - 48 }}
+                onWheel={(event) => event.stopPropagation()}
+                onTouchMove={(event) => event.stopPropagation()}
               >
                 {workspaces.length > 0 ? (
                   workspaces.map((item) => {
