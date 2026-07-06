@@ -604,6 +604,13 @@ function CrmPageContent() {
   >({});
   const [isCrmLoadingSlow, setIsCrmLoadingSlow] = useState(false);
   const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
+  const crmBoardScrollRef = useRef<HTMLElement | null>(null);
+  const stickyBoardScrollRef = useRef<HTMLDivElement | null>(null);
+  const isSyncingBoardScrollRef = useRef(false);
+  const [boardScrollMetrics, setBoardScrollMetrics] = useState({
+    scrollWidth: 0,
+    show: false,
+  });
   const [endOfTodayMs, setEndOfTodayMs] = useState(() => {
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
@@ -737,6 +744,80 @@ function CrmPageContent() {
 
     return deals.filter((deal) => deal.pipeline_id === activePipeline?.id);
   }, [activePipeline?.id, deals, isAllPipelinesSelected]);
+
+  const syncBoardScrollFromMain = useCallback(() => {
+    if (isSyncingBoardScrollRef.current) return;
+
+    const board = crmBoardScrollRef.current;
+    const sticky = stickyBoardScrollRef.current;
+
+    if (!board || !sticky) return;
+
+    isSyncingBoardScrollRef.current = true;
+    sticky.scrollLeft = board.scrollLeft;
+    window.requestAnimationFrame(() => {
+      isSyncingBoardScrollRef.current = false;
+    });
+  }, []);
+
+  const syncBoardScrollFromSticky = useCallback(() => {
+    if (isSyncingBoardScrollRef.current) return;
+
+    const board = crmBoardScrollRef.current;
+    const sticky = stickyBoardScrollRef.current;
+
+    if (!board || !sticky) return;
+
+    isSyncingBoardScrollRef.current = true;
+    board.scrollLeft = sticky.scrollLeft;
+    window.requestAnimationFrame(() => {
+      isSyncingBoardScrollRef.current = false;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (workspaceView !== "pipeline" || displayMode !== "board") {
+      setBoardScrollMetrics({
+        scrollWidth: 0,
+        show: false,
+      });
+      return;
+    }
+
+    const board = crmBoardScrollRef.current;
+
+    if (!board) return;
+
+    const updateBoardScrollMetrics = () => {
+      const nextMetrics = {
+        scrollWidth: board.scrollWidth,
+        show: board.scrollWidth > board.clientWidth + 4,
+      };
+
+      setBoardScrollMetrics(nextMetrics);
+
+      const sticky = stickyBoardScrollRef.current;
+      if (sticky) {
+        sticky.scrollLeft = board.scrollLeft;
+      }
+    };
+
+    updateBoardScrollMetrics();
+
+    const resizeObserver = new ResizeObserver(updateBoardScrollMetrics);
+    resizeObserver.observe(board);
+
+    if (board.firstElementChild) {
+      resizeObserver.observe(board.firstElementChild);
+    }
+
+    window.addEventListener("resize", updateBoardScrollMetrics);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateBoardScrollMetrics);
+    };
+  }, [activeDeals.length, activeStages.length, displayMode, workspaceView]);
 
   const selectedDeal =
     deals.find((deal) => deal.id === selectedDealId) ?? null;
@@ -2236,7 +2317,12 @@ function CrmPageContent() {
             </div>
           </section>
         ) : displayMode === "board" ? (
-        <section className="overflow-x-auto pb-4">
+        <>
+        <section
+          ref={crmBoardScrollRef}
+          onScroll={syncBoardScrollFromMain}
+          className="overflow-x-auto pb-4"
+        >
           <div
             className="grid min-h-[calc(100vh-290px)] gap-4"
             style={{
@@ -2320,6 +2406,26 @@ function CrmPageContent() {
             })}
           </div>
         </section>
+        {boardScrollMetrics.show ? (
+          <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-[220] hidden md:block lg:left-[306px]">
+            <div className="rivn-themed-surface pointer-events-auto mx-auto max-w-full rounded-full border p-2 shadow-[0_22px_70px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
+              <div
+                ref={stickyBoardScrollRef}
+                onScroll={syncBoardScrollFromSticky}
+                className="overflow-x-auto pb-1"
+                aria-label="Горизонтальная прокрутка CRM-воронки"
+              >
+                <div
+                  style={{
+                    height: 1,
+                    width: `${boardScrollMetrics.scrollWidth}px`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+        </>
         ) : (
           <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#121827]">
             <div className="overflow-x-auto">
