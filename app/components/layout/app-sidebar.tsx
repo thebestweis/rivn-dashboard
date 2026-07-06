@@ -280,7 +280,7 @@ export function AppSidebar() {
   }, [isWorkspaceMenuOpen]);
 
   const activeWorkspaceId = workspace?.id ?? "";
-  const canScrollWorkspaceMenu = workspaces.length > 4;
+  const canScrollWorkspaceMenu = workspaces.length > 3;
   const resolvedRole: AppRole | null = isAppRole(role) ? role : null;
   const activeRole: AppRole | null = isMounted ? resolvedRole : null;
   const showResolvedContext =
@@ -333,19 +333,30 @@ export function AppSidebar() {
 
     const rect = workspaceButtonRef.current.getBoundingClientRect();
     const gap = 12;
-    const viewportPadding = 12;
-    const maxHeight = Math.max(
-      220,
-      Math.min(520, rect.top - gap - viewportPadding)
+    const viewportPadding = 16;
+    const menuTop = viewportPadding;
+    const availableHeight = Math.max(260, rect.top - gap - menuTop);
+    const width = Math.min(
+      Math.max(340, rect.width),
+      window.innerWidth - viewportPadding * 2
     );
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      window.innerWidth - width - viewportPadding
+    );
+    const maxHeight = Math.min(640, availableHeight);
 
     setMenuPosition({
-      left: rect.left,
-      top: rect.top - gap,
-      width: rect.width,
+      left,
+      top: menuTop,
+      width,
       maxHeight,
     });
     setIsWorkspaceMenuOpen(true);
+
+    requestAnimationFrame(() => {
+      workspaceMenuScrollRef.current?.scrollTo({ top: 0 });
+    });
   }
 
   function scrollWorkspaceMenuBy(offset: number) {
@@ -814,7 +825,6 @@ export function AppSidebar() {
                 top: menuPosition.top,
                 width: menuPosition.width,
                 maxHeight: menuPosition.maxHeight,
-                transform: "translateY(-100%)",
               }}
               onMouseDown={(event) => event.stopPropagation()}
               onWheel={handleWorkspaceMenuWheel}
