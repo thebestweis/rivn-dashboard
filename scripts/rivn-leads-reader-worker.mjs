@@ -108,13 +108,23 @@ function logError(message, error, meta = {}) {
 const alertSentAt = new Map();
 
 function isRecoverableReaderError(error) {
+  const message = String(error || "");
+  if (/RIVN Leads ingest failed|500|502|503|504|522|429/i.test(message)) {
+    return true;
+  }
   return /disconnected|reconnect|TIMEOUT|Not connected|fetch failed|network|socket hang up|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|temporar|external service|Telegram connection was reset|Bad Gateway|503|502|504|429|Внешний сервис|временно не ответил/i.test(
-    String(error || "")
+    message
   );
 }
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function truncateForTelegram(value, maxLength = 700) {
+  const text = String(value ?? "");
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1)}…`;
 }
 
 function escapeHtml(value) {
@@ -135,7 +145,7 @@ async function sendAdminAlert(title, lines = [], throttleKey = title) {
   const text = [
     `[ALERT] <b>${escapeHtml(title)}</b>`,
     "",
-    ...lines.map((line) => escapeHtml(line)),
+    ...lines.map((line) => escapeHtml(truncateForTelegram(line))),
   ].join("\n");
 
   try {
@@ -260,7 +270,7 @@ async function sendToIngest(payload) {
       const retryAfterSeconds = Number(response.headers.get("retry-after"));
       retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 0;
 
-      if (![429, 502, 503, 504].includes(response.status) || attempt === maxAttempts) break;
+      if (![429, 500, 502, 503, 504].includes(response.status) || attempt === maxAttempts) break;
     } catch (error) {
       lastError = error;
       if (attempt === maxAttempts) break;
@@ -630,16 +640,48 @@ class ReaderRuntime {
 
     const sender = await resolveSender(this.client, message);
     const telegramMessageId = String(message.id);
-    const result = await sendToIngest({
-      sourceChatId: sourceChat.id,
-      telegramChatId: sourceChat.telegram_chat_id,
-      telegramMessageId,
-      messageText: text,
-      authorName: sender.authorName,
-      authorUsername: sender.authorUsername,
-      messageLink: buildMessageLink(sourceChat, telegramMessageId),
-      messageDate: getMessageDate(message),
-    });
+    let result = null;
+    try {
+      result = await sendToIngest({
+        sourceChatId: sourceChat.id,
+        telegramChatId: sourceChat.telegram_chat_id,
+        telegramMessageId,
+        messageText: text,
+        authorName: sender.authorName,
+        authorUsername: sender.authorUsername,
+        messageLink: buildMessageLink(sourceChat, telegramMessageId),
+        messageDate: getMessageDate(message),
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (!isRecoverableReaderError(errorMessage)) throw error;
+
+      logError("RIVN Leads ingest temporarily failed", error, {
+        readerId: this.reader.id,
+        sourceChatId: sourceChat.id,
+        telegramMessageId,
+      });
+      await updateSourceChat(sourceChat.id, {
+        last_checked_at: new Date().toISOString(),
+      });
+      await updateReader(this.reader.id, {
+        status: "active",
+        last_error: errorMessage,
+        last_seen_at: new Date().toISOString(),
+      });
+      await sendAdminAlert(
+        "RIVN Leads ingest temporarily failed",
+        [
+          `Reader: ${this.reader.label || this.reader.id}`,
+          `Chat: ${sourceChat.title || sourceChat.id}`,
+          `Message: ${telegramMessageId}`,
+          `Reason: ${errorMessage}`,
+          "Status: reader keeps running and will process next messages.",
+        ],
+        `ingest-temporary:${this.reader.id}:${sourceChat.id}`
+      );
+      return;
+    }
 
     await updateSourceChat(sourceChat.id, {
       last_message_at: getMessageDate(message),
