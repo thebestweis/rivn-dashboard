@@ -65,6 +65,64 @@ function getErrorStatus(error: unknown) {
   return error instanceof HttpError ? error.status : 500;
 }
 
+type ServiceSupabase = ReturnType<typeof getServiceSupabase>;
+
+function isMissingTableError(error: { code?: string; message?: string }) {
+  const message = error.message?.toLowerCase() ?? "";
+
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    (message.includes("relation") && message.includes("does not exist")) ||
+    message.includes("could not find the table")
+  );
+}
+
+async function deleteRows(
+  supabase: ServiceSupabase,
+  table: string,
+  column: string,
+  value: string | string[]
+) {
+  const query = supabase.from(table).delete();
+  const { error } = Array.isArray(value)
+    ? await query.in(column, value)
+    : await query.eq(column, value);
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      return;
+    }
+
+    throw new Error(`Ошибка удаления связанных данных (${table}): ${error.message}`);
+  }
+}
+
+async function deleteAccountRelatedRows(
+  supabase: ServiceSupabase,
+  accountIds: string[]
+) {
+  if (accountIds.length === 0) return;
+
+  await deleteRows(supabase, "avito_report_snapshots", "account_id", accountIds);
+  await deleteRows(supabase, "avito_report_metrics", "account_id", accountIds);
+  await deleteRows(supabase, "avito_report_sync_jobs", "account_id", accountIds);
+  await deleteRows(supabase, "avito_report_item_cache", "account_id", accountIds);
+  await deleteRows(supabase, "avito_report_stats_cache", "account_id", accountIds);
+}
+
+async function deleteClientRelatedRows(
+  supabase: ServiceSupabase,
+  clientId: string
+) {
+  await deleteRows(supabase, "avito_report_snapshots", "client_id", clientId);
+  await deleteRows(supabase, "avito_report_metrics", "client_id", clientId);
+  await deleteRows(supabase, "avito_report_sync_jobs", "client_id", clientId);
+  await deleteRows(supabase, "avito_report_logs", "client_id", clientId);
+  await deleteRows(supabase, "avito_report_chat_links", "client_id", clientId);
+  await deleteRows(supabase, "avito_telegram_delivery_queue", "client_id", clientId);
+}
+
 function buildTelegramPrivateLink(clientCode: string) {
   return `https://t.me/stat_rivnos_bot?start=${encodeURIComponent(clientCode)}`;
 }
@@ -500,7 +558,7 @@ export async function PATCH(request: Request) {
 
     const { data: account, error: accountError } = await supabase
       .from("avito_report_accounts")
-      .select("id, client_id")
+      .select("id, client_id, avito_user_id")
       .eq("id", accountId)
       .maybeSingle();
 
@@ -542,7 +600,36 @@ export async function PATCH(request: Request) {
     }
 
     if (typeof patch.avitoUserId === "string" && patch.avitoUserId.trim()) {
-      accountUpdatePayload.avito_user_id = patch.avitoUserId.trim();
+      const nextAvitoUserId = patch.avitoUserId.trim();
+
+      if (nextAvitoUserId !== account.avito_user_id) {
+        const { data: duplicateAccount, error: duplicateError } =
+          await supabase
+            .from("avito_report_accounts")
+            .select(
+              `
+              id,
+              avito_user_id,
+              avito_report_clients!inner(workspace_id)
+            `
+            )
+            .eq("avito_user_id", nextAvitoUserId)
+            .eq("avito_report_clients.workspace_id", workspaceId)
+            .neq("id", accountId)
+            .limit(1);
+
+        if (duplicateError) {
+          throw new Error(`Ошибка проверки Avito user_id: ${duplicateError.message}`);
+        }
+
+        if ((duplicateAccount ?? []).length > 0) {
+          throw new Error(
+            `Avito user_id ${nextAvitoUserId} уже подключен в этом кабинете.`
+          );
+        }
+      }
+
+      accountUpdatePayload.avito_user_id = nextAvitoUserId;
     }
 
     if (typeof patch.avitoClientId === "string" && patch.avitoClientId.trim()) {
@@ -579,6 +666,126 @@ export async function PATCH(request: Request) {
           error instanceof Error
             ? error.message
             : "Ошибка обновления Avito-интеграции",
+      },
+      { status: getErrorStatus(error) }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json();
+    const workspaceId = body.workspaceId;
+    const integrationId = body.integrationId;
+    const accountId = body.accountId;
+
+    if (!workspaceId) {
+      throw new Error("Не передан workspaceId");
+    }
+
+    if (!integrationId && !accountId) {
+      throw new Error("Не передан проект или Avito-аккаунт для удаления");
+    }
+
+    const supabase = getServiceSupabase();
+    await requireWorkspaceAccess(supabase, workspaceId);
+
+    if (accountId) {
+      const { data: account, error: accountError } = await supabase
+        .from("avito_report_accounts")
+        .select(
+          `
+          id,
+          client_id,
+          avito_report_clients!inner (
+            id,
+            workspace_id
+          )
+        `
+        )
+        .eq("id", accountId)
+        .eq("avito_report_clients.workspace_id", workspaceId)
+        .maybeSingle();
+
+      if (accountError) {
+        throw new Error(`Ошибка проверки аккаунта: ${accountError.message}`);
+      }
+
+      if (!account) {
+        throw new Error("Avito-аккаунт не найден в текущем кабинете");
+      }
+
+      await deleteAccountRelatedRows(supabase, [account.id]);
+
+      const { error: deleteError } = await supabase
+        .from("avito_report_accounts")
+        .delete()
+        .eq("id", account.id);
+
+      if (deleteError) {
+        throw new Error(`Ошибка удаления Avito-аккаунта: ${deleteError.message}`);
+      }
+
+      return Response.json({ ok: true, deleted: "account" });
+    }
+
+    const { data: integration, error: integrationError } = await supabase
+      .from("avito_report_clients")
+      .select("id")
+      .eq("id", integrationId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    if (integrationError) {
+      throw new Error(`Ошибка проверки проекта: ${integrationError.message}`);
+    }
+
+    if (!integration) {
+      throw new Error("Проект не найден в текущем кабинете");
+    }
+
+    const { data: accounts, error: accountsError } = await supabase
+      .from("avito_report_accounts")
+      .select("id")
+      .eq("client_id", integration.id);
+
+    if (accountsError) {
+      throw new Error(`Ошибка проверки аккаунтов проекта: ${accountsError.message}`);
+    }
+
+    const accountIds = (accounts ?? []).map((account) => account.id);
+
+    await deleteAccountRelatedRows(supabase, accountIds);
+    await deleteClientRelatedRows(supabase, integration.id);
+
+    const { error: accountsDeleteError } = await supabase
+      .from("avito_report_accounts")
+      .delete()
+      .eq("client_id", integration.id);
+
+    if (accountsDeleteError) {
+      throw new Error(`Ошибка удаления аккаунтов проекта: ${accountsDeleteError.message}`);
+    }
+
+    const { error: integrationDeleteError } = await supabase
+      .from("avito_report_clients")
+      .delete()
+      .eq("id", integration.id)
+      .eq("workspace_id", workspaceId);
+
+    if (integrationDeleteError) {
+      throw new Error(`Ошибка удаления проекта: ${integrationDeleteError.message}`);
+    }
+
+    return Response.json({ ok: true, deleted: "integration" });
+  } catch (error) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Ошибка удаления Avito-интеграции",
       },
       { status: getErrorStatus(error) }
     );
