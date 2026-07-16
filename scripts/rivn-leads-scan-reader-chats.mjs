@@ -53,6 +53,7 @@ const config = {
   telegramApiId: Number(requiredEnv("TELEGRAM_API_ID")),
   telegramApiHash: requiredEnv("TELEGRAM_API_HASH"),
   encryptionKey: requiredEnv("RIVN_LEADS_ENCRYPTION_KEY", ["ENCRYPTION_KEY"]),
+  dialogScanLimit: Math.min(Math.max(Number(process.env.RIVN_LEADS_DIALOG_SCAN_LIMIT || 5000), 500), 5000),
 };
 
 if (!Number.isFinite(config.telegramApiId) || config.telegramApiId <= 0) {
@@ -255,7 +256,7 @@ async function linkChatsToProjects(readerId, savedChats, now) {
 
 async function scanReader(reader) {
   const now = new Date().toISOString();
-  const limit = Math.min(args.limit || Number(reader.max_chats_limit) || 500, 500);
+  const limit = Math.min(args.limit || config.dialogScanLimit, config.dialogScanLimit);
   const sessionString = decryptSessionString(reader.encrypted_session_string, config.encryptionKey);
   const telegramClientOptions = getTelegramClientOptions(5);
   const client = new TelegramClient(

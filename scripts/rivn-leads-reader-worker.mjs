@@ -51,6 +51,7 @@ const config = {
   alertThrottleMs: Number(process.env.RIVN_LEADS_ALERT_THROTTLE_MS || 300_000),
   ingestMaxAttempts: Number(process.env.RIVN_LEADS_INGEST_MAX_ATTEMPTS || 3),
   ingestRetryDelayMs: Number(process.env.RIVN_LEADS_INGEST_RETRY_DELAY_MS || 2_000),
+  dialogScanLimit: Math.min(Math.max(Number(process.env.RIVN_LEADS_DIALOG_SCAN_LIMIT || 5000), 500), 5000),
 };
 
 function getTelegramProxy() {
@@ -502,8 +503,7 @@ class ReaderRuntime {
     if (!this.client) return { found: 0, saved: 0, linked: 0 };
 
     const now = new Date().toISOString();
-    const limit = Math.min(Number(this.reader.max_chats_limit) || 500, 500);
-    const dialogs = await this.client.getDialogs({ limit });
+    const dialogs = await this.client.getDialogs({ limit: config.dialogScanLimit });
     const categoryId = await ensureSourceChatCategory(this.reader.assigned_niche);
     const uniqueRows = new Map();
 
@@ -562,7 +562,7 @@ class ReaderRuntime {
   async resolveDialogs() {
     if (!this.client) return;
 
-    const dialogs = await this.client.getDialogs({ limit: 500 });
+    const dialogs = await this.client.getDialogs({ limit: config.dialogScanLimit });
     const sourceChatsById = new Map();
 
     for (const chat of this.sourceChats) {
