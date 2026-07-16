@@ -600,6 +600,8 @@ class ReaderRuntime {
   async recoverSourceChatById(sourceChat, now) {
     if (!this.client) return false;
 
+    let lastError = "";
+
     for (const candidate of directChatCandidates(sourceChat.telegram_chat_id)) {
       try {
         const entity = await this.client.getEntity(candidate);
@@ -612,11 +614,19 @@ class ReaderRuntime {
           });
           return true;
         }
-      } catch {
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
         // Try the next representation of the same Telegram chat id.
       }
     }
 
+    log("Recoverable chat is still unavailable for reader", {
+      readerId: this.reader.id,
+      sourceChatId: sourceChat.id,
+      title: sourceChat.title,
+      telegramChatId: sourceChat.telegram_chat_id,
+      error: lastError || "not found in reader session",
+    });
     return false;
   }
 

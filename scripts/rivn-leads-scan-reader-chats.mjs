@@ -283,6 +283,8 @@ async function loadRecoverableSourceChats(readerId) {
 }
 
 async function recoverSourceChatById(client, sourceChat, now) {
+  let lastError = "";
+
   for (const candidate of directChatCandidates(sourceChat.telegram_chat_id)) {
     try {
       const entity = await client.getEntity(candidate);
@@ -301,11 +303,17 @@ async function recoverSourceChatById(client, sourceChat, now) {
         if (error) throw new Error(error.message);
         return true;
       }
-    } catch {
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
       // Try the next representation of the same Telegram chat id.
     }
   }
 
+  console.log(
+    `Recover skipped: ${sourceChat.title || sourceChat.telegram_chat_id} (${sourceChat.telegram_chat_id}) - ${
+      lastError || "not found in reader session"
+    }`
+  );
   return false;
 }
 
