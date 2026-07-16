@@ -214,6 +214,23 @@ function peerLookupKeys(telegramChatId) {
   return [...keys];
 }
 
+function directChatCandidates(telegramChatId) {
+  const value = String(telegramChatId || "").trim();
+  if (!value) return [];
+
+  const candidates = [value];
+
+  if (value.startsWith("-100")) {
+    const channelId = value.slice(4);
+    candidates.push(channelId, new Api.PeerChannel({ channelId }));
+  } else if (value.startsWith("-")) {
+    const chatId = value.slice(1);
+    candidates.push(chatId, new Api.PeerChat({ chatId }));
+  }
+
+  return candidates;
+}
+
 function getMessageDate(message) {
   return typeof message.date === "number" ? new Date(message.date * 1000).toISOString() : new Date().toISOString();
 }
@@ -415,6 +432,17 @@ async function linkChatsToProjects(readerId, savedChats, now) {
   return links.length;
 }
 
+async function loadRecoverableSourceChats(readerId) {
+  const { data, error } = await supabase
+    .from("rivn_leads_source_chats")
+    .select("id,title,telegram_chat_id,status")
+    .eq("reader_account_id", readerId)
+    .in("status", ["access_lost", "pending_access", "error"]);
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
 class ReaderRuntime {
   constructor(reader) {
     this.reader = reader;
@@ -549,6 +577,16 @@ class ReaderRuntime {
     if (saveChatsError) throw new Error(saveChatsError.message);
 
     const linked = await linkChatsToProjects(this.reader.id, savedChats ?? [], now);
+    const savedIds = new Set(rows.map((row) => row.telegram_chat_id));
+    const recoverableChats = await loadRecoverableSourceChats(this.reader.id);
+    let recovered = 0;
+
+    for (const chat of recoverableChats) {
+      if (savedIds.has(chat.telegram_chat_id)) continue;
+      if (await this.recoverSourceChatById(chat, now)) {
+        recovered += 1;
+      }
+    }
 
     await updateReader(this.reader.id, {
       status: "active",
@@ -556,7 +594,30 @@ class ReaderRuntime {
       last_seen_at: now,
     });
 
-    return { found: rows.length, saved: savedChats?.length ?? 0, linked };
+    return { found: rows.length, saved: savedChats?.length ?? 0, linked, recovered };
+  }
+
+  async recoverSourceChatById(sourceChat, now) {
+    if (!this.client) return false;
+
+    for (const candidate of directChatCandidates(sourceChat.telegram_chat_id)) {
+      try {
+        const entity = await this.client.getEntity(candidate);
+        const messages = await this.client.getMessages(entity, { limit: 1 });
+
+        if (messages) {
+          await updateSourceChat(sourceChat.id, {
+            status: "active",
+            last_checked_at: now,
+          });
+          return true;
+        }
+      } catch {
+        // Try the next representation of the same Telegram chat id.
+      }
+    }
+
+    return false;
   }
 
   async resolveDialogs() {

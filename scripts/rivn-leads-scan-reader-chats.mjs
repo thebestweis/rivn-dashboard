@@ -166,6 +166,23 @@ function dialogMemberCount(entity) {
   return entity?.participantsCount ?? null;
 }
 
+function directChatCandidates(telegramChatId) {
+  const value = String(telegramChatId || "").trim();
+  if (!value) return [];
+
+  const candidates = [value];
+
+  if (value.startsWith("-100")) {
+    const channelId = value.slice(4);
+    candidates.push(channelId, new Api.PeerChannel({ channelId }));
+  } else if (value.startsWith("-")) {
+    const chatId = value.slice(1);
+    candidates.push(chatId, new Api.PeerChat({ chatId }));
+  }
+
+  return candidates;
+}
+
 async function ensureSourceChatCategory(niche) {
   const normalizedNiche = niche?.trim().toLowerCase();
   const preferredSlug = normalizedNiche === "crm" ? "crm" : normalizedNiche === "marketing" ? "marketing" : null;
@@ -254,6 +271,44 @@ async function linkChatsToProjects(readerId, savedChats, now) {
   return links.length;
 }
 
+async function loadRecoverableSourceChats(readerId) {
+  const { data, error } = await supabase
+    .from("rivn_leads_source_chats")
+    .select("id,title,telegram_chat_id,status")
+    .eq("reader_account_id", readerId)
+    .in("status", ["access_lost", "pending_access", "error"]);
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+async function recoverSourceChatById(client, sourceChat, now) {
+  for (const candidate of directChatCandidates(sourceChat.telegram_chat_id)) {
+    try {
+      const entity = await client.getEntity(candidate);
+      const messages = await client.getMessages(entity, { limit: 1 });
+
+      if (messages) {
+        const { error } = await supabase
+          .from("rivn_leads_source_chats")
+          .update({
+            status: "active",
+            last_checked_at: now,
+            updated_at: now,
+          })
+          .eq("id", sourceChat.id);
+
+        if (error) throw new Error(error.message);
+        return true;
+      }
+    } catch {
+      // Try the next representation of the same Telegram chat id.
+    }
+  }
+
+  return false;
+}
+
 async function scanReader(reader) {
   const now = new Date().toISOString();
   const limit = Math.min(args.limit || config.dialogScanLimit, config.dialogScanLimit);
@@ -334,6 +389,16 @@ async function scanReader(reader) {
     if (saveChatsError) throw new Error(saveChatsError.message);
 
     const linked = await linkChatsToProjects(reader.id, savedChats ?? [], now);
+    const savedIds = new Set(rows.map((row) => row.telegram_chat_id));
+    const recoverableChats = await loadRecoverableSourceChats(reader.id);
+    let recovered = 0;
+
+    for (const chat of recoverableChats) {
+      if (savedIds.has(chat.telegram_chat_id)) continue;
+      if (await recoverSourceChatById(client, chat, now)) {
+        recovered += 1;
+      }
+    }
 
     await updateReader(reader.id, {
       status: "active",
@@ -341,8 +406,8 @@ async function scanReader(reader) {
       last_seen_at: now,
     });
 
-    console.log(`Result: found=${rows.length}, saved=${savedChats?.length ?? 0}, linked=${linked}`);
-    return { found: rows.length, saved: savedChats?.length ?? 0, linked };
+    console.log(`Result: found=${rows.length}, saved=${savedChats?.length ?? 0}, linked=${linked}, recovered=${recovered}`);
+    return { found: rows.length, saved: savedChats?.length ?? 0, linked, recovered };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const isAuthError = /auth|session|authorize|unauthorized|AUTH_KEY|SESSION_REVOKED|USER_DEACTIVATED/i.test(message);
