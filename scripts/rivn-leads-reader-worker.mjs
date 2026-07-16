@@ -296,13 +296,17 @@ async function loadReaders() {
   });
 }
 
-async function loadSourceChats(readerId) {
-  const { data, error } = await supabase
+async function loadSourceChats(readerId, options = {}) {
+  let query = supabase
     .from("rivn_leads_source_chats")
     .select("id,title,telegram_chat_id,username,status")
-    .eq("reader_account_id", readerId)
-    .eq("status", "active");
+    .eq("reader_account_id", readerId);
 
+  query = options.includeRecoverable
+    ? query.in("status", ["active", "access_lost", "pending_access", "error"])
+    : query.eq("status", "active");
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data ?? [];
 }
@@ -425,7 +429,9 @@ class ReaderRuntime {
 
   async start() {
     const shouldScanChats = isChatScanRequested(this.reader);
-    this.sourceChats = await loadSourceChats(this.reader.id);
+    this.sourceChats = await loadSourceChats(this.reader.id, {
+      includeRecoverable: shouldScanChats,
+    });
     if (this.sourceChats.length === 0 && !shouldScanChats) {
       log("Reader пропущен: нет активных чатов", { readerId: this.reader.id });
       return false;
@@ -461,7 +467,9 @@ class ReaderRuntime {
     if (shouldScanChats) {
       const result = await this.scanReaderChats();
       log("Reader Telegram chats scanned", { readerId: this.reader.id, ...result });
-      this.sourceChats = await loadSourceChats(this.reader.id);
+      this.sourceChats = await loadSourceChats(this.reader.id, {
+        includeRecoverable: true,
+      });
 
       if (this.sourceChats.length === 0) {
         log("Reader пропущен: нет активных чатов", { readerId: this.reader.id });
@@ -573,6 +581,16 @@ class ReaderRuntime {
       .filter(Boolean);
 
     const trackedIds = new Set(this.trackedDialogs.map((dialog) => dialog.sourceChat.id));
+    await Promise.all(
+      this.trackedDialogs
+        .filter((dialog) => dialog.sourceChat.status !== "active")
+        .map((dialog) =>
+          updateSourceChat(dialog.sourceChat.id, {
+            status: "active",
+            last_checked_at: new Date().toISOString(),
+          })
+        )
+    );
     await Promise.all(
       this.sourceChats
         .filter((chat) => !trackedIds.has(chat.id))
