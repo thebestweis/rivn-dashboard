@@ -171,6 +171,7 @@ create table if not exists public.rivn_leads_telegram_messages (
   telegram_message_id text not null,
   message_text text not null,
   normalized_text text not null,
+  author_id text,
   author_name text,
   author_username text,
   message_link text,
@@ -195,6 +196,20 @@ create table if not exists public.rivn_leads_leads (
   created_at timestamptz not null default now(),
   expires_at timestamptz not null,
   unique (project_id, telegram_message_id)
+);
+
+create table if not exists public.rivn_leads_blocked_authors (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.rivn_leads_projects(id) on delete cascade,
+  author_key text not null,
+  author_id text,
+  author_username text,
+  author_name text,
+  blocked_by_telegram_id text,
+  blocked_by_username text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (project_id, author_key)
 );
 
 create table if not exists public.rivn_leads_processed_messages (
@@ -260,6 +275,8 @@ create index if not exists rivn_leads_special_requests_project_status_idx
   on public.rivn_leads_special_chat_requests(project_id, status);
 create index if not exists rivn_leads_messages_source_date_idx
   on public.rivn_leads_telegram_messages(source_chat_id, message_date);
+create index if not exists rivn_leads_messages_author_id_idx
+  on public.rivn_leads_telegram_messages(author_id);
 create index if not exists rivn_leads_messages_expires_idx
   on public.rivn_leads_telegram_messages(expires_at);
 create index if not exists rivn_leads_leads_project_status_created_idx
@@ -268,6 +285,8 @@ create index if not exists rivn_leads_leads_source_created_idx
   on public.rivn_leads_leads(source_chat_id, created_at desc);
 create index if not exists rivn_leads_leads_expires_idx
   on public.rivn_leads_leads(expires_at);
+create index if not exists rivn_leads_blocked_authors_project_key_idx
+  on public.rivn_leads_blocked_authors(project_id, author_key);
 create index if not exists rivn_leads_processed_messages_processed_idx
   on public.rivn_leads_processed_messages(processed_at);
 create index if not exists rivn_leads_delivery_logs_lead_created_idx
@@ -291,6 +310,7 @@ alter table public.rivn_leads_stop_words enable row level security;
 alter table public.rivn_leads_special_chat_requests enable row level security;
 alter table public.rivn_leads_telegram_messages enable row level security;
 alter table public.rivn_leads_leads enable row level security;
+alter table public.rivn_leads_blocked_authors enable row level security;
 alter table public.rivn_leads_processed_messages enable row level security;
 alter table public.rivn_leads_delivery_logs enable row level security;
 alter table public.rivn_leads_daily_reports enable row level security;
@@ -483,6 +503,29 @@ with check (
     from public.rivn_leads_projects p
     where p.id = rivn_leads_leads.project_id
       and public.rivn_leads_can_manage_workspace(p.workspace_id)
+  )
+);
+
+drop policy if exists rivn_leads_blocked_authors_super_admin_all on public.rivn_leads_blocked_authors;
+create policy rivn_leads_blocked_authors_super_admin_all
+on public.rivn_leads_blocked_authors
+for all
+to authenticated
+using (public.rivn_leads_is_super_admin())
+with check (public.rivn_leads_is_super_admin());
+
+drop policy if exists rivn_leads_blocked_authors_project_select on public.rivn_leads_blocked_authors;
+create policy rivn_leads_blocked_authors_project_select
+on public.rivn_leads_blocked_authors
+for select
+to authenticated
+using (
+  public.rivn_leads_is_super_admin()
+  or exists (
+    select 1
+    from public.rivn_leads_projects p
+    where p.id = rivn_leads_blocked_authors.project_id
+      and public.rivn_leads_is_workspace_member(p.workspace_id)
   )
 );
 

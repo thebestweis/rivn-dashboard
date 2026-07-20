@@ -51,6 +51,7 @@ export async function POST(request: Request) {
         telegramChatId,
         telegramMessageId,
         messageText,
+        authorId: typeof body?.authorId === "string" ? body.authorId : null,
         authorName: typeof body?.authorName === "string" ? body.authorName : null,
         authorUsername: typeof body?.authorUsername === "string" ? body.authorUsername : null,
         messageLink: typeof body?.messageLink === "string" ? body.messageLink : null,

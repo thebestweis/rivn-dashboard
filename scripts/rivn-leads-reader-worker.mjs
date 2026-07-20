@@ -247,22 +247,24 @@ function buildMessageLink(sourceChat, telegramMessageId) {
 }
 
 async function resolveSender(client, message) {
-  if (!message.senderId) return { authorName: null, authorUsername: null };
+  const authorId = message.senderId ? String(message.senderId) : null;
+  if (!message.senderId) return { authorId, authorName: null, authorUsername: null };
 
   try {
     const entity = await client.getEntity(message.senderId);
     if (entity instanceof Api.User) {
       const name = [entity.firstName, entity.lastName].filter(Boolean).join(" ").trim();
       return {
+        authorId,
         authorName: name || null,
         authorUsername: entity.username ?? null,
       };
     }
   } catch {
-    return { authorName: null, authorUsername: null };
+    return { authorId, authorName: null, authorUsername: null };
   }
 
-  return { authorName: null, authorUsername: null };
+  return { authorId, authorName: null, authorUsername: null };
 }
 
 async function sendToIngest(payload) {
@@ -736,6 +738,7 @@ class ReaderRuntime {
         telegramChatId: sourceChat.telegram_chat_id,
         telegramMessageId,
         messageText: text,
+        authorId: sender.authorId,
         authorName: sender.authorName,
         authorUsername: sender.authorUsername,
         messageLink: buildMessageLink(sourceChat, telegramMessageId),

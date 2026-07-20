@@ -97,6 +97,14 @@ async function sendTelegramMessage(chatId, text, parseMode = "HTML") {
   });
 }
 
+async function answerCallbackQuery(callbackQueryId, text) {
+  return callTelegram("answerCallbackQuery", {
+    callback_query_id: callbackQueryId,
+    text,
+    show_alert: false,
+  });
+}
+
 function htmlEscape(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -165,10 +173,10 @@ function pickMessage(update) {
 }
 
 function parseCommand(text) {
-  const [commandRaw = "", payload = ""] = String(text || "").trim().split(/\s+/);
+  const [commandRaw = "", ...payloadParts] = String(text || "").trim().split(/\s+/);
   return {
     command: commandRaw.split("@")[0].toLowerCase(),
-    payload: payload.trim(),
+    payload: payloadParts.join(" ").trim(),
   };
 }
 
@@ -204,6 +212,144 @@ async function saveTelegramChatFromMessage(message) {
   );
 
   if (error) logError("Failed to save Telegram chat_id", error, { chatId: chat.id });
+}
+
+function normalizeWord(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function authorKeyFromMessage(telegramMessage) {
+  const authorId = telegramMessage?.author_id ? String(telegramMessage.author_id) : "";
+  const authorUsername = telegramMessage?.author_username
+    ? String(telegramMessage.author_username).replace(/^@/, "").trim().toLowerCase()
+    : "";
+
+  if (authorId) return `id:${authorId}`;
+  if (authorUsername) return `username:${authorUsername}`;
+  return "";
+}
+
+async function getProjectByChatId(chatId) {
+  const { data, error } = await supabase
+    .from("rivn_leads_projects")
+    .select("id,name,destination_chat_id")
+    .eq("destination_chat_id", String(chatId))
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function sendProjectWordsList(chatId, project, type) {
+  const isMinus = type === "minus";
+  const table = isMinus ? "rivn_leads_stop_words" : "rivn_leads_keywords";
+  const title = isMinus ? "Минус-слова" : "Плюс-слова";
+  const { data, error } = await supabase
+    .from(table)
+    .select("value,enabled,created_at")
+    .eq("project_id", project.id)
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  const activeWords = (data ?? [])
+    .filter((word) => word.enabled !== false)
+    .map((word) => String(word.value || "").trim())
+    .filter(Boolean);
+
+  await sendTelegramMessage(
+    chatId,
+    [
+      `<b>${htmlEscape(title)} проекта</b>`,
+      htmlEscape(project.name),
+      "",
+      activeWords.length > 0
+        ? activeWords.map((word, index) => `${index + 1}. ${htmlEscape(word)}`).join("\n")
+        : "Список пока пуст.",
+    ].join("\n")
+  );
+}
+
+async function addProjectWord(chatId, project, type, value) {
+  const word = String(value || "").trim();
+  const normalizedWord = normalizeWord(word);
+
+  if (!normalizedWord) {
+    await sendTelegramMessage(
+      chatId,
+      type === "minus"
+        ? "Напиши минус-слово после команды: <code>/newminusslovo слово</code>"
+        : "Напиши плюс-слово после команды: <code>/newplusslovo слово</code>"
+    );
+    return;
+  }
+
+  const isMinus = type === "minus";
+  const table = isMinus ? "rivn_leads_stop_words" : "rivn_leads_keywords";
+  const payload = isMinus
+    ? {
+        project_id: project.id,
+        value: word,
+        normalized_value: normalizedWord,
+        enabled: true,
+        updated_at: new Date().toISOString(),
+      }
+    : {
+        project_id: project.id,
+        value: word,
+        normalized_value: normalizedWord,
+        match_type: "contains",
+        enabled: true,
+        updated_at: new Date().toISOString(),
+      };
+
+  const { error } = await supabase
+    .from(table)
+    .upsert(payload, { onConflict: "project_id,normalized_value" });
+
+  if (error) throw new Error(error.message);
+
+  await sendTelegramMessage(
+    chatId,
+    `${isMinus ? "Минус-слово" : "Плюс-слово"} добавлено и уже работает: <b>${htmlEscape(word)}</b>`
+  );
+}
+
+async function handleRivnLeadsCommand({ chatId, command, payload }) {
+  const project = await getProjectByChatId(chatId);
+
+  if (!project) {
+    await sendTelegramMessage(
+      chatId,
+      "Этот чат не привязан к активному проекту RIVN Leads."
+    );
+    return;
+  }
+
+  if (command === "/plusslovo") {
+    await sendProjectWordsList(chatId, project, "plus");
+    return;
+  }
+
+  if (command === "/minusslovo" && payload) {
+    await addProjectWord(chatId, project, "minus", payload);
+    return;
+  }
+
+  if (command === "/minusslovo" || command === "/minus") {
+    await sendProjectWordsList(chatId, project, "minus");
+    return;
+  }
+
+  if (command === "/newplusslovo") {
+    await addProjectWord(chatId, project, "plus", payload);
+    return;
+  }
+
+  if (command === "/newminusslovo" || command === "/newminus") {
+    await addProjectWord(chatId, project, "minus", payload);
+  }
 }
 
 async function linkChatToRivnLeadsProject({ projectId, chatId }) {
@@ -284,6 +430,24 @@ function formatLeadMessage(lead) {
   return lines.join("\n");
 }
 
+function buildBlockAuthorKeyboard(lead) {
+  const telegramMessage = one(lead, "rivn_leads_telegram_messages");
+  const authorKey = authorKeyFromMessage(telegramMessage);
+
+  if (!authorKey) return undefined;
+
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: "👨🛑",
+          callback_data: `rl:block:${lead.id}`,
+        },
+      ],
+    ],
+  };
+}
+
 async function fetchPendingLeads() {
   const statuses = config.retryFailedDeliveries ? ["new", "delivery_failed"] : ["new"];
 
@@ -298,7 +462,7 @@ async function fetchPendingLeads() {
         matched_keywords,
         rivn_leads_projects!inner(id,name,destination_chat_id),
         rivn_leads_source_chats!inner(id,title),
-        rivn_leads_telegram_messages!inner(id,message_text,author_username,message_link)
+        rivn_leads_telegram_messages!inner(id,message_text,author_id,author_name,author_username,message_link)
       `
     )
     .in("status", statuses)
@@ -332,7 +496,13 @@ async function deliverLead(lead) {
     return { delivered: false, reason: "destination_missing" };
   }
 
-  const sent = await sendTelegramMessage(destinationChatId, formatLeadMessage(lead));
+  const sent = await callTelegram("sendMessage", {
+    chat_id: destinationChatId,
+    text: formatLeadMessage(lead),
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    reply_markup: buildBlockAuthorKeyboard(lead),
+  });
 
   await supabase.from("rivn_leads_delivery_logs").insert({
     lead_id: lead.id,
@@ -348,6 +518,69 @@ async function deliverLead(lead) {
     .eq("id", lead.id);
 
   return { delivered: true, reason: null };
+}
+
+async function blockLeadAuthor(callbackQuery) {
+  const data = String(callbackQuery?.data || "");
+  const leadId = data.slice("rl:block:".length).trim();
+  const from = callbackQuery?.from;
+
+  if (!leadId) {
+    await answerCallbackQuery(callbackQuery.id, "Не удалось определить лид.");
+    return;
+  }
+
+  const { data: lead, error } = await supabase
+    .from("rivn_leads_leads")
+    .select(
+      `
+        id,
+        project_id,
+        rivn_leads_projects!inner(id,name,destination_chat_id),
+        rivn_leads_telegram_messages!inner(id,author_id,author_name,author_username)
+      `
+    )
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!lead) {
+    await answerCallbackQuery(callbackQuery.id, "Лид не найден.");
+    return;
+  }
+
+  const project = one(lead, "rivn_leads_projects");
+  const telegramMessage = one(lead, "rivn_leads_telegram_messages");
+  const authorKey = authorKeyFromMessage(telegramMessage);
+
+  if (!authorKey) {
+    await answerCallbackQuery(callbackQuery.id, "У автора нет id/username для блокировки.");
+    return;
+  }
+
+  const { error: upsertError } = await supabase
+    .from("rivn_leads_blocked_authors")
+    .upsert(
+      {
+        project_id: lead.project_id,
+        author_key: authorKey,
+        author_id: telegramMessage?.author_id ? String(telegramMessage.author_id) : null,
+        author_username: telegramMessage?.author_username ?? null,
+        author_name: telegramMessage?.author_name ?? null,
+        blocked_by_telegram_id: from?.id ? String(from.id) : null,
+        blocked_by_username: from?.username ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "project_id,author_key" }
+    );
+
+  if (upsertError) throw new Error(upsertError.message);
+
+  await answerCallbackQuery(callbackQuery.id, "Автор заблокирован для этого проекта.");
+  await sendTelegramMessage(
+    project?.destination_chat_id || callbackQuery.message?.chat?.id,
+    `Автор больше не будет приходить в проект <b>${htmlEscape(project?.name || "RIVN Leads")}</b>.`
+  );
 }
 
 async function deliverPendingLeads() {
@@ -379,6 +612,11 @@ async function deliverPendingLeads() {
 }
 
 async function handleUpdate(update) {
+  if (update.callback_query?.data?.startsWith("rl:block:")) {
+    await blockLeadAuthor(update.callback_query);
+    return;
+  }
+
   const message = pickMessage(update);
   if (!message?.chat?.id) return;
 
@@ -389,6 +627,13 @@ async function handleUpdate(update) {
 
   const { command, payload } = parseCommand(text);
   const chatId = message.chat.id;
+
+  if (
+    ["/plusslovo", "/minusslovo", "/minus", "/newplusslovo", "/newminusslovo", "/newminus"].includes(command)
+  ) {
+    await handleRivnLeadsCommand({ chatId, command, payload });
+    return;
+  }
 
   if (command !== "/leads" && command !== "/rivnleads") return;
 
@@ -413,7 +658,7 @@ async function pollUpdates() {
   const result = await callTelegram("getUpdates", {
     offset: offset || undefined,
     timeout: config.pollTimeoutSeconds,
-    allowed_updates: ["message", "edited_message", "channel_post"],
+    allowed_updates: ["message", "edited_message", "channel_post", "callback_query"],
   });
 
   const updates = Array.isArray(result) ? result : [];

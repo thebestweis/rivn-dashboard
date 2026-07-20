@@ -1,6 +1,7 @@
 type SendTelegramMessageInput = {
   chatId: string;
   text: string;
+  replyMarkup?: unknown;
 };
 
 type TelegramApiResponse<T> = {
@@ -118,6 +119,7 @@ export async function sendRivnLeadTelegramMessage(input: SendTelegramMessageInpu
       text: input.text,
       parse_mode: "HTML",
       disable_web_page_preview: true,
+      reply_markup: input.replyMarkup,
     }),
   });
 

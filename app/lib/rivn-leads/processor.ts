@@ -9,6 +9,7 @@ export type RivnLeadsIncomingMessage = {
   telegramChatId: string;
   telegramMessageId: string;
   messageText: string;
+  authorId?: string | null;
   authorName?: string | null;
   authorUsername?: string | null;
   messageLink?: string | null;
@@ -60,6 +61,17 @@ function isUniqueConflict(error: { code?: string } | null | undefined) {
   return error?.code === "23505";
 }
 
+function getAuthorKeys(message: RivnLeadsIncomingMessage) {
+  const keys = [];
+  const authorId = message.authorId?.trim();
+  const authorUsername = message.authorUsername?.replace(/^@/, "").trim().toLowerCase();
+
+  if (authorId) keys.push(`id:${authorId}`);
+  if (authorUsername) keys.push(`username:${authorUsername}`);
+
+  return keys;
+}
+
 async function canCreateLeadForProject(serviceSupabase: ServiceSupabase, project: ProjectRow) {
   const now = new Date();
 
@@ -100,7 +112,7 @@ export async function deliverRivnLead(serviceSupabase: ServiceSupabase, leadId: 
         matched_keywords,
         rivn_leads_projects!inner(id,name,destination_chat_id),
         rivn_leads_source_chats!inner(id,title),
-        rivn_leads_telegram_messages!inner(id,message_text,author_username,message_link)
+        rivn_leads_telegram_messages!inner(id,message_text,author_id,author_name,author_username,message_link)
       `
     )
     .eq("id", leadId)
@@ -139,6 +151,12 @@ export async function deliverRivnLead(serviceSupabase: ServiceSupabase, leadId: 
     const matchedKeywords = Array.isArray(lead.matched_keywords)
       ? lead.matched_keywords.map((item: { value?: string } | string) => String(typeof item === "string" ? item : item.value ?? "")).filter(Boolean)
       : [];
+    const authorKey =
+      telegramMessage.author_id
+        ? `id:${telegramMessage.author_id}`
+        : telegramMessage.author_username
+          ? `username:${String(telegramMessage.author_username).replace(/^@/, "").toLowerCase()}`
+          : "";
     const sent = await sendRivnLeadTelegramMessage({
       chatId: destinationChatId,
       text: formatRivnLeadTelegramMessage({
@@ -148,6 +166,18 @@ export async function deliverRivnLead(serviceSupabase: ServiceSupabase, leadId: 
         messageLink: telegramMessage.message_link,
         matchedKeywords,
       }),
+      replyMarkup: authorKey
+        ? {
+            inline_keyboard: [
+              [
+                {
+                  text: "👨🛑",
+                  callback_data: `rl:block:${lead.id}`,
+                },
+              ],
+            ],
+          }
+        : undefined,
     });
 
     await serviceSupabase.from("rivn_leads_delivery_logs").insert({
@@ -256,7 +286,12 @@ export async function processRivnLeadsMessage(
   }
 
   const activeProjectIds = projects.map((project) => project.id);
-  const [{ data: keywords, error: keywordsError }, { data: stopWords, error: stopWordsError }] = await Promise.all([
+  const authorKeys = getAuthorKeys(message);
+  const [
+    { data: keywords, error: keywordsError },
+    { data: stopWords, error: stopWordsError },
+    { data: blockedAuthors, error: blockedAuthorsError },
+  ] = await Promise.all([
     serviceSupabase
       .from("rivn_leads_keywords")
       .select("id,project_id,value,normalized_value,match_type,enabled")
@@ -267,10 +302,22 @@ export async function processRivnLeadsMessage(
       .select("id,project_id,value,normalized_value,enabled")
       .in("project_id", activeProjectIds)
       .eq("enabled", true),
+    authorKeys.length > 0
+      ? serviceSupabase
+          .from("rivn_leads_blocked_authors")
+          .select("project_id,author_key")
+          .in("project_id", activeProjectIds)
+          .in("author_key", authorKeys)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (keywordsError) throw new Error(keywordsError.message);
   if (stopWordsError) throw new Error(stopWordsError.message);
+  if (blockedAuthorsError) throw new Error(blockedAuthorsError.message);
+
+  const blockedProjectIds = new Set(
+    ((blockedAuthors ?? []) as Array<{ project_id: string }>).map((item) => item.project_id)
+  );
 
   const { data: telegramMessage, error: messageError } = await serviceSupabase
     .from("rivn_leads_telegram_messages")
@@ -281,6 +328,7 @@ export async function processRivnLeadsMessage(
         telegram_message_id: message.telegramMessageId,
         message_text: message.messageText,
         normalized_text: normalizedText,
+        author_id: message.authorId ?? null,
         author_name: message.authorName ?? null,
         author_username: message.authorUsername?.replace(/^@/, "") ?? null,
         message_link: message.messageLink ?? null,
@@ -299,6 +347,8 @@ export async function processRivnLeadsMessage(
   const leadIds: string[] = [];
 
   for (const project of projects) {
+    if (blockedProjectIds.has(project.id)) continue;
+
     const projectKeywords = ((keywords ?? []) as Array<KeywordCandidate & { project_id: string }>).filter(
       (keyword) => keyword.project_id === project.id
     );
