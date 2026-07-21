@@ -252,7 +252,7 @@ export default function RivnLeadsPage() {
             <Link href="/" className={styles.brand}>
               <div className={styles.brandIcon}>
                 <Image
-                  src="/logorivnos.png"
+                  src="/rivn-logo-icon.png"
                   alt="RIVN OS"
                   width={36}
                   height={36}

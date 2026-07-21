@@ -208,7 +208,7 @@ const fadeUp = {
             <div className={styles.brand}>
               <div className={styles.brandIcon}>
   <Image
-    src="/logorivnos.png"
+    src="/rivn-logo-icon.png"
     alt="RIVN OS logo"
     width={32}
     height={32}
@@ -897,7 +897,7 @@ const fadeUp = {
               <div className={styles.footerBrand}>
   <div className={styles.footerBrandIcon}>
     <Image
-      src="/logorivnos.png"
+      src="/rivn-logo-icon.png"
       alt="RIVN OS logo"
       width={28}
       height={28}

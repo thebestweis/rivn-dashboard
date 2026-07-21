@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { createPortal } from "react-dom";
 import type { ComponentType, WheelEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -313,9 +314,8 @@ export function AppSidebar() {
   const crmUnreadCount = sidebarInboxItems.filter((item) => item.isUnread).length;
   const workspaceDisplayName =
     typeof workspace?.name === "string" ? workspace.name.trim() : "";
-  const sidebarBrandLabel =
-    showResolvedContext && workspaceDisplayName ? "RIVN OS" : "Agency OS";
-  const sidebarCompanyLabel = workspaceDisplayName || "RIVN";
+  const sidebarBrandLabel = "RIVN OS";
+  const sidebarCompanyLabel = workspaceDisplayName || "RIVN media";
   const visibleSidebarCompanyLabel = showResolvedContext
     ? sidebarCompanyLabel
     : "RIVN";
@@ -400,8 +400,15 @@ export function AppSidebar() {
       <div className="rivn-themed-sidebar fixed inset-x-0 top-0 z-[240] border-b border-white/[0.08] bg-[#07111f]/88 px-4 py-3 shadow-[0_22px_70px_rgba(0,0,0,0.34)] backdrop-blur-2xl lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#00f5a8]/25 bg-[radial-gradient(circle_at_30%_25%,#7dffd6,#00f5a8_48%,#047857)] text-[#06101d] shadow-[0_0_30px_rgba(0,245,168,0.22),inset_0_1px_0_rgba(255,255,255,0.45)]">
-              <span className="text-base font-bold">R</span>
+            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-2xl shadow-[0_0_28px_rgba(0,245,168,0.22)]">
+              <Image
+                src="/rivn-logo-icon.png"
+                alt=""
+                fill
+                sizes="40px"
+                className="object-cover"
+                priority
+              />
             </div>
 
             <div className="min-w-0">
@@ -455,22 +462,35 @@ export function AppSidebar() {
         >
           <div
             className={`mb-6 flex min-w-0 items-center ${
-              isCollapsed ? "justify-center" : "gap-3"
+              isCollapsed ? "justify-center" : "gap-5"
             }`}
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#00f5a8]/25 bg-[radial-gradient(circle_at_30%_25%,#7dffd6,#00f5a8_48%,#047857)] text-[#06101d] shadow-[0_0_34px_rgba(0,245,168,0.24),inset_0_1px_0_rgba(255,255,255,0.45)] transition duration-500 ease-out hover:scale-[1.03]">
-              <span className="text-lg font-bold">R</span>
+            <div
+              className={`relative shrink-0 overflow-hidden shadow-[0_0_38px_rgba(0,245,168,0.24)] transition duration-500 ease-out hover:scale-[1.03] ${
+                isCollapsed
+                  ? "h-12 w-12 rounded-[18px]"
+                  : "h-16 w-16 rounded-[24px]"
+              }`}
+            >
+              <Image
+                src="/rivn-logo-icon.png"
+                alt=""
+                fill
+                sizes={isCollapsed ? "48px" : "64px"}
+                className="object-cover"
+                priority
+              />
             </div>
 
             <div className={`min-w-0 flex-1 ${isCollapsed ? "hidden" : ""}`}>
               <div
-                className="truncate text-sm text-white/42"
+                className="truncate text-sm text-white/48"
                 suppressHydrationWarning
               >
                 {sidebarBrandLabel}
               </div>
               <div
-                className="truncate text-lg font-semibold text-white"
+                className="truncate text-[26px] font-bold leading-tight text-white"
                 title={isMounted ? visibleSidebarCompanyLabel : undefined}
                 suppressHydrationWarning
               >
