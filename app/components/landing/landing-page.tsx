@@ -966,7 +966,7 @@ const fadeUp = {
   <div>©2026 RIVN OS. Все права защищены.</div>
   <div className={styles.footerLinks}>
     <a href="#">Условия использования</a>
-    <a href="#">Политика конфиденциальности</a>
+    <a href="/privacy">Политика конфиденциальности</a>
   </div>
 </div>
         </div>
