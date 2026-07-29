@@ -61,6 +61,18 @@ function isUniqueConflict(error: { code?: string } | null | undefined) {
   return error?.code === "23505";
 }
 
+function isMissingSchemaError(error: { code?: string; message?: string } | null | undefined) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return (
+    error?.code === "42P01" ||
+    error?.code === "42703" ||
+    error?.code === "PGRST204" ||
+    (message.includes("relation") && message.includes("does not exist")) ||
+    (message.includes("column") && message.includes("does not exist")) ||
+    (message.includes("could not find") && message.includes("column"))
+  );
+}
+
 function getAuthorKeys(message: RivnLeadsIncomingMessage) {
   const keys = [];
   const authorId = message.authorId?.trim();
@@ -290,7 +302,6 @@ export async function processRivnLeadsMessage(
   const [
     { data: keywords, error: keywordsError },
     { data: stopWords, error: stopWordsError },
-    { data: blockedAuthors, error: blockedAuthorsError },
   ] = await Promise.all([
     serviceSupabase
       .from("rivn_leads_keywords")
@@ -302,48 +313,68 @@ export async function processRivnLeadsMessage(
       .select("id,project_id,value,normalized_value,enabled")
       .in("project_id", activeProjectIds)
       .eq("enabled", true),
-    authorKeys.length > 0
-      ? serviceSupabase
-          .from("rivn_leads_blocked_authors")
-          .select("project_id,author_key")
-          .in("project_id", activeProjectIds)
-          .in("author_key", authorKeys)
-      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (keywordsError) throw new Error(keywordsError.message);
   if (stopWordsError) throw new Error(stopWordsError.message);
-  if (blockedAuthorsError) throw new Error(blockedAuthorsError.message);
+
+  let blockedAuthors: Array<{ project_id: string }> = [];
+  if (authorKeys.length > 0) {
+    const { data, error } = await serviceSupabase
+      .from("rivn_leads_blocked_authors")
+      .select("project_id,author_key")
+      .in("project_id", activeProjectIds)
+      .in("author_key", authorKeys);
+
+    if (error && !isMissingSchemaError(error)) throw new Error(error.message);
+    blockedAuthors = ((data ?? []) as Array<{ project_id: string }>);
+  }
 
   const blockedProjectIds = new Set(
-    ((blockedAuthors ?? []) as Array<{ project_id: string }>).map((item) => item.project_id)
+    blockedAuthors.map((item) => item.project_id)
   );
 
-  const { data: telegramMessage, error: messageError } = await serviceSupabase
+  const telegramMessagePayload = {
+    source_chat_id: message.sourceChatId,
+    telegram_chat_id: message.telegramChatId,
+    telegram_message_id: message.telegramMessageId,
+    message_text: message.messageText,
+    normalized_text: normalizedText,
+    author_id: message.authorId ?? null,
+    author_name: message.authorName ?? null,
+    author_username: message.authorUsername?.replace(/^@/, "") ?? null,
+    message_link: message.messageLink ?? null,
+    message_date: messageDate,
+    expires_at: addDays(new Date(), 90),
+  };
+
+  let { data: telegramMessage, error: messageError } = await serviceSupabase
     .from("rivn_leads_telegram_messages")
-    .upsert(
-      {
-        source_chat_id: message.sourceChatId,
-        telegram_chat_id: message.telegramChatId,
-        telegram_message_id: message.telegramMessageId,
-        message_text: message.messageText,
-        normalized_text: normalizedText,
-        author_id: message.authorId ?? null,
-        author_name: message.authorName ?? null,
-        author_username: message.authorUsername?.replace(/^@/, "") ?? null,
-        message_link: message.messageLink ?? null,
-        message_date: messageDate,
-        expires_at: addDays(new Date(), 90),
-      },
-      { onConflict: "telegram_chat_id,telegram_message_id" }
-    )
+    .upsert(telegramMessagePayload, { onConflict: "telegram_chat_id,telegram_message_id" })
     .select("id")
     .single();
 
+  if (messageError && isMissingSchemaError(messageError)) {
+    const legacyPayload: Omit<typeof telegramMessagePayload, "author_id"> & Partial<Pick<typeof telegramMessagePayload, "author_id">> = {
+      ...telegramMessagePayload,
+    };
+    delete legacyPayload.author_id;
+    const legacyResult = await serviceSupabase
+      .from("rivn_leads_telegram_messages")
+      .upsert(legacyPayload, { onConflict: "telegram_chat_id,telegram_message_id" })
+      .select("id")
+      .single();
+
+    telegramMessage = legacyResult.data;
+    messageError = legacyResult.error;
+  }
+
   if (messageError) throw new Error(messageError.message);
+  if (!telegramMessage) throw new Error("RIVN Leads message was not saved");
 
   let leadsCreated = 0;
   let leadsDelivered = 0;
+  let deliveryErrors = 0;
   const leadIds: string[] = [];
 
   for (const project of projects) {
@@ -383,8 +414,17 @@ export async function processRivnLeadsMessage(
     leadIds.push(lead.id);
 
     if (options.deliver !== false) {
-      const delivery = await deliverRivnLead(serviceSupabase, lead.id);
-      if (delivery.delivered) leadsDelivered += 1;
+      try {
+        const delivery = await deliverRivnLead(serviceSupabase, lead.id);
+        if (delivery.delivered) leadsDelivered += 1;
+      } catch (error) {
+        deliveryErrors += 1;
+        console.error("RIVN Leads delivery failed after ingest", {
+          leadId: lead.id,
+          projectId: project.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 
@@ -393,6 +433,7 @@ export async function processRivnLeadsMessage(
     reason: "processed",
     leadsCreated,
     leadsDelivered,
+    deliveryErrors,
     leadIds,
   };
 }
