@@ -35,6 +35,39 @@ function requiredEnv(name, fallbackNames = []) {
   return value;
 }
 
+function normalizeAppUrl() {
+  const appUrl = (process.env.RIVN_LEADS_APP_URL || "https://rivnos.ru").replace(/\/$/, "");
+
+  try {
+    const parsed = new URL(appUrl);
+    const isIpHost = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(parsed.hostname);
+
+    if (isIpHost && process.env.RIVN_LEADS_ALLOW_IP_APP_URL !== "true") {
+      console.warn(
+        JSON.stringify({
+          level: "warn",
+          service: "rivn-leads-reader",
+          message: "RIVN_LEADS_APP_URL points to an IP address; falling back to https://rivnos.ru",
+          configuredAppUrl: appUrl,
+        })
+      );
+      return "https://rivnos.ru";
+    }
+  } catch {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        service: "rivn-leads-reader",
+        message: "RIVN_LEADS_APP_URL is invalid; falling back to https://rivnos.ru",
+        configuredAppUrl: appUrl,
+      })
+    );
+    return "https://rivnos.ru";
+  }
+
+  return appUrl;
+}
+
 const config = {
   supabaseUrl: requiredEnv("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]),
   serviceRoleKey: requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
@@ -42,7 +75,7 @@ const config = {
   telegramApiHash: requiredEnv("TELEGRAM_API_HASH"),
   encryptionKey: requiredEnv("RIVN_LEADS_ENCRYPTION_KEY", ["ENCRYPTION_KEY"]),
   ingestSecret: requiredEnv("RIVN_LEADS_INGEST_SECRET", ["CRON_SECRET", "VERCEL_CRON_SECRET"]),
-  appUrl: (process.env.RIVN_LEADS_APP_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || "https://rivnos.ru").replace(/\/$/, ""),
+  appUrl: normalizeAppUrl(),
   syncIntervalMs: Number(process.env.RIVN_LEADS_READER_SYNC_MS || 30_000),
   recentMessagesLimit: Number(process.env.RIVN_LEADS_RECENT_MESSAGES_LIMIT || 10),
   heartbeatMs: Number(process.env.RIVN_LEADS_READER_HEARTBEAT_MS || 60_000),
