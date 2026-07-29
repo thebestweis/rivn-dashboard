@@ -19,6 +19,8 @@ function getRequestSecret(request: Request, body: Record<string, unknown> | null
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+
   try {
     const body = await readJsonWithLimit<Record<string, unknown>>(
       request,
@@ -70,6 +72,23 @@ export async function POST(request: Request) {
       });
     }
 
-    return apiFailure({ error, code: "INTERNAL_ERROR" });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isDatabaseUnavailable =
+      /fetch failed|econnrefused|enotfound|eai_again|etimedout|socket hang up/i.test(
+        errorMessage
+      );
+
+    console.error("RIVN Leads ingest failed", {
+      requestId,
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
+    return apiFailure({
+      error,
+      status: isDatabaseUnavailable ? 503 : 500,
+      code: isDatabaseUnavailable ? "DATABASE_ERROR" : "INTERNAL_ERROR",
+      details: { requestId },
+    });
   }
 }

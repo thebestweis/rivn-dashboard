@@ -25,6 +25,7 @@ Reader-аккаунт хранит Telegram `session string` только в з�
 
 ```txt
 NEXT_PUBLIC_SUPABASE_URL=...
+SUPABASE_SERVER_URL=https://PROJECT_REF.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=...
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_API_ID=...
@@ -33,6 +34,11 @@ RIVN_LEADS_ENCRYPTION_KEY=...
 RIVN_LEADS_INGEST_SECRET=...
 RIVN_LEADS_APP_URL=https://rivnos.ru
 ```
+
+`SUPABASE_SERVER_URL` — прямой server-to-server адрес Supabase. На основном
+сервере он позволяет ingest RIVN Leads не зависеть от публичного прокси
+Supabase. Для старых JWT service-role ключей адрес проекта определяется
+автоматически, но в production лучше задать переменную явно.
 
 Если `RIVN_LEADS_INGEST_SECRET` не заполнен, worker попробует использовать `CRON_SECRET`.
 
