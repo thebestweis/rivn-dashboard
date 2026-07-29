@@ -57,7 +57,7 @@ export async function POST(request: Request) {
         messageLink: typeof body?.messageLink === "string" ? body.messageLink : null,
         messageDate: typeof body?.messageDate === "string" ? body.messageDate : new Date().toISOString(),
       },
-      { deliver: process.env.RIVN_LEADS_DELIVER_IN_INGEST === "true" }
+      { deliver: false }
     );
 
     return apiSuccess({ result });

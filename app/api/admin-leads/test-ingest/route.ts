@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       authorUsername: typeof body?.authorUsername === "string" ? body.authorUsername : "test_lead",
       messageLink: sourceChat.username ? `https://t.me/${sourceChat.username}` : null,
       messageDate: new Date().toISOString(),
-    });
+    }, { deliver: false });
 
     return apiSuccess({ result });
   } catch (error) {
