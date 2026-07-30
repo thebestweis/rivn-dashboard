@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getAvitoProfileAnalyticsByPeriod,
   getFriendlyAvitoErrorMessage,
@@ -21,6 +21,7 @@ import {
   type AvitoSnapshotStatus,
 } from "@/app/api/avito/report-reliability";
 import { saveAvitoReportMetric } from "@/app/api/avito/save-avito-report-metric";
+import { createAvitoReportsClient } from "@/app/lib/avito-reports/storage";
 
 type Supabase = SupabaseClient;
 
@@ -64,8 +65,6 @@ type RunReportParams = {
   testMode?: boolean;
 };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MESSAGE_LIMIT = 3900;
 const TELEGRAM_FETCH_TIMEOUT_MS = 20_000;
@@ -79,11 +78,7 @@ function shouldQueueTelegramDelivery() {
 }
 
 function getSupabase() {
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Не найдены переменные Supabase");
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
+  return createAvitoReportsClient();
 }
 
 function getMoscowDate(daysAgo: number) {

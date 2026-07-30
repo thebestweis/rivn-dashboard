@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import { getAvitoReportsStorageConfig } from "./lib/avito-reports-storage.mjs";
 
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 
@@ -45,10 +46,11 @@ const requestTimeoutMs = Math.max(
   Number(process.env.AVITO_TELEGRAM_REQUEST_TIMEOUT_MS || 20_000),
   (updatesPollTimeoutSeconds + 10) * 1000
 );
+const storage = getAvitoReportsStorageConfig();
 
 const config = {
-  supabaseUrl: requiredEnv("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]),
-  serviceRoleKey: requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+  supabaseUrl: storage.url,
+  serviceRoleKey: storage.serviceKey,
   telegramBotToken: requiredEnv("AVITO_TELEGRAM_BOT_TOKEN"),
   fallbackTelegramBotTokenConfigured: Boolean(optionalEnv("TELEGRAM_BOT_TOKEN")),
   pollMs: Number(process.env.AVITO_TELEGRAM_WORKER_POLL_MS || 10_000),
@@ -576,6 +578,8 @@ async function main() {
   await clearWebhook();
 
   log("Avito Telegram delivery worker started", {
+    storageMode: storage.mode,
+    storageHost: new URL(storage.url).host,
     pollMs: config.pollMs,
     batchSize: config.batchSize,
     updatesPollTimeoutSeconds: config.updatesPollTimeoutSeconds,

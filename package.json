@@ -12,6 +12,7 @@
     "leads:diagnose-pipeline": "node scripts/rivn-leads-diagnose-pipeline.mjs",
     "leads:health": "node scripts/rivn-leads-health-check.mjs",
     "avito:telegram-worker": "node scripts/avito-telegram-delivery-worker.mjs",
+    "avito:storage:migrate": "node scripts/avito-reports-migrate-storage.mjs",
     "health:site": "node scripts/rivnos-health-check.mjs",
     "leads:scan-chats": "node scripts/rivn-leads-scan-reader-chats.mjs",
     "leads:session": "node scripts/rivn-leads-generate-session.mjs",

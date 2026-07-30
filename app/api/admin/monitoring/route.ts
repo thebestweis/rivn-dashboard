@@ -1,4 +1,5 @@
 import { apiFailure, apiSuccess } from "@/app/lib/api/errors";
+import { createAvitoAwareServiceClient } from "@/app/lib/avito-reports/storage";
 import { requireSuperAdminRoute } from "../_utils";
 
 export const dynamic = "force-dynamic";
@@ -97,7 +98,8 @@ function increment(map: Map<string, number>, key: string | null | undefined) {
 
 export async function GET() {
   try {
-    const { serviceSupabase } = await requireSuperAdminRoute();
+    await requireSuperAdminRoute();
+    const serviceSupabase = createAvitoAwareServiceClient();
 
     const [
       workspacesResult,

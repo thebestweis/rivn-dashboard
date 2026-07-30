@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ApiAccessError } from "@/app/api/_guards";
 import { readJsonWithLimit } from "@/app/api/_request";
 import { safeEqualSecret } from "@/app/api/_secrets";
+import { createAvitoReportsClient } from "@/app/lib/avito-reports/storage";
 import { createRivnLeadsClient } from "@/app/lib/rivn-leads/storage";
 
 type TelegramUpdate = {
@@ -34,16 +35,10 @@ type TelegramChatUpdatePayload = TelegramUpdate & {
   };
 };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 
 function getSupabase() {
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Не найдены переменные Supabase или SUPABASE_SERVICE_ROLE_KEY");
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
+  return createAvitoReportsClient();
 }
 
 async function sendTelegramMessage(chatId: string | number, text: string) {

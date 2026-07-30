@@ -31,4 +31,5 @@ docker compose \
   -f "$script_dir/docker-compose.yml" \
   up -d
 
+"$script_dir/upgrade-avito-reports.sh"
 "$script_dir/verify.sh"

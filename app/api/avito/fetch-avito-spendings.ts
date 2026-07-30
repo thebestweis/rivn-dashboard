@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createAvitoReportsClient } from "@/app/lib/avito-reports/storage";
 
 export type AvitoSpendingType =
   | "all"
@@ -32,8 +32,6 @@ type AvitoSpendingsResponse = {
 };
 
 const SPENDINGS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const spendingsCache = new Map<
   string,
@@ -50,11 +48,7 @@ function sleep(ms: number) {
 }
 
 function getServiceSupabase() {
-  if (!supabaseUrl || !supabaseKey) {
-    return null;
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
+  return createAvitoReportsClient();
 }
 
 function buildCacheKey(params: FetchAvitoSpendingsParams) {

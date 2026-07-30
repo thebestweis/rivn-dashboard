@@ -1,8 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
+import { createAvitoReportsClient } from "@/app/lib/avito-reports/storage";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ITEMS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 const itemIdsMemoryCache = new Map<
@@ -60,11 +58,7 @@ export class AvitoApiError extends Error {
 }
 
 function getServiceSupabase() {
-  if (!supabaseUrl || !supabaseKey) {
-    return null;
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
+  return createAvitoReportsClient();
 }
 
 export function sleep(ms: number) {

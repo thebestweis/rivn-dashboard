@@ -1,0 +1,59 @@
+#!/bin/bash
+set -euo pipefail
+
+app_dir=${RIVNOS_APP_DIR:-/var/www/rivnos}
+env_file=${RIVNOS_ENV_FILE:-$app_dir/.env.production}
+job=${1:-}
+
+if [[ ! -f "$env_file" ]]; then
+  echo "Environment file not found: $env_file" >&2
+  exit 1
+fi
+
+set -a
+# shellcheck disable=SC1090
+source "$env_file"
+set +a
+
+secret=${CRON_SECRET:-${VERCEL_CRON_SECRET:-}}
+if [[ -z "$secret" ]]; then
+  echo "CRON_SECRET is not configured" >&2
+  exit 1
+fi
+
+case "$job" in
+  daily) path="/api/cron/daily" ;;
+  daily-retry-15) path="/api/cron/daily-retry-15" ;;
+  daily-retry-30) path="/api/cron/daily-retry-30" ;;
+  weekly) path="/api/cron/weekly" ;;
+  report-sync) path="/api/cron/avito-report-sync" ;;
+  cache-warmup) path="/api/cron/avito-cache-warmup" ;;
+  crm-dialogs-sync) path="/api/cron/avito-crm-dialogs-sync?limit=3&days=1&maxChats=20" ;;
+  *)
+    echo "Unknown job: $job" >&2
+    exit 1
+    ;;
+esac
+
+lock_name=$job
+if [[ "$job" == daily* ]]; then
+  lock_name=daily
+fi
+
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"/var/lock/rivnos-avito-$lock_name.lock"
+  if ! flock -n 9; then
+    echo "Skipped overlapping job: $job"
+    exit 0
+  fi
+fi
+
+curl \
+  --fail-with-body \
+  --silent \
+  --show-error \
+  --connect-timeout 5 \
+  --max-time 420 \
+  -H "Authorization: Bearer $secret" \
+  "http://127.0.0.1:3000$path"
+echo

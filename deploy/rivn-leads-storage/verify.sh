@@ -21,4 +21,9 @@ curl -fsS \
   -H "apikey: $RIVN_LEADS_DATABASE_SERVICE_KEY" \
   -H "Authorization: Bearer $RIVN_LEADS_DATABASE_SERVICE_KEY" \
   "$base_url/rest/v1/rivn_leads_reader_accounts?select=id&limit=1"
-printf '\nRIVN Leads standalone storage is healthy.\n'
+printf '\n'
+curl -fsS \
+  -H "apikey: $RIVN_LEADS_DATABASE_SERVICE_KEY" \
+  -H "Authorization: Bearer $RIVN_LEADS_DATABASE_SERVICE_KEY" \
+  "$base_url/rest/v1/avito_report_clients?select=id&limit=1"
+printf '\nStandalone storage for RIVN Leads and Avito Reports is healthy.\n'

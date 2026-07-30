@@ -1,7 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import { createAvitoReportsClient } from "@/app/lib/avito-reports/storage";
 
 type SaveAvitoReportMetricParams = {
   clientId: string;
@@ -32,11 +29,7 @@ export async function saveAvitoReportMetric({
   costPerContact,
   raw = {},
 }: SaveAvitoReportMetricParams) {
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Не найдены переменные Supabase");
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = createAvitoReportsClient();
 
   const { error } = await supabase.from("avito_report_metrics").upsert(
     {

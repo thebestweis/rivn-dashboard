@@ -1,16 +1,9 @@
-import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/app/lib/supabase/server";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import { createAvitoAwareServiceClient } from "@/app/lib/avito-reports/storage";
 
 function getServiceSupabase() {
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Не найдены переменные Supabase");
-  }
-
-  return createServiceClient(supabaseUrl, supabaseKey);
+  return createAvitoAwareServiceClient();
 }
 
 function getMoscowDate(daysAgo: number) {

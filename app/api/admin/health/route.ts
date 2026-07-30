@@ -1,5 +1,9 @@
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import { apiFailure, apiSuccess } from "@/app/lib/api/errors";
+import {
+  createAvitoReportsClient,
+  getAvitoReportsStorageInfo,
+} from "@/app/lib/avito-reports/storage";
 import { requireSuperAdminRoute } from "../_utils";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +28,8 @@ function getStatus(ok: boolean, warning = false): HealthStatus {
 export async function GET() {
   try {
     const { serviceSupabase } = await requireSuperAdminRoute();
+    const avitoSupabase = createAvitoReportsClient();
+    const avitoStorage = getAvitoReportsStorageInfo();
 
     const envChecks = [
       "NEXT_PUBLIC_SUPABASE_URL",
@@ -122,7 +128,7 @@ export async function GET() {
           : `Не заполнено: ${missingEnv.map((item) => item.name).join(", ")}`,
     });
 
-    const { data: latestLog } = await serviceSupabase
+    const { data: latestLog } = await avitoSupabase
       .from("avito_report_logs")
       .select("created_at,status,error")
       .order("created_at", { ascending: false })
@@ -134,8 +140,8 @@ export async function GET() {
       label: "Cron и отчёты",
       status: latestLog?.created_at ? "ok" : "warning",
       message: latestLog?.created_at
-        ? `Последний лог отчёта: ${new Date(latestLog.created_at).toLocaleString("ru-RU")}`
-        : "Логи отчётов пока не найдены",
+        ? `Последний лог отчёта: ${new Date(latestLog.created_at).toLocaleString("ru-RU")} (${avitoStorage.mode})`
+        : `Логи отчётов пока не найдены (${avitoStorage.mode})`,
     });
 
     const overallStatus: HealthStatus = checks.some((item) => item.status === "error")

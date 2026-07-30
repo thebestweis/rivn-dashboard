@@ -1,19 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
+import { createAvitoReportsClient } from "@/app/lib/avito-reports/storage";
 import {
   apiAccessErrorResponse,
   requireAuthenticatedUser,
   requireWorkspaceMember,
 } from "@/app/api/_guards";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
 function getSupabase() {
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Supabase env variables are missing");
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
+  return createAvitoReportsClient();
 }
 
 export async function GET(request: Request) {

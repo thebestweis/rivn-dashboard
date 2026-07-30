@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createAvitoReportsClient } from "@/app/lib/avito-reports/storage";
 import { fetchAvitoSpendings } from "@/app/api/avito/fetch-avito-spendings";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import {
@@ -14,8 +14,6 @@ import {
 } from "@/app/api/avito/report-reliability";
 import { verifyCronSecret } from "../verify-cron-secret";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const AVITO_REPORT_CRON_DISABLED = false;
 
 type AvitoAccount = {
@@ -28,11 +26,7 @@ type AvitoAccount = {
 };
 
 function getSupabase() {
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Supabase env variables are missing");
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
+  return createAvitoReportsClient();
 }
 
 function buildStats(params: {

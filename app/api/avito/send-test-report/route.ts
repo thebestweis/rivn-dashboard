@@ -1,19 +1,12 @@
-import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { GET as sendAvitoTestReport } from "@/app/api/avito/test-report/route";
 import { createClient as createServerClient } from "@/app/lib/supabase/server";
+import { createAvitoAwareServiceClient } from "@/app/lib/avito-reports/storage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
 function getServiceSupabase() {
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Не найдены переменные Supabase");
-  }
-
-  return createServiceClient(supabaseUrl, supabaseKey);
+  return createAvitoAwareServiceClient();
 }
 
 async function readJsonResponse(response: Response) {

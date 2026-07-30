@@ -1,7 +1,7 @@
-import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/app/lib/supabase/server";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import { POST as saveCrmDialog } from "@/app/api/crm/dialogs/route";
+import { createAvitoAwareServiceClient } from "@/app/lib/avito-reports/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -49,20 +49,8 @@ type LinkedAvitoAccount = {
   avito_report_clients?: unknown[] | unknown;
 };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
 function getServiceSupabase() {
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Supabase env is missing");
-  }
-
-  return createServiceClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  return createAvitoAwareServiceClient();
 }
 
 class HttpError extends Error {

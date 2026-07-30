@@ -1,6 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
 import { POST as saveCrmDialog } from "@/app/api/crm/dialogs/route";
+import { createAvitoReportsClient } from "@/app/lib/avito-reports/storage";
 import { verifyCronSecret } from "../verify-cron-secret";
 
 export const dynamic = "force-dynamic";
@@ -63,20 +63,8 @@ type AvitoMessage = {
   };
 };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
 function getSupabase() {
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Supabase env is missing");
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  return createAvitoReportsClient();
 }
 
 function isLocalUrl(value: string) {
