@@ -40,6 +40,20 @@ RIVN_LEADS_APP_URL=https://rivnos.ru
 Supabase. Для старых JWT service-role ключей адрес проекта определяется
 автоматически, но в production лучше задать переменную явно.
 
+Worker автоматически ставит ingest на паузу при недоступности Supabase,
+сохраняет новые сообщения в recovery-очередь и отправляет один общий алерт на
+инцидент. Значения по умолчанию можно переопределить:
+
+```txt
+RIVN_LEADS_READER_SYNC_MS=60000
+RIVN_LEADS_RECENT_POLL_MS=60000
+RIVN_LEADS_STARTUP_RECENT_MESSAGES_LIMIT=100
+RIVN_LEADS_INGEST_QUEUE_LIMIT=20000
+RIVN_LEADS_INGEST_RECOVERY_BATCH_SIZE=100
+RIVN_LEADS_OUTAGE_ALERT_THROTTLE_MS=21600000
+RIVN_LEADS_BOT_FAILED_DELIVERY_POLL_MS=300000
+```
+
 Если `RIVN_LEADS_INGEST_SECRET` не заполнен, worker попробует использовать `CRON_SECRET`.
 
 `RIVN_LEADS_ENCRYPTION_KEY` должен быть ровно 32 байта в utf8 или base64. Этот ключ нужен, чтобы шифровать и расшифровывать Telegram session string.

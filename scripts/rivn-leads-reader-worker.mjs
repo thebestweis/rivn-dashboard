@@ -69,21 +69,32 @@ function normalizeAppUrl() {
 }
 
 const config = {
-  supabaseUrl: requiredEnv("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]),
+  supabaseUrl: requiredEnv("SUPABASE_SERVER_URL", [
+    "SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_URL",
+  ]),
   serviceRoleKey: requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
   telegramApiId: Number(requiredEnv("TELEGRAM_API_ID")),
   telegramApiHash: requiredEnv("TELEGRAM_API_HASH"),
   encryptionKey: requiredEnv("RIVN_LEADS_ENCRYPTION_KEY", ["ENCRYPTION_KEY"]),
   ingestSecret: requiredEnv("RIVN_LEADS_INGEST_SECRET", ["CRON_SECRET", "VERCEL_CRON_SECRET"]),
   appUrl: normalizeAppUrl(),
-  syncIntervalMs: Number(process.env.RIVN_LEADS_READER_SYNC_MS || 30_000),
+  syncIntervalMs: Number(process.env.RIVN_LEADS_READER_SYNC_MS || 60_000),
+  recentPollMs: Number(process.env.RIVN_LEADS_RECENT_POLL_MS || 60_000),
   recentMessagesLimit: Number(process.env.RIVN_LEADS_RECENT_MESSAGES_LIMIT || 10),
+  startupRecentMessagesLimit: Number(
+    process.env.RIVN_LEADS_STARTUP_RECENT_MESSAGES_LIMIT || 100
+  ),
   heartbeatMs: Number(process.env.RIVN_LEADS_READER_HEARTBEAT_MS || 60_000),
   telegramBotToken: process.env.RIVN_LEADS_ALERT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "",
   alertChatId: process.env.RIVN_LEADS_ALERT_CHAT_ID || process.env.CRON_ERROR_CHAT_ID || "",
   alertThrottleMs: Number(process.env.RIVN_LEADS_ALERT_THROTTLE_MS || 300_000),
+  outageAlertThrottleMs: Number(process.env.RIVN_LEADS_OUTAGE_ALERT_THROTTLE_MS || 21_600_000),
   ingestMaxAttempts: Number(process.env.RIVN_LEADS_INGEST_MAX_ATTEMPTS || 3),
   ingestRetryDelayMs: Number(process.env.RIVN_LEADS_INGEST_RETRY_DELAY_MS || 2_000),
+  ingestQueueLimit: Number(process.env.RIVN_LEADS_INGEST_QUEUE_LIMIT || 20_000),
+  ingestRecoveryBatchSize: Number(process.env.RIVN_LEADS_INGEST_RECOVERY_BATCH_SIZE || 100),
+  ingestRecoveryPollMs: Number(process.env.RIVN_LEADS_INGEST_RECOVERY_POLL_MS || 15_000),
   dialogScanLimit: Math.min(Math.max(Number(process.env.RIVN_LEADS_DIALOG_SCAN_LIMIT || 5000), 500), 5000),
 };
 
@@ -140,10 +151,176 @@ function logError(message, error, meta = {}) {
 }
 
 const alertSentAt = new Map();
+const seenMessageKeys = new Set();
+const seenMessageOrder = [];
+const pendingIngestMessages = new Map();
+const storageOutage = {
+  active: false,
+  consecutiveFailures: 0,
+  startedAt: 0,
+  retryAt: 0,
+  lastError: "",
+  lastLoggedAt: 0,
+  lastFailureContext: "",
+};
+let isFlushingPendingIngest = false;
+let lastQueueOverflowLoggedAt = 0;
+
+function isStorageRestrictedError(error) {
+  return /service for this project is restricted|exceed(?:ed)? egress quota|spend caps?|project.*restricted/i.test(
+    String(error || "")
+  );
+}
+
+function messageKey(payload) {
+  return `${payload.telegramChatId}:${payload.telegramMessageId}`;
+}
+
+function rememberMessage(key) {
+  if (seenMessageKeys.has(key)) return;
+
+  seenMessageKeys.add(key);
+  seenMessageOrder.push(key);
+
+  while (seenMessageOrder.length > 20_000) {
+    const oldest = seenMessageOrder.shift();
+    if (oldest) seenMessageKeys.delete(oldest);
+  }
+}
+
+function queueIngest(payload, meta) {
+  const key = messageKey(payload);
+  if (seenMessageKeys.has(key) || pendingIngestMessages.has(key)) return true;
+
+  if (pendingIngestMessages.size >= config.ingestQueueLimit) {
+    if (Date.now() - lastQueueOverflowLoggedAt >= config.outageAlertThrottleMs) {
+      lastQueueOverflowLoggedAt = Date.now();
+      logError("RIVN Leads recovery queue is full", new Error("ingest queue limit reached"), {
+        queueSize: pendingIngestMessages.size,
+        queueLimit: config.ingestQueueLimit,
+      });
+    }
+    return false;
+  }
+
+  pendingIngestMessages.set(key, {
+    payload,
+    meta,
+    queuedAt: Date.now(),
+  });
+  return true;
+}
+
+function canAttemptStorage() {
+  return !storageOutage.active || Date.now() >= storageOutage.retryAt;
+}
+
+function registerStorageFailure(error) {
+  const now = Date.now();
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const wasActive = storageOutage.active;
+
+  if (wasActive && now < storageOutage.retryAt) {
+    storageOutage.lastError = errorMessage;
+    return {
+      isNewIncident: false,
+      backoffMs: storageOutage.retryAt - now,
+      errorMessage,
+    };
+  }
+
+  storageOutage.active = true;
+  storageOutage.consecutiveFailures += 1;
+  storageOutage.startedAt ||= now;
+  storageOutage.lastError = errorMessage;
+
+  const baseDelay = isStorageRestrictedError(errorMessage) ? 15 * 60_000 : 60_000;
+  const backoffMs = Math.min(
+    baseDelay * 2 ** Math.min(storageOutage.consecutiveFailures - 1, 4),
+    60 * 60_000
+  );
+  storageOutage.retryAt = now + backoffMs;
+
+  return {
+    isNewIncident: !wasActive,
+    backoffMs,
+    errorMessage,
+  };
+}
+
+async function reportStorageFailure(error, context) {
+  const failure = registerStorageFailure(error);
+  storageOutage.lastFailureContext = context;
+  const now = Date.now();
+
+  if (
+    failure.isNewIncident ||
+    now - storageOutage.lastLoggedAt >= config.outageAlertThrottleMs
+  ) {
+    storageOutage.lastLoggedAt = now;
+    logError("RIVN Leads storage is temporarily unavailable", error, {
+      context,
+      retryAt: new Date(storageOutage.retryAt).toISOString(),
+      pendingMessages: pendingIngestMessages.size,
+    });
+  }
+
+  await sendAdminAlert(
+    "RIVN Leads storage temporarily unavailable",
+    [
+      `Reason: ${failure.errorMessage}`,
+      `Queued messages: ${pendingIngestMessages.size}`,
+      `Next automatic retry: ${new Date(storageOutage.retryAt).toISOString()}`,
+      "Status: Telegram readers remain online; messages are queued for automatic recovery.",
+    ],
+    "storage-outage",
+    config.outageAlertThrottleMs
+  );
+}
+
+async function reportStorageRecovery(context) {
+  if (!storageOutage.active) return;
+  if (
+    context === "reader_sync" &&
+    storageOutage.lastFailureContext !== "reader_sync"
+  ) {
+    return;
+  }
+
+  const outageDurationMs = Date.now() - storageOutage.startedAt;
+  storageOutage.active = false;
+  storageOutage.consecutiveFailures = 0;
+  storageOutage.startedAt = 0;
+  storageOutage.retryAt = 0;
+  storageOutage.lastError = "";
+  storageOutage.lastLoggedAt = 0;
+  storageOutage.lastFailureContext = "";
+  alertSentAt.delete("storage-outage");
+
+  log("RIVN Leads storage connection recovered", {
+    context,
+    outageDurationMs,
+    pendingMessages: pendingIngestMessages.size,
+  });
+  await sendAdminAlert(
+    "RIVN Leads storage recovered",
+    [
+      `Outage duration: ${Math.ceil(outageDurationMs / 60_000)} min`,
+      `Queued messages remaining: ${pendingIngestMessages.size}`,
+      "Status: automatic message processing resumed.",
+    ],
+    `storage-recovered:${Date.now()}`,
+    0
+  );
+}
 
 function isRecoverableReaderError(error) {
   const message = String(error || "");
-  if (/RIVN Leads ingest failed|500|502|503|504|522|429/i.test(message)) {
+  if (
+    /RIVN Leads ingest failed|500|502|503|504|522|429|service for this project is restricted|egress quota|spend cap/i.test(
+      message
+    )
+  ) {
     return true;
   }
   return /disconnected|reconnect|TIMEOUT|Not connected|fetch failed|network|socket hang up|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|temporar|external service|Telegram connection was reset|Bad Gateway|503|502|504|429|Внешний сервис|временно не ответил/i.test(
@@ -168,12 +345,17 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;");
 }
 
-async function sendAdminAlert(title, lines = [], throttleKey = title) {
+async function sendAdminAlert(
+  title,
+  lines = [],
+  throttleKey = title,
+  throttleMs = config.alertThrottleMs
+) {
   if (!config.telegramBotToken || !config.alertChatId) return;
 
   const now = Date.now();
   const previousSentAt = alertSentAt.get(throttleKey) || 0;
-  if (now - previousSentAt < config.alertThrottleMs) return;
+  if (now - previousSentAt < throttleMs) return;
   alertSentAt.set(throttleKey, now);
 
   const text = [
@@ -319,7 +501,14 @@ async function sendToIngest(payload) {
       if (response.ok && body?.ok) return body.result;
 
       const message = body?.error || `RIVN Leads ingest failed: ${response.status}`;
-      lastError = new Error(`RIVN Leads ingest failed: ${response.status}: ${message}`);
+      const requestId =
+        typeof body?.details?.requestId === "string"
+          ? `, requestId=${body.details.requestId}`
+          : "";
+      const errorCode = typeof body?.code === "string" ? `, code=${body.code}` : "";
+      lastError = new Error(
+        `RIVN Leads ingest failed: ${response.status}: ${message}${errorCode}${requestId}`
+      );
       const retryAfterSeconds = Number(response.headers.get("retry-after"));
       retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 0;
 
@@ -333,6 +522,50 @@ async function sendToIngest(payload) {
   }
 
   throw lastError || new Error("RIVN Leads ingest failed");
+}
+
+async function flushPendingIngest() {
+  if (
+    isFlushingPendingIngest ||
+    pendingIngestMessages.size === 0 ||
+    !canAttemptStorage()
+  ) {
+    return;
+  }
+
+  isFlushingPendingIngest = true;
+  let processed = 0;
+  let failed = false;
+
+  try {
+    for (const [key, entry] of pendingIngestMessages) {
+      if (processed >= config.ingestRecoveryBatchSize) break;
+
+      try {
+        await sendToIngest(entry.payload);
+        pendingIngestMessages.delete(key);
+        rememberMessage(key);
+        processed += 1;
+      } catch (error) {
+        failed = true;
+        await reportStorageFailure(error, "pending_ingest_flush");
+        break;
+      }
+    }
+  } finally {
+    isFlushingPendingIngest = false;
+  }
+
+  if (processed > 0 && !failed) {
+    await reportStorageRecovery("pending_ingest_flush");
+  }
+
+  if (processed > 0) {
+    log("RIVN Leads queued messages processed", {
+      processed,
+      pendingMessages: pendingIngestMessages.size,
+    });
+  }
 }
 
 async function loadReaders() {
@@ -352,7 +585,7 @@ async function loadReaders() {
 async function loadSourceChats(readerId, options = {}) {
   let query = supabase
     .from("rivn_leads_source_chats")
-    .select("id,title,telegram_chat_id,username,status")
+    .select("id,title,telegram_chat_id,username,status,last_message_at")
     .eq("reader_account_id", readerId);
 
   query = options.includeRecoverable
@@ -489,6 +722,7 @@ class ReaderRuntime {
     this.isConnected = false;
     this.isPolling = false;
     this.needsRestart = false;
+    this.lastPresenceUpdateAt = 0;
   }
 
   async start() {
@@ -544,11 +778,13 @@ class ReaderRuntime {
 
     await this.resolveDialogs();
     this.client.addEventHandler((event) => void this.handleNewMessage(event), new NewMessage({}));
-    await this.pollRecentMessages();
+    await this.pollRecentMessages({
+      limit: config.startupRecentMessagesLimit,
+    });
 
     this.pollTimer = setInterval(() => {
       void this.pollRecentMessages().catch((error) => this.handleRuntimeError(error, "Ошибка фонового опроса сообщений"));
-    }, config.syncIntervalMs);
+    }, config.recentPollMs);
 
     await updateReader(this.reader.id, { status: "active", last_error: null, last_seen_at: new Date().toISOString() });
     log("Reader запущен", { readerId: this.reader.id, chats: this.trackedDialogs.length });
@@ -721,13 +957,14 @@ class ReaderRuntime {
     });
 
     if (!sourceChat) return;
-    await this.processMessage(sourceChat, message);
+    await this.processMessage(sourceChat, message, { fromPoll: false });
   }
 
-  async pollRecentMessages() {
+  async pollRecentMessages(options = {}) {
     if (!this.client || this.isStopping || this.isPolling || !this.isConnected) return;
 
     this.isPolling = true;
+    const messagesLimit = Number(options.limit || config.recentMessagesLimit);
 
     try {
       for (const dialog of this.trackedDialogs) {
@@ -735,7 +972,9 @@ class ReaderRuntime {
 
         let messages = [];
         try {
-          messages = await this.client.getMessages(dialog.entity, { limit: config.recentMessagesLimit });
+          messages = await this.client.getMessages(dialog.entity, {
+            limit: messagesLimit,
+          });
         } catch (error) {
           if (/CHANNEL_PRIVATE|CHAT_ADMIN_REQUIRED|not a participant|forbidden|access/i.test(String(error))) {
             await updateSourceChat(dialog.sourceChat.id, {
@@ -749,7 +988,9 @@ class ReaderRuntime {
 
         for (const message of [...messages].reverse()) {
           if (this.isStopping || !this.isConnected) return;
-          if (message instanceof Api.Message) await this.processMessage(dialog.sourceChat, message);
+          if (message instanceof Api.Message) {
+            await this.processMessage(dialog.sourceChat, message, { fromPoll: true });
+          }
         }
       }
     } finally {
@@ -757,62 +998,84 @@ class ReaderRuntime {
     }
   }
 
-  async processMessage(sourceChat, message) {
+  async processMessage(sourceChat, message, options = {}) {
     if (!this.client || this.isStopping || !this.isConnected) return;
     const text = message.message ?? "";
     if (!text.trim()) return;
 
-    const sender = await resolveSender(this.client, message);
     const telegramMessageId = String(message.id);
+    const key = `${sourceChat.telegram_chat_id}:${telegramMessageId}`;
+    if (seenMessageKeys.has(key) || pendingIngestMessages.has(key)) return;
+
+    const messageDate = getMessageDate(message);
+    const previousMessageAt = sourceChat.last_message_at
+      ? new Date(sourceChat.last_message_at).getTime()
+      : Number.NaN;
+    const messageTimestamp = new Date(messageDate).getTime();
+
+    if (
+      options.fromPoll &&
+      Number.isFinite(previousMessageAt) &&
+      Number.isFinite(messageTimestamp) &&
+      messageTimestamp < previousMessageAt
+    ) {
+      rememberMessage(key);
+      return;
+    }
+
+    const sender = await resolveSender(this.client, message);
+    const payload = {
+      sourceChatId: sourceChat.id,
+      telegramChatId: sourceChat.telegram_chat_id,
+      telegramMessageId,
+      messageText: text,
+      authorId: sender.authorId,
+      authorName: sender.authorName,
+      authorUsername: sender.authorUsername,
+      messageLink: buildMessageLink(sourceChat, telegramMessageId),
+      messageDate,
+    };
+    const meta = {
+      readerId: this.reader.id,
+      readerLabel: this.reader.label || this.reader.id,
+      sourceChatId: sourceChat.id,
+      sourceChatTitle: sourceChat.title || sourceChat.id,
+      telegramMessageId,
+    };
+
+    if (!canAttemptStorage()) {
+      queueIngest(payload, meta);
+      return;
+    }
+
     let result = null;
     try {
-      result = await sendToIngest({
-        sourceChatId: sourceChat.id,
-        telegramChatId: sourceChat.telegram_chat_id,
-        telegramMessageId,
-        messageText: text,
-        authorId: sender.authorId,
-        authorName: sender.authorName,
-        authorUsername: sender.authorUsername,
-        messageLink: buildMessageLink(sourceChat, telegramMessageId),
-        messageDate: getMessageDate(message),
-      });
+      result = await sendToIngest(payload);
+      rememberMessage(key);
+      await reportStorageRecovery("live_ingest");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (!isRecoverableReaderError(errorMessage)) throw error;
 
-      logError("RIVN Leads ingest temporarily failed", error, {
-        readerId: this.reader.id,
-        sourceChatId: sourceChat.id,
-        telegramMessageId,
-      });
-      await updateSourceChat(sourceChat.id, {
-        last_checked_at: new Date().toISOString(),
-      });
-      await updateReader(this.reader.id, {
-        status: "active",
-        last_error: errorMessage,
-        last_seen_at: new Date().toISOString(),
-      });
-      await sendAdminAlert(
-        "RIVN Leads ingest temporarily failed",
-        [
-          `Reader: ${this.reader.label || this.reader.id}`,
-          `Chat: ${sourceChat.title || sourceChat.id}`,
-          `Message: ${telegramMessageId}`,
-          `Reason: ${errorMessage}`,
-          "Status: reader keeps running and will process next messages.",
-        ],
-        `ingest-temporary:${this.reader.id}:${sourceChat.id}`
-      );
+      queueIngest(payload, meta);
+      await reportStorageFailure(error, "live_ingest");
       return;
     }
 
-    await updateSourceChat(sourceChat.id, {
-      last_message_at: getMessageDate(message),
-      last_checked_at: new Date().toISOString(),
-    });
-    await updateReader(this.reader.id, { status: "active", last_error: null, last_seen_at: new Date().toISOString() });
+    if (!sourceChat.last_message_at || messageTimestamp > previousMessageAt) {
+      sourceChat.last_message_at = messageDate;
+    }
+
+    const now = Date.now();
+    if (now - this.lastPresenceUpdateAt >= config.heartbeatMs) {
+      this.lastPresenceUpdateAt = now;
+      await updateReader(this.reader.id, {
+        status: "active",
+        last_error: null,
+        last_seen_at: new Date().toISOString(),
+      });
+    }
+
     log("Сообщение обработано", {
       readerId: this.reader.id,
       sourceChatId: sourceChat.id,
@@ -918,6 +1181,11 @@ async function syncReaders() {
       activeReaders: readers.length,
       runningReaders: runtimes.size,
       startingReaders: startingReaders.size,
+      pendingIngestMessages: pendingIngestMessages.size,
+      storageOutageActive: storageOutage.active,
+      storageRetryAt: storageOutage.retryAt
+        ? new Date(storageOutage.retryAt).toISOString()
+        : null,
       runtimes: [...runtimes.values()].map((runtime) => ({
         readerId: runtime.reader.id,
         sourceChats: runtime.sourceChats.length,
@@ -927,6 +1195,17 @@ async function syncReaders() {
         isPolling: runtime.isPolling,
       })),
     });
+  }
+}
+
+async function runReaderSync() {
+  if (!canAttemptStorage()) return;
+
+  try {
+    await syncReaders();
+    await reportStorageRecovery("reader_sync");
+  } catch (error) {
+    await reportStorageFailure(error, "reader_sync");
   }
 }
 
@@ -943,23 +1222,18 @@ async function main() {
   log("Запускаем RIVN Leads reader worker", {
     appUrl: config.appUrl,
     syncIntervalMs: config.syncIntervalMs,
+    recentPollMs: config.recentPollMs,
     heartbeatMs: config.heartbeatMs,
   });
 
-  await syncReaders();
+  await runReaderSync();
   setInterval(() => {
-    void syncReaders().catch((error) => {
-      logError("Ошибка синхронизации reader-аккаунтов", error);
-      void sendAdminAlert(
-        "RIVN Leads reader sync failed",
-        [
-          `Reason: ${error instanceof Error ? error.message : String(error)}`,
-          "Action: check rivn-leads-reader PM2 logs and Supabase connectivity.",
-        ],
-        "reader-sync-failed"
-      );
-    });
+    void runReaderSync();
   }, config.syncIntervalMs);
+
+  setInterval(() => {
+    void flushPendingIngest();
+  }, config.ingestRecoveryPollMs);
 }
 
 main().catch((error) => {

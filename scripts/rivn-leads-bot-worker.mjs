@@ -36,13 +36,18 @@ function requiredEnv(name, fallbackNames = []) {
 }
 
 const config = {
-  supabaseUrl: requiredEnv("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]),
+  supabaseUrl: requiredEnv("SUPABASE_SERVER_URL", [
+    "SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_URL",
+  ]),
   serviceRoleKey: requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
   telegramBotToken: requiredEnv("TELEGRAM_BOT_TOKEN"),
   pollTimeoutSeconds: Number(process.env.RIVN_LEADS_BOT_POLL_TIMEOUT_SECONDS || 25),
   deliveryPollMs: Number(process.env.RIVN_LEADS_BOT_DELIVERY_POLL_MS || 10_000),
   deliveryBatchSize: Number(process.env.RIVN_LEADS_BOT_DELIVERY_BATCH_SIZE || 20),
   retryFailedDeliveries: process.env.RIVN_LEADS_BOT_RETRY_FAILED_DELIVERIES !== "false",
+  failedDeliveryPollMs: Number(process.env.RIVN_LEADS_BOT_FAILED_DELIVERY_POLL_MS || 300_000),
+  databaseBackoffMaxMs: Number(process.env.RIVN_LEADS_BOT_DATABASE_BACKOFF_MAX_MS || 900_000),
 };
 
 const supabase = createClient(config.supabaseUrl, config.serviceRoleKey, {
@@ -52,6 +57,10 @@ const supabase = createClient(config.supabaseUrl, config.serviceRoleKey, {
 let offset = 0;
 let isStopping = false;
 let isDelivering = false;
+let lastFailedDeliveryPollAt = 0;
+let deliveryPollFailures = 0;
+let deliveryBackoffUntil = 0;
+let lastDeliveryErrorLoggedAt = 0;
 
 function log(message, meta = {}) {
   console.log(JSON.stringify({ level: "info", service: "rivn-leads-bot", message, ...meta }));
@@ -448,9 +457,7 @@ function buildBlockAuthorKeyboard(lead) {
   };
 }
 
-async function fetchPendingLeads() {
-  const statuses = config.retryFailedDeliveries ? ["new", "delivery_failed"] : ["new"];
-
+async function fetchPendingLeads(statuses = ["new"]) {
   const { data, error } = await supabase
     .from("rivn_leads_leads")
     .select(
@@ -584,11 +591,21 @@ async function blockLeadAuthor(callbackQuery) {
 }
 
 async function deliverPendingLeads() {
-  if (isDelivering) return;
+  if (isDelivering || Date.now() < deliveryBackoffUntil) return;
   isDelivering = true;
 
   try {
-    const leads = await fetchPendingLeads();
+    let leads = await fetchPendingLeads(["new"]);
+    const shouldRetryFailed =
+      config.retryFailedDeliveries &&
+      leads.length === 0 &&
+      Date.now() - lastFailedDeliveryPollAt >= config.failedDeliveryPollMs;
+
+    if (shouldRetryFailed) {
+      lastFailedDeliveryPollAt = Date.now();
+      leads = await fetchPendingLeads(["delivery_failed"]);
+    }
+
     for (const lead of leads) {
       if (isStopping) return;
 
@@ -606,8 +623,35 @@ async function deliverPendingLeads() {
         logError("Lead delivery failed", error, { leadId: lead.id, projectId: lead.project_id });
       }
     }
+
+    deliveryPollFailures = 0;
+    deliveryBackoffUntil = 0;
   } finally {
     isDelivering = false;
+  }
+}
+
+async function runDeliveryPoll() {
+  try {
+    await deliverPendingLeads();
+  } catch (error) {
+    deliveryPollFailures += 1;
+    const backoffMs = Math.min(
+      30_000 * 2 ** Math.min(deliveryPollFailures - 1, 5),
+      config.databaseBackoffMaxMs
+    );
+    deliveryBackoffUntil = Date.now() + backoffMs;
+
+    if (
+      deliveryPollFailures === 1 ||
+      Date.now() - lastDeliveryErrorLoggedAt >= 60 * 60_000
+    ) {
+      lastDeliveryErrorLoggedAt = Date.now();
+      logError("Lead delivery storage poll paused", error, {
+        failures: deliveryPollFailures,
+        retryAt: new Date(deliveryBackoffUntil).toISOString(),
+      });
+    }
   }
 }
 
@@ -689,9 +733,9 @@ async function main() {
     deliveryPollMs: config.deliveryPollMs,
   });
 
-  void deliverPendingLeads().catch((error) => logError("Initial lead delivery poll failed", error));
+  void runDeliveryPoll();
   const deliveryTimer = setInterval(() => {
-    void deliverPendingLeads().catch((error) => logError("Lead delivery poll failed", error));
+    void runDeliveryPoll();
   }, config.deliveryPollMs);
 
   while (!isStopping) {

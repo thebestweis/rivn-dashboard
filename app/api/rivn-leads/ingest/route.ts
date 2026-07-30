@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 
     const errorMessage = error instanceof Error ? error.message : String(error);
     const isDatabaseUnavailable =
-      /fetch failed|econnrefused|enotfound|eai_again|etimedout|socket hang up/i.test(
+      /fetch failed|econnrefused|enotfound|eai_again|etimedout|socket hang up|service for this project is restricted|egress quota|spend cap/i.test(
         errorMessage
       );
 
