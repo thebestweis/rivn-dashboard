@@ -78,6 +78,13 @@ and CRM data remain in the platform database.
    bash deploy/avito-reports/run-cron.sh client-test <client_code>
    ```
 
+   To build a real report without sending it to Telegram, run a preview by
+   chat ID. The completed Telegram HTML is returned in `results[].preview`:
+
+   ```bash
+   bash deploy/avito-reports/run-cron.sh chat-preview <telegram_chat_id>
+   ```
+
 ## Rollback
 
 Set `AVITO_REPORTS_STORAGE_MODE=supabase`, rebuild/restart the main application,

@@ -37,6 +37,14 @@ case "$job" in
     fi
     path="/api/cron/avito-client-test?clientCode=$client_code"
     ;;
+  chat-preview)
+    chat_id=${2:-}
+    if [[ ! "$chat_id" =~ ^-?[0-9]+$ ]]; then
+      echo "A valid Telegram chat_id is required for chat-preview" >&2
+      exit 1
+    fi
+    path="/api/cron/avito-client-test?chatId=$chat_id&preview=true"
+    ;;
   *)
     echo "Unknown job: $job" >&2
     exit 1

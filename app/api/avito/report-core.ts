@@ -1,15 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  getAvitoCallsStatsForPeriod,
   getAvitoProfileAnalyticsByPeriod,
   getFriendlyAvitoErrorMessage,
   sleep,
+  type AvitoCallsStats,
   type AvitoProfileAnalyticsStats,
 } from "@/app/api/avito/avito-api-helpers";
 import {
   buildDialogAnalyticsBlock,
+  formatPercentRounded,
+  formatSeconds,
   getDialogAnalytics,
   getMoscowPeriodRangeUnix,
   mergeDialogAnalytics,
+  percent,
   type DialogAnalytics,
 } from "@/app/api/avito/dialog-analytics";
 import { getAvitoAccessToken } from "@/app/api/avito/get-avito-access-token";
@@ -62,7 +67,9 @@ type RunReportParams = {
   reportType: AvitoReportType;
   forceSend?: boolean;
   clientCode?: string;
+  telegramChatId?: string;
   testMode?: boolean;
+  previewMode?: boolean;
 };
 
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -70,18 +77,12 @@ const TELEGRAM_MESSAGE_LIMIT = 3900;
 const TELEGRAM_FETCH_TIMEOUT_MS = 20_000;
 const telegramDeliveryMode = process.env.AVITO_TELEGRAM_DELIVERY_MODE;
 const ZAGZEM_AVITO_CHAT_ID = "-5553928184";
-const DEFAULT_DAILY_WEEKLY_LAYOUT_CHAT_IDS = [ZAGZEM_AVITO_CHAT_ID];
 
-const dailyWeeklyLayoutChatIds = new Set([
-  ...DEFAULT_DAILY_WEEKLY_LAYOUT_CHAT_IDS,
-  ...(process.env.AVITO_DAILY_WEEKLY_LAYOUT_CHAT_IDS ?? "")
-    .split(",")
-    .map((chatId) => chatId.trim())
-    .filter(Boolean),
-]);
-
-function shouldUseWeeklyLayoutForDailyReport(client: AvitoClient) {
-  return dailyWeeklyLayoutChatIds.has(String(client.telegram_chat_id));
+function isZagzemDailyReport(client: AvitoClient, reportType: AvitoReportType) {
+  return (
+    reportType === "daily" &&
+    String(client.telegram_chat_id) === ZAGZEM_AVITO_CHAT_ID
+  );
 }
 
 function shouldQueueTelegramDelivery() {
@@ -668,6 +669,175 @@ function buildDailyReport(params: {
   ].join("\n");
 }
 
+function mergeCallsStats(items: AvitoCallsStats[]): AvitoCallsStats {
+  return items.reduce(
+    (total, item) => ({
+      calls: total.calls + item.calls,
+      answered: total.answered + item.answered,
+      newCalls: total.newCalls + item.newCalls,
+      newAnswered: total.newAnswered + item.newAnswered,
+    }),
+    { calls: 0, answered: 0, newCalls: 0, newAnswered: 0 }
+  );
+}
+
+function buildZagzemAnalyticsBlock(params: {
+  dialogs: DialogAnalytics;
+  dialogsUnavailable: boolean;
+  calls: AvitoCallsStats;
+  callsUnavailable: boolean;
+}) {
+  const callLines = params.callsUnavailable
+    ? [
+        "Звонков: данные временно недоступны",
+        "Отвеченных: данные временно недоступны",
+        "Первичных: данные временно недоступны",
+      ]
+    : [
+        `Звонков: ${formatNumber(params.calls.calls)}`,
+        `Отвеченных: ${formatNumber(params.calls.answered)}`,
+        `Первичных: ${formatNumber(params.calls.newCalls)}`,
+      ];
+
+  if (params.dialogsUnavailable) {
+    return [
+      "━━━━━━━━━━━━",
+      "",
+      "<b>Работа с входящими диалогами</b>",
+      "",
+      ...callLines,
+      "",
+      "— Статистика диалогов временно недоступна",
+    ].join("\n");
+  }
+
+  if (params.dialogs.incomingDialogs === 0) {
+    return [
+      "━━━━━━━━━━━━",
+      "",
+      "<b>Работа с входящими диалогами</b>",
+      "",
+      ...callLines,
+      "",
+      "— За период новых входящих диалогов не найдено",
+    ].join("\n");
+  }
+
+  return [
+    "━━━━━━━━━━━━",
+    "",
+    "<b>Работа с входящими диалогами</b>",
+    "",
+    ...callLines,
+    "",
+    "<b>Скорость первого ответа</b>",
+    `— До 30 минут: ${params.dialogs.firstReplyWithin30Min} из ${params.dialogs.firstReplyDialogs} диалогов (${formatPercentRounded(
+      percent(
+        params.dialogs.firstReplyWithin30Min,
+        params.dialogs.firstReplyDialogs
+      )
+    )})`,
+    `— Среднее время: ${formatSeconds(params.dialogs.averageFirstReplySeconds)}`,
+    `— Максимальная пауза: ${formatSeconds(params.dialogs.maxFirstReplySeconds)}`,
+    "",
+    "<b>Работа с номерами</b>",
+    `— Попросили номер: ${params.dialogs.requestedPhoneDialogs} из ${params.dialogs.incomingDialogs} диалогов (${formatPercentRounded(
+      percent(
+        params.dialogs.requestedPhoneDialogs,
+        params.dialogs.incomingDialogs
+      )
+    )})`,
+    `— Не попросили номер: ${params.dialogs.notRequestedPhoneDialogs} из ${params.dialogs.incomingDialogs} диалогов (${formatPercentRounded(
+      percent(
+        params.dialogs.notRequestedPhoneDialogs,
+        params.dialogs.incomingDialogs
+      )
+    )})`,
+    `— Получили номер: ${params.dialogs.receivedPhoneDialogs} из ${params.dialogs.incomingDialogs} диалогов (${formatPercentRounded(
+      percent(
+        params.dialogs.receivedPhoneDialogs,
+        params.dialogs.incomingDialogs
+      )
+    )})`,
+  ].join("\n");
+}
+
+function buildZagzemDailyReport(params: {
+  period: ReportPeriod;
+  accountBlocks: string[];
+  totalCurrent: PeriodStats;
+  totalPrevious: PeriodStats;
+  dialogAnalytics: DialogAnalytics;
+  dialogsUnavailable: boolean;
+  callsStats: AvitoCallsStats;
+  callsUnavailable: boolean;
+  failedAccountsCount: number;
+  statsUnavailableAccountsCount: number;
+}) {
+  const hasUnavailableStats = params.statsUnavailableAccountsCount > 0;
+
+  return [
+    "👋 Добрый день",
+    "",
+    `📊 <b>Ежедневный отчёт за период: ${params.period.label}</b>`,
+    "",
+    ...params.accountBlocks,
+    "",
+    "━━━━━━━━━━━━",
+    "<b>Итого по всем аккаунтам</b>",
+    "",
+    buildMetricLine(
+      "Расходы",
+      params.totalCurrent.expenses,
+      params.totalPrevious.expenses,
+      "money"
+    ),
+    ...(hasUnavailableStats
+      ? [
+          ...unavailableStatsLines(),
+          "",
+          "⚠️ Итоги по просмотрам и контактам не рассчитаны: Avito временно не отдал статистику по части аккаунтов.",
+        ]
+      : [
+          buildMetricLine(
+            "Просмотры",
+            params.totalCurrent.views,
+            params.totalPrevious.views,
+            "number"
+          ),
+          buildMetricLine(
+            "Конверсия",
+            params.totalCurrent.conversion,
+            params.totalPrevious.conversion,
+            "percent"
+          ),
+          buildMetricLine(
+            "Контакты",
+            params.totalCurrent.contacts,
+            params.totalPrevious.contacts,
+            "number"
+          ),
+          buildMetricLine(
+            "Стоимость 1 контакта",
+            params.totalCurrent.costPerContact,
+            params.totalPrevious.costPerContact,
+            "money"
+          ),
+        ]),
+    "",
+    buildZagzemAnalyticsBlock({
+      dialogs: params.dialogAnalytics,
+      dialogsUnavailable: params.dialogsUnavailable,
+      calls: params.callsStats,
+      callsUnavailable: params.callsUnavailable,
+    }),
+    "",
+    params.failedAccountsCount
+      ? "✅ Отчёт сформирован. Часть аккаунтов требует повторной проверки."
+      : "✅ Аккаунты проверены",
+  ].join("\n");
+}
+
 function buildWeeklyReport(params: {
   clientName: string;
   reportLabel?: "Ежедневный" | "Еженедельный";
@@ -721,6 +891,7 @@ async function loadClients(params: {
   supabase: Supabase;
   reportType: AvitoReportType;
   clientCode?: string;
+  telegramChatId?: string;
 }) {
   let query = params.supabase
     .from("avito_report_clients")
@@ -730,6 +901,8 @@ async function loadClients(params: {
 
   if (params.clientCode) {
     query = query.eq("client_code", params.clientCode).limit(1);
+  } else if (params.telegramChatId) {
+    query = query.eq("telegram_chat_id", params.telegramChatId).limit(1);
   } else {
     query =
       params.reportType === "daily"
@@ -841,17 +1014,22 @@ async function queueTelegramReport(params: {
 export async function runAvitoReport(params: RunReportParams) {
   const supabase = getSupabase();
   const period = getReportPeriod(params.reportType);
-  const deliveryMode = shouldQueueTelegramDelivery() ? "queue" : "direct";
+  const deliveryMode = params.previewMode
+    ? "preview"
+    : shouldQueueTelegramDelivery()
+      ? "queue"
+      : "direct";
   const clients = await loadClients({
     supabase,
     reportType: params.reportType,
     clientCode: params.clientCode,
+    telegramChatId: params.telegramChatId,
   });
 
   if (clients.length === 0) {
     return {
       ok: false,
-      error: params.clientCode
+      error: params.clientCode || params.telegramChatId
         ? "Активный клиент с Telegram chat_id не найден"
         : "Активные клиенты с Telegram chat_id не найдены",
       status: 404,
@@ -864,15 +1042,18 @@ export async function runAvitoReport(params: RunReportParams) {
     status: "success" | "failed" | "skipped";
     accountsCount: number;
     error?: string;
+    preview?: string;
   }> = [];
 
   for (const client of clients) {
     try {
-      const useWeeklyLayoutForDaily =
-        params.reportType === "daily" &&
-        shouldUseWeeklyLayoutForDailyReport(client);
+      const useZagzemDailyLayout = isZagzemDailyReport(
+        client,
+        params.reportType
+      );
 
       if (
+        !params.previewMode &&
         !params.testMode &&
         !params.forceSend &&
         ((await hasDuplicateSuccess({
@@ -915,10 +1096,13 @@ export async function runAvitoReport(params: RunReportParams) {
 
       const accountBlocks: string[] = [];
       const dialogAnalyticsItems: DialogAnalytics[] = [];
+      const callsStatsItems: AvitoCallsStats[] = [];
       const totalCurrentRaw = { views: 0, contacts: 0, favorites: 0, expenses: 0 };
       const totalPreviousRaw = { views: 0, contacts: 0, favorites: 0, expenses: 0 };
       let failedAccountsCount = 0;
       let statsUnavailableAccountsCount = 0;
+      let dialogsUnavailableAccountsCount = 0;
+      let callsUnavailableAccountsCount = 0;
 
       for (const account of accounts) {
         try {
@@ -954,25 +1138,63 @@ export async function runAvitoReport(params: RunReportParams) {
           const warnings = [...current.warnings];
           const statsUnavailable = isStatsUnavailable(warnings);
 
-          if (params.reportType === "weekly" || useWeeklyLayoutForDaily) {
+          if (params.reportType === "weekly" || useZagzemDailyLayout) {
+            let accessToken: string | null = null;
+
             try {
-              const accessToken = await resolveAvitoAccessToken(account);
-              const dialogRange = getMoscowPeriodRangeUnix(
-                period.currentStart,
-                period.currentEnd
-              );
-              const analytics = await getDialogAnalytics({
-                accessToken,
-                avitoUserId: account.avito_user_id,
-                start: dialogRange.start,
-                end: dialogRange.end,
-              });
-              dialogAnalyticsItems.push(analytics);
+              accessToken = await resolveAvitoAccessToken(account);
             } catch (error) {
-              console.error("[avito:report-core] dialog analytics failed", {
+              dialogsUnavailableAccountsCount += 1;
+
+              if (useZagzemDailyLayout) {
+                callsUnavailableAccountsCount += 1;
+              }
+
+              console.error("[avito:report-core] analytics token failed", {
                 accountId: account.id,
                 error,
               });
+            }
+
+            if (accessToken) {
+              try {
+                const dialogRange = getMoscowPeriodRangeUnix(
+                  period.currentStart,
+                  period.currentEnd
+                );
+                const analytics = await getDialogAnalytics({
+                  accessToken,
+                  avitoUserId: account.avito_user_id,
+                  start: dialogRange.start,
+                  end: dialogRange.end,
+                });
+                dialogAnalyticsItems.push(analytics);
+              } catch (error) {
+                dialogsUnavailableAccountsCount += 1;
+                console.error("[avito:report-core] dialog analytics failed", {
+                  accountId: account.id,
+                  error,
+                });
+              }
+
+              if (useZagzemDailyLayout) {
+                try {
+                  callsStatsItems.push(
+                    await getAvitoCallsStatsForPeriod({
+                      accessToken,
+                      avitoUserId: account.avito_user_id,
+                      dateFrom: period.currentStart,
+                      dateTo: period.currentEnd,
+                    })
+                  );
+                } catch (error) {
+                  callsUnavailableAccountsCount += 1;
+                  console.error("[avito:report-core] calls analytics failed", {
+                    accountId: account.id,
+                    error,
+                  });
+                }
+              }
             }
           }
 
@@ -989,24 +1211,26 @@ export async function runAvitoReport(params: RunReportParams) {
           }
 
           if (warnings.length === 0 && params.reportType === "daily") {
-            await saveAvitoReportMetric({
-              clientId: client.id,
-              accountId: account.id,
-              reportType: "daily",
-              periodStart: period.currentStart,
-              periodEnd: period.currentEnd,
-              views: current.stats.views,
-              contacts: current.stats.contacts,
-              favorites: current.stats.favorites,
-              expenses: current.stats.expenses,
-              conversion: current.stats.conversion,
-              costPerContact: current.stats.costPerContact,
-              raw: {
-                accountName: account.name,
-                source: current.fromSnapshot ? "snapshot" : "live_fetch",
-                previous: previous.stats,
-              },
-            });
+            if (!params.previewMode) {
+              await saveAvitoReportMetric({
+                clientId: client.id,
+                accountId: account.id,
+                reportType: "daily",
+                periodStart: period.currentStart,
+                periodEnd: period.currentEnd,
+                views: current.stats.views,
+                contacts: current.stats.contacts,
+                favorites: current.stats.favorites,
+                expenses: current.stats.expenses,
+                conversion: current.stats.conversion,
+                costPerContact: current.stats.costPerContact,
+                raw: {
+                  accountName: account.name,
+                  source: current.fromSnapshot ? "snapshot" : "live_fetch",
+                  previous: previous.stats,
+                },
+              });
+            }
           }
 
           if (warnings.length > 0) {
@@ -1043,7 +1267,8 @@ export async function runAvitoReport(params: RunReportParams) {
       if (
         failedAccountsCount === 0 &&
         params.reportType === "daily" &&
-        !params.testMode
+        !params.testMode &&
+        !params.previewMode
       ) {
         await saveAvitoReportMetric({
           clientId: client.id,
@@ -1064,8 +1289,20 @@ export async function runAvitoReport(params: RunReportParams) {
         });
       }
 
-      const reportText =
-        params.reportType === "daily" && !useWeeklyLayoutForDaily
+      const reportText = useZagzemDailyLayout
+        ? buildZagzemDailyReport({
+            period,
+            accountBlocks,
+            totalCurrent,
+            totalPrevious,
+            dialogAnalytics: mergeDialogAnalytics(dialogAnalyticsItems),
+            dialogsUnavailable: dialogsUnavailableAccountsCount > 0,
+            callsStats: mergeCallsStats(callsStatsItems),
+            callsUnavailable: callsUnavailableAccountsCount > 0,
+            failedAccountsCount,
+            statsUnavailableAccountsCount,
+          })
+        : params.reportType === "daily"
           ? buildDailyReport({
               period,
               accountBlocks,
@@ -1076,9 +1313,6 @@ export async function runAvitoReport(params: RunReportParams) {
             })
           : buildWeeklyReport({
               clientName: client.name,
-              reportLabel: useWeeklyLayoutForDaily
-                ? "Ежедневный"
-                : "Еженедельный",
               period,
               accountBlocks,
               totalCurrent,
@@ -1092,6 +1326,17 @@ export async function runAvitoReport(params: RunReportParams) {
       const finalText = params.testMode
         ? ["🧪 <b>Тестовый Avito-отчёт RIVN OS</b>", "", reportText].join("\n")
         : reportText;
+
+      if (params.previewMode) {
+        results.push({
+          clientId: client.id,
+          clientName: client.name,
+          status: "success",
+          accountsCount: accounts.length,
+          preview: finalText,
+        });
+        continue;
+      }
 
       if (deliveryMode === "queue") {
         await queueTelegramReport({
@@ -1146,6 +1391,7 @@ export async function runAvitoReport(params: RunReportParams) {
     reportType: params.reportType,
     deliveryMode,
     testMode: params.testMode ?? false,
+    previewMode: params.previewMode ?? false,
     forceSend: params.forceSend ?? false,
     period,
     totalClients: clients.length,

@@ -12,19 +12,26 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const clientCode = url.searchParams.get("clientCode");
+    const telegramChatId = url.searchParams.get("chatId");
+    const previewMode = url.searchParams.get("preview") === "true";
 
-    if (!clientCode) {
+    if (!clientCode && !telegramChatId) {
       return Response.json(
-        { ok: false, error: "Передай clientCode для точечного теста" },
+        {
+          ok: false,
+          error: "Передай clientCode или chatId для точечного теста",
+        },
         { status: 400 }
       );
     }
 
     const result = await runAvitoReport({
       reportType: "daily",
-      clientCode,
+      clientCode: clientCode || undefined,
+      telegramChatId: telegramChatId || undefined,
       forceSend: true,
-      testMode: true,
+      testMode: !previewMode,
+      previewMode,
     });
 
     return Response.json(result, {

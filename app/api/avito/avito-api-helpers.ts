@@ -45,6 +45,13 @@ export type AvitoProfileAnalyticsStats = AvitoPeriodStats & {
   expenses: number;
 };
 
+export type AvitoCallsStats = {
+  calls: number;
+  answered: number;
+  newCalls: number;
+  newAnswered: number;
+};
+
 export class AvitoApiError extends Error {
   status: number;
   details: unknown;
@@ -1012,6 +1019,69 @@ export async function getAvitoProfileAnalyticsForPeriod(params: {
   });
 
   return getProfileAnalyticsStatsFromValue(data);
+}
+
+export async function getAvitoCallsStatsForPeriod(params: {
+  accessToken: string;
+  avitoUserId: string;
+  dateFrom: string;
+  dateTo: string;
+}): Promise<AvitoCallsStats> {
+  const data = await fetchAvitoJson(
+    `https://api.avito.ru/core/v1/accounts/${params.avitoUserId}/calls/stats/`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.accessToken}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        dateFrom: params.dateFrom,
+        dateTo: params.dateTo,
+      }),
+    },
+    "Ошибка получения статистики звонков Avito"
+  );
+  const root =
+    data && typeof data === "object"
+      ? (data as Record<string, unknown>)
+      : null;
+  const result =
+    root?.result && typeof root.result === "object"
+      ? (root.result as Record<string, unknown>)
+      : null;
+  const items = Array.isArray(result?.items) ? result.items : [];
+  const totals: AvitoCallsStats = {
+    calls: 0,
+    answered: 0,
+    newCalls: 0,
+    newAnswered: 0,
+  };
+
+  for (const item of items) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    const days = Array.isArray((item as Record<string, unknown>).days)
+      ? ((item as Record<string, unknown>).days as unknown[])
+      : [];
+
+    for (const day of days) {
+      if (!day || typeof day !== "object") {
+        continue;
+      }
+
+      const record = day as Record<string, unknown>;
+      totals.calls += Number(record.calls) || 0;
+      totals.answered += Number(record.answered) || 0;
+      totals.newCalls += Number(record.new) || 0;
+      totals.newAnswered += Number(record.newAnswered) || 0;
+    }
+  }
+
+  return totals;
 }
 
 async function fetchAggregateStatsByDayFromAvito(params: {
