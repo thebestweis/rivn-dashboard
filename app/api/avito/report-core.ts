@@ -1110,11 +1110,24 @@ export async function runAvitoReport(params: RunReportParams) {
             throw new Error("Нет avito_user_id");
           }
 
-          const profileAnalytics = await loadProfileAnalyticsForAccount({
-            account,
-            period,
-            reportType: params.reportType,
-          });
+          let profileAnalytics: Record<string, AvitoProfileAnalyticsStats> = {};
+
+          try {
+            profileAnalytics = await loadProfileAnalyticsForAccount({
+              account,
+              period,
+              reportType: params.reportType,
+            });
+          } catch (error) {
+            console.warn(
+              "[avito:report-core] live profile analytics failed, using snapshots",
+              {
+                accountId: account.id,
+                error,
+              }
+            );
+          }
+
           const current = await getPreparedOrLivePeriod({
             supabase,
             clientId: client.id,
