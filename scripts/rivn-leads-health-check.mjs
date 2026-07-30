@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import {
+  getRivnLeadsStorageConfig,
+  storageHost,
+} from "./lib/rivn-leads-storage.mjs";
 
 function loadEnvFile(fileName) {
   const path = resolve(process.cwd(), fileName);
@@ -93,10 +97,17 @@ function minutesSince(value) {
 }
 
 async function main() {
+  const storage = getRivnLeadsStorageConfig(requiredEnv);
   const supabase = createClient(
-    requiredEnv("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]),
-    requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false } }
+    storage.url,
+    storage.serviceKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    }
   );
 
   const staleAfterMinutes = Number(process.env.RIVN_LEADS_HEALTH_STALE_MINUTES || 10);
@@ -154,6 +165,8 @@ async function main() {
   if (failedLeads > 0) issues.push(`There are ${failedLeads} failed leads.`);
 
   const summary = {
+    storageMode: storage.mode,
+    storageHost: storageHost(storage.url),
     readers: readerRows.length,
     activeReaders: activeReaders.length,
     activeSourceChats,

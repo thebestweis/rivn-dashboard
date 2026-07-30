@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import {
+  getRivnLeadsStorageConfig,
+  storageHost,
+} from "./lib/rivn-leads-storage.mjs";
 
 function loadEnvFile(fileName) {
   const path = resolve(process.cwd(), fileName);
@@ -31,15 +35,19 @@ function env(name, fallbacks = []) {
   return process.env[name] || fallbacks.map((fallback) => process.env[fallback]).find(Boolean) || "";
 }
 
-const supabaseUrl = env("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]);
-const serviceRoleKey = env("SUPABASE_SERVICE_ROLE_KEY");
-
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error("Supabase env is not configured");
+function requiredEnv(name, fallbacks = []) {
+  const value = env(name, fallbacks);
+  if (!value) throw new Error(`${name} is not configured`);
+  return value;
 }
 
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false },
+const storage = getRivnLeadsStorageConfig(requiredEnv);
+const supabase = createClient(storage.url, storage.serviceKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
 });
 
 async function count(table, apply = (query) => query) {
@@ -102,6 +110,10 @@ async function main() {
   if (keywordsError) throw new Error(keywordsError.message);
 
   const output = {
+    storage: {
+      mode: storage.mode,
+      host: storageHost(storage.url),
+    },
     counts: {
       readers,
       activeReaders,

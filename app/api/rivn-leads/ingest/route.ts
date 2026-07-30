@@ -3,7 +3,7 @@ import { ApiAccessError } from "@/app/api/_guards";
 import { readJsonWithLimit } from "@/app/api/_request";
 import { safeEqualSecret } from "@/app/api/_secrets";
 import { processRivnLeadsMessage } from "@/app/lib/rivn-leads/processor";
-import { createServiceRoleClient } from "@/app/lib/supabase/service-role";
+import { createRivnLeadsClient } from "@/app/lib/rivn-leads/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const serviceSupabase = createServiceRoleClient();
+    const serviceSupabase = createRivnLeadsClient();
     const result = await processRivnLeadsMessage(
       serviceSupabase,
       {

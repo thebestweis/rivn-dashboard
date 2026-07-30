@@ -1,4 +1,8 @@
 import { apiSuccess } from "@/app/lib/api/errors";
+import {
+  createRivnLeadsClient,
+  getRivnLeadsStorageInfo,
+} from "@/app/lib/rivn-leads/storage";
 import { requireSuperAdminRoute } from "../../admin/_utils";
 import { adminLeadsFailure } from "../_utils";
 
@@ -38,7 +42,8 @@ const defaultCategories = [
 
 export async function GET() {
   try {
-    const { serviceSupabase } = await requireSuperAdminRoute();
+    const { serviceSupabase: platformSupabase } = await requireSuperAdminRoute();
+    const leadsSupabase = createRivnLeadsClient();
 
     const todayIso = startOfTodayIso();
     const weekIso = sevenDaysAgoIso();
@@ -58,13 +63,13 @@ export async function GET() {
       failedDeliveryResponse,
       recentDeliveryResponse,
     ] = await Promise.all([
-      serviceSupabase
+      platformSupabase
         .from("workspaces")
         .select("id,name,slug,created_at")
         .order("created_at", { ascending: false })
         .limit(200),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_reader_accounts")
         .select(
           "id,label,phone_hint,status,assigned_niche,last_seen_at,last_error,max_chats_limit,created_at"
@@ -72,12 +77,12 @@ export async function GET() {
         .order("created_at", { ascending: false })
         .limit(100),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_source_chat_categories")
         .select("id,name,slug,description")
         .order("name", { ascending: true }),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_source_chats")
         .select(
           "id,category_id,reader_account_id,title,telegram_chat_id,username,invite_link,type,access_level,status,member_count,last_checked_at,last_message_at,created_at"
@@ -85,7 +90,7 @@ export async function GET() {
         .order("created_at", { ascending: false })
         .limit(300),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_projects")
         .select(
           "id,workspace_id,reader_account_id,name,niche,status,destination_chat_id,telegram_bot_added,daily_lead_limit,monthly_lead_limit,created_at"
@@ -93,47 +98,47 @@ export async function GET() {
         .order("created_at", { ascending: false })
         .limit(200),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_project_source_chats")
         .select("id,project_id,source_chat_id,enabled,created_at")
         .order("created_at", { ascending: false })
         .limit(1000),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_keywords")
         .select("id,project_id,value,normalized_value,match_type,enabled,created_at")
         .order("created_at", { ascending: false })
         .limit(1000),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_stop_words")
         .select("id,project_id,value,normalized_value,enabled,created_at")
         .order("created_at", { ascending: false })
         .limit(1000),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_leads")
         .select("id,project_id,source_chat_id,status,matched_keywords,delivered_at,created_at")
         .order("created_at", { ascending: false })
         .limit(50),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_leads")
         .select("id", { count: "exact", head: true })
         .gte("created_at", todayIso),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_leads")
         .select("id", { count: "exact", head: true })
         .gte("created_at", weekIso),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_delivery_logs")
         .select("id", { count: "exact", head: true })
         .eq("status", "failed")
         .gte("created_at", weekIso),
 
-      serviceSupabase
+      leadsSupabase
         .from("rivn_leads_delivery_logs")
         .select("id,project_id,status,error_message,created_at")
         .order("created_at", { ascending: false })
@@ -163,7 +168,7 @@ export async function GET() {
     let categories = categoriesResponse.data ?? [];
 
     if (categories.length === 0) {
-      const { error: seedError } = await serviceSupabase
+      const { error: seedError } = await leadsSupabase
         .from("rivn_leads_source_chat_categories")
         .upsert(defaultCategories, { onConflict: "slug" });
 
@@ -171,7 +176,7 @@ export async function GET() {
         throw new Error(`Не удалось создать базовые категории RIVN Leads: ${seedError.message}`);
       }
 
-      const { data: seededCategories, error: seededCategoriesError } = await serviceSupabase
+      const { data: seededCategories, error: seededCategoriesError } = await leadsSupabase
         .from("rivn_leads_source_chat_categories")
         .select("id,name,slug,description")
         .order("name", { ascending: true });
@@ -214,6 +219,7 @@ export async function GET() {
       stopWords: stopWordsResponse.data ?? [],
       latestLeads: latestLeadsResponse.data ?? [],
       recentDeliveryLogs: recentDeliveryResponse.data ?? [],
+      storage: getRivnLeadsStorageInfo(),
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

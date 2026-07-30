@@ -1,0 +1,11 @@
+[Unit]
+Description=RIVN Leads PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/var/www/rivnos/deploy/rivn-leads-storage/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

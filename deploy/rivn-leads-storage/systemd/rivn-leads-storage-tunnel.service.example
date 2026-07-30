@@ -1,0 +1,21 @@
+[Unit]
+Description=Secure tunnel to RIVN Leads standalone storage
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh -NT \
+  -i /root/.ssh/id_ed25519_rivn_leads \
+  -o BatchMode=yes \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -o StrictHostKeyChecking=yes \
+  -L 127.0.0.1:3101:127.0.0.1:3001 \
+  root@31.76.126.41
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

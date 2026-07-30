@@ -1,4 +1,5 @@
 import { apiSuccess } from "@/app/lib/api/errors";
+import { createRivnLeadsClient } from "@/app/lib/rivn-leads/storage";
 import { requireSuperAdminRoute } from "../../admin/_utils";
 import {
   adminLeadsFailure,
@@ -57,7 +58,8 @@ async function getProjectWorkspaceId(serviceSupabase: AdminLeadsClient, projectI
 
 export async function POST(request: Request) {
   try {
-    const { user, serviceSupabase } = await requireSuperAdminRoute();
+    const { user } = await requireSuperAdminRoute();
+    const serviceSupabase = createRivnLeadsClient();
     const body = (await request.json().catch(() => null)) as
       | (Record<string, unknown> & { action?: ManageAction })
       | null;

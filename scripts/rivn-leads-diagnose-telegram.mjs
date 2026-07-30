@@ -4,6 +4,10 @@ import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
+import {
+  getRivnLeadsStorageConfig,
+  storageHost,
+} from "./lib/rivn-leads-storage.mjs";
 
 function loadEnvFile(fileName) {
   const path = resolve(process.cwd(), fileName);
@@ -112,15 +116,20 @@ async function testMode({ label, sessionString, apiId, apiHash, useWSS, proxy })
 }
 
 async function main() {
-  const supabaseUrl = requiredEnv("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]);
-  const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const storage = getRivnLeadsStorageConfig(requiredEnv);
   const apiId = Number(requiredEnv("TELEGRAM_API_ID"));
   const apiHash = requiredEnv("TELEGRAM_API_HASH");
   const encryptionKey = requiredEnv("RIVN_LEADS_ENCRYPTION_KEY", ["ENCRYPTION_KEY"]);
 
   if (!Number.isFinite(apiId) || apiId <= 0) throw new Error("TELEGRAM_API_ID должен быть числом");
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+  const supabase = createClient(storage.url, storage.serviceKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
   const { data: reader, error } = await supabase
     .from("rivn_leads_reader_accounts")
     .select("id,label,encrypted_session_string,status,last_error")
@@ -131,6 +140,7 @@ async function main() {
   if (error) throw new Error(error.message);
   if (!reader) throw new Error("Reader-аккаунты не найдены");
 
+  console.log(`Storage: ${storage.mode} (${storageHost(storage.url)})`);
   console.log(`Reader: ${reader.label} (${reader.id})`);
   console.log(`Статус: ${reader.status}`);
   if (reader.last_error) console.log(`Последняя ошибка: ${reader.last_error}`);

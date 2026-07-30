@@ -1,5 +1,6 @@
 import { apiSuccess } from "@/app/lib/api/errors";
 import { processRivnLeadsMessage } from "@/app/lib/rivn-leads/processor";
+import { createRivnLeadsClient } from "@/app/lib/rivn-leads/storage";
 import { requireSuperAdminRoute } from "../../admin/_utils";
 import { adminLeadsFailure } from "../_utils";
 
@@ -7,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const { serviceSupabase } = await requireSuperAdminRoute();
+    await requireSuperAdminRoute();
+    const serviceSupabase = createRivnLeadsClient();
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
 
     const sourceChatId = typeof body?.sourceChatId === "string" ? body.sourceChatId.trim() : "";

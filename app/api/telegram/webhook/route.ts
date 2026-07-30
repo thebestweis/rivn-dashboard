@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ApiAccessError } from "@/app/api/_guards";
 import { readJsonWithLimit } from "@/app/api/_request";
 import { safeEqualSecret } from "@/app/api/_secrets";
+import { createRivnLeadsClient } from "@/app/lib/rivn-leads/storage";
 
 type TelegramUpdate = {
   message?: {
@@ -258,7 +259,7 @@ async function linkChatToRivnLeadsProject(params: {
   projectId: string;
   chatId: number;
 }) {
-  const supabase = getSupabase();
+  const supabase = createRivnLeadsClient();
   const projectId = params.projectId.trim();
   const chatId = String(params.chatId);
 

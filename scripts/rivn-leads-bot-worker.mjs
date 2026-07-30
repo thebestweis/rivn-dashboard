@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import {
+  getRivnLeadsStorageConfig,
+  storageHost,
+} from "./lib/rivn-leads-storage.mjs";
 
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 
@@ -35,12 +39,12 @@ function requiredEnv(name, fallbackNames = []) {
   return value;
 }
 
+const storage = getRivnLeadsStorageConfig(requiredEnv);
+
 const config = {
-  supabaseUrl: requiredEnv("SUPABASE_SERVER_URL", [
-    "SUPABASE_URL",
-    "NEXT_PUBLIC_SUPABASE_URL",
-  ]),
-  serviceRoleKey: requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+  supabaseUrl: storage.url,
+  serviceRoleKey: storage.serviceKey,
+  storageMode: storage.mode,
   telegramBotToken: requiredEnv("TELEGRAM_BOT_TOKEN"),
   pollTimeoutSeconds: Number(process.env.RIVN_LEADS_BOT_POLL_TIMEOUT_SECONDS || 25),
   deliveryPollMs: Number(process.env.RIVN_LEADS_BOT_DELIVERY_POLL_MS || 10_000),
@@ -51,7 +55,11 @@ const config = {
 };
 
 const supabase = createClient(config.supabaseUrl, config.serviceRoleKey, {
-  auth: { persistSession: false },
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
 });
 
 let offset = 0;
@@ -729,6 +737,8 @@ async function main() {
 
   log("RIVN Leads bot worker started", {
     botUsername: me?.username || null,
+    storageMode: config.storageMode,
+    storageHost: storageHost(config.supabaseUrl),
     pollTimeoutSeconds: config.pollTimeoutSeconds,
     deliveryPollMs: config.deliveryPollMs,
   });

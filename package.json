@@ -15,6 +15,8 @@
     "health:site": "node scripts/rivnos-health-check.mjs",
     "leads:scan-chats": "node scripts/rivn-leads-scan-reader-chats.mjs",
     "leads:session": "node scripts/rivn-leads-generate-session.mjs",
+    "leads:storage:secrets": "node scripts/rivn-leads-generate-storage-env.mjs",
+    "leads:storage:migrate": "node scripts/rivn-leads-migrate-storage.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test"
