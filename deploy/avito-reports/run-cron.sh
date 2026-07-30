@@ -29,6 +29,14 @@ case "$job" in
   report-sync) path="/api/cron/avito-report-sync" ;;
   cache-warmup) path="/api/cron/avito-cache-warmup" ;;
   crm-dialogs-sync) path="/api/cron/avito-crm-dialogs-sync?limit=3&days=1&maxChats=20" ;;
+  client-test)
+    client_code=${2:-}
+    if [[ ! "$client_code" =~ ^[A-Za-z0-9_-]+$ ]]; then
+      echo "A valid client code is required for client-test" >&2
+      exit 1
+    fi
+    path="/api/cron/avito-client-test?clientCode=$client_code"
+    ;;
   *)
     echo "Unknown job: $job" >&2
     exit 1

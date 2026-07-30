@@ -72,6 +72,12 @@ and CRM data remain in the platform database.
    tail -n 100 /var/log/rivnos-avito-reports.log
    ```
 
+   A report for one client can be tested without a browser session:
+
+   ```bash
+   bash deploy/avito-reports/run-cron.sh client-test <client_code>
+   ```
+
 ## Rollback
 
 Set `AVITO_REPORTS_STORAGE_MODE=supabase`, rebuild/restart the main application,
