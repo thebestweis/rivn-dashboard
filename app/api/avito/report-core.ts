@@ -69,6 +69,20 @@ const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MESSAGE_LIMIT = 3900;
 const TELEGRAM_FETCH_TIMEOUT_MS = 20_000;
 const telegramDeliveryMode = process.env.AVITO_TELEGRAM_DELIVERY_MODE;
+const ZAGZEM_AVITO_CHAT_ID = "-5553928184";
+const DEFAULT_DAILY_WEEKLY_LAYOUT_CHAT_IDS = [ZAGZEM_AVITO_CHAT_ID];
+
+const dailyWeeklyLayoutChatIds = new Set([
+  ...DEFAULT_DAILY_WEEKLY_LAYOUT_CHAT_IDS,
+  ...(process.env.AVITO_DAILY_WEEKLY_LAYOUT_CHAT_IDS ?? "")
+    .split(",")
+    .map((chatId) => chatId.trim())
+    .filter(Boolean),
+]);
+
+function shouldUseWeeklyLayoutForDailyReport(client: AvitoClient) {
+  return dailyWeeklyLayoutChatIds.has(String(client.telegram_chat_id));
+}
 
 function shouldQueueTelegramDelivery() {
   return (
@@ -656,6 +670,7 @@ function buildDailyReport(params: {
 
 function buildWeeklyReport(params: {
   clientName: string;
+  reportLabel?: "Ежедневный" | "Еженедельный";
   period: ReportPeriod;
   accountBlocks: string[];
   totalCurrent: PeriodStats;
@@ -667,7 +682,7 @@ function buildWeeklyReport(params: {
   const hasUnavailableStats = params.statsUnavailableAccountsCount > 0;
 
   return [
-    `📊 <b>Еженедельный Avito-отчёт: ${escapeHtml(params.clientName)}</b>`,
+    `📊 <b>${params.reportLabel ?? "Еженедельный"} Avito-отчёт: ${escapeHtml(params.clientName)}</b>`,
     `Период: ${params.period.label}`,
     "",
     ...params.accountBlocks,
@@ -853,6 +868,10 @@ export async function runAvitoReport(params: RunReportParams) {
 
   for (const client of clients) {
     try {
+      const useWeeklyLayoutForDaily =
+        params.reportType === "daily" &&
+        shouldUseWeeklyLayoutForDailyReport(client);
+
       if (
         !params.testMode &&
         !params.forceSend &&
@@ -935,7 +954,7 @@ export async function runAvitoReport(params: RunReportParams) {
           const warnings = [...current.warnings];
           const statsUnavailable = isStatsUnavailable(warnings);
 
-          if (params.reportType === "weekly") {
+          if (params.reportType === "weekly" || useWeeklyLayoutForDaily) {
             try {
               const accessToken = await resolveAvitoAccessToken(account);
               const dialogRange = getMoscowPeriodRangeUnix(
@@ -1046,7 +1065,7 @@ export async function runAvitoReport(params: RunReportParams) {
       }
 
       const reportText =
-        params.reportType === "daily"
+        params.reportType === "daily" && !useWeeklyLayoutForDaily
           ? buildDailyReport({
               period,
               accountBlocks,
@@ -1057,6 +1076,9 @@ export async function runAvitoReport(params: RunReportParams) {
             })
           : buildWeeklyReport({
               clientName: client.name,
+              reportLabel: useWeeklyLayoutForDaily
+                ? "Ежедневный"
+                : "Еженедельный",
               period,
               accountBlocks,
               totalCurrent,
