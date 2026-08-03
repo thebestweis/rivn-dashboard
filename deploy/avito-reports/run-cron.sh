@@ -45,6 +45,19 @@ case "$job" in
     fi
     path="/api/cron/avito-client-test?chatId=$chat_id&preview=true"
     ;;
+  account-weekly-preview|account-weekly-send)
+    account_name=${2:-}
+    if [[ -z "$account_name" ]]; then
+      echo "An Avito account name is required for $job" >&2
+      exit 1
+    fi
+    encoded_account_name=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$account_name")
+    if [[ "$job" == "account-weekly-preview" ]]; then
+      path="/api/cron/avito-client-test?accountName=$encoded_account_name&reportType=weekly&preview=true"
+    else
+      path="/api/cron/avito-client-test?accountName=$encoded_account_name&reportType=weekly&send=true"
+    fi
+    ;;
   *)
     echo "Unknown job: $job" >&2
     exit 1

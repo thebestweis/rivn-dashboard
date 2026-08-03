@@ -68,6 +68,7 @@ type RunReportParams = {
   forceSend?: boolean;
   clientCode?: string;
   telegramChatId?: string;
+  accountName?: string;
   testMode?: boolean;
   previewMode?: boolean;
 };
@@ -253,6 +254,7 @@ function isStatsUnavailable(warnings: string[]) {
     const lower = warning.toLowerCase();
 
     return (
+      lower.includes("статистику профиля") ||
       (lower.includes("просмотр") || lower.includes("контакт")) &&
       (lower.includes("недоступ") ||
         lower.includes("нулев") ||
@@ -521,6 +523,102 @@ async function getPreparedOrLivePeriod(params: {
     warnings: saved.warnings,
     fromSnapshot: false,
   };
+}
+
+function getDateKeys(dateFrom: string, dateTo: string) {
+  const keys: string[] = [];
+  const cursor = new Date(`${dateFrom}T00:00:00Z`);
+  const end = new Date(`${dateTo}T00:00:00Z`);
+
+  while (cursor <= end && keys.length <= 31) {
+    keys.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return keys;
+}
+
+async function loadDailySnapshotAggregate(params: {
+  supabase: Supabase;
+  accountId: string;
+  dateFrom: string;
+  dateTo: string;
+}): Promise<AvitoProfileAnalyticsStats | null> {
+  const expectedDates = getDateKeys(params.dateFrom, params.dateTo);
+
+  if (expectedDates.length === 0) {
+    return null;
+  }
+
+  const { data, error } = await params.supabase
+    .from("avito_report_snapshots")
+    .select(
+      "period_start, period_end, views, contacts, favorites, expenses, stats_status, expenses_status, quality_status, updated_at"
+    )
+    .eq("account_id", params.accountId)
+    .eq("report_type", "daily")
+    .gte("period_start", params.dateFrom)
+    .lte("period_start", params.dateTo)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    console.warn("[avito:report-core] daily snapshot aggregate unavailable", {
+      accountId: params.accountId,
+      error: error.message,
+    });
+    return null;
+  }
+
+  const snapshotsByDate = new Map<
+    string,
+    {
+      views: number;
+      contacts: number;
+      favorites: number;
+      expenses: number;
+    }
+  >();
+
+  for (const row of data ?? []) {
+    const date = String(row.period_start || "");
+
+    if (
+      snapshotsByDate.has(date) ||
+      row.period_end !== date ||
+      row.stats_status !== "success" ||
+      row.expenses_status !== "success" ||
+      row.quality_status === "critical"
+    ) {
+      continue;
+    }
+
+    snapshotsByDate.set(date, {
+      views: Number(row.views || 0),
+      contacts: Number(row.contacts || 0),
+      favorites: Number(row.favorites || 0),
+      expenses: Number(row.expenses || 0),
+    });
+  }
+
+  if (expectedDates.some((date) => !snapshotsByDate.has(date))) {
+    return null;
+  }
+
+  return expectedDates.reduce<AvitoProfileAnalyticsStats>(
+    (total, date) => {
+      const snapshot = snapshotsByDate.get(date);
+
+      if (snapshot) {
+        total.views += snapshot.views;
+        total.contacts += snapshot.contacts;
+        total.favorites += snapshot.favorites;
+        total.expenses += snapshot.expenses;
+      }
+
+      return total;
+    },
+    { views: 0, contacts: 0, favorites: 0, expenses: 0 }
+  );
 }
 
 async function loadProfileAnalyticsForAccount(params: {
@@ -892,7 +990,38 @@ async function loadClients(params: {
   reportType: AvitoReportType;
   clientCode?: string;
   telegramChatId?: string;
+  accountName?: string;
 }) {
+  let accountClientId: string | null = null;
+
+  if (params.accountName) {
+    const { data: matchingAccounts, error: accountError } = await params.supabase
+      .from("avito_report_accounts")
+      .select("client_id")
+      .eq("name", params.accountName)
+      .eq("is_active", true);
+
+    if (accountError) {
+      throw new Error(`Ошибка поиска Avito-аккаунта: ${accountError.message}`);
+    }
+
+    const clientIds = [
+      ...new Set(
+        (matchingAccounts ?? [])
+          .map((account) => String(account.client_id || ""))
+          .filter(Boolean)
+      ),
+    ];
+
+    if (clientIds.length > 1) {
+      throw new Error(
+        `Найдено несколько проектов с аккаунтом ${params.accountName}. Используй clientCode или chatId.`
+      );
+    }
+
+    accountClientId = clientIds[0] ?? null;
+  }
+
   let query = params.supabase
     .from("avito_report_clients")
     .select("id, name, client_code, telegram_chat_id")
@@ -903,6 +1032,12 @@ async function loadClients(params: {
     query = query.eq("client_code", params.clientCode).limit(1);
   } else if (params.telegramChatId) {
     query = query.eq("telegram_chat_id", params.telegramChatId).limit(1);
+  } else if (params.accountName) {
+    if (!accountClientId) {
+      return [] as AvitoClient[];
+    }
+
+    query = query.eq("id", accountClientId).limit(1);
   } else {
     query =
       params.reportType === "daily"
@@ -1024,12 +1159,13 @@ export async function runAvitoReport(params: RunReportParams) {
     reportType: params.reportType,
     clientCode: params.clientCode,
     telegramChatId: params.telegramChatId,
+    accountName: params.accountName,
   });
 
   if (clients.length === 0) {
     return {
       ok: false,
-      error: params.clientCode || params.telegramChatId
+      error: params.clientCode || params.telegramChatId || params.accountName
         ? "Активный клиент с Telegram chat_id не найден"
         : "Активные клиенты с Telegram chat_id не найдены",
       status: 404,
@@ -1101,6 +1237,7 @@ export async function runAvitoReport(params: RunReportParams) {
       const totalPreviousRaw = { views: 0, contacts: 0, favorites: 0, expenses: 0 };
       let failedAccountsCount = 0;
       let statsUnavailableAccountsCount = 0;
+      let availableStatsAccountsCount = 0;
       let dialogsUnavailableAccountsCount = 0;
       let callsUnavailableAccountsCount = 0;
 
@@ -1112,20 +1249,55 @@ export async function runAvitoReport(params: RunReportParams) {
 
           let profileAnalytics: Record<string, AvitoProfileAnalyticsStats> = {};
 
-          try {
-            profileAnalytics = await loadProfileAnalyticsForAccount({
-              account,
-              period,
-              reportType: params.reportType,
-            });
-          } catch (error) {
-            console.warn(
-              "[avito:report-core] live profile analytics failed, using snapshots",
-              {
-                accountId: account.id,
-                error,
-              }
-            );
+          if (params.reportType === "weekly") {
+            const [currentDailyAggregate, previousDailyAggregate] =
+              await Promise.all([
+                loadDailySnapshotAggregate({
+                  supabase,
+                  accountId: account.id,
+                  dateFrom: period.currentStart,
+                  dateTo: period.currentEnd,
+                }),
+                loadDailySnapshotAggregate({
+                  supabase,
+                  accountId: account.id,
+                  dateFrom: period.previousStart,
+                  dateTo: period.previousEnd,
+                }),
+              ]);
+
+            if (currentDailyAggregate) {
+              profileAnalytics[period.currentStart] = currentDailyAggregate;
+            }
+
+            if (previousDailyAggregate) {
+              profileAnalytics[period.previousStart] = previousDailyAggregate;
+            }
+          }
+
+          if (
+            !profileAnalytics[period.currentStart] ||
+            !profileAnalytics[period.previousStart]
+          ) {
+            try {
+              const liveAnalytics = await loadProfileAnalyticsForAccount({
+                account,
+                period,
+                reportType: params.reportType,
+              });
+              profileAnalytics = {
+                ...liveAnalytics,
+                ...profileAnalytics,
+              };
+            } catch (error) {
+              console.warn(
+                "[avito:report-core] live profile analytics failed, using snapshots",
+                {
+                  accountId: account.id,
+                  error,
+                }
+              );
+            }
           }
 
           const current = await getPreparedOrLivePeriod({
@@ -1214,6 +1386,7 @@ export async function runAvitoReport(params: RunReportParams) {
           if (statsUnavailable) {
             statsUnavailableAccountsCount += 1;
           } else {
+            availableStatsAccountsCount += 1;
             addStats(totalCurrentRaw, current.stats);
             addStats(totalPreviousRaw, previous.stats);
           }
@@ -1276,6 +1449,18 @@ export async function runAvitoReport(params: RunReportParams) {
 
       const totalCurrent = buildStats(totalCurrentRaw);
       const totalPrevious = buildStats(totalPreviousRaw);
+
+      if (availableStatsAccountsCount === 0) {
+        results.push({
+          clientId: client.id,
+          clientName: client.name,
+          status: "failed",
+          accountsCount: accounts.length,
+          error:
+            "Отчёт не отправлен: Avito не отдал проверенную статистику ни по одному аккаунту",
+        });
+        continue;
+      }
 
       if (
         failedAccountsCount === 0 &&

@@ -85,6 +85,14 @@ and CRM data remain in the platform database.
    bash deploy/avito-reports/run-cron.sh chat-preview <telegram_chat_id>
    ```
 
+   A weekly report can be safely previewed and then re-sent for the single
+   project containing an exact Avito account name:
+
+   ```bash
+   bash deploy/avito-reports/run-cron.sh account-weekly-preview '<account_name>'
+   bash deploy/avito-reports/run-cron.sh account-weekly-send '<account_name>'
+   ```
+
 ## Rollback
 
 Set `AVITO_REPORTS_STORAGE_MODE=supabase`, rebuild/restart the main application,

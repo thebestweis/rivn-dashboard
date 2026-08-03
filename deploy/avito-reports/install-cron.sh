@@ -28,6 +28,8 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 15 6 * * * root $runner daily-retry-15 >> $log_file 2>&1
 30 6 * * * root $runner daily-retry-30 >> $log_file 2>&1
 0 7 * * 1 root $runner weekly >> $log_file 2>&1
+30 7 * * 1 root $runner weekly >> $log_file 2>&1
+0 8 * * 1 root $runner weekly >> $log_file 2>&1
 */5 3-5 * * * root $runner cache-warmup >> $log_file 2>&1
 */5 * * * * root $runner report-sync >> $log_file 2>&1
 */15 * * * * root $runner crm-dialogs-sync >> $log_file 2>&1
