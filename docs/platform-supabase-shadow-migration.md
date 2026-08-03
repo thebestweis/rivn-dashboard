@@ -33,6 +33,16 @@ recommends 8 GB+ RAM, 4 CPU cores, and 80 GB+ SSD. If neither existing server
 has that spare capacity, use a separate database server rather than risking the
 main RIVN OS or Telegram workers.
 
+If resources pass but Docker is missing, install it from Docker's official apt
+repository without touching PM2 or nginx:
+
+```bash
+sh deploy/platform-supabase-shadow/install-docker.sh
+sh deploy/platform-supabase-shadow/preflight.sh
+```
+
+The installer refuses to remove conflicting container packages automatically.
+
 Copy the non-secret configuration only when defaults need to be changed:
 
 ```bash
