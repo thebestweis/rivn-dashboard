@@ -1,0 +1,12 @@
+name: rivn-platform-shadow
+
+services:
+  kong:
+    ports: !override
+      - "127.0.0.1:${KONG_HTTP_PORT}:8000/tcp"
+      - "127.0.0.1:${KONG_HTTPS_PORT}:8443/tcp"
+
+  supavisor:
+    ports: !override
+      - "127.0.0.1:${SHADOW_POSTGRES_PORT}:5432/tcp"
+      - "127.0.0.1:${SHADOW_POOLER_PORT}:6543/tcp"
