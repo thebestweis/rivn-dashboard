@@ -43,21 +43,30 @@ project_name=$(basename "$RIVN_PLATFORM_SHADOW_ROOT")
 mkdir -p "$parent_dir"
 
 setup_script=$(mktemp)
-trap 'rm -f "$setup_script"' EXIT HUP INT TERM
+setup_log=$(mktemp)
+chmod 600 "$setup_script" "$setup_log"
+trap 'rm -f "$setup_script" "$setup_log"' EXIT HUP INT TERM
 
 curl -fsSL \
   "https://raw.githubusercontent.com/supabase/supabase/$RIVN_PLATFORM_SUPABASE_SETUP_COMMIT/docker/setup.sh" \
   -o "$setup_script"
 
 log "Preparing official Supabase $RIVN_PLATFORM_SUPABASE_REF"
-(
+if ! (
   cd "$parent_dir"
   sh "$setup_script" \
     --project-dir "$project_name" \
     --skip-deps \
     --ref "$RIVN_PLATFORM_SUPABASE_REF" \
     --yes
-)
+) > "$setup_log" 2>&1; then
+  sed -E \
+    's/^([A-Z][A-Z0-9_]*(KEY|SECRET|PASSWORD|TOKEN)[A-Z0-9_]*)=.*/\1=[REDACTED]/' \
+    "$setup_log" | tail -n 80 >&2
+  die "Official Supabase setup failed; generated secrets were redacted"
+fi
+
+rm -f "$setup_log"
 
 set_env() {
   key=$1
