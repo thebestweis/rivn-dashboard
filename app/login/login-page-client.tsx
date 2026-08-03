@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import { withTimeout } from "../lib/supabase/auth-flow";
+import {
+  getLoginErrorMessage,
+  withTimeout,
+} from "../lib/supabase/auth-flow";
 import { reportAuthTelemetry } from "../lib/auth-telemetry";
 
 function getSafeNextPath(value: string | null) {
@@ -68,18 +71,7 @@ export function LoginPageClient() {
         email: email.trim(),
         message: error instanceof Error ? error.message : "Login failed",
       });
-      const message = error instanceof Error ? error.message : "";
-      const normalizedMessage = message.toLowerCase();
-      const isLoadingIssue =
-        normalizedMessage.includes("timeout") ||
-        normalizedMessage.includes("bootstrap") ||
-        normalizedMessage.includes("context");
-
-      setErrorMessage(
-        isLoadingIssue
-          ? "Не удалось быстро загрузить кабинет. Попробуй ещё раз через несколько секунд."
-          : "Неверный логин или пароль"
-      );
+      setErrorMessage(getLoginErrorMessage(error));
     } finally {
       submissionInFlightRef.current = false;
       setIsSubmitting(false);
