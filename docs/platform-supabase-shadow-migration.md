@@ -54,7 +54,6 @@ Shadow RIVN OS:      127.0.0.1:3300
 
 ```bash
 cd /var/www/rivnos
-chmod 700 deploy/platform-supabase-shadow/*.sh
 sh deploy/platform-supabase-shadow/prepare.sh
 ```
 
