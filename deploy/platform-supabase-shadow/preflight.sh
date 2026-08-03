@@ -5,12 +5,9 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 # shellcheck disable=SC1091
 . "$script_dir/common.sh"
 
-require_command docker
 require_command df
 require_command getconf
 require_command ss
-
-docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required"
 [ -r /proc/meminfo ] || die "/proc/meminfo is unavailable"
 
 cpu_count=$(getconf _NPROCESSORS_ONLN)
@@ -34,11 +31,23 @@ printf 'cpu_cores=%s\n' "$cpu_count"
 printf 'memory_available_gb=%s\n' "$((available_memory_kb / 1024 / 1024))"
 printf 'disk_available_gb=%s\n' "$((available_disk_kb / 1024 / 1024))"
 
+docker_status=missing
+if command -v docker >/dev/null 2>&1; then
+  if docker compose version >/dev/null 2>&1; then
+    docker_status=ready
+  else
+    docker_status=compose_missing
+  fi
+fi
+printf 'docker=%s\n' "$docker_status"
+
 [ "$cpu_count" -ge 2 ] || die "At least 2 CPU cores are required"
 [ "$available_memory_kb" -ge "$minimum_memory_kb" ] || die \
   "At least 4 GB of available RAM is required for the parallel stack"
 [ "$available_disk_kb" -ge "$minimum_disk_kb" ] || die \
   "At least 40 GB of available disk is required for the parallel stack"
+[ "$docker_status" = "ready" ] || die \
+  "Docker Engine with Compose v2 is required after the resource check passes"
 
 if [ "$available_memory_kb" -lt "$recommended_memory_kb" ]; then
   printf 'WARNING: Supabase recommends 8 GB+ RAM for production workloads.\n' >&2
