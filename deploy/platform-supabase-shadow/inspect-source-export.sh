@@ -8,6 +8,8 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 require_command find
 require_command sha256sum
 
+expected_files="EXPORT_COMPLETE SHA256SUMS roles.sql schema.sql data.sql source-counts.txt"
+
 latest_dump=$(find "$RIVN_PLATFORM_SOURCE_BACKUP_ROOT" \
   -mindepth 2 \
   -maxdepth 2 \
@@ -15,10 +17,31 @@ latest_dump=$(find "$RIVN_PLATFORM_SOURCE_BACKUP_ROOT" \
   -name EXPORT_COMPLETE \
   -printf '%h\n' 2>/dev/null | LC_ALL=C sort | tail -n 1)
 
-[ -n "$latest_dump" ] || die \
-  "No completed source export was found under $RIVN_PLATFORM_SOURCE_BACKUP_ROOT"
+if [ -z "$latest_dump" ]; then
+  latest_partial=$(find "$RIVN_PLATFORM_SOURCE_BACKUP_ROOT" \
+    -mindepth 1 \
+    -maxdepth 1 \
+    -type d \
+    -printf '%p\n' 2>/dev/null | LC_ALL=C sort | tail -n 1)
 
-for file in EXPORT_COMPLETE SHA256SUMS roles.sql schema.sql data.sql source-counts.txt; do
+  if [ -z "$latest_partial" ]; then
+    die "No source export directory was found under $RIVN_PLATFORM_SOURCE_BACKUP_ROOT"
+  fi
+
+  printf 'latest_incomplete_dump=%s\n' "$latest_partial"
+  for file in $expected_files; do
+    if [ -f "$latest_partial/$file" ]; then
+      size=$(wc -c < "$latest_partial/$file" | tr -d ' ')
+      printf 'present=%s bytes=%s\n' "$file" "$size"
+    else
+      printf 'missing=%s\n' "$file"
+    fi
+  done
+
+  die "The latest source export is incomplete; run export-source.sh again and keep its full output"
+fi
+
+for file in $expected_files; do
   [ -f "$latest_dump/$file" ] || die "Completed export is missing $file"
 done
 
