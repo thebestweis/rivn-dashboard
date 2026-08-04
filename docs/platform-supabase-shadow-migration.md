@@ -120,6 +120,15 @@ not call the Supabase Storage client.
 If direct Postgres is also restricted, stop here. Never restore an incomplete
 export and never switch production to an empty shadow database.
 
+Inspect the latest completed export without printing credentials or row data:
+
+```bash
+sh deploy/platform-supabase-shadow/inspect-source-export.sh
+```
+
+The command verifies every checksum and requires non-empty `auth.users` and
+`public` table sets before declaring the dump ready.
+
 ## 4. Restore and compare every table
 
 Pass the exact protected export directory printed by the previous command:
