@@ -97,9 +97,14 @@ Use a temporary shell variable on the main server:
 ```bash
 cd /var/www/rivnos
 export RIVN_PLATFORM_SOURCE_DB_URL='postgresql://...'
+sh deploy/platform-supabase-shadow/check-source-connection.sh
 sh deploy/platform-supabase-shadow/export-source.sh
 unset RIVN_PLATFORM_SOURCE_DB_URL
 ```
+
+Use the Session Pooler URL on port `5432` from the Supabase `Connect` dialog.
+Replace the password placeholder with the real database password. The connection
+check prints only table and user counts, never the URL or password.
 
 The script creates a protected timestamped directory under
 `/var/backups/rivn-platform-supabase` containing:

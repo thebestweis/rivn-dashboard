@@ -12,6 +12,9 @@ require_command sha256sum
 [ -n "${RIVN_PLATFORM_SOURCE_DB_URL:-}" ] || die \
   "Set RIVN_PLATFORM_SOURCE_DB_URL to the hosted Supabase direct/session-pooler connection string"
 
+export RIVN_PLATFORM_SOURCE_DB_URL
+sh "$script_dir/check-source-connection.sh"
+
 umask 077
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 dump_dir="$RIVN_PLATFORM_SOURCE_BACKUP_ROOT/$timestamp"
@@ -27,7 +30,7 @@ trap cleanup_failed_export EXIT HUP INT TERM
 
 log "Checking direct database access and collecting source counts"
 docker run --rm --network host \
-  -e RIVN_PLATFORM_SOURCE_DB_URL="$RIVN_PLATFORM_SOURCE_DB_URL" \
+  -e RIVN_PLATFORM_SOURCE_DB_URL \
   -v "$script_dir/source-counts.sql:/source-counts.sql:ro" \
   postgres:17-alpine \
   sh -c 'psql "$RIVN_PLATFORM_SOURCE_DB_URL" -X -v ON_ERROR_STOP=1 -f /source-counts.sql' \
