@@ -72,6 +72,10 @@ and CRM data remain in the platform database.
    tail -n 100 /var/log/rivnos-avito-reports.log
    ```
 
+   Daily retry runs at 09:15 and 09:30 Moscow time are intentional. Regular
+   queue rows use a database-backed deduplication key, so retries and parallel
+   workers cannot enqueue or claim the same client report twice.
+
    A report for one client can be tested without a browser session:
 
    ```bash

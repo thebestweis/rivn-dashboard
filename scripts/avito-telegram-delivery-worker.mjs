@@ -473,7 +473,7 @@ async function pollTelegramUpdates() {
 async function fetchPendingReports() {
   const { data, error } = await supabase
     .from("avito_telegram_delivery_queue")
-    .select("id, client_id, telegram_chat_id, report_type, period_start, period_end, message, attempts, created_at")
+    .select("id, client_id, telegram_chat_id, report_type, period_start, period_end, message, status, attempts, created_at")
     .in("status", ["pending", "failed"])
     .lt("attempts", config.maxAttempts)
     .order("created_at", { ascending: true })
@@ -489,6 +489,40 @@ async function updateQueueReport(reportId, patch) {
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq("id", reportId);
   if (error) throw new Error(error.message);
+}
+
+async function claimQueueReport(report) {
+  const { data, error } = await supabase
+    .from("avito_telegram_delivery_queue")
+    .update({
+      status: "processing",
+      attempts: Number(report.attempts || 0) + 1,
+      last_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", report.id)
+    .eq("status", report.status)
+    .select("id")
+    .limit(1);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).length === 1;
+}
+
+async function finalizeSentReport(reportId, patch) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await updateQueueReport(reportId, patch);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await sleep(attempt * 1000);
+    }
+  }
+
+  throw lastError ?? new Error("Failed to finalize sent Avito report");
 }
 
 async function insertDeliveryLog(report, message) {
@@ -511,26 +545,60 @@ async function deliverReport(report) {
   const chatId = report.telegram_chat_id ? String(report.telegram_chat_id) : "";
   const text = report.message ? String(report.message) : "";
 
-  if (!chatId) throw new Error("Report has no telegram_chat_id");
-  if (!text) throw new Error("Report has empty message");
+  const claimed = await claimQueueReport(report);
+  if (!claimed) return { claimed: false, messageId: null, finalized: false };
 
-  await updateQueueReport(report.id, {
-    status: "processing",
-    attempts: Number(report.attempts || 0) + 1,
-    last_error: null,
-  });
+  if (!chatId || !text) {
+    const error = new Error(
+      !chatId ? "Report has no telegram_chat_id" : "Report has empty message"
+    );
+    await updateQueueReport(report.id, {
+      status: "failed",
+      last_error: error.message,
+    }).catch((updateError) =>
+      logError("Failed to mark invalid Avito report as failed", updateError, { reportId: report.id })
+    );
+    throw error;
+  }
 
-  const sent = await sendTelegramReport(chatId, text);
-  await updateQueueReport(report.id, {
-    status: "sent",
-    telegram_message_id: sent?.message_id ? String(sent.message_id) : null,
-    sent_at: new Date().toISOString(),
-    last_error: null,
-  });
+  let sent;
+  try {
+    sent = await sendTelegramReport(chatId, text);
+  } catch (error) {
+    await updateQueueReport(report.id, {
+      status: "failed",
+      last_error: error instanceof Error ? error.message : String(error),
+    }).catch((updateError) =>
+      logError("Failed to mark Avito report delivery as failed", updateError, { reportId: report.id })
+    );
+    throw error;
+  }
+
+  try {
+    await finalizeSentReport(report.id, {
+      status: "sent",
+      telegram_message_id: sent?.message_id ? String(sent.message_id) : null,
+      sent_at: new Date().toISOString(),
+      last_error: null,
+    });
+  } catch (error) {
+    logError("Telegram accepted Avito report but queue finalization failed; delivery remains processing", error, {
+      reportId: report.id,
+      telegramMessageId: sent?.message_id ?? null,
+    });
+    return {
+      claimed: true,
+      messageId: sent?.message_id ?? null,
+      finalized: false,
+    };
+  }
+
   await insertDeliveryLog(report, text);
 
   return {
+    claimed: true,
     messageId: sent?.message_id ?? null,
+    finalized: true,
   };
 }
 
@@ -545,21 +613,22 @@ async function deliverPendingReports() {
 
       try {
         const result = await deliverReport(report);
+        if (!result.claimed) {
+          log("Avito report delivery already claimed", {
+            reportId: report.id,
+            clientId: report.client_id,
+          });
+          continue;
+        }
         log("Avito report delivered", {
           reportId: report.id,
           clientId: report.client_id,
           chatId: report.telegram_chat_id,
           reportType: report.report_type,
           telegramMessageId: result.messageId,
+          queueFinalized: result.finalized,
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await updateQueueReport(report.id, {
-          status: "failed",
-          last_error: message,
-        }).catch((updateError) =>
-          logError("Failed to mark Avito report delivery as failed", updateError, { reportId: report.id })
-        );
         logError("Avito report delivery failed", error, {
           reportId: report.id,
           clientId: report.client_id,

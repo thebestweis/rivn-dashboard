@@ -264,6 +264,7 @@ const tables = [
       "report_type",
       "period_start",
       "period_end",
+      "dedupe_key",
       "message",
       "status",
       "attempts",

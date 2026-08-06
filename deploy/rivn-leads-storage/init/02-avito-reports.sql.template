@@ -185,6 +185,7 @@ create table if not exists public.avito_telegram_delivery_queue (
   report_type text not null,
   period_start date not null,
   period_end date not null,
+  dedupe_key text,
   message text not null,
   status text not null default 'pending'
     check (status in ('pending', 'processing', 'sent', 'failed')),
@@ -195,6 +196,53 @@ create table if not exists public.avito_telegram_delivery_queue (
   updated_at timestamptz not null default now(),
   sent_at timestamptz
 );
+
+alter table public.avito_telegram_delivery_queue
+  add column if not exists dedupe_key text;
+
+with ranked_deliveries as (
+  select
+    id,
+    client_id,
+    report_type,
+    period_start,
+    period_end,
+    row_number() over (
+      partition by client_id, report_type, period_start, period_end
+      order by
+        case status
+          when 'sent' then 1
+          when 'processing' then 2
+          when 'pending' then 3
+          else 4
+        end,
+        created_at,
+        id
+    ) as delivery_rank
+  from public.avito_telegram_delivery_queue
+  where report_type in ('daily', 'weekly')
+    and dedupe_key is null
+)
+update public.avito_telegram_delivery_queue as queue
+set dedupe_key = concat_ws(
+  ':',
+  queue.client_id::text,
+  queue.report_type,
+  queue.period_start::text,
+  queue.period_end::text
+)
+from ranked_deliveries as ranked
+where queue.id = ranked.id
+  and ranked.delivery_rank = 1
+  and not exists (
+    select 1
+    from public.avito_telegram_delivery_queue as existing
+    where existing.client_id = ranked.client_id
+      and existing.report_type = ranked.report_type
+      and existing.period_start = ranked.period_start
+      and existing.period_end = ranked.period_end
+      and existing.dedupe_key is not null
+  );
 
 create index if not exists avito_report_clients_workspace_idx
   on public.avito_report_clients(workspace_id, is_active);
@@ -222,6 +270,9 @@ create index if not exists avito_report_sync_jobs_due_idx
   on public.avito_report_sync_jobs(status, next_run_at, priority);
 create index if not exists avito_telegram_queue_status_created_idx
   on public.avito_telegram_delivery_queue(status, created_at);
+create unique index if not exists avito_telegram_queue_dedupe_idx
+  on public.avito_telegram_delivery_queue(dedupe_key)
+  where dedupe_key is not null;
 
 grant select, insert, update, delete
   on public.avito_report_clients,

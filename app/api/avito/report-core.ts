@@ -1130,20 +1130,37 @@ async function queueTelegramReport(params: {
   reportType: AvitoReportType | "test";
   period: ReportPeriod;
   message: string;
+  deduplicate: boolean;
 }) {
+  const dedupeKey =
+    params.reportType === "test" || !params.deduplicate
+      ? null
+      : [
+          params.client.id,
+          params.reportType,
+          params.period.currentStart,
+          params.period.currentEnd,
+        ].join(":");
   const { error } = await params.supabase.from("avito_telegram_delivery_queue").insert({
     client_id: params.client.id,
     telegram_chat_id: params.client.telegram_chat_id,
     report_type: params.reportType,
     period_start: params.period.currentStart,
     period_end: params.period.currentEnd,
+    dedupe_key: dedupeKey,
     status: "pending",
     message: params.message,
   });
 
+  if (error?.code === "23505") {
+    return false;
+  }
+
   if (error) {
     throw new Error(`Не удалось поставить Avito-отчёт в очередь Telegram (table: avito_telegram_delivery_queue, status: pending): ${error.message}`);
   }
+
+  return true;
 }
 
 export async function runAvitoReport(params: RunReportParams) {
@@ -1537,13 +1554,25 @@ export async function runAvitoReport(params: RunReportParams) {
       }
 
       if (deliveryMode === "queue") {
-        await queueTelegramReport({
+        const queued = await queueTelegramReport({
           supabase,
           client,
           reportType: params.testMode ? "test" : params.reportType,
           period,
           message: finalText,
+          deduplicate: !params.forceSend,
         });
+
+        if (!queued) {
+          results.push({
+            clientId: client.id,
+            clientName: client.name,
+            status: "skipped",
+            accountsCount: accounts.length,
+            error: `${params.reportType} отчёт уже поставлен в очередь за этот период`,
+          });
+          continue;
+        }
       } else {
         await sendTelegramMessage(client.telegram_chat_id, finalText);
 

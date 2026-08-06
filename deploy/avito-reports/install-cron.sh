@@ -25,6 +25,7 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # The server uses UTC. Moscow is UTC+3 year-round.
 0 6 * * * root $runner daily >> $log_file 2>&1
+# Retry runs are idempotent through avito_telegram_delivery_queue.dedupe_key.
 15 6 * * * root $runner daily-retry-15 >> $log_file 2>&1
 30 6 * * * root $runner daily-retry-30 >> $log_file 2>&1
 0 7 * * 1 root $runner weekly >> $log_file 2>&1
