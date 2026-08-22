@@ -24,13 +24,9 @@ cat >"$cron_file" <<EOF
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # The server uses UTC. Moscow is UTC+3 year-round.
+# All scheduled Telegram reports are emitted only at 09:00 Moscow time.
 0 6 * * * root $runner daily >> $log_file 2>&1
-# Retry runs are idempotent through avito_telegram_delivery_queue.dedupe_key.
-15 6 * * * root $runner daily-retry-15 >> $log_file 2>&1
-30 6 * * * root $runner daily-retry-30 >> $log_file 2>&1
-0 7 * * 1 root $runner weekly >> $log_file 2>&1
-30 7 * * 1 root $runner weekly >> $log_file 2>&1
-0 8 * * 1 root $runner weekly >> $log_file 2>&1
+0 6 * * 1 root $runner weekly >> $log_file 2>&1
 */5 3-5 * * * root $runner cache-warmup >> $log_file 2>&1
 */5 * * * * root $runner report-sync >> $log_file 2>&1
 */15 * * * * root $runner crm-dialogs-sync >> $log_file 2>&1

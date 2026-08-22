@@ -72,9 +72,11 @@ and CRM data remain in the platform database.
    tail -n 100 /var/log/rivnos-avito-reports.log
    ```
 
-   Daily retry runs at 09:15 and 09:30 Moscow time are intentional. Regular
-   queue rows use a database-backed deduplication key, so retries and parallel
-   workers cannot enqueue or claim the same client report twice.
+   The VPS is the only scheduler for Avito Telegram reports. Daily reports and
+   the Monday weekly report run at 09:00 Moscow time; there are no scheduled
+   late-delivery retries. Vercel must not define Avito daily or weekly crons.
+   Queue rows still use a database-backed deduplication key to protect against
+   accidental parallel or manual invocations.
 
    A report for one client can be tested without a browser session:
 
