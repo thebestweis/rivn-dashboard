@@ -78,6 +78,8 @@ const TELEGRAM_MESSAGE_LIMIT = 3900;
 const TELEGRAM_FETCH_TIMEOUT_MS = 20_000;
 const telegramDeliveryMode = process.env.AVITO_TELEGRAM_DELIVERY_MODE;
 const ZAGZEM_AVITO_CHAT_ID = "-5553928184";
+const FOR_AVITO_CLIENT_CODE = "rivn-d27b14b0c8c6";
+const FOR_TARIFF_RUBLES_PER_ACCOUNT_PER_DAY = 100;
 
 function isZagzemDailyReport(client: AvitoClient, reportType: AvitoReportType) {
   return (
@@ -91,6 +93,34 @@ function shouldQueueTelegramDelivery() {
     telegramDeliveryMode === "queue" ||
     process.env.AVITO_TELEGRAM_QUEUE_ENABLED === "true"
   );
+}
+
+function getInclusivePeriodDays(dateFrom: string, dateTo: string) {
+  const start = Date.parse(`${dateFrom}T00:00:00.000Z`);
+  const end = Date.parse(`${dateTo}T00:00:00.000Z`);
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return 0;
+  }
+
+  return Math.floor((end - start) / 86_400_000) + 1;
+}
+
+function addForTariffToExpenses(
+  stats: PeriodStats,
+  dateFrom: string,
+  dateTo: string
+) {
+  const tariff =
+    getInclusivePeriodDays(dateFrom, dateTo) *
+    FOR_TARIFF_RUBLES_PER_ACCOUNT_PER_DAY;
+
+  return buildStats({
+    views: stats.views,
+    contacts: stats.contacts,
+    favorites: stats.favorites,
+    expenses: stats.expenses + tariff,
+  });
 }
 
 function getSupabase() {
@@ -1337,6 +1367,20 @@ export async function runAvitoReport(params: RunReportParams) {
             allowWarningSnapshot: true,
             preloadedStats: profileAnalytics[period.previousStart],
           });
+
+          if (client.client_code === FOR_AVITO_CLIENT_CODE) {
+            current.stats = addForTariffToExpenses(
+              current.stats,
+              period.currentStart,
+              period.currentEnd
+            );
+            previous.stats = addForTariffToExpenses(
+              previous.stats,
+              period.previousStart,
+              period.previousEnd
+            );
+          }
+
           const warnings = [...current.warnings];
           const statsUnavailable = isStatsUnavailable(warnings);
 
